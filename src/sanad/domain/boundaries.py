@@ -7,6 +7,7 @@ Pydantic model_construct or model_copy(update=...) APIs for incoming data.
 """
 
 from datetime import UTC, datetime
+from functools import cache
 from typing import Annotated, Literal, Self
 from zoneinfo import available_timezones
 
@@ -31,8 +32,13 @@ def _utc(value: datetime) -> datetime:
     return value.astimezone(UTC)
 
 
+@cache
+def _available_timezones() -> frozenset[str]:
+    return frozenset(available_timezones())
+
+
 def _iana_zone(value: str) -> str:
-    if value not in available_timezones():
+    if value not in _available_timezones():
         raise ValueError("must be an IANA timezone name")
     return value
 
@@ -46,6 +52,7 @@ type PositiveVersion = Annotated[int, Field(strict=True, gt=0)]
 type NonnegativeInt = Annotated[int, Field(strict=True, ge=0)]
 type UnitInterval = Annotated[float, Field(strict=True, ge=0, le=1, allow_inf_nan=False)]
 type UtcInstant = Annotated[AwareDatetime, AfterValidator(_utc)]
+type IanaZone = Annotated[NonblankStr, AfterValidator(_iana_zone)]
 type ActorKind = Literal["unknown", "admin", "doctor", "patient", "system"]
 type VerifiedRole = Literal["admin", "doctor", "patient"]
 
@@ -188,7 +195,7 @@ class TimingProposal(_BoundaryValue):
     proposed_due_at: UtcInstant
     source: Literal["scribe", "default"]
     reason: NonblankStr
-    timezone: Annotated[NonblankStr, AfterValidator(_iana_zone)]
+    timezone: IanaZone
     anchor_time: UtcInstant
     anchor_kind: Literal[
         "observation_received",

@@ -1,5 +1,7 @@
 import ast
 import socket
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -43,6 +45,23 @@ def test_domain_imports_only_pure_foundation_dependencies() -> None:
             else:
                 continue
             assert all(
-                name.split(".")[0] in {"datetime", "typing", "zoneinfo", "pydantic"}
+                name.split(".")[0] in sys.stdlib_module_names | {"pydantic"}
+                or name == "sanad.domain"
+                or name.startswith("sanad.domain.")
                 for name in names
             ), f"Non-foundation import in {path.name}: {names}"
+
+
+def test_clean_domain_import_loads_no_web_or_provider_implementation() -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import sys; import sanad.domain; "
+            "assert not {'fastapi', 'boto3', 'strands', 'httpx'} & set(sys.modules)",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr

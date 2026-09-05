@@ -2,7 +2,7 @@
 
 Version: 1.0 · Proposed reconciled schema for the final audit · 2026-09-05
 
-This blueprint is implementation input after final audit; it is not executable code or a released contract. [architecture.md](architecture.md) owns the system flow. Contract 00 defines types only; contract 01 implements transitions/deadlines; 02–03 implement storage and recovery. Later contracts extend this schema explicitly before adding behavior. Existing `pending_review`/`done` execution terminology is superseded by the split below; DONE remains a message class.
+This blueprint is implementation input after final audit; it is not executable code or a released contract. Where slice 01's accepted code refines a shape (creation factories, no-op semantics, review action table, follow-up legality, policy fields), the binding wording is the A01–A24 addendum in [contract 01](contracts/01-domain-transitions-and-deadlines.md) and the code under `src/sanad/domain/`. [architecture.md](architecture.md) owns the system flow. Contract 00 defines types only; contract 01 implements transitions/deadlines; 02–03 implement storage and recovery. Later contracts extend this schema explicitly before adding behavior. Existing `pending_review`/`done` execution terminology is superseded by the split below; DONE remains a message class.
 
 ## Shared types and invariants
 

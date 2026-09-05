@@ -1,13 +1,16 @@
 export UV_CACHE_DIR ?= $(CURDIR)/.uv-cache
 export UV_PYTHON_INSTALL_DIR ?= $(CURDIR)/.uv-python
 
-.PHONY: install test lint typecheck run build
+.PHONY: install test test-ddb lint typecheck run build
 
 install:
 	uv sync --locked
 
 test:
-	uv run --offline --no-sync pytest
+	uv run --offline --no-sync pytest $(TEST_ARGS)
+
+test-ddb:
+	uv run --offline --no-sync pytest tests/store --ddb --require-ddb
 
 lint:
 	uv run --offline --no-sync ruff check .

@@ -1,0 +1,1135 @@
+"""Shared validated operations over backend-specific atomic compare-and-set primitives."""
+
+import json
+from abc import ABC, abstractmethod
+from collections import OrderedDict
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from typing import Any, Literal
+from uuid import uuid4
+
+from pydantic import ValidationError
+
+from sanad.domain import (
+    FollowUpTask,
+    Mission,
+    PatientScope,
+    ReviewObligation,
+    TenantScope,
+    VersionRef,
+)
+from sanad.domain.deadlines import utc_instant
+from sanad.store import keys
+from sanad.store.keys import Key, Scope, ScopedKey
+from sanad.store.records import (
+    MODELS,
+    PROJECTION_FIELDS,
+    Accepted,
+    AuditEvent,
+    Claim,
+    CommitRequest,
+    CommitResult,
+    Cursor,
+    DeliveryAttempt,
+    DeliveryOutcome,
+    DueItem,
+    DuePage,
+    Duplicate,
+    Forbidden,
+    InboundAccept,
+    InboundReceipt,
+    Lease,
+    MarkerRecord,
+    OutboundIntent,
+    PatientProfile,
+    ProcessingClaim,
+    ReconcileReport,
+    RecordPage,
+    ReviewCreation,
+    SessionSnapshot,
+    StaleVersion,
+    StoredRecord,
+    TooLarge,
+    WorkerCapability,
+    canonical_json,
+    from_record,
+    item_record,
+    model_scope,
+    projections,
+    record_item,
+    scope_owns,
+    to_record,
+)
+
+type Item = dict[str, Any]
+
+
+@dataclass(frozen=True)
+class Write:
+    item: Item
+    before: int | None
+
+    @property
+    def key(self) -> Key:
+        return Key(self.item["PK"], self.item["SK"])
+
+
+@dataclass(frozen=True)
+class Check:
+    key: Key
+    version: int | None
+
+
+def utc_now() -> datetime:
+    return datetime.now(UTC)
+
+
+def size_failure(writes: list[Write], checks: list[Check]) -> TooLarge | None:
+    if len(writes) + len(checks) > 100:
+        return TooLarge(reason="item_count")
+    key_limits = {"PK": 2048, "SK": 1024}
+    for hash_key, sort_key in INDEX_FIELDS.values():
+        key_limits.update({hash_key: 2048, sort_key: 1024})
+    if any(
+        len(str(write.item[field]).encode("utf-8")) > limit
+        for write in writes
+        for field, limit in key_limits.items()
+        if field in write.item
+    ):
+        return TooLarge(reason="item_bytes")
+    # JSON wire size is a conservative upper bound on these string/number items.
+    sizes = [len(canonical_json(write.item)) + 128 for write in writes]
+    if any(size > 400 * 1024 for size in sizes):
+        return TooLarge(reason="item_bytes")
+    if sum(sizes) + 1024 * len(checks) > 4 * 1024 * 1024:
+        return TooLarge(reason="transaction_bytes")
+    return None
+
+
+class StoreBase(ABC):
+    def __init__(self, *, clock: Callable[[], datetime] = utc_now):
+        self._clock = clock
+        # Global index continuation keys can name another tenant. Keep them server-side;
+        # a caller receives only a bounded, scope-bound opaque continuation handle.
+        self._due_cursors: OrderedDict[str, tuple[str, Cursor]] = OrderedDict()
+
+    @abstractmethod
+    def _read(self, key: Key) -> Item | None: ...
+
+    @abstractmethod
+    def _atomic(self, writes: list[Write], checks: list[Check]) -> bool: ...
+
+    @abstractmethod
+    def _update(self, item: Item, before: int) -> bool:
+        """Version-checked UpdateItem (including claims/leases/projection repairs)."""
+        ...
+
+    @abstractmethod
+    def _query(
+        self,
+        pk: str,
+        *,
+        index: str | None = None,
+        prefix: str = "",
+        through: str | None = None,
+        cursor: Cursor | None = None,
+        limit: int = 100,
+    ) -> tuple[list[Item], Cursor | None]: ...
+
+    def _owned(self, scope: Scope, key: Key) -> StoredRecord | None:
+        raw = self._read(key)
+        if raw is None or raw.get("doctor_id") != scope.doctor_id:
+            return None
+        if isinstance(scope, PatientScope) and raw.get("patient_id") != scope.patient_id:
+            return None
+        if raw.get("entity_type") not in MODELS:
+            return None
+        record = item_record(raw)
+        model = from_record(record, MODELS[record.entity_type])
+        return record if scope_owns(scope, model_scope(model)) else None
+
+    def get(self, scope: Scope, entity_type: str, id: str) -> StoredRecord | None:
+        prefixes = {
+            "mission": "MISSION",
+            "followup": "FOLLOWUP",
+            "review": "REVIEW",
+            "outbound_intent": "OUT",
+        }
+        if entity_type in {"mission", "followup", "patient_profile"} and not isinstance(
+            scope, PatientScope
+        ):
+            return None
+        if entity_type == "patient_profile":
+            assert isinstance(scope, PatientScope)
+            if id != scope.patient_id:
+                return None
+            key = keys.patient(scope)
+        elif entity_type in prefixes:
+            key = Key(keys.partition(scope), f"{prefixes[entity_type]}#{keys.component(id)}")
+        elif entity_type == "inbound_receipt":
+            if not id.startswith("IN#"):
+                return None
+            key = Key(id, "META")
+        elif entity_type in {"audit_event", "delivery_attempt", "session_snapshot"}:
+            prefix = {
+                "audit_event": "EVENT#",
+                "delivery_attempt": "ATTEMPT#",
+                "session_snapshot": "SESSION#",
+            }[entity_type]
+            cursor = None
+            found = None
+            while True:
+                items, cursor = self._query(keys.partition(scope), prefix=prefix, cursor=cursor)
+                for item in items:
+                    if item.get("id") == id and item.get("entity_type") == entity_type:
+                        record = self._owned(scope, Key(item["PK"], item["SK"]))
+                        if record is not None:
+                            if found is not None:
+                                return None  # An ambiguous bare ID must never select a record.
+                            found = record
+                if cursor is None:
+                    return found
+        else:
+            return None
+        record = self._owned(scope, key)
+        return record if record and record.entity_type == entity_type else None
+
+    def get_mission(self, scope: PatientScope, id: str) -> Mission | None:
+        record = self.get(scope, "mission", id)
+        return from_record(record, Mission) if record else None
+
+    def get_followup(self, scope: PatientScope, id: str) -> FollowUpTask | None:
+        record = self.get(scope, "followup", id)
+        return from_record(record, FollowUpTask) if record else None
+
+    def get_review(self, scope: Scope, id: str) -> ReviewObligation | None:
+        record = self.get(scope, "review", id)
+        return from_record(record, ReviewObligation) if record else None
+
+    def get_patient_profile(self, scope: PatientScope) -> PatientProfile | None:
+        record = self.get(scope, "patient_profile", scope.patient_id)
+        return from_record(record, PatientProfile) if record else None
+
+    def _list(
+        self,
+        scope: Scope,
+        pk: str,
+        cursor: Cursor | None,
+        limit: int,
+        *,
+        index: str | None = None,
+        prefix: str = "",
+    ) -> RecordPage:
+        items, next_cursor = self._query(pk, index=index, prefix=prefix, cursor=cursor, limit=limit)
+        records = []
+        for item in items:
+            record = self._owned(scope, Key(item["PK"], item["SK"]))
+            if record is None:
+                continue
+            if index == "GSI_REVIEW" and (
+                record.entity_type != "review" or record.body["state"] == "resolved"
+            ):
+                continue
+            if index == "GSI_DOCTOR_PATIENTS" and record.entity_type != "patient_profile":
+                continue
+            records.append(record)
+        return tuple(records), next_cursor
+
+    def list_patients(
+        self, tenant_scope: TenantScope, cursor: Cursor | None = None, limit: int = 100
+    ) -> RecordPage:
+        if type(tenant_scope) is not TenantScope:
+            return (), None
+        return self._list(
+            tenant_scope, keys.tenant_pk(tenant_scope), cursor, limit, index="GSI_DOCTOR_PATIENTS"
+        )
+
+    def list_reviews(
+        self, tenant_scope: TenantScope, cursor: Cursor | None = None, limit: int = 100
+    ) -> RecordPage:
+        if type(tenant_scope) is not TenantScope:
+            return (), None
+        return self._list(
+            tenant_scope, keys.tenant_pk(tenant_scope), cursor, limit, index="GSI_REVIEW"
+        )
+
+    def list_events(
+        self, patient_scope: PatientScope, cursor: Cursor | None = None, limit: int = 100
+    ) -> RecordPage:
+        if not isinstance(patient_scope, PatientScope):
+            return (), None
+        return self._list(
+            patient_scope, keys.partition(patient_scope), cursor, limit, prefix="EVENT#"
+        )
+
+    def _lease_record(self, lease: Lease, now: datetime) -> StoredRecord | None:
+        record = self.get(lease.scope, "patient_profile", lease.scope.patient_id)
+        if record is None:
+            return None
+        profile = from_record(record, PatientProfile)
+        if (
+            profile.lease_owner != lease.owner
+            or profile.lease_generation != lease.generation
+            or profile.lease_expires_at != lease.expires_at
+            or lease.expires_at <= now
+        ):
+            return None
+        return record
+
+    def _duplicate(self, key: Key, digest: str, scope: Scope) -> CommitResult | None:
+        existing = self._read(key)
+        if existing is None:
+            return None
+        if existing.get("scope") != scope.model_dump(mode="json"):
+            return Forbidden()
+        if existing.get("payload_digest") != digest:
+            return StaleVersion(conflicts=("command_payload",))
+        return Duplicate(original=Accepted.model_validate(existing["accepted_result"]))
+
+    def commit(self, request: CommitRequest) -> CommitResult:
+        command = request.command
+        scope = command.scope
+        actor = command.principal
+        if (
+            actor.doctor_id != scope.doctor_id
+            or actor.actor_kind not in {"doctor", "patient"}
+            or actor.actor_kind not in actor.verified_roles
+        ):
+            return Forbidden()
+        if actor.actor_kind == "patient" and (
+            not isinstance(scope, PatientScope) or actor.patient_id != scope.patient_id
+        ):
+            return Forbidden()
+        # These require authoritative entities which are explicitly deferred to 05/06.
+        if any(
+            getattr(command, field) is not None
+            for field in (
+                "expected_auth_epoch",
+                "expected_binding_epoch",
+                "expected_consent_version",
+                "expected_delivery_epoch",
+                "expected_safety_epoch",
+            )
+        ):
+            return Forbidden()
+        command_key = keys.uniqueness(scope, "CMD", command.command_id)
+        # Replay identity is the immutable command payload, independent of retry time.
+        digest = keys.digest(canonical_json(command.payload).decode())
+        records = [*request.puts, *request.events, *request.intents]
+        # Reject obviously oversized requests before even a base read/duplicate lookup.
+        provisional = [Write(record_item(record), record.version - 1 or None) for record in records]
+        provisional.append(
+            Write(
+                {
+                    "PK": command_key.pk,
+                    "SK": command_key.sk,
+                    "payload_digest": digest,
+                    "accepted_result": {
+                        "event_ids": [r.id for r in records if r.entity_type == "audit_event"],
+                        "resulting_versions": [r.ref.model_dump() for r in records],
+                    },
+                    "scope": scope.model_dump(mode="json"),
+                },
+                None,
+            )
+        )
+        for record in records:
+            unique = (
+                record.body.get("logical_key")
+                if record.entity_type == "outbound_intent"
+                else (
+                    record.body.get("unique_source_key") if record.entity_type == "review" else None
+                )
+            )
+            if record.version == 1 and isinstance(unique, str):
+                provisional_key = Key(
+                    record.pk,
+                    ("OUTKEY#" if record.entity_type == "outbound_intent" else "REVIEWKEY#")
+                    + keys.digest(unique),
+                )
+                provisional.append(
+                    Write(
+                        self._marker_item(provisional_key, scope, record.key, command.requested_at),
+                        None,
+                    )
+                )
+        for marker in request.markers:
+            if marker.key not in {write.key for write in provisional}:
+                provisional.append(
+                    Write(
+                        self._marker_item(
+                            marker.key,
+                            marker.scope,
+                            marker.target.key,
+                            marker.created_at,
+                            marker.ttl,
+                        ),
+                        None,
+                    )
+                )
+        extra_checks = []
+        if isinstance(scope, PatientScope) and keys.patient(scope) not in {
+            w.key for w in provisional
+        }:
+            extra_checks.append(Check(keys.patient(scope), None))
+        written_refs = {(record.entity_type, record.id) for record in records}
+        extra_checks.extend(
+            Check(Key("preflight", f"{ref.entity_type}#{ref.id}"), ref.version)
+            for ref in set(command.expected_versions)
+            if (ref.entity_type, ref.id) not in written_refs
+        )
+        if request.receipt_completion is not None:
+            extra_checks.append(Check(request.receipt_completion.claim.record_key.key, None))
+        early_large = size_failure(provisional, extra_checks)
+        if early_large:
+            return early_large
+        prior = self._duplicate(command_key, digest, scope)
+        if prior is not None:
+            return prior
+        if any(r.entity_type != "audit_event" for r in request.events) or any(
+            r.entity_type != "outbound_intent" for r in request.intents
+        ):
+            return Forbidden()
+        if len({(r.entity_type, r.id) for r in records}) != len(records):
+            return StaleVersion(conflicts=("repeated_record",))
+        expected = {(r.entity_type, r.id): r.version for r in request.expected}
+        if len(expected) != len(request.expected) or expected != {
+            (r.entity_type, r.id): r.version for r in records
+        }:
+            return StaleVersion(conflicts=("expected_versions",))
+        if len({marker.key for marker in request.markers}) != len(request.markers):
+            return StaleVersion(conflicts=("repeated_marker",))
+        writes: list[Write] = []
+        checks: list[Check] = []
+        now = utc_instant(self._clock())
+        if isinstance(scope, PatientScope):
+            patient = self.get(scope, "patient_profile", scope.patient_id)
+            if patient is not None:
+                profile = from_record(patient, PatientProfile)
+                if profile.lease_generation > 0 and command.fence is None:
+                    return StaleVersion(conflicts=("patient_fence",))
+            checks.append(Check(keys.patient(scope), patient.version if patient else None))
+        if command.fence is not None:
+            if command.fence.scope != scope:
+                return Forbidden()
+            fenced = self._lease_record(command.fence, now)
+            if fenced is None:
+                return StaleVersion(conflicts=("patient_fence",))
+            checks.append(Check(fenced.key, fenced.version))
+        if command.work_claim is not None:
+            work_claim = command.work_claim
+            if work_claim.record_key.scope != scope:
+                return Forbidden()
+            claimed = self._owned(scope, work_claim.record_key.key)
+            token = ProcessingClaim.model_validate(
+                work_claim.model_dump(exclude={"record_key", "version"})
+            )
+            if (
+                claimed is None
+                or claimed.version != work_claim.version
+                or claimed.processing_claim != token
+                or work_claim.expires_at <= now
+                or claimed.key not in {record.key for record in records}
+            ):
+                return StaleVersion(conflicts=("work_claim",))
+        for record in records:
+            try:
+                model = from_record(record, MODELS[record.entity_type])
+            except (KeyError, ValueError, ValidationError):
+                return Forbidden()
+            if scope != model_scope(model):
+                return Forbidden()
+            if isinstance(model, AuditEvent) and (
+                model.command_id != command.command_id
+                or model.actor != actor
+                or model.scope != scope
+            ):
+                return Forbidden()
+            if record.entity_type in {"inbound_receipt", "delivery_attempt", "session_snapshot"}:
+                return Forbidden()  # Their fenced operations own these writes.
+            current = self._owned(scope, record.key)
+            if current is not None:
+                if (
+                    current.created_at != record.created_at
+                    or record.updated_at < current.updated_at
+                ):
+                    return StaleVersion(conflicts=("record_metadata",))
+                if current.processing_claim is not None and (
+                    command.work_claim is None or command.work_claim.record_key.key != current.key
+                ):
+                    return StaleVersion(conflicts=("claimed_record",))
+                if isinstance(model, PatientProfile):
+                    old = from_record(current, PatientProfile)
+                    if (model.lease_owner, model.lease_expires_at, model.lease_generation) != (
+                        old.lease_owner,
+                        old.lease_expires_at,
+                        old.lease_generation,
+                    ):
+                        return Forbidden()
+                if isinstance(model, OutboundIntent):
+                    old_intent = from_record(current, OutboundIntent)
+                    if model.logical_key != old_intent.logical_key or old_intent.status != "queued":
+                        return Forbidden()
+            elif isinstance(model, PatientProfile) and model.lease_generation != 0:
+                return Forbidden()
+            if isinstance(model, OutboundIntent) and model.status not in {"queued", "suppressed"}:
+                return Forbidden()
+            canonical = to_record(model, scope)
+            canonical = StoredRecord.model_validate(
+                canonical.model_dump()
+                | {
+                    "ttl": record.ttl,
+                    "claim_generation": current.claim_generation if current else 0,
+                }
+            )
+            writes.append(Write(record_item(canonical), record.version - 1 or None))
+            if record.version == 1 and isinstance(model, (OutboundIntent, ReviewObligation)):
+                kind: Literal["OUTKEY", "REVIEWKEY"] = (
+                    "OUTKEY" if isinstance(model, OutboundIntent) else "REVIEWKEY"
+                )
+                unique = (
+                    model.logical_key
+                    if isinstance(model, OutboundIntent)
+                    else model.unique_source_key
+                )
+                marker_key = keys.uniqueness(model_scope(model), kind, keys.digest(unique))
+                writes.append(
+                    Write(self._marker_item(marker_key, model_scope(model), record.key, now), None)
+                )
+        for ref in command.expected_versions:
+            current = self.get(scope, ref.entity_type, ref.id)
+            if current is None or current.version != ref.version:
+                return StaleVersion(conflicts=("source_version",))
+            checks.append(Check(current.key, ref.version))
+        for marker in request.markers:
+            if not self._valid_marker(marker, scope, records):
+                return Forbidden()
+            # An explicitly supplied automatic marker is the same transaction item.
+            writes = [write for write in writes if write.key != marker.key]
+            writes.append(
+                Write(
+                    self._marker_item(
+                        marker.key, marker.scope, marker.target.key, marker.created_at, marker.ttl
+                    ),
+                    None,
+                )
+            )
+        if request.receipt_completion is not None:
+            completion = request.receipt_completion
+            claim = completion.claim
+            if claim.record_key.scope != scope:
+                return Forbidden()
+            receipt = self._owned(scope, claim.record_key.key)
+            if (
+                receipt is None
+                or receipt.entity_type != "inbound_receipt"
+                or receipt.version != claim.version
+                or claim.expires_at <= now
+            ):
+                return StaleVersion(conflicts=("receipt_claim",))
+            inbound = from_record(receipt, InboundReceipt)
+            token = ProcessingClaim.model_validate(
+                claim.model_dump(exclude={"record_key", "version"})
+            )
+            if inbound.state != "processing" or inbound.processing_claim != token:
+                return StaleVersion(conflicts=("receipt_claim",))
+            if completion.result_event_ids != tuple(
+                r.id for r in records if r.entity_type == "audit_event"
+            ):
+                return StaleVersion(conflicts=("receipt_result_events",))
+            completed = self._revision(
+                receipt,
+                now,
+                state="completed",
+                work_clock=None,
+                processing_claim=None,
+                result_event_ids=completion.result_event_ids,
+            )
+            records.append(completed)
+            writes.append(Write(record_item(completed), receipt.version))
+        result = Accepted(
+            event_ids=tuple(r.id for r in records if r.entity_type == "audit_event"),
+            resulting_versions=tuple(r.ref for r in records),
+        )
+        writes.append(
+            Write(
+                {
+                    "PK": command_key.pk,
+                    "SK": command_key.sk,
+                    "version": 1,
+                    "scope": scope.model_dump(mode="json"),
+                    "payload_digest": digest,
+                    "accepted_result": result.model_dump(mode="json"),
+                    "accepted_at": keys.instant(now),
+                },
+                None,
+            )
+        )
+        merged = self._merge_checks(writes, checks)
+        if merged is None:
+            return StaleVersion(conflicts=("repeated_key_or_version",))
+        large = size_failure(writes, merged)
+        if large:
+            return large
+        if self._atomic(writes, merged):
+            return result
+        return self._duplicate(command_key, digest, scope) or StaleVersion(
+            conflicts=("conditional_write",)
+        )
+
+    @staticmethod
+    def _merge_checks(writes: list[Write], checks: list[Check]) -> list[Check] | None:
+        written = {w.key: w.before for w in writes}
+        if len(written) != len(writes):
+            return None
+        result: dict[Key, Check] = {}
+        for check in checks:
+            if check.key in written:
+                if written[check.key] != check.version:
+                    return None
+            elif check.key in result and result[check.key].version != check.version:
+                return None
+            else:
+                result[check.key] = check
+        return list(result.values())
+
+    @staticmethod
+    def _marker_item(
+        key: Key, scope: Scope, target: Key, at: datetime, ttl: int | None = None
+    ) -> Item:
+        item: Item = {
+            "PK": key.pk,
+            "SK": key.sk,
+            "version": 1,
+            "scope": scope.model_dump(mode="json"),
+            "target_pk": target.pk,
+            "target_sk": target.sk,
+            "created_at": keys.instant(at),
+        }
+        if ttl is not None:
+            item["ttl"] = ttl
+        return item
+
+    @staticmethod
+    def _valid_marker(marker: MarkerRecord, scope: Scope, records: list[StoredRecord]) -> bool:
+        if not scope_owns(scope, marker.scope) or marker.target.scope != marker.scope:
+            return False
+        if marker.target.key not in {r.key for r in records}:
+            return False
+        if marker.pk == keys.partition(marker.scope):
+            target = next(r for r in records if r.key == marker.target.key)
+            if target.entity_type == "outbound_intent":
+                value = target.body.get("logical_key")
+                return isinstance(value, str) and marker.key == keys.uniqueness(
+                    marker.scope, "OUTKEY", keys.digest(value)
+                )
+            if target.entity_type == "review":
+                value = target.body.get("unique_source_key")
+                return isinstance(value, str) and marker.key == keys.uniqueness(
+                    marker.scope, "REVIEWKEY", keys.digest(value)
+                )
+            return False
+        # Global rows contain scope references only; account activation is deferred.
+        parts = marker.pk.split("#")
+        try:
+            if len(parts) == 3 and parts[0] == "SUBJECT":
+                return marker.key == keys.subject(parts[1], parts[2])
+            if len(parts) == 3 and parts[0] == "TOKEN":
+                return marker.key == keys.token(parts[1], parts[2])
+        except ValueError:
+            pass
+        return False
+
+    def accept_inbound(self, transport_key: str, receipt: StoredRecord) -> InboundAccept:
+        try:
+            model = from_record(receipt, InboundReceipt)
+        except ValueError:
+            return InboundAccept(status="forbidden")
+        if model.transport_key != transport_key or model.version != 1 or model.state != "pending":
+            return InboundAccept(status="conflict")
+        canonical = to_record(model, model.scope)
+        if size_failure([Write(record_item(canonical), None)], []):
+            return InboundAccept(status="conflict")
+        if self._atomic([Write(record_item(canonical), None)], []):
+            return InboundAccept(status="created", record=canonical, state="pending")
+        existing = self._owned(model.scope, receipt.key)
+        if existing is None:
+            return InboundAccept(status="forbidden")
+        return InboundAccept(status="existing", record=existing, state=str(existing.body["state"]))
+
+    @staticmethod
+    def _revision(record: StoredRecord, now: datetime, **changes: object) -> StoredRecord:
+        data = (
+            record.body | {"version": record.version + 1, "updated_at": utc_instant(now)} | changes
+        )
+        model = MODELS[record.entity_type].model_validate(data)
+        revised = to_record(model, model_scope(model))
+        return StoredRecord.model_validate(
+            revised.model_dump()
+            | {
+                "ttl": record.ttl,
+                "processing_claim": record.processing_claim,
+                "claim_generation": record.claim_generation,
+            }
+        )
+
+    def claim_work(
+        self,
+        record_key: ScopedKey,
+        expected_version: int,
+        owner: str,
+        now: datetime,
+        ttl: timedelta,
+    ) -> Claim | None:
+        now = utc_instant(now)
+        record = self._owned(record_key.scope, record_key.key)
+        if (
+            record is None
+            or type(expected_version) is not int
+            or expected_version < 1
+            or record.version != expected_version
+            or ttl <= timedelta()
+            or not owner.strip()
+            or not record.body.get("work_clock")
+        ):
+            return None
+        model = from_record(record, MODELS[record.entity_type])
+        previous = (
+            model.processing_claim if isinstance(model, InboundReceipt) else record.processing_claim
+        )
+        if previous is not None and previous.expires_at > now:
+            return None
+        token = ProcessingClaim(
+            owner=owner,
+            generation=max(record.claim_generation, previous.generation if previous else 0) + 1,
+            claimed_at=now,
+            expires_at=now + ttl,
+        )
+        if isinstance(model, InboundReceipt):
+            updated = self._revision(record, now, processing_claim=token, state="processing")
+        else:
+            revised = self._revision(record, now)
+            updated = StoredRecord.model_validate(
+                revised.model_dump() | {"processing_claim": token}
+            )
+        updated = StoredRecord.model_validate(
+            updated.model_dump() | {"claim_generation": token.generation}
+        )
+        if not self._update(record_item(updated), record.version):
+            return None
+        return Claim(**token.model_dump(), record_key=record_key, version=updated.version)
+
+    def acquire_patient(
+        self, scope: PatientScope, owner: str, now: datetime, ttl: timedelta
+    ) -> Lease | None:
+        now = utc_instant(now)
+        record = self.get(scope, "patient_profile", scope.patient_id)
+        if record is None or ttl <= timedelta() or not owner.strip():
+            return None
+        profile = from_record(record, PatientProfile)
+        if profile.lease_expires_at is not None and profile.lease_expires_at > now:
+            return None
+        lease = Lease(
+            scope=scope,
+            owner=owner,
+            generation=profile.lease_generation + 1,
+            claimed_at=now,
+            expires_at=now + ttl,
+        )
+        updated = self._revision(
+            record,
+            now,
+            lease_owner=owner,
+            lease_expires_at=lease.expires_at,
+            lease_generation=lease.generation,
+        )
+        return lease if self._update(record_item(updated), record.version) else None
+
+    def release_patient(self, lease: Lease) -> None:
+        now = utc_instant(self._clock())
+        record = self._lease_record(lease, now)
+        if record is not None:
+            updated = self._revision(record, now, lease_owner=None, lease_expires_at=None)
+            self._update(record_item(updated), record.version)
+
+    def query_due(
+        self,
+        lane: str,
+        shard: str,
+        through: datetime,
+        cursor: Cursor | None = None,
+        limit: int = 100,
+        *,
+        capability: WorkerCapability | None = None,
+    ) -> DuePage:
+        """Index hints only: caller MUST re-read the base record/clock before any action."""
+        if (
+            capability is None
+            or lane not in capability.permitted_lanes
+            or capability.auth_expiry <= utc_instant(self._clock())
+        ):
+            return (), None
+        binding = keys.digest(
+            canonical_json(
+                [
+                    capability.resolved_scope.model_dump(mode="json"),
+                    lane,
+                    shard,
+                    keys.instant(through),
+                ]
+            ).decode()
+        )
+        internal_cursor = None
+        if cursor is not None:
+            saved = self._due_cursors.get(cursor.position.get("token", ""))
+            if cursor.query != binding or saved is None or saved[0] != binding:
+                return (), None
+            internal_cursor = saved[1]
+        items, next_cursor = self._query(
+            f"{lane}#{shard}",
+            index="GSI_DUE",
+            through=keys.instant(through) + "#\uffff",
+            cursor=internal_cursor,
+            limit=limit,
+        )
+        hints = []
+        for item in items:
+            record = self._owned(capability.resolved_scope, Key(item["PK"], item["SK"]))
+            if record is None:
+                continue
+            hints.append(
+                DueItem(
+                    record_key=record.scoped_key(
+                        model_scope(from_record(record, MODELS[record.entity_type]))
+                    ),
+                    entity_type=record.entity_type,
+                    id=record.id,
+                    next_action_at=item["due_sort"].split("#", 1)[0],
+                )
+            )
+        public_cursor = None
+        if next_cursor is not None:
+            token = uuid4().hex
+            self._due_cursors[token] = (binding, next_cursor)
+            if len(self._due_cursors) > 256:
+                self._due_cursors.popitem(last=False)
+            public_cursor = Cursor(query=binding, position={"token": token})
+        return tuple(hints), public_cursor
+
+    def reserve_contact(
+        self, scope: PatientScope, slot_key: str, intent_id: str, expected_fence: Lease
+    ) -> Literal["reserved", "already_taken"]:
+        now = utc_instant(self._clock())
+        if scope != expected_fence.scope:
+            return "already_taken"
+        profile = self._lease_record(expected_fence, now)
+        intent = self.get(scope, "outbound_intent", intent_id)
+        if profile is None or intent is None or intent.body.get("slot_id") != slot_key:
+            return "already_taken"
+        if (
+            intent.body.get("status") != "queued"
+            or from_record(intent, OutboundIntent).expires_at <= now
+        ):
+            return "already_taken"
+        key = keys.contact(scope, slot_key)
+        item = self._marker_item(key, scope, intent.key, now)
+        item.update(state="reserved", fence_generation=expected_fence.generation)
+        accepted = self._atomic(
+            [Write(item, None)],
+            [Check(profile.key, profile.version), Check(intent.key, intent.version)],
+        )
+        return "reserved" if accepted else "already_taken"
+
+    def start_delivery(
+        self,
+        intent_id: str,
+        expected_versions: tuple[VersionRef, ...],
+        owner: str,
+        now: datetime,
+        *,
+        scope: Scope,
+    ) -> DeliveryAttempt | None:
+        now = utc_instant(now)
+        record = self.get(scope, "outbound_intent", intent_id)
+        if record is None or not owner.strip():
+            return None
+        intent = from_record(record, OutboundIntent)
+        if record.processing_claim is not None:
+            return None  # Finish the fenced work update before beginning a delivery attempt.
+        if intent.status == "sending":
+            if intent.delivery_claim is None or intent.delivery_claim.expires_at > now:
+                return None
+            # Persisted attempt-start means an interrupted network outcome is unknown.
+            attempts, _ = self._query(
+                record.pk, prefix=f"ATTEMPT#{keys.component(intent_id)}#", limit=100
+            )
+            for raw in attempts:
+                attempt = from_record(item_record(raw), DeliveryAttempt)
+                if (
+                    attempt.lease_generation == intent.delivery_claim.generation
+                    and attempt.outcome == "started"
+                ):
+                    changed_attempt = self._revision(
+                        item_record(raw), now, outcome="uncertain", ended_at=now
+                    )
+                    uncertain = self._revision(record, now, status="uncertain")
+                    self._atomic(
+                        [
+                            Write(record_item(changed_attempt), attempt.version),
+                            Write(record_item(uncertain), record.version),
+                        ],
+                        [],
+                    )
+                    return None
+            return None  # No proof of an unsent request; recovery policy is slice 03.
+        if intent.status != "queued":
+            return None
+        required = (record.ref, *intent.source_versions)
+        if set(expected_versions) != set(required) or len(expected_versions) != len(set(required)):
+            return None
+        checks = []
+        valid = intent.expires_at > now
+        for ref in intent.source_versions:
+            current = self.get(scope, ref.entity_type, ref.id)
+            if current is None or current.version != ref.version:
+                valid = False
+                break
+            checks.append(Check(current.key, ref.version))
+        if not valid:
+            suppressed = self._revision(
+                record,
+                now,
+                status="suppressed",
+                work_clock=None,
+                suppression_reason="stale_source_or_expired",
+            )
+            self._update(record_item(suppressed), record.version)
+            return None
+        claim = ProcessingClaim(
+            owner=owner,
+            generation=(intent.delivery_claim.generation + 1 if intent.delivery_claim else 1),
+            claimed_at=now,
+            expires_at=now + timedelta(seconds=intent.delivery_lease_seconds),
+        )
+        attempt_id = uuid4().hex
+        attempt = DeliveryAttempt(
+            id=attempt_id,
+            attempt_id=attempt_id,
+            scope=model_scope(intent),
+            intent_id=intent_id,
+            lease_generation=claim.generation,
+            freshness_snapshot=expected_versions,
+            started_at=now,
+            created_at=now,
+            updated_at=now,
+        )
+        sending = self._revision(record, now, status="sending", delivery_claim=claim)
+        writes = [
+            Write(record_item(sending), record.version),
+            Write(record_item(to_record(attempt, scope)), None),
+        ]
+        merged = self._merge_checks(writes, checks)
+        return attempt if merged is not None and self._atomic(writes, merged) else None
+
+    def complete_delivery(
+        self,
+        attempt_id: str,
+        outcome: DeliveryOutcome,
+        provider_message_id: str | None,
+        *,
+        scope: Scope,
+    ) -> StoredRecord | None:
+        now = utc_instant(self._clock())
+        record = self.get(scope, "delivery_attempt", attempt_id)
+        if record is None or outcome not in {"provider_accepted", "uncertain", "definite_failure"}:
+            return None
+        attempt = from_record(record, DeliveryAttempt)
+        intent_record = self.get(scope, "outbound_intent", attempt.intent_id)
+        if intent_record is None:
+            return None
+        intent = from_record(intent_record, OutboundIntent)
+        if attempt.outcome != "started":
+            return (
+                intent_record
+                if (
+                    attempt.outcome == outcome
+                    and attempt.provider_message_id == provider_message_id
+                )
+                else None
+            )
+        if (
+            intent.status != "sending"
+            or intent.delivery_claim is None
+            or intent.delivery_claim.generation != attempt.lease_generation
+        ):
+            return None
+        if intent.delivery_claim.expires_at <= now:
+            outcome, provider_message_id = "uncertain", None
+        if outcome == "provider_accepted" and not provider_message_id:
+            return None
+        if outcome != "provider_accepted" and provider_message_id is not None:
+            return None
+        changes: dict[str, object] = {
+            "status": "failed" if outcome == "definite_failure" else outcome
+        }
+        if outcome == "provider_accepted":
+            changes.update(
+                accepted_message_id=provider_message_id, accepted_at=now, work_clock=None
+            )
+        finished = self._revision(intent_record, now, **changes)
+        ended = self._revision(
+            record, now, outcome=outcome, ended_at=now, provider_message_id=provider_message_id
+        )
+        return (
+            finished
+            if self._atomic(
+                [
+                    Write(record_item(finished), intent_record.version),
+                    Write(record_item(ended), record.version),
+                ],
+                [],
+            )
+            else None
+        )
+
+    def create_or_get_review(
+        self, payload: ReviewCreation, now: datetime
+    ) -> tuple[StoredRecord | None, bool]:
+        now = utc_instant(now)
+        review = payload.review
+        try:
+            actual_scope = model_scope(review)
+        except ValueError:
+            return None, False
+        if not scope_owns(payload.scope, actual_scope) or review.version != 1:
+            return None, False
+        record = to_record(review, payload.scope)
+        marker = keys.uniqueness(
+            model_scope(review), "REVIEWKEY", keys.digest(review.unique_source_key)
+        )
+        writes = [
+            Write(record_item(record), None),
+            Write(self._marker_item(marker, model_scope(review), record.key, now), None),
+        ]
+        if self._atomic(writes, []):
+            return record, True
+        existing = self._read(marker)
+        if existing is None:
+            return None, False
+        found = self._owned(payload.scope, Key(existing["target_pk"], existing["target_sk"]))
+        if (
+            found is None
+            or found.entity_type != "review"
+            or found.body.get("unique_source_key") != review.unique_source_key
+        ):
+            return None, False
+        return found, False
+
+    def load_session(self, scope: PatientScope, key: str) -> SessionSnapshot | None:
+        record = self.get(scope, "session_snapshot", key)
+        return from_record(record, SessionSnapshot) if record else None
+
+    def commit_session(
+        self,
+        scope: PatientScope,
+        key: str,
+        expected_session_version: int,
+        fence: Lease,
+        *,
+        snapshot: SessionSnapshot,
+    ) -> bool:
+        now = utc_instant(self._clock())
+        if (
+            scope != fence.scope
+            or type(expected_session_version) is not int
+            or expected_session_version < 0
+            or snapshot.scope != scope
+            or snapshot.id != key
+            or snapshot.fence_generation != fence.generation
+            or snapshot.session_version != expected_session_version + 1
+        ):
+            return False
+        profile = self._lease_record(fence, now)
+        if profile is None:
+            return False
+        record = to_record(snapshot, scope)
+        previous = self.get(scope, "session_snapshot", key)
+        if previous is not None and (
+            previous.key != record.key
+            or previous.created_at != record.created_at
+            or previous.updated_at > record.updated_at
+        ):
+            return False
+        return self._atomic(
+            [Write(record_item(record), expected_session_version or None)],
+            [Check(profile.key, profile.version)],
+        )
+
+    def reconcile_partition(
+        self, scope: Scope, cursor: Cursor | None = None, limit: int = 100
+    ) -> ReconcileReport:
+        items, next_cursor = self._query(keys.partition(scope), cursor=cursor, limit=limit)
+        inconsistent: list[Key] = []
+        repaired: list[Key] = []
+        conflicts: list[Key] = []
+        unrepairable: list[Key] = []
+        for item in items:
+            if item.get("entity_type") not in MODELS or item.get("doctor_id") != scope.doctor_id:
+                continue
+            key = Key(item["PK"], item["SK"])
+            try:
+                record = item_record(item)
+                model = from_record(record, MODELS[record.entity_type])
+                if not scope_owns(scope, model_scope(model)):
+                    continue
+                desired = projections(model)
+            except (ValueError, ValidationError):
+                # Missing canonical clocks cannot be invented by a projection repair.
+                unrepairable.append(key)
+                continue
+            actual = {field: item[field] for field in PROJECTION_FIELDS if field in item}
+            if actual == desired:
+                continue
+            inconsistent.append(key)
+            updated = {k: v for k, v in item.items() if k not in PROJECTION_FIELDS} | desired
+            (repaired if self._update(updated, record.version) else conflicts).append(key)
+        return ReconcileReport(
+            examined=len(items),
+            inconsistent=tuple(inconsistent),
+            repaired=tuple(repaired),
+            conflicts=tuple(conflicts),
+            unrepairable=tuple(unrepairable),
+            cursor=next_cursor,
+        )
+
+    def authorize(self) -> None:
+        """Deferred to slice 05."""
+        raise NotImplementedError("authorize belongs to slice 05")
+
+    def acquire_intake(self) -> None:
+        """Deferred to slice 09."""
+        raise NotImplementedError("acquire_intake belongs to slice 09")
+
+    def raise_intake_concern(self) -> None:
+        """Deferred to slice 09."""
+        raise NotImplementedError("raise_intake_concern belongs to slice 09")
+
+    def raise_incident(self) -> None:
+        """Deferred to slices 03/04."""
+        raise NotImplementedError("raise_incident belongs to slices 03/04")
+
+    def confirm_claim(self) -> None:
+        """Deferred to slice 06."""
+        raise NotImplementedError("confirm_claim belongs to slice 06")
+
+
+INDEX_FIELDS = {
+    "GSI_DUE": ("due_lane_shard", "due_sort"),
+    "GSI_REVIEW": ("review_pk", "review_sort"),
+    "GSI_DOCTOR_PATIENTS": ("patients_pk", "patients_sort"),
+}
+
+
+def query_identity(pk: str, index: str | None, prefix: str, through: str | None) -> str:
+    return keys.digest(json.dumps([pk, index, prefix, through]))

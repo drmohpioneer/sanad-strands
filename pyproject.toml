@@ -13,6 +13,7 @@ dependencies = [
     "pydantic==2.13.5",
     "uvicorn==0.52.4",
     "tzdata==2026.3",
+    "boto3==1.43.89",
 ]
 
 [dependency-groups]

@@ -1,0 +1,25 @@
+# Secrets
+.env
+*.env
+*credentials*.json
+*.pem
+
+# Local noise
+__pycache__/
+*.pyc
+.venv/
+venv/
+.DS_Store
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.uv-cache/
+.uv-python/
+dist/
+*.egg-info/
+
+# Media scratch
+*.ogg
+*.wav
+*.aiff
+*.mp4

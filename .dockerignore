@@ -1,0 +1,15 @@
+.git
+.env*
+*.env
+.venv
+.tools
+.uv-cache
+.uv-python
+lane
+tests
+docs
+dist
+**/__pycache__
+**/.pytest_cache
+**/.mypy_cache
+**/.ruff_cache

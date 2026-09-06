@@ -1,0 +1,12 @@
+version: 0.2
+phases:
+  pre_build:
+    commands:
+      - aws ecr get-login-password --region "$AWS_DEFAULT_REGION" | docker login --username AWS --password-stdin "$ECR_URI"
+  build:
+    commands:
+      - docker build --platform linux/arm64 --build-arg BUILDKIT_INLINE_CACHE=1 -f deploy/Dockerfile -t "$ECR_URI:$IMAGE_TAG" .
+      - docker image inspect --format 'UNCOMPRESSED_IMAGE_BYTES={{.Size}}' "$ECR_URI:$IMAGE_TAG"
+  post_build:
+    commands:
+      - docker push "$ECR_URI:$IMAGE_TAG"

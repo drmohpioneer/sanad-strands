@@ -30,10 +30,11 @@ dev = [
 packages = ["src/sanad"]
 
 [tool.hatch.build.targets.sdist]
-include = ["/src", "/tests", "/pyproject.toml", "/uv.lock", "/.python-version", "/Makefile", "/README.md"]
+include = ["/src", "/tests", "/deploy", "/pyproject.toml", "/uv.lock", "/.python-version", "/Makefile", "/README.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 addopts = "-q --disable-socket --allow-unix-socket"
 filterwarnings = ["error"]
 
@@ -71,7 +72,7 @@ exclude = [
 python_version = "3.12"
 strict = true
 plugins = ["pydantic.mypy"]
-files = ["src", "tests"]
+files = ["src", "tests", "deploy"]
 
 [[tool.mypy.overrides]]
 module = ["sanad.safety.sentinel", "sanad.safety.labs", "sanad.safety.vitals", "sanad.safety.validator"]

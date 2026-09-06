@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI
 
@@ -12,6 +12,8 @@ if TYPE_CHECKING:
     from sanad.auth.commands import ConsentPolicy
     from sanad.channels.telegram.settings import TelegramSettings
     from sanad.channels.transport import Transport
+    from sanad.ops.nonce_store import TickVerifier
+    from sanad.store.keys import ScopedKey
     from sanad.store.protocol import Store
     from sanad.web.settings import WebSettings
 
@@ -26,6 +28,9 @@ def create_app(
     process_receipts: bool = True,
     web_settings: WebSettings | None = None,
     consent_policy: Callable[[str], ConsentPolicy | None] | None = None,
+    receipt_submit: Callable[[ScopedKey], None] | None = None,
+    tick_verifier: TickVerifier | None = None,
+    tick_sweep: Callable[[], dict[str, Any]] | None = None,
 ) -> FastAPI:
     """Build an independent application without reading runtime configuration."""
     app = FastAPI()
@@ -95,5 +100,11 @@ def create_app(
             return response
 
     app.state.telegram = runtime
-    app.include_router(telegram_router(runtime, process_receipts=process_receipts))
+    app.include_router(
+        telegram_router(runtime, process_receipts=process_receipts, receipt_submit=receipt_submit)
+    )
+    if tick_verifier is not None and tick_sweep is not None and runtime is not None:
+        from sanad.api.internal import internal_router
+
+        app.include_router(internal_router(tick_verifier, tick_sweep, runtime))
     return app

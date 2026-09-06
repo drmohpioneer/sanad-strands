@@ -1,12 +1,54 @@
 # Deployment, operations and clinical readiness
 
-Version 2.0 · Planning only; no infrastructure provisioned or clinical activation authorized
+Version 2.1 · 2026-09-06 · Synthetic AWS development deployment accepted (contract 07); no clinical activation
 
 ## Environments and owners
 
 Local development uses fake clocks, captured transport, fixture models and the in-memory store; DynamoDB Local verifies adapter transactions. Development deployment uses only synthetic data, a new AWS target and a new Telegram bot. Judge deployment is a separately identified synthetic release. A clinical environment follows the readiness gate below with its own configuration, data and access controls.
 
 The specification defines and the review checks operational contracts; the implementation demonstrates them. The operator owns cloud accounts, allowed spending, clinical decisions and release authorization. Record an operational responder and escalation channel before launch. Provisioning must positively identify new account/region/resource names and refuse legacy Google service/bot targets.
+
+## Development deployment, contract 07
+
+The owner authorized this development deployment and rollback on 2026-09-06. Account and region were verified through the AWS default credential chain; the account remains `FREE / ACTIVE` in `us-east-1`. Only synthetic fixtures were used. Contract 07 was accepted by the architect on 2026-09-06.
+
+| Environment | State and endpoint |
+|---|---|
+| Local | In-memory store or DynamoDB Local; captured transport |
+| dev | Stack `sanad-dev`; [HTTPS health](https://btx35drwcqejwxymdcwfzwku5m0cynoz.lambda-url.us-east-1.on.aws/health); real SSM/DynamoDB, Lambda workers and minute ticks |
+| judge | Not deployed |
+| Clinical | Not activated |
+
+| Stack output / setting | Development value |
+|---|---|
+| Function URL | `https://btx35drwcqejwxymdcwfzwku5m0cynoz.lambda-url.us-east-1.on.aws/` |
+| App / relay | `sanad-dev-app` / `sanad-dev-relay` |
+| Table | `sanad-dev-data` |
+| Bucket | `sanad-dev-<owner-account>-us-east-1` (account component redacted) |
+| ECR repository / CodeBuild project | `sanad-dev-app` / `sanad-dev-build` |
+| Image digest | `sha256:e5c14db0b496c622af829dcb11ef7af25c31ebe59b7be13fb7bcd07c3dee81f3` |
+| Source archive SHA-256 | `357e56d60a5098790c99e3c10fdedb02d6622b0d82c9ee6b66ae02d8ed5ef725` |
+| Stack revision | `1e84abb9b2b8cd422f36d27035c47dbd2dce82c878bb1eaf91cb242fcb0279ad` |
+| Code / stored schema version | `1` / `1` |
+| Parameter prefix | `/sanad/dev/` (values withheld) |
+| App limits | ARM64, 3,008 MB, 120 s; no reserved concurrency |
+| Relay limits | ARM64, Python 3.12 zip, 128 MB, 25 s; no reserved concurrency |
+| Account concurrency | 10 total, 10 unreserved |
+| Alarms / budget | App Errors and Throttles, relay Errors over 5 minutes; $20 monthly account budget with one configured email subscriber |
+
+The 23 stack resources include the build infrastructure, bucket, table, functions, URL permissions, schedule, roles, log groups, alarms and budget. Seven parameters are owned by `ops.py`: `bot-token`, `webhook-secret`, `tick-secret`, `admin-telegram-id` (SecureString), and `public-base-url`, `bot-username`, `budget-email` (String). The app and relay can decrypt only through SSM using its default managed key. The app's table role includes `ConditionCheckItem` for transaction read guards; the first live smoke exposed that missing permission, and it was fixed before a passing release was recorded.
+
+Use the two-pass operator sequence in [README](../README.md#deploy). A bootstrap stack without an image records application checks as skipped; it does not constitute a passing deployment. The app pass writes the function URL to SSM and requires health, tick/replay/forgery, webhook persistence/replay/worker completion, two-tenant store isolation, browser headers/CSRF and cost checks. Configuration revision uses parameter versions and modification timestamps, so recreating a parameter at version 1 also refreshes cached Lambda configuration.
+
+[Release history](../deploy/releases/dev.json) records every attempt, including the initial smoke failure, a passing first image, a passing second image, a real rollback to the first image, restoration of the final image and no-op verification. The real rollback restored `sha256:6c0d13328b9dbbdf9de06f67824f6bd90fcd4d91f42aef0bdcfcf18b350abd9d` with all six smoke groups passing; the final image above was then restored. The new bot's webhook is registered on this stack's `/tg` URL, with zero pending updates at verification. No real account was approved or patient activated by these checks. Tenant smoke uses a separate synthetic bot namespace in the real table; the live tick excludes other bot namespaces.
+
+The final image measured 73,251,440 bytes in ECR (compressed) and 199,688,097 bytes through `docker image inspect` (uncompressed). First health after introducing that image took 4.1626 s; its warm check took 0.1715 s. The first ever public health request on the initial image took 7.4146 s. These are end-to-end request timings, not clinical SLAs or isolated CPU initialization measurements. Every passing warm health measurement was below 1 s.
+
+The actual CloudWatch inputs and 30-day Lambda forecast are embedded in each release record and in [contract 07's report](contracts/07-aws-development-deployment.md#report). The forecast reports both 30 times the observed 24-hour window and 43,200 minute-scheduled app/relay calls using measured mean durations at the ARM rate. The observation window includes deployment and smoke traffic; it is not a full day of steady operation. ECR, CodeBuild, DynamoDB, S3, logs, alarms and future model/media usage are separate costs. The credit API reported $139.56 remaining during verification. The $20 budget is a notification, not a hard cap.
+
+The replaced spike function and URL, disabled rule and targets, ECR repository/images, CodeBuild project, both roles/policies, bucket and two log groups were removed. Bucket cleanup removed two versions/objects; read-only checks confirmed the principal spike resources absent. No frozen Google resources were accessed.
+
+Deleting the development stack intentionally removes its table, functions, logs, build project, ECR images/repository, roles, schedule, budget and alarms. The versioned bucket and seven parameters remain. After stack deletion, run `python -m deploy.cleanup retained-bucket --env dev` to remove versions, delete markers and multipart uploads and then the bucket; run `python -m deploy.ops secrets delete --env dev` to remove the parameters. The bucket command refuses to operate while the stack still exists. Preserve required evidence and exports before teardown. Do not use these deletion commands for ordinary rollback.
 
 ## Budget and access before live calls
 

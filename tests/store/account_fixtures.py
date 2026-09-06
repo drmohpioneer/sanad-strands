@@ -13,12 +13,14 @@ from pydantic import BaseModel, JsonValue, SecretStr
 from sanad.accounts.commands import ApplyAsDoctor, ApproveDoctor
 from sanad.accounts.records import Application, Doctor, SubjectBinding
 from sanad.api.app import create_app
+from sanad.api.internal import process_event
 from sanad.channels.telegram.router import TelegramRuntime
 from sanad.channels.telegram.settings import TelegramSettings
 from sanad.channels.transport import CapturedTransport
 from sanad.domain import PatientScope, Principal
 from sanad.store import keys
 from sanad.store._base import StoreBase, Write
+from sanad.store.keys import ScopedKey
 from sanad.store.records import (
     CommandEnvelope,
     CommitRequest,
@@ -79,12 +81,20 @@ class AccountWorld:
     @classmethod
     def create(cls, store: StoreBase, clock: FakeClock, *, process: bool = True) -> "AccountWorld":
         transport = CapturedTransport()
+
+        def submit(key: ScopedKey) -> None:
+            process_event(
+                app.state.telegram,
+                {"type": "process_receipt", "receipt": key.model_dump(mode="json")},
+            )
+
         app = create_app(
             telegram_settings=settings(),
             store=store,
             clock=clock,
             transport=transport,
             process_receipts=process,
+            receipt_submit=submit,
         )
         return cls(store, clock, cast(TelegramRuntime, app.state.telegram), app, transport)
 

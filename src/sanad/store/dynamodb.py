@@ -181,6 +181,21 @@ class DynamoStore(StoreBase):
                 return False
             raise
 
+    def _delete_nonce(self, key: Key, before: int) -> bool:
+        if not key.pk.startswith("OPS#") or not key.sk.startswith("NONCE#"):
+            return False
+        try:
+            self._client.delete_item(
+                TableName=self._table,
+                Key=_encode({"PK": key.pk, "SK": key.sk}),
+                **self._condition(before),
+            )
+            return True
+        except ClientError as error:
+            if error.response["Error"]["Code"] == "ConditionalCheckFailedException":
+                return False
+            raise
+
     def _query(
         self,
         pk: str,

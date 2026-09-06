@@ -135,6 +135,11 @@ class StoreBase(ABC):
     def _atomic(self, writes: list[Write], checks: list[Check]) -> bool: ...
 
     @abstractmethod
+    def _delete_nonce(self, key: Key, before: int) -> bool:
+        """CAS deletion of an operational nonce only; never a domain record."""
+        ...
+
+    @abstractmethod
     def _update(self, item: Item, before: int) -> bool:
         """Version-checked UpdateItem (including claims/leases/projection repairs)."""
         ...

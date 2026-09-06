@@ -51,6 +51,15 @@ class MemoryStore(StoreBase):
     def _update(self, item: Item, before: int) -> bool:
         return self._atomic([Write(item, before)], [])
 
+    def _delete_nonce(self, key: Key, before: int) -> bool:
+        if not key.pk.startswith("OPS#") or not key.sk.startswith("NONCE#"):
+            return False
+        with self._lock:
+            if self._items.get(key, {}).get("version") != before:
+                return False
+            del self._items[key]
+            return True
+
     def _query(
         self,
         pk: str,

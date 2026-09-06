@@ -1,0 +1,1105 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Sanad synthetic AWS development service, contract 07",
+  "Parameters": {
+    "Environment": {
+      "Type": "String",
+      "AllowedValues": [
+        "dev",
+        "judge"
+      ]
+    },
+    "ImageUri": {
+      "Type": "String",
+      "Default": ""
+    },
+    "BudgetEmail": {
+      "Type": "String",
+      "AllowedPattern": "[^\\s@]+@[^\\s@]+\\.[^\\s@]+"
+    },
+    "StackRevision": {
+      "Type": "String"
+    },
+    "RelayCodeKey": {
+      "Type": "String",
+      "Default": ""
+    },
+    "SsmKeyArn": {
+      "Type": "String"
+    },
+    "ConfigRevision": {
+      "Type": "String",
+      "Default": "infrastructure-only"
+    }
+  },
+  "Conditions": {
+    "HasImage": {
+      "Fn::Not": [
+        {
+          "Fn::Equals": [
+            {
+              "Ref": "ImageUri"
+            },
+            ""
+          ]
+        }
+      ]
+    },
+    "IsJudge": {
+      "Fn::Equals": [
+        {
+          "Ref": "Environment"
+        },
+        "judge"
+      ]
+    }
+  },
+  "Resources": {
+    "Table": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": {
+          "Fn::Sub": "sanad-${Environment}-data"
+        },
+        "BillingMode": "PAY_PER_REQUEST",
+        "KeySchema": [
+          {
+            "AttributeName": "PK",
+            "KeyType": "HASH"
+          },
+          {
+            "AttributeName": "SK",
+            "KeyType": "RANGE"
+          }
+        ],
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "PK",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "SK",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "due_lane_shard",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "due_sort",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "patients_pk",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "patients_sort",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "review_pk",
+            "AttributeType": "S"
+          },
+          {
+            "AttributeName": "review_sort",
+            "AttributeType": "S"
+          }
+        ],
+        "GlobalSecondaryIndexes": [
+          {
+            "IndexName": "GSI_DUE",
+            "KeySchema": [
+              {
+                "AttributeName": "due_lane_shard",
+                "KeyType": "HASH"
+              },
+              {
+                "AttributeName": "due_sort",
+                "KeyType": "RANGE"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            }
+          },
+          {
+            "IndexName": "GSI_REVIEW",
+            "KeySchema": [
+              {
+                "AttributeName": "review_pk",
+                "KeyType": "HASH"
+              },
+              {
+                "AttributeName": "review_sort",
+                "KeyType": "RANGE"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            }
+          },
+          {
+            "IndexName": "GSI_DOCTOR_PATIENTS",
+            "KeySchema": [
+              {
+                "AttributeName": "patients_pk",
+                "KeyType": "HASH"
+              },
+              {
+                "AttributeName": "patients_sort",
+                "KeyType": "RANGE"
+              }
+            ],
+            "Projection": {
+              "ProjectionType": "ALL"
+            }
+          }
+        ],
+        "PointInTimeRecoverySpecification": {
+          "PointInTimeRecoveryEnabled": true
+        },
+        "TimeToLiveSpecification": {
+          "AttributeName": "ttl",
+          "Enabled": true
+        },
+        "DeletionProtectionEnabled": {
+          "Fn::If": [
+            "IsJudge",
+            true,
+            false
+          ]
+        },
+        "SSESpecification": {
+          "SSEEnabled": true
+        }
+      }
+    },
+    "Bucket": {
+      "Type": "AWS::S3::Bucket",
+      "DeletionPolicy": "RetainExceptOnCreate",
+      "UpdateReplacePolicy": "Retain",
+      "Properties": {
+        "BucketName": {
+          "Fn::Sub": "sanad-${Environment}-${AWS::AccountId}-${AWS::Region}"
+        },
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "OwnershipControls": {
+          "Rules": [
+            {
+              "ObjectOwnership": "BucketOwnerEnforced"
+            }
+          ]
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        },
+        "LifecycleConfiguration": {
+          "Rules": [
+            {
+              "Id": "expire-spikes",
+              "Prefix": "spike/",
+              "Status": "Enabled",
+              "ExpirationInDays": 7,
+              "NoncurrentVersionExpiration": {
+                "NoncurrentDays": 7
+              }
+            },
+            {
+              "Id": "abort-incomplete",
+              "Status": "Enabled",
+              "AbortIncompleteMultipartUpload": {
+                "DaysAfterInitiation": 1
+              }
+            }
+          ]
+        }
+      }
+    },
+    "BucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "Bucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Deny",
+              "Principal": "*",
+              "Action": "s3:*",
+              "Resource": [
+                {
+                  "Fn::GetAtt": [
+                    "Bucket",
+                    "Arn"
+                  ]
+                },
+                {
+                  "Fn::Sub": "${Bucket.Arn}/*"
+                }
+              ],
+              "Condition": {
+                "Bool": {
+                  "aws:SecureTransport": "false"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "Repository": {
+      "Type": "AWS::ECR::Repository",
+      "Properties": {
+        "RepositoryName": {
+          "Fn::Sub": "sanad-${Environment}-app"
+        },
+        "EmptyOnDelete": true,
+        "ImageTagMutability": "IMMUTABLE",
+        "EncryptionConfiguration": {
+          "EncryptionType": "AES256"
+        },
+        "LifecyclePolicy": {
+          "LifecyclePolicyText": "{\"rules\": [{\"rulePriority\": 1, \"description\": \"Keep five most recent images\", \"selection\": {\"tagStatus\": \"any\", \"countType\": \"imageCountMoreThan\", \"countNumber\": 5}, \"action\": {\"type\": \"expire\"}}]}"
+        },
+        "RepositoryPolicyText": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "LambdaImageRead",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": [
+                "ecr:BatchGetImage",
+                "ecr:GetDownloadUrlForLayer"
+              ],
+              "Condition": {
+                "ArnLike": {
+                  "aws:SourceArn": {
+                    "Fn::Sub": "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:sanad-${Environment}-app"
+                  }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "AppLogs": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/lambda/sanad-${Environment}-app"
+        },
+        "RetentionInDays": 30
+      }
+    },
+    "RelayLogs": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/lambda/sanad-${Environment}-relay"
+        },
+        "RetentionInDays": 30
+      }
+    },
+    "BuildLogs": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "LogGroupName": {
+          "Fn::Sub": "/aws/codebuild/sanad-${Environment}-build"
+        },
+        "RetentionInDays": 30
+      }
+    },
+    "AppRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "sanad-${Environment}-app"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "scoped-access",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ssm:GetParameter",
+                    "ssm:GetParameters"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/sanad/${Environment}/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "kms:Decrypt"
+                  ],
+                  "Resource": {
+                    "Ref": "SsmKeyArn"
+                  },
+                  "Condition": {
+                    "StringEquals": {
+                      "kms:ViaService": {
+                        "Fn::Sub": "ssm.${AWS::Region}.amazonaws.com"
+                      }
+                    }
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "dynamodb:GetItem",
+                    "dynamodb:PutItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:DeleteItem",
+                    "dynamodb:Query",
+                    "dynamodb:TransactWriteItems",
+                    "dynamodb:ConditionCheckItem"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": [
+                        "Table",
+                        "Arn"
+                      ]
+                    },
+                    {
+                      "Fn::Sub": "${Table.Arn}/index/*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:PutObject",
+                    "s3:DeleteObject"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "${Bucket.Arn}/*"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:ListBucket"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "Bucket",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "AppLogs",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "bedrock:InvokeModel",
+                    "bedrock:Converse"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.amazon.nova-lite-v1:0"
+                    },
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:bedrock:us-east-1::foundation-model/amazon.nova-lite-v1:0"
+                    },
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:bedrock:us-east-2::foundation-model/amazon.nova-lite-v1:0"
+                    },
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:bedrock:us-west-2::foundation-model/amazon.nova-lite-v1:0"
+                    },
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.amazon.nova-pro-v1:0"
+                    },
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:bedrock:us-east-1::foundation-model/amazon.nova-pro-v1:0"
+                    },
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:bedrock:us-east-2::foundation-model/amazon.nova-pro-v1:0"
+                    },
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:bedrock:us-west-2::foundation-model/amazon.nova-pro-v1:0"
+                    },
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/us.amazon.nova-micro-v1:0"
+                    },
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:bedrock:us-east-1::foundation-model/amazon.nova-micro-v1:0"
+                    },
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:bedrock:us-east-2::foundation-model/amazon.nova-micro-v1:0"
+                    },
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:bedrock:us-west-2::foundation-model/amazon.nova-micro-v1:0"
+                    },
+                    {
+                      "Fn::Sub": "arn:${AWS::Partition}:bedrock:us-east-1::foundation-model/mistral.voxtral-small-24b-2507"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "lambda:InvokeFunction"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:lambda:${AWS::Region}:${AWS::AccountId}:function:sanad-${Environment}-app"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "RelayRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "sanad-${Environment}-relay"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "scoped-access",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ssm:GetParameter"
+                  ],
+                  "Resource": {
+                    "Fn::Sub": "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/sanad/${Environment}/tick-secret"
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "kms:Decrypt"
+                  ],
+                  "Resource": {
+                    "Ref": "SsmKeyArn"
+                  },
+                  "Condition": {
+                    "StringEquals": {
+                      "kms:ViaService": {
+                        "Fn::Sub": "ssm.${AWS::Region}.amazonaws.com"
+                      }
+                    }
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "RelayLogs",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "BuildRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "sanad-${Environment}-build"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "codebuild.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "Policies": [
+          {
+            "PolicyName": "scoped-access",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetObject",
+                    "s3:GetObjectVersion",
+                    "s3:PutObject"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::Sub": "${Bucket.Arn}/builds/*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetBucketLocation",
+                    "s3:ListBucket"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "Bucket",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "logs:CreateLogStream",
+                    "logs:PutLogEvents"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "BuildLogs",
+                      "Arn"
+                    ]
+                  }
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ecr:GetAuthorizationToken"
+                  ],
+                  "Resource": "*"
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "ecr:BatchCheckLayerAvailability",
+                    "ecr:CompleteLayerUpload",
+                    "ecr:InitiateLayerUpload",
+                    "ecr:UploadLayerPart",
+                    "ecr:PutImage",
+                    "ecr:BatchGetImage",
+                    "ecr:GetDownloadUrlForLayer"
+                  ],
+                  "Resource": {
+                    "Fn::GetAtt": [
+                      "Repository",
+                      "Arn"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "BuildProject": {
+      "Type": "AWS::CodeBuild::Project",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "sanad-${Environment}-build"
+        },
+        "ServiceRole": {
+          "Fn::GetAtt": [
+            "BuildRole",
+            "Arn"
+          ]
+        },
+        "Artifacts": {
+          "Type": "NO_ARTIFACTS"
+        },
+        "Source": {
+          "Type": "S3",
+          "Location": {
+            "Fn::Sub": "${Bucket}/builds/bootstrap.zip"
+          },
+          "BuildSpec": "deploy/buildspec.yml"
+        },
+        "Environment": {
+          "Type": "ARM_CONTAINER",
+          "ComputeType": "BUILD_GENERAL1_MEDIUM",
+          "Image": "aws/codebuild/amazonlinux-aarch64-standard:3.0",
+          "PrivilegedMode": true,
+          "EnvironmentVariables": [
+            {
+              "Name": "ECR_URI",
+              "Value": {
+                "Fn::GetAtt": [
+                  "Repository",
+                  "RepositoryUri"
+                ]
+              }
+            }
+          ]
+        },
+        "TimeoutInMinutes": 20,
+        "QueuedTimeoutInMinutes": 10,
+        "LogsConfig": {
+          "CloudWatchLogs": {
+            "Status": "ENABLED",
+            "GroupName": {
+              "Ref": "BuildLogs"
+            }
+          }
+        }
+      }
+    },
+    "AppFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Condition": "HasImage",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "sanad-${Environment}-app"
+        },
+        "Role": {
+          "Fn::GetAtt": [
+            "AppRole",
+            "Arn"
+          ]
+        },
+        "PackageType": "Image",
+        "Code": {
+          "ImageUri": {
+            "Ref": "ImageUri"
+          }
+        },
+        "Architectures": [
+          "arm64"
+        ],
+        "MemorySize": 3008,
+        "Timeout": 120,
+        "Environment": {
+          "Variables": {
+            "SANAD_ENV": {
+              "Ref": "Environment"
+            },
+            "SANAD_REVISION": {
+              "Fn::Select": [
+                1,
+                {
+                  "Fn::Split": [
+                    "@",
+                    {
+                      "Ref": "ImageUri"
+                    }
+                  ]
+                }
+              ]
+            },
+            "SANAD_TABLE": {
+              "Ref": "Table"
+            },
+            "SANAD_BUCKET": {
+              "Ref": "Bucket"
+            },
+            "SANAD_SSM_PREFIX": {
+              "Fn::Sub": "/sanad/${Environment}/"
+            },
+            "SANAD_CONFIG_REVISION": {
+              "Ref": "ConfigRevision"
+            }
+          }
+        },
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "AppLogs"
+          }
+        }
+      }
+    },
+    "AppUrl": {
+      "Type": "AWS::Lambda::Url",
+      "Condition": "HasImage",
+      "Properties": {
+        "TargetFunctionArn": {
+          "Fn::GetAtt": [
+            "AppFunction",
+            "Arn"
+          ]
+        },
+        "AuthType": "NONE",
+        "InvokeMode": "BUFFERED"
+      }
+    },
+    "PublicUrlPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Condition": "HasImage",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "AppFunction"
+        },
+        "Action": "lambda:InvokeFunctionUrl",
+        "Principal": "*",
+        "FunctionUrlAuthType": "NONE"
+      }
+    },
+    "PublicInvokePermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Condition": "HasImage",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "AppFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "*",
+        "InvokedViaFunctionUrl": true
+      }
+    },
+    "AppAsyncConfig": {
+      "Type": "AWS::Lambda::EventInvokeConfig",
+      "Condition": "HasImage",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "AppFunction"
+        },
+        "Qualifier": "$LATEST",
+        "MaximumEventAgeInSeconds": 300,
+        "MaximumRetryAttempts": 0
+      }
+    },
+    "RelayFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Condition": "HasImage",
+      "Properties": {
+        "FunctionName": {
+          "Fn::Sub": "sanad-${Environment}-relay"
+        },
+        "Runtime": "python3.12",
+        "Handler": "relay.handler",
+        "Architectures": [
+          "arm64"
+        ],
+        "MemorySize": 128,
+        "Timeout": 25,
+        "Role": {
+          "Fn::GetAtt": [
+            "RelayRole",
+            "Arn"
+          ]
+        },
+        "Code": {
+          "S3Bucket": {
+            "Ref": "Bucket"
+          },
+          "S3Key": {
+            "Ref": "RelayCodeKey"
+          }
+        },
+        "Environment": {
+          "Variables": {
+            "APP_URL": {
+              "Fn::GetAtt": [
+                "AppUrl",
+                "FunctionUrl"
+              ]
+            },
+            "TICK_PARAMETER": {
+              "Fn::Sub": "/sanad/${Environment}/tick-secret"
+            },
+            "SANAD_CONFIG_REVISION": {
+              "Ref": "ConfigRevision"
+            }
+          }
+        },
+        "LoggingConfig": {
+          "LogGroup": {
+            "Ref": "RelayLogs"
+          }
+        }
+      }
+    },
+    "TickRule": {
+      "Type": "AWS::Events::Rule",
+      "Condition": "HasImage",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "sanad-${Environment}-tick"
+        },
+        "ScheduleExpression": "rate(1 minute)",
+        "State": "ENABLED",
+        "Targets": [
+          {
+            "Id": "relay",
+            "Arn": {
+              "Fn::GetAtt": [
+                "RelayFunction",
+                "Arn"
+              ]
+            },
+            "RetryPolicy": {
+              "MaximumRetryAttempts": 0,
+              "MaximumEventAgeInSeconds": 60
+            }
+          }
+        ]
+      }
+    },
+    "TickPermission": {
+      "Type": "AWS::Lambda::Permission",
+      "Condition": "HasImage",
+      "Properties": {
+        "FunctionName": {
+          "Ref": "RelayFunction"
+        },
+        "Action": "lambda:InvokeFunction",
+        "Principal": "events.amazonaws.com",
+        "SourceArn": {
+          "Fn::GetAtt": [
+            "TickRule",
+            "Arn"
+          ]
+        },
+        "SourceAccount": {
+          "Ref": "AWS::AccountId"
+        }
+      }
+    },
+    "AppErrors": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Condition": "HasImage",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "sanad-${Environment}-apperrors"
+        },
+        "Namespace": "AWS/Lambda",
+        "MetricName": "Errors",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "AppFunction"
+            }
+          }
+        ],
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 0,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "RelayErrors": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Condition": "HasImage",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "sanad-${Environment}-relayerrors"
+        },
+        "Namespace": "AWS/Lambda",
+        "MetricName": "Errors",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "RelayFunction"
+            }
+          }
+        ],
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 0,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "AppThrottles": {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Condition": "HasImage",
+      "Properties": {
+        "AlarmName": {
+          "Fn::Sub": "sanad-${Environment}-appthrottles"
+        },
+        "Namespace": "AWS/Lambda",
+        "MetricName": "Throttles",
+        "Dimensions": [
+          {
+            "Name": "FunctionName",
+            "Value": {
+              "Ref": "AppFunction"
+            }
+          }
+        ],
+        "Statistic": "Sum",
+        "Period": 300,
+        "EvaluationPeriods": 1,
+        "Threshold": 0,
+        "ComparisonOperator": "GreaterThanThreshold",
+        "TreatMissingData": "notBreaching"
+      }
+    },
+    "Budget": {
+      "Type": "AWS::Budgets::Budget",
+      "Properties": {
+        "Budget": {
+          "BudgetName": {
+            "Fn::Sub": "sanad-${Environment}-monthly"
+          },
+          "BudgetLimit": {
+            "Amount": 20,
+            "Unit": "USD"
+          },
+          "TimeUnit": "MONTHLY",
+          "BudgetType": "COST"
+        },
+        "NotificationsWithSubscribers": [
+          {
+            "Notification": {
+              "NotificationType": "ACTUAL",
+              "ComparisonOperator": "GREATER_THAN",
+              "ThresholdType": "ABSOLUTE_VALUE",
+              "Threshold": 20
+            },
+            "Subscribers": [
+              {
+                "SubscriptionType": "EMAIL",
+                "Address": {
+                  "Ref": "BudgetEmail"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "TableName": {
+      "Value": {
+        "Ref": "Table"
+      }
+    },
+    "BucketName": {
+      "Value": {
+        "Ref": "Bucket"
+      }
+    },
+    "RepositoryUri": {
+      "Value": {
+        "Fn::GetAtt": [
+          "Repository",
+          "RepositoryUri"
+        ]
+      }
+    },
+    "BuildProjectName": {
+      "Value": {
+        "Ref": "BuildProject"
+      }
+    },
+    "StackRevision": {
+      "Value": {
+        "Ref": "StackRevision"
+      }
+    },
+    "FunctionUrl": {
+      "Condition": "HasImage",
+      "Value": {
+        "Fn::GetAtt": [
+          "AppUrl",
+          "FunctionUrl"
+        ]
+      }
+    },
+    "ImageDigest": {
+      "Condition": "HasImage",
+      "Value": {
+        "Fn::Select": [
+          1,
+          {
+            "Fn::Split": [
+              "@",
+              {
+                "Ref": "ImageUri"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "AppFunctionName": {
+      "Condition": "HasImage",
+      "Value": {
+        "Ref": "AppFunction"
+      }
+    },
+    "RelayFunctionName": {
+      "Condition": "HasImage",
+      "Value": {
+        "Ref": "RelayFunction"
+      }
+    }
+  }
+}

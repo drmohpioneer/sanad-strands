@@ -10,6 +10,7 @@ from harness import FakeClock
 from starlette.exceptions import StarletteDeprecationWarning
 
 from sanad.api.app import create_app
+from sanad.api.internal import process_event
 from sanad.auth.claim import ClaimService
 from sanad.auth.commands import (
     ConfirmPatientClaim,
@@ -23,6 +24,7 @@ from sanad.channels.telegram.router import TelegramRuntime
 from sanad.channels.transport import CapturedTransport
 from sanad.domain import Principal
 from sanad.store._base import StoreBase, Write
+from sanad.store.keys import ScopedKey
 from sanad.store.records import (
     Doctor,
     Patient,
@@ -63,12 +65,20 @@ class LoginWorld(AccountWorld):
     @classmethod
     def create(cls, store: StoreBase, clock: FakeClock, *, process: bool = True) -> "LoginWorld":
         transport = CapturedTransport()
+
+        def submit(key: ScopedKey) -> None:
+            process_event(
+                app.state.telegram,
+                {"type": "process_receipt", "receipt": key.model_dump(mode="json")},
+            )
+
         app = create_app(
             telegram_settings=settings(),
             store=store,
             clock=clock,
             transport=transport,
             process_receipts=process,
+            receipt_submit=submit,
             web_settings=WebSettings(public_base_url=ORIGIN, bot_username="synthetic_sanad_bot"),
             consent_policy=lambda doctor_id: CONSENT_POLICY,
         )

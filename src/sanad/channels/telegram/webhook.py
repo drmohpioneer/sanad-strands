@@ -2,11 +2,13 @@
 
 import hmac
 import logging
+from collections.abc import Callable
 
-from fastapi import APIRouter, BackgroundTasks, Request, Response
+from fastapi import APIRouter, Request, Response
 from pydantic import JsonValue, ValidationError
+from starlette.concurrency import run_in_threadpool
 
-from sanad.channels.telegram.router import TelegramRuntime, route_receipt
+from sanad.channels.telegram.router import TelegramRuntime
 from sanad.channels.telegram.update import TelegramUpdate
 from sanad.domain import PatientScope, TenantScope
 from sanad.safety import screen_text
@@ -17,20 +19,16 @@ from sanad.store.records import InboundReceipt, OperationalClock, to_record
 logger = logging.getLogger(__name__)
 
 
-def _process(runtime: TelegramRuntime, key: ScopedKey) -> None:
-    try:
-        result = route_receipt(runtime, key)
-        runtime.count("route_" + result.route)
-    except Exception:
-        runtime.count("processing_failure")
-        logger.warning("telegram processing deferred; durable receipt retained")
-
-
-def telegram_router(runtime: TelegramRuntime | None, *, process_receipts: bool = True) -> APIRouter:
+def telegram_router(
+    runtime: TelegramRuntime | None,
+    *,
+    process_receipts: bool = True,
+    receipt_submit: Callable[[ScopedKey], None] | None = None,
+) -> APIRouter:
     router = APIRouter()
 
     @router.post("/tg")
-    async def telegram(request: Request, background: BackgroundTasks) -> Response:
+    async def telegram(request: Request) -> Response:
         if runtime is None:
             return Response(status_code=503)
         supplied = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
@@ -140,9 +138,13 @@ def telegram_router(runtime: TelegramRuntime | None, *, process_receipts: bool =
         if accepted.status not in {"created", "existing"} or accepted.record is None:
             runtime.count("receipt_conflict")
             return Response(status_code=503)
-        if process_receipts and accepted.state != "completed":
+        if process_receipts and receipt_submit is not None and accepted.state != "completed":
             saved = InboundReceipt.model_validate(accepted.record.body)
-            background.add_task(_process, runtime, accepted.record.scoped_key(saved.scope))
+            try:
+                await run_in_threadpool(receipt_submit, accepted.record.scoped_key(saved.scope))
+            except Exception:
+                runtime.count("processing_failure")
+                logger.warning("telegram hand-off deferred; durable receipt retained")
         return Response(status_code=200)
 
     return router

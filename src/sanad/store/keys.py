@@ -14,6 +14,9 @@ from urllib.parse import quote
 from sanad.domain import NonblankStr, PatientScope, TenantScope, utc_instant
 from sanad.domain.boundaries import _BoundaryValue
 
+SCHEMA_VERSION = 1
+SCHEMA_KEY = ("META", "schema_version")
+
 
 class IntakeScope(TenantScope):
     intake_id: NonblankStr

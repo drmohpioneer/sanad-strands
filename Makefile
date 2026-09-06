@@ -10,7 +10,7 @@ test:
 	uv run --offline --no-sync pytest $(TEST_ARGS)
 
 test-ddb:
-	uv run --offline --no-sync pytest tests/store --ddb --require-ddb
+	uv run --offline --no-sync pytest tests/store tests/deploy --ddb --require-ddb
 
 lint:
 	uv run --offline --no-sync ruff check .

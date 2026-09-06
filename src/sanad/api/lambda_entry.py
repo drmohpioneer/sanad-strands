@@ -1,0 +1,121 @@
+"""AWS composition root and Lambda Web Adapter async event entry.
+
+Health/readiness needs only the revision. Configuration is loaded once on the
+first non-health request, after deploy has written the function URL into SSM.
+No environment file is read, no webhook is registered and no provider is called
+at import. The public event path requires the same stored service replay guard.
+"""
+
+import logging
+import os
+import threading
+
+import boto3  # type: ignore[import-untyped]
+from botocore.config import Config  # type: ignore[import-untyped]
+from fastapi import FastAPI
+from pydantic import SecretStr
+from starlette.concurrency import run_in_threadpool
+from starlette.responses import Response
+from starlette.types import ASGIApp, Receive, Scope, Send
+
+from sanad.api.app import create_app
+from sanad.api.internal import process_event as process_event
+from sanad.channels.telegram.settings import TelegramSettings
+from sanad.ops.nonce_store import NonceStore, TickVerifier
+from sanad.ops.sweep import sweep_due
+from sanad.ops.worker import AsyncReceiptInvoker
+from sanad.store._base import utc_now
+from sanad.store.dynamodb import DynamoStore
+from sanad.web.settings import WebSettings
+
+logger = logging.getLogger(__name__)
+
+
+class MetadataOnlyErrors(logging.Filter):
+    """Provider/validation exceptions can retain request bodies or credentials."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.exc_info:
+            record.msg = "application request failed; details withheld from logs"
+            record.args = ()
+            record.exc_info = record.exc_text = None
+        return True
+
+
+def configure(revision: str) -> FastAPI:
+    config = Config(connect_timeout=2, read_timeout=3, retries={"total_max_attempts": 1})
+    prefix = os.environ["SANAD_SSM_PREFIX"]
+    ssm = boto3.client("ssm", config=config)
+    names = (
+        "bot-token",
+        "webhook-secret",
+        "tick-secret",
+        "admin-telegram-id",
+        "public-base-url",
+        "bot-username",
+    )
+    response = ssm.get_parameters(Names=[prefix + n for n in names], WithDecryption=True)
+    values = {p["Name"].removeprefix(prefix): p["Value"] for p in response["Parameters"]}
+    if set(values) != set(names) or any(not v for v in values.values()):
+        raise ValueError("SSM configuration incomplete")
+    settings = TelegramSettings(
+        bot_id=values["bot-token"].split(":", 1)[0],
+        bot_token=SecretStr(values["bot-token"]),
+        webhook_secret=SecretStr(values["webhook-secret"]),
+        admin_user_id=values["admin-telegram-id"],
+    )
+    store = DynamoStore(boto3.client("dynamodb", config=config), os.environ["SANAD_TABLE"])
+    invoker = AsyncReceiptInvoker(
+        boto3.client("lambda", config=config),
+        os.environ["AWS_LAMBDA_FUNCTION_NAME"],
+        values["tick-secret"],
+    )
+    verifier = TickVerifier(
+        values["tick-secret"], NonceStore(store, "tick:" + os.environ["SANAD_ENV"]), utc_now
+    )
+    app = create_app(
+        revision,
+        telegram_settings=settings,
+        store=store,
+        receipt_submit=invoker,
+        web_settings=WebSettings(
+            public_base_url=values["public-base-url"], bot_username=values["bot-username"]
+        ),
+        tick_verifier=verifier,
+        tick_sweep=lambda: sweep_due(app.state.telegram, store, app.state.claim_lane),
+    )
+    return app
+
+
+def create_runtime_app() -> ASGIApp:
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
+    logging.getLogger("uvicorn.error").addFilter(MetadataOnlyErrors())
+    # HTTPX's default request logger contains single-use login URLs in send bodies only
+    # at DEBUG; the accepted transport also redacts Telegram token-bearing URLs.
+    for name in ("httpx", "httpcore", "boto3", "botocore", "urllib3"):
+        logging.getLogger(name).setLevel(logging.WARNING)
+    revision = os.environ["SANAD_REVISION"]
+    health = create_app(revision)
+    configured: FastAPI | None = None
+    lock = threading.Lock()
+
+    def load() -> FastAPI:
+        nonlocal configured
+        with lock:
+            if configured is None:
+                configured = configure(revision)
+            return configured
+
+    async def application(scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http" or scope["path"] == "/health":
+            await health(scope, receive, send)
+            return
+        try:
+            app = await run_in_threadpool(load)
+        except Exception:
+            logger.error("runtime configuration unavailable")
+            await Response(status_code=503)(scope, receive, send)
+            return
+        await app(scope, receive, send)
+
+    return application

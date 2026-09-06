@@ -33,7 +33,7 @@ Domain values live in `sanad.domain.boundaries` and match the [canonical foundat
 
 `sanad.domain` also exposes typed missions, independent follow-up tasks and review obligations, creation factories, objective specifications, timing resolution and pure transition functions. Transitions return a new aggregate and inert effects or a typed rejection; documented replays return the original object without effects. Explicit doctor instants survive exactly, inferred timing retains its reason, and a supplied timing policy controls defaults and accountability intervals. Medication START and its independent day-three response produce separate completion intents; corrections preserve history and create review work. The shipped `draft-2026-09` policy is an operational draft. The layer performs no storage or delivery, and callers remain responsible for authenticated scope, current authority and deterministic evidence evaluation. See [contract 01](docs/contracts/01-domain-transitions-and-deadlines.md#report) for tests and conservative edge-case choices.
 
-Resolved versions are pinned in `pyproject.toml` and `uv.lock`: FastAPI 0.141.1, Pydantic 2.13.5, Uvicorn 0.52.4, tzdata 2026.3, boto3 1.43.89; pytest 9.1.1, pytest-socket 0.8.1, HTTPX 0.28.1, Ruff 0.16.6, mypy 1.20.2 and Hatchling 1.32.0. The lock was generated with uv 0.12.7. Model providers and live cloud integrations belong to later contracts.
+Resolved versions are pinned in `pyproject.toml` and `uv.lock`: FastAPI 0.141.1, Pydantic 2.13.5, Uvicorn 0.52.4, tzdata 2026.3, boto3 1.43.89; pytest 9.1.1, pytest-socket 0.8.1, HTTPX 0.28.1, Ruff 0.16.6, mypy 1.20.2 and Hatchling 1.32.0. The lock was generated with uv 0.12.7. Model adapters belong to slice 08; the AWS development deployment is described below.
 
 ## Store
 
@@ -89,7 +89,7 @@ Urgent templates cover emergency directions, doctor danger reports, unreadable-m
 
 Pass validated settings and a persistent store to `create_app(telegram_settings=..., store=...)`. The factory mounts `POST /tg` and keeps `GET /health` available without configuration. An unconfigured webhook returns 503; a wrong or missing secret returns an empty 401. Invalid JSON or oversized permitted text returns 400. Bot senders, non-private chats, missing senders, mismatched private recipients and updates naming another bot receive a counted 200 drop. No account or patient data is stored for those dropped updates.
 
-The webhook screens the full permitted text/caption, resolves the numeric sender's current identity and persists a recoverable receipt before returning 200. Processing runs separately after acknowledgment and is also callable as `route_receipt(runtime, receipt_key)` for recovery. An unfinished duplicate joins that work; a completed duplicate does nothing, even if approval changed the sender's scope. Background processing is a latency aid; persisted ingress clocks and claims allow a worker to recover after restart. Deployment and tick composition remain in 07.
+The webhook screens the full permitted text/caption, resolves the numeric sender's current identity and persists a recoverable receipt before returning 200. An explicitly injected invoker submits the receipt reference for separate processing; the AWS runtime invokes the same Lambda asynchronously. An unfinished duplicate joins that work; a completed duplicate does nothing, even if approval changed the sender's scope. Failed hand-offs retain pending work for the authenticated sweep. Without an invoker, the receipt stays pending. The webhook uses no in-process background task.
 
 An unknown sender's first text or bare `/start` creates one application. Display names, usernames and forwarded claims confer no role. The admin receives opaque, hashed, expiring, single-use approve/reject actions. Repeated applications are capped at one acknowledgment per 24 hours, and pending repeats do not notify the admin again. Rejection followed by `/start` starts a new pending version. The typed account service also supports suspension and reinstatement: each changes the authorization epoch atomically with coverage ownership. Old routine guidance remains invalid; a verified suspended doctor still receives DANGER under the explicit safety exception. Account administration grants no chart access.
 
@@ -97,7 +97,7 @@ Bound patient danger goes through the existing urgent Steward before ordinary pr
 
 `Dispatcher` validates account recipients, source versions, application state, current admin configuration and applicable authorization epochs immediately before sending. `TelegramTransport` sends plain text with optional inline buttons and records provider acceptance separately from uncertainty or failure. It honors retry guidance, redacts URL string/repr logging, and implements callback acknowledgment. Application startup performs no provider request. Local tests inject `CapturedTransport`, `httpx.MockTransport` or ASGI transport; only the existing DynamoDB Local fixture opens numeric loopback connections.
 
-The ops-only `register_webhook(settings, public_url, http=...)` calls `setWebhook` with the configured secret, `allowed_updates=["message", "callback_query"]` and `drop_pending_updates=False`. Slice 07 will invoke it against the authorized new deployment. It is never invoked by tests, startup or Make targets. Account wording review and admin ID configuration remain owner gates; slice 06 must recheck `auth_epoch` on every browser request and exchange.
+The ops-only `register_webhook(settings, public_url, http=...)` calls `setWebhook` with the configured secret, `allowed_updates=["message", "callback_query"]` and `drop_pending_updates=False`. The deployment operator command invokes it against the configured stack's `/tg` endpoint. It is never invoked by startup or Make targets. Account wording review remains an owner gate; browser requests and exchanges recheck `auth_epoch`.
 
 ## Login and patient claim
 
@@ -107,7 +107,46 @@ An approved doctor sends `/login` in Telegram and receives a ten-minute single-u
 
 A doctor creates a patient record stub and issues an invitation: an opaque token behind `<site>/p/<token>`, stored hashed, 24-hour draft expiry. The landing page shows only the doctor's name and a Telegram deep link. In Telegram the patient's `/start <token>` records a pending claim (a second scanner is refused and the first claim is kept), the consent text is presented with accept/decline buttons, and the doctor then confirms the person's identity from the encounter. Confirmation is one transaction across invitation, claim, patient, binding, the global subject index and the delivery authority row; a subject already bound anywhere fails the whole transaction without disclosing the other record. Revocation raises the binding and delivery epochs so queued routine messages are suppressed while danger alerts are unaffected. A bound patient's `/login` opens `/pl/<token>` → `/pp` with the same discipline.
 
-Locally everything runs against the in-memory store, the FastAPI test client and captured transports; the same tests run on DynamoDB Local. Real HTTPS, cookies behind the proxy and the deep link are verified at deployment. All enrollment wording, including the consent text, is marked pending owner review.
+Locally everything runs against the in-memory store, the FastAPI test client and captured transports; the same tests run on DynamoDB Local. Deployment smokes verify real HTTPS, the neutral Continue page, security headers and CSRF rejection. Full doctor/patient journeys and enrollment wording, including consent, remain subject to their later verification and owner-review gates.
+
+## Deploy
+
+Development uses synthetic data only. `deploy/stack.yaml` declares one CloudFormation stack: the ARM CodeBuild project and ECR repository, private versioned S3 bucket, DynamoDB table with its three indexes/PITR/TTL, app Lambda and public HTTPS function URL, private tick relay and minute schedule, scoped IAM roles, 30-day logs, error/throttle alarms and a $20 monthly account budget. The template is JSON, a YAML-compatible format, so offline schema tests need no additional parser.
+
+AWS credentials, `AWS_DEFAULT_REGION=us-east-1` and `AWS_ACCOUNT_ID` must already be configured in the process. Commands verify the account and region without printing credentials. Only the secret operator and budget-email lookup read the project `.env`; the app loads SSM through its execution role. The seven SSM parameters are managed by `ops.py`, separately from the stack.
+
+The first deployment requires two passes. With no image, the first pass creates the build infrastructure and explicitly records application smokes as skipped. Then build, configure secrets, deploy the digest with full smokes, and register the new bot:
+
+```sh
+uv run --no-sync python -m deploy.deploy --env dev
+uv run --no-sync python -m deploy.build --env dev
+uv run --no-sync python -m deploy.ops secrets set --env dev
+uv run --no-sync python -m deploy.deploy --env dev --image sha256:<digest-from-build>
+uv run --no-sync python -m deploy.ops webhook register --env dev
+```
+
+`secrets set` reads `TELEGRAM_BOT_TOKEN_SANAD_STRANDS`, `SANAD_ADMIN_TELEGRAM_USER_ID`, `SANAD_TELEGRAM_BOT_USERNAME` and `SANAD_BUDGET_EMAIL`. It generates the webhook and tick secrets once and preserves them on reruns. Before the app exists, the URL parameter holds an explicit bootstrap sentinel; deploy replaces it with the stack output before full smoke. Changes to the other parameter versions refresh both Lambda configurations. No-op deployments keep unchanged configuration versions.
+
+Subsequent releases use build, deploy and rollback:
+
+```sh
+uv run --no-sync python -m deploy.build --env dev
+uv run --no-sync python -m deploy.deploy --env dev --image sha256:<digest-from-build>
+uv run --no-sync python -m deploy.rollback --env dev
+```
+
+The build uploads an archive excluding secrets, local environments, caches and `lane/`, pins its S3 version for CodeBuild, and records the Git revision, archive hash and immutable image digest. Builder dependencies come from the lock; the final image contains only the wheel and locked runtime dependencies. Release history in `deploy/releases/dev.json` records passing and failed smokes, image/source hashes, stack revision, SSM parameter versions and both schema versions. Schema mismatches stop before updating the app. A smoke failure leaves the deployed stack in place and names the failed check; rollback selects the previous distinct digest with passing smokes. Rollback changes the image and preserves current data and SSM configuration.
+
+The app has 3,008 MB and a 120-second timeout; the relay has a 25-second timeout. There are no reserved concurrency settings: the measured account limit is 10. The relay skips a minute on app throttling or timeout; the ingress invoker retries three times with backoff, then leaves the durable receipt for recovery. Tick HMAC verification and nonce consumption use one shared signer and DynamoDB CAS with a 600-second TTL. Tick work uses the existing scoped sweep and its 100-item/10-second budget. The budget and CloudWatch alarms provide visibility; this slice makes no model calls.
+
+```sh
+uv run --no-sync python -m deploy.ops secrets check --env dev
+uv run --no-sync python -m deploy.ops webhook info --env dev
+uv run --no-sync python -m deploy.ops tick fire --env dev
+uv run --no-sync python -m deploy.ops logs tail --env dev
+```
+
+Stack deletion retains the versioned bucket and the seven SSM parameters. After intentionally deleting the stack, `python -m deploy.cleanup retained-bucket --env dev` removes all retained object versions, delete markers and incomplete uploads, then deletes the bucket. `python -m deploy.ops secrets delete --env dev` removes the parameters. The cleanup command refuses to empty a bucket while its stack still exists. See [operations](docs/operations.md) for live outputs and [contract 07](docs/contracts/07-aws-development-deployment.md#report) for measured evidence and review status.
 
 ## Prior work
 

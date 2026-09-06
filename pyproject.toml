@@ -44,11 +44,50 @@ line-length = 100
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
+# Contract 04 preserves source bytes and copied test bodies. Exempt only the
+# legacy style findings; new safety APIs/tests retain the repository checks.
+[tool.ruff.lint.per-file-ignores]
+"src/sanad/safety/normalize.py" = ["E501", "UP045"]
+"src/sanad/safety/sentinel.py" = ["E501", "UP045"]
+"src/sanad/safety/labs.py" = ["E501", "UP035", "UP045", "UP007"]
+"src/sanad/safety/vitals.py" = ["E501", "UP035", "UP045", "UP037"]
+"src/sanad/safety/validator.py" = ["E501", "UP045"]
+"src/sanad/safety/templates.py" = ["E501"]
+"tests/safety/test_sentinel.py" = ["E501", "B905"]
+"tests/safety/test_labs.py" = ["E501"]
+"tests/safety/test_vitals.py" = ["E501"]
+"tests/safety/test_validator.py" = ["E501"]
+
+[tool.ruff.format]
+exclude = [
+    "src/sanad/safety/normalize.py", "src/sanad/safety/sentinel.py",
+    "src/sanad/safety/labs.py", "src/sanad/safety/vitals.py",
+    "src/sanad/safety/validator.py", "src/sanad/safety/templates.py",
+    "tests/safety/test_sentinel.py", "tests/safety/test_labs.py",
+    "tests/safety/test_vitals.py", "tests/safety/test_validator.py",
+]
+
 [tool.mypy]
 python_version = "3.12"
 strict = true
 plugins = ["pydantic.mypy"]
 files = ["src", "tests"]
+
+[[tool.mypy.overrides]]
+module = ["sanad.safety.sentinel", "sanad.safety.labs", "sanad.safety.vitals", "sanad.safety.validator"]
+disable_error_code = ["type-arg"] # Existing unparameterized legacy dictionaries.
+
+[[tool.mypy.overrides]]
+module = ["safety.test_labs"]
+disable_error_code = ["union-attr", "assignment", "no-untyped-def", "no-untyped-call"]
+
+[[tool.mypy.overrides]]
+module = ["safety.test_vitals"]
+disable_error_code = ["union-attr"]
+
+[[tool.mypy.overrides]]
+module = ["safety.test_sentinel"]
+disable_error_code = ["arg-type"] # The copied regression intentionally passes None.
 
 [tool.pydantic-mypy]
 init_forbid_extra = true

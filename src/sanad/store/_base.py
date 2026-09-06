@@ -20,6 +20,7 @@ from sanad.domain import (
     VersionRef,
 )
 from sanad.domain.deadlines import utc_instant
+from sanad.domain.operations import transition_operational_clock
 from sanad.store import keys
 from sanad.store.keys import Key, Scope, ScopedKey
 from sanad.store.records import (
@@ -28,17 +29,21 @@ from sanad.store.records import (
     Accepted,
     AuditEvent,
     Claim,
+    CommandEnvelope,
     CommitRequest,
     CommitResult,
     Cursor,
     DeliveryAttempt,
     DeliveryOutcome,
+    DeliveryResolution,
+    DoctorAuthority,
     DueItem,
     DuePage,
     Duplicate,
     Forbidden,
     InboundAccept,
     InboundReceipt,
+    Incident,
     Lease,
     MarkerRecord,
     OutboundIntent,
@@ -150,11 +155,18 @@ class StoreBase(ABC):
         return record if scope_owns(scope, model_scope(model)) else None
 
     def get(self, scope: Scope, entity_type: str, id: str) -> StoredRecord | None:
+        if entity_type == "doctor_authority":
+            if id != scope.doctor_id:
+                return None
+            tenant = TenantScope(doctor_id=scope.doctor_id)
+            return self._owned(tenant, keys.doctor(tenant))
         prefixes = {
             "mission": "MISSION",
             "followup": "FOLLOWUP",
             "review": "REVIEW",
             "outbound_intent": "OUT",
+            "incident": "INCIDENT",
+            "evidence_annotation": "FACT",
         }
         if entity_type in {"mission", "followup", "patient_profile"} and not isinstance(
             scope, PatientScope
@@ -165,6 +177,8 @@ class StoreBase(ABC):
             if id != scope.patient_id:
                 return None
             key = keys.patient(scope)
+        elif entity_type == "care_order" and isinstance(scope, PatientScope):
+            key = keys.patient(scope, "ORDER", id)
         elif entity_type in prefixes:
             key = Key(keys.partition(scope), f"{prefixes[entity_type]}#{keys.component(id)}")
         elif entity_type == "inbound_receipt":
@@ -277,6 +291,94 @@ class StoreBase(ABC):
             return None
         return record
 
+    def list_records(
+        self, scope: Scope, entity_type: str, cursor: Cursor | None = None, limit: int = 100
+    ) -> RecordPage:
+        prefixes = {
+            "mission": "MISSION#",
+            "followup": "FOLLOWUP#",
+            "review": "REVIEW#",
+            "incident": "INCIDENT#",
+            "outbound_intent": "OUT#",
+            "evidence_annotation": "FACT#",
+            "care_order": "ORDER#",
+        }
+        if entity_type not in prefixes:
+            return (), None
+        rows, cursor = self._list(
+            scope, keys.partition(scope), cursor, limit, prefix=prefixes[entity_type]
+        )
+        return tuple(r for r in rows if r.entity_type == entity_type), cursor
+
+    def lookup_command(self, command: CommandEnvelope) -> CommitResult | None:
+        if command.principal.doctor_id != command.scope.doctor_id:
+            return Forbidden()
+        if command.principal.actor_kind == "patient" and (
+            not isinstance(command.scope, PatientScope)
+            or command.principal.patient_id != command.scope.patient_id
+        ):
+            return Forbidden()
+        return self._duplicate(
+            keys.uniqueness(command.scope, "CMD", command.command_id),
+            keys.digest(canonical_json(command.payload).decode()),
+            command.scope,
+        )
+
+    def commit_incident(self, request: CommitRequest) -> CommitResult:
+        """No lease dependency; ordinary record updates cannot use this escape hatch."""
+        scope, worker = request.command.scope, request.command.worker
+        if (
+            not isinstance(scope, PatientScope)
+            or worker is None
+            or "urgent" not in worker.permitted_lanes
+            or request.receipt_completion
+        ):
+            return Forbidden()
+        incidents = [r for r in request.puts if r.entity_type == "incident"]
+        profiles = [r for r in request.puts if r.entity_type == "patient_profile"]
+        if len(incidents) != 1 or len(profiles) != 1:
+            return Forbidden()
+        if any(
+            r.entity_type not in {"incident", "patient_profile", "review"} for r in request.puts
+        ):
+            return Forbidden()
+        if any(
+            r.body.get("notification_purpose") not in {"DANGER", "patient_safety_response"}
+            for r in request.intents
+        ):
+            return Forbidden()
+        prior = self.lookup_command(request.command)
+        if prior is not None:
+            return prior
+        current = self.get_patient_profile(scope)
+        if current is None:
+            return Forbidden()
+        proposed = from_record(profiles[0], PatientProfile)
+        allowed = {"version", "updated_at", "safety_epoch"}
+        if proposed.safety_epoch != current.safety_epoch + 1 or proposed.model_dump(
+            exclude=allowed
+        ) != current.model_dump(exclude=allowed):
+            return StaleVersion(conflicts=("safety_epoch",))
+        incident = from_record(incidents[0], Incident)
+        reviews = [
+            from_record(r, ReviewObligation) for r in request.puts if r.entity_type == "review"
+        ]
+        intents = [from_record(r, OutboundIntent) for r in request.intents]
+        if (
+            incident.version != 1
+            or len(reviews) != 1
+            or len(intents) != 2
+            or reviews[0].id != incident.review_obligation_id
+            or reviews[0].review_kind != "incident_response"
+            or reviews[0].source_type != "incident"
+            or reviews[0].source_id != incident.id
+            or set(incident.alert_intent_ids) != {i.id for i in intents}
+            or {i.notification_purpose for i in intents} != {"DANGER", "patient_safety_response"}
+            or any(i.source_event_ids != (incident.id,) for i in intents)
+        ):
+            return Forbidden()
+        return self._commit(request, urgent=True)
+
     def _duplicate(self, key: Key, digest: str, scope: Scope) -> CommitResult | None:
         existing = self._read(key)
         if existing is None:
@@ -288,10 +390,25 @@ class StoreBase(ABC):
         return Duplicate(original=Accepted.model_validate(existing["accepted_result"]))
 
     def commit(self, request: CommitRequest) -> CommitResult:
+        return self._commit(request)
+
+    def _commit(self, request: CommitRequest, *, urgent: bool = False) -> CommitResult:
         command = request.command
         scope = command.scope
         actor = command.principal
-        if (
+        worker = command.worker
+        system = (
+            actor.actor_kind == "system"
+            and actor.doctor_id == scope.doctor_id
+            and worker is not None
+            and worker.service_subject == actor.subject
+            and worker.resolved_scope == scope
+            and worker.auth_expiry > utc_instant(self._clock())
+            and bool(
+                worker.permitted_lanes & {"mission", "followup", "review", "ingress", "urgent"}
+            )
+        )
+        if not system and (
             actor.doctor_id != scope.doctor_id
             or actor.actor_kind not in {"doctor", "patient"}
             or actor.actor_kind not in actor.verified_roles
@@ -301,18 +418,42 @@ class StoreBase(ABC):
             not isinstance(scope, PatientScope) or actor.patient_id != scope.patient_id
         ):
             return Forbidden()
-        # These require authoritative entities which are explicitly deferred to 05/06.
-        if any(
-            getattr(command, field) is not None
-            for field in (
-                "expected_auth_epoch",
-                "expected_binding_epoch",
-                "expected_consent_version",
-                "expected_delivery_epoch",
-                "expected_safety_epoch",
+        # Missing authoritative facts remain a denial, preserving slice 02's safe default.
+        epoch_fields = (
+            "expected_auth_epoch",
+            "expected_binding_epoch",
+            "expected_consent_version",
+            "expected_delivery_epoch",
+            "expected_safety_epoch",
+        )
+        authority_checks: list[Check] = []
+        if any(getattr(command, field) is not None for field in epoch_fields):
+            if not isinstance(scope, PatientScope):
+                return Forbidden()
+            profile_record = self.get(scope, "patient_profile", scope.patient_id)
+            doctor_record = self.get(scope, "doctor_authority", scope.doctor_id)
+            if profile_record is None or doctor_record is None:
+                return Forbidden()
+            profile_fact = from_record(profile_record, PatientProfile)
+            doctor_fact = from_record(doctor_record, DoctorAuthority)
+            if command.expected_auth_epoch is not None and not doctor_fact.approved:
+                return Forbidden()
+            actual_epochs = (
+                doctor_fact.auth_epoch,
+                profile_fact.binding_epoch,
+                profile_fact.consent_version,
+                profile_fact.delivery_epoch,
+                profile_fact.safety_epoch,
             )
-        ):
-            return Forbidden()
+            if any(
+                getattr(command, field) is not None and getattr(command, field) != actual
+                for field, actual in zip(epoch_fields, actual_epochs, strict=True)
+            ):
+                return StaleVersion(conflicts=("authority_epoch",))
+            authority_checks = [
+                Check(profile_record.key, profile_record.version),
+                Check(doctor_record.key, doctor_record.version),
+            ]
         command_key = keys.uniqueness(scope, "CMD", command.command_id)
         # Replay identity is the immutable command payload, independent of retry time.
         digest = keys.digest(canonical_json(command.payload).decode())
@@ -401,13 +542,13 @@ class StoreBase(ABC):
         if len({marker.key for marker in request.markers}) != len(request.markers):
             return StaleVersion(conflicts=("repeated_marker",))
         writes: list[Write] = []
-        checks: list[Check] = []
+        checks: list[Check] = authority_checks.copy()
         now = utc_instant(self._clock())
         if isinstance(scope, PatientScope):
             patient = self.get(scope, "patient_profile", scope.patient_id)
             if patient is not None:
                 profile = from_record(patient, PatientProfile)
-                if profile.lease_generation > 0 and command.fence is None:
+                if profile.lease_generation > 0 and command.fence is None and not urgent:
                     return StaleVersion(conflicts=("patient_fence",))
             checks.append(Check(keys.patient(scope), patient.version if patient else None))
         if command.fence is not None:
@@ -425,12 +566,24 @@ class StoreBase(ABC):
             token = ProcessingClaim.model_validate(
                 work_claim.model_dump(exclude={"record_key", "version"})
             )
+            completing = (
+                request.receipt_completion is not None
+                and request.receipt_completion.claim == work_claim
+            )
+            checkpointing = claimed is not None and claimed.entity_type == "inbound_receipt"
+            stored_token = (
+                from_record(claimed, InboundReceipt).processing_claim
+                if checkpointing and claimed is not None
+                else claimed.processing_claim
+                if claimed
+                else None
+            )
             if (
                 claimed is None
                 or claimed.version != work_claim.version
-                or claimed.processing_claim != token
+                or stored_token != token
                 or work_claim.expires_at <= now
-                or claimed.key not in {record.key for record in records}
+                or (not completing and claimed.key not in {record.key for record in records})
             ):
                 return StaleVersion(conflicts=("work_claim",))
         for record in records:
@@ -446,9 +599,28 @@ class StoreBase(ABC):
                 or model.scope != scope
             ):
                 return Forbidden()
-            if record.entity_type in {"inbound_receipt", "delivery_attempt", "session_snapshot"}:
+            if record.entity_type in {"delivery_attempt", "session_snapshot"}:
                 return Forbidden()  # Their fenced operations own these writes.
             current = self._owned(scope, record.key)
+            if isinstance(model, InboundReceipt):
+                if (
+                    current is None
+                    or command.work_claim is None
+                    or command.work_claim.record_key.key != record.key
+                ):
+                    return Forbidden()
+                old_receipt = from_record(current, InboundReceipt)
+                mutable = {
+                    "version",
+                    "updated_at",
+                    "state",
+                    "work_clock",
+                    "processing_claim",
+                    "result_event_ids",
+                    "review_obligation_id",
+                }
+                if model.model_dump(exclude=mutable) != old_receipt.model_dump(exclude=mutable):
+                    return Forbidden()
             if current is not None:
                 if (
                     current.created_at != record.created_at
@@ -551,6 +723,8 @@ class StoreBase(ABC):
         result = Accepted(
             event_ids=tuple(r.id for r in records if r.entity_type == "audit_event"),
             resulting_versions=tuple(r.ref for r in records),
+            command_status=request.command_status,
+            reason_code=request.reason_code,
         )
         writes.append(
             Write(
@@ -681,6 +855,8 @@ class StoreBase(ABC):
         owner: str,
         now: datetime,
         ttl: timedelta,
+        *,
+        count_attempt: bool = True,
     ) -> Claim | None:
         now = utc_instant(now)
         record = self._owned(record_key.scope, record_key.key)
@@ -707,7 +883,21 @@ class StoreBase(ABC):
             expires_at=now + ttl,
         )
         if isinstance(model, InboundReceipt):
-            updated = self._revision(record, now, processing_claim=token, state="processing")
+            if (
+                (model.state == "needs_attention" and count_attempt)
+                or model.work_clock is None
+                or model.work_clock.next_action_at > now
+            ):
+                return None
+            updated = self._revision(
+                record,
+                now,
+                processing_claim=token,
+                state="needs_attention" if model.state == "needs_attention" else "processing",
+                work_clock=transition_operational_clock(
+                    model.work_clock, now + ttl, attempt_delta=int(count_attempt)
+                ),
+            )
         else:
             revised = self._revision(record, now)
             updated = StoredRecord.model_validate(
@@ -828,15 +1018,28 @@ class StoreBase(ABC):
         if profile is None or intent is None or intent.body.get("slot_id") != slot_key:
             return "already_taken"
         if (
-            intent.body.get("status") != "queued"
+            intent.body.get("status") not in {"queued", "sending"}
             or from_record(intent, OutboundIntent).expires_at <= now
         ):
             return "already_taken"
         key = keys.contact(scope, slot_key)
         item = self._marker_item(key, scope, intent.key, now)
         item.update(state="reserved", fence_generation=expected_fence.generation)
+        previous = self._read(key)
+        if previous is not None and previous.get("state") != "released":
+            # Retain the same logical reservation across a provably failed retry.
+            return (
+                "reserved"
+                if (
+                    intent.body.get("status") == "sending"
+                    and previous.get("target_sk") == intent.sk
+                )
+                else "already_taken"
+            )
+        if previous is not None:
+            item["version"] = previous["version"] + 1
         accepted = self._atomic(
-            [Write(item, None)],
+            [Write(item, previous["version"] if previous else None)],
             [Check(profile.key, profile.version), Check(intent.key, intent.version)],
         )
         return "reserved" if accepted else "already_taken"
@@ -849,6 +1052,7 @@ class StoreBase(ABC):
         now: datetime,
         *,
         scope: Scope,
+        freshness_versions: tuple[VersionRef, ...] = (),
     ) -> DeliveryAttempt | None:
         now = utc_instant(now)
         record = self.get(scope, "outbound_intent", intent_id)
@@ -864,6 +1068,9 @@ class StoreBase(ABC):
             attempts, _ = self._query(
                 record.pk, prefix=f"ATTEMPT#{keys.component(intent_id)}#", limit=100
             )
+            if intent.active_attempt_id is not None:
+                active = self.get(scope, "delivery_attempt", intent.active_attempt_id)
+                attempts = [record_item(active)] if active else []
             for raw in attempts:
                 attempt = from_record(item_record(raw), DeliveryAttempt)
                 if (
@@ -889,12 +1096,19 @@ class StoreBase(ABC):
         if set(expected_versions) != set(required) or len(expected_versions) != len(set(required)):
             return None
         checks = []
-        valid = intent.expires_at > now
-        for ref in intent.source_versions:
+        # DANGER is authority-only: never invalidate it through routine expiry/source rules.
+        danger = intent.notification_purpose == "DANGER"
+        valid = danger or intent.expires_at > now
+        for ref in () if danger else intent.source_versions:
             current = self.get(scope, ref.entity_type, ref.id)
             if current is None or current.version != ref.version:
                 valid = False
                 break
+            checks.append(Check(current.key, ref.version))
+        for ref in freshness_versions:
+            current = self.get(scope, ref.entity_type, ref.id)
+            if current is None or current.version != ref.version:
+                return None
             checks.append(Check(current.key, ref.version))
         if not valid:
             suppressed = self._revision(
@@ -919,12 +1133,20 @@ class StoreBase(ABC):
             scope=model_scope(intent),
             intent_id=intent_id,
             lease_generation=claim.generation,
-            freshness_snapshot=expected_versions,
+            freshness_snapshot=tuple(dict.fromkeys((*expected_versions, *freshness_versions))),
             started_at=now,
             created_at=now,
             updated_at=now,
         )
-        sending = self._revision(record, now, status="sending", delivery_claim=claim)
+        assert intent.work_clock is not None
+        sending = self._revision(
+            record,
+            now,
+            status="sending",
+            delivery_claim=claim,
+            active_attempt_id=attempt_id,
+            work_clock=transition_operational_clock(intent.work_clock, claim.expires_at),
+        )
         writes = [
             Write(record_item(sending), record.version),
             Write(record_item(to_record(attempt, scope)), None),
@@ -939,16 +1161,26 @@ class StoreBase(ABC):
         provider_message_id: str | None,
         *,
         scope: Scope,
+        resolution: DeliveryResolution | None = None,
     ) -> StoredRecord | None:
         now = utc_instant(self._clock())
         record = self.get(scope, "delivery_attempt", attempt_id)
-        if record is None or outcome not in {"provider_accepted", "uncertain", "definite_failure"}:
+        if record is None or outcome not in {
+            "provider_accepted",
+            "uncertain",
+            "definite_failure",
+            "suppressed",
+        }:
             return None
         attempt = from_record(record, DeliveryAttempt)
         intent_record = self.get(scope, "outbound_intent", attempt.intent_id)
         if intent_record is None:
             return None
         intent = from_record(intent_record, OutboundIntent)
+        if resolution is not None:
+            return self._finish_delivery_resolution(
+                record, intent_record, outcome, provider_message_id, resolution, now, scope
+            )
         if attempt.outcome != "started":
             return (
                 intent_record
@@ -992,6 +1224,140 @@ class StoreBase(ABC):
             )
             else None
         )
+
+    def _finish_delivery_resolution(
+        self,
+        attempt_record: StoredRecord,
+        current: StoredRecord,
+        outcome: DeliveryOutcome,
+        provider_id: str | None,
+        resolution: DeliveryResolution,
+        now: datetime,
+        scope: Scope,
+    ) -> StoredRecord | None:
+        attempt = from_record(attempt_record, DeliveryAttempt)
+        old = from_record(current, OutboundIntent)
+        new = from_record(resolution.intent, OutboundIntent)
+        if (
+            model_scope(new) != scope
+            or new.id != old.id
+            or new.version != old.version + 1
+            or old.active_attempt_id != attempt.id
+            or old.delivery_claim is None
+            or old.delivery_claim.generation != attempt.lease_generation
+        ):
+            return None
+        if old.status == "sending" and old.delivery_claim.expires_at <= now:
+            return None  # start_delivery recovers this as uncertain before policy settlement.
+        if not (
+            (old.status == "sending" and attempt.outcome == "started")
+            or (
+                old.status == "uncertain"
+                and attempt.outcome == "uncertain"
+                and old.work_clock is not None
+            )
+            or (
+                old.status == "failed"
+                and attempt.outcome == "definite_failure"
+                and old.work_clock is not None
+            )
+        ):
+            return None
+        if (outcome == "provider_accepted") != (provider_id is not None) or (
+            outcome == "provider_accepted" and new.accepted_message_id != provider_id
+        ):
+            return None
+        if outcome == "provider_accepted" and (
+            new.status != "provider_accepted" or new.accepted_at != now
+        ):
+            return None
+        if outcome == "suppressed" and (
+            new.status != "suppressed" or new.suppression_reason is None
+        ):
+            return None
+        if outcome == "uncertain" and (
+            new.uncertain_retry_count != old.uncertain_retry_count + 1
+            or new.status not in {"queued", "uncertain"}
+            or (
+                new.status == "queued"
+                and (old.notification_purpose != "DANGER" or new.uncertain_retry_count != 1)
+            )
+        ):
+            return None
+        if outcome == "definite_failure" and (
+            new.status not in {"queued", "failed"} or new.retry_count != old.retry_count + 1
+        ):
+            return None
+        mutable = {
+            "version",
+            "updated_at",
+            "status",
+            "work_clock",
+            "accepted_message_id",
+            "accepted_at",
+            "retry_count",
+            "uncertain_retry_count",
+            "last_error",
+            "suppression_reason",
+            "review_obligation_id",
+            "retryable",
+        }
+        if new.model_dump(exclude=mutable) != old.model_dump(exclude=mutable):
+            return None
+        writes = [Write(record_item(to_record(new, scope)), current.version)]
+        if attempt.outcome == "started":
+            ended = self._revision(
+                attempt_record,
+                now,
+                outcome=outcome,
+                ended_at=now,
+                provider_message_id=provider_id,
+                redacted_error_code=new.last_error,
+            )
+            writes.append(Write(record_item(ended), attempt_record.version))
+        checks: list[Check] = []
+        for record in resolution.reviews:
+            review = from_record(record, ReviewObligation)
+            if (
+                model_scope(review) != scope
+                or review.review_kind != "delivery_failure"
+                or review.source_type != "outbound_intent"
+                or review.source_id != new.id
+                or review.source_version != new.version
+            ):
+                return None
+            existing = self.get(scope, "review", review.id)
+            if existing is not None:
+                checks.append(Check(existing.key, existing.version))
+                continue
+            writes.append(Write(record_item(to_record(review, scope)), None))
+            marker = keys.uniqueness(scope, "REVIEWKEY", keys.digest(review.unique_source_key))
+            writes.append(Write(self._marker_item(marker, scope, record.key, now), None))
+        if new.review_obligation_id is not None and not any(
+            r.id == new.review_obligation_id for r in resolution.reviews
+        ):
+            return None
+        if (
+            isinstance(scope, PatientScope)
+            and old.slot_id
+            and old.notification_purpose == "routine_prompt"
+        ):
+            reservation = self._read(keys.contact(scope, old.slot_id))
+            if reservation and reservation.get("target_sk") == current.sk:
+                if outcome == "provider_accepted" or resolution.release_reservation:
+                    if resolution.release_reservation and outcome not in {
+                        "definite_failure",
+                        "suppressed",
+                    }:
+                        return None
+                    changed = reservation | {
+                        "version": reservation["version"] + 1,
+                        "state": "consumed" if outcome == "provider_accepted" else "released",
+                    }
+                    writes.append(Write(changed, reservation["version"]))
+        if self._atomic(writes, checks):
+            return to_record(new, scope)
+        return None
 
     def create_or_get_review(
         self, payload: ReviewCreation, now: datetime

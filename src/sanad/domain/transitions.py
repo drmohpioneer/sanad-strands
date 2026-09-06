@@ -37,6 +37,7 @@ from sanad.domain.entities import (
     WorkClock,
     review_source_key,
 )
+from sanad.domain.operations import AccountabilityWake
 from sanad.domain.predicates import DoctorAnswerPredicate, PatientReportPredicate
 
 STATE_PRESERVING_EVENTS: frozenset[type[ev.MissionEvent]] = frozenset(
@@ -347,10 +348,12 @@ def _finish_mission(
 
 def transition_mission(
     mission: Mission,
-    event: ev.MissionEvent,
+    event: ev.MissionEvent | AccountabilityWake,
     now: datetime,
     policy: DoctorTimingPolicy,
 ) -> Outcome:
+    if isinstance(event, AccountabilityWake):
+        return _accountability_wake(mission, event, now, policy)
     if type(event) not in LEGAL_TRANSITIONS[mission.state]:
         return _illegal(mission, event)
     now = utc_instant(now)
@@ -731,10 +734,12 @@ def _followup_next_action(
 
 def transition_followup(
     task: FollowUpTask,
-    event: ev.FollowUpEvent,
+    event: ev.FollowUpEvent | AccountabilityWake,
     now: datetime,
     policy: DoctorTimingPolicy,
 ) -> Outcome:
+    if isinstance(event, AccountabilityWake):
+        return _accountability_wake(task, event, now, policy)
     if type(event) not in LEGAL_FOLLOWUP_TRANSITIONS[task.state]:
         return _illegal(task, event)
     now = utc_instant(now)
@@ -873,10 +878,12 @@ def transition_followup(
 
 def transition_review(
     obligation: ReviewObligation,
-    event: ev.ReviewEvent,
+    event: ev.ReviewEvent | AccountabilityWake,
     now: datetime,
     policy: DoctorTimingPolicy,
 ) -> Outcome:
+    if isinstance(event, AccountabilityWake):
+        return _accountability_wake(obligation, event, now, policy)
     if type(event) not in LEGAL_REVIEW_TRANSITIONS[obligation.state]:
         return _illegal(obligation, event)
     now = utc_instant(now)
@@ -950,6 +957,78 @@ def transition_review(
     updated = ReviewObligation.model_validate(data)
     return ev.TransitionResult(
         aggregate=updated, effects=(_audit(event, obligation.version, updated.version),)
+    )
+
+
+def _accountability_wake(
+    aggregate: ev.Aggregate, event: AccountabilityWake, now: datetime, policy: DoctorTimingPolicy
+) -> Outcome:
+    """Re-arm owed review without claiming a reply, prompt, resolution or material change.
+
+    An expired proposal remains proposed; an expired pause stays blocked. Their
+    original clinical dates survive, with a future administrative checkpoint.
+    """
+    now = utc_instant(now)
+    clock = aggregate.work_clock
+    if clock is None or clock.next_action_at > now:
+        return _noop(aggregate)
+    unhandled = (
+        isinstance(aggregate, Mission)
+        and aggregate.state != MissionState.proposed
+        and aggregate.handled_deadline_generation < aggregate.deadline_generation
+        and aggregate.escalation_at <= now
+    ) or (
+        isinstance(aggregate, FollowUpTask)
+        and aggregate.state not in {FollowUpState.contact_suppressed, FollowUpState.overdue}
+        and not aggregate.deadline_handled
+        and (aggregate.due_at or aggregate.review_at) <= now
+    )
+    if now < aggregate.updated_at or unhandled:
+        return ev.TransitionRejected(
+            reason_code="deadline_requires_handling" if unhandled else "stale_time",
+            message="Handle the outstanding deadline first." if unhandled else "Stale time.",
+            state=aggregate.state,
+            event_type=event.event_type,
+        )
+    interval = (
+        policy.draft_review_interval
+        if isinstance(aggregate, Mission) and aggregate.state == MissionState.proposed
+        else policy.overdue_review_interval
+    )
+    candidates = [aggregate.review_at if aggregate.review_at > now else now + interval]
+    changes: dict[str, object] = {}
+    if isinstance(aggregate, Mission):
+        changes["review_at"] = candidates[0]
+        candidates += [
+            at
+            for at in (aggregate.next_contact_at, aggregate.resume_at)
+            if at is not None and at > now
+        ]
+        if aggregate.handled_deadline_generation < aggregate.deadline_generation:
+            if aggregate.escalation_at > now:
+                candidates.append(aggregate.escalation_at)
+    elif isinstance(aggregate, FollowUpTask):
+        candidates = [_followup_next_action(aggregate, now, policy)]
+    updated = type(aggregate).model_validate(
+        aggregate.model_dump()
+        | changes
+        | {
+            "version": aggregate.version + 1,
+            "updated_at": now,
+            "last_work_generation": aggregate.last_work_generation + 1,
+            "work_clock": _clock(aggregate, min(candidates), clock.work_lane),
+        }
+    )
+    return ev.TransitionResult(
+        aggregate=updated,
+        effects=(
+            ev.RecordAudit(
+                event_type=event.event_type,
+                event_id=event.event_id,
+                before_version=aggregate.version,
+                after_version=updated.version,
+            ),
+        ),
     )
 
 

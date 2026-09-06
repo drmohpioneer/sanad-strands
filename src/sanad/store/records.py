@@ -5,10 +5,12 @@ receipt, delivery and memory envelopes were blueprint-only at slice 01 and are
 defined here to support persistence, without adding clinical authority.
 """
 
+from __future__ import annotations
+
 import json
 from typing import Annotated, Any, Literal, Self
 
-from pydantic import BaseModel, Field, JsonValue, model_validator
+from pydantic import BaseModel, Field, JsonValue, StrictBool, model_validator
 
 from sanad.domain import (
     FollowUpTask,
@@ -24,6 +26,8 @@ from sanad.domain import (
     VersionRef,
 )
 from sanad.domain.boundaries import _BoundaryValue
+from sanad.domain.events import RecordEvidenceAssociation, RetainObservation, SupersedeEvidence
+from sanad.domain.operations import OperationalClock as OperationalClock
 from sanad.store import keys
 from sanad.store.keys import IntakeScope, Key, Scope, ScopedKey
 
@@ -33,17 +37,6 @@ class ProcessingClaim(_BoundaryValue):
     generation: PositiveVersion
     expires_at: UtcInstant
     claimed_at: UtcInstant
-
-
-class OperationalClock(_BoundaryValue):
-    """Storage clocks for the ingress/delivery lanes absent from domain WorkClock."""
-
-    next_action_at: UtcInstant
-    work_lane: Literal["ingress", "delivery"]
-    work_shard: NonblankStr = "0"
-    work_generation: PositiveVersion = 1
-    attempt_count: NonnegativeInt = 0
-    last_error_code: NonblankStr | None = None
 
 
 class _Metadata(_BoundaryValue):
@@ -60,7 +53,7 @@ class _Metadata(_BoundaryValue):
 
 
 class PatientProfile(_Metadata):
-    """Storage stub only; no binding, consent, demographics or clinical access."""
+    """Operational authority facts supplied by trusted fixtures until slice 06."""
 
     entity_type: Literal["patient_profile"] = "patient_profile"
     doctor_id: NonblankStr
@@ -69,6 +62,15 @@ class PatientProfile(_Metadata):
     lease_owner: NonblankStr | None = None
     lease_expires_at: UtcInstant | None = None
     lease_generation: NonnegativeInt = 0
+    safety_epoch: NonnegativeInt = 0
+    delivery_epoch: NonnegativeInt = 0
+    binding_epoch: NonnegativeInt = 0
+    consent_version: PositiveVersion | None = None
+    consent_active: StrictBool = False
+    binding_active: StrictBool = False
+    recipient_ref: NonblankStr | None = None
+    recipient_subject: NonblankStr | None = None
+    recipient_auth_epoch: NonnegativeInt = 0
 
     @model_validator(mode="after")
     def identity(self) -> Self:
@@ -77,6 +79,56 @@ class PatientProfile(_Metadata):
         if (self.lease_owner is None) != (self.lease_expires_at is None):
             raise ValueError("lease owner and expiry must be supplied together")
         return self
+
+
+class DoctorAuthority(_Metadata):
+    """Approval/recipient snapshot only; enrollment and authentication remain 05/06."""
+
+    entity_type: Literal["doctor_authority"] = "doctor_authority"
+    doctor_id: NonblankStr
+    approved: StrictBool = False
+    subject: NonblankStr
+    recipient_ref: NonblankStr
+    auth_epoch: NonnegativeInt
+
+    @model_validator(mode="after")
+    def identity(self) -> Self:
+        if self.id != self.doctor_id:
+            raise ValueError("doctor authority ID must equal doctor ID")
+        return self
+
+
+class OrderAuthority(_Metadata):
+    """Current order version/status fact, without prescribing or amendment workflows."""
+
+    entity_type: Literal["care_order"] = "care_order"
+    scope: PatientScope
+    status: Literal["active", "stopped", "superseded"]
+
+
+class EvidenceAnnotation(_Metadata):
+    entity_type: Literal["evidence_annotation"] = "evidence_annotation"
+    scope: PatientScope
+    source_event_id: NonblankStr
+    aggregate_ref: VersionRef
+    annotation: Annotated[
+        RetainObservation | RecordEvidenceAssociation | SupersedeEvidence,
+        Field(discriminator="effect_type"),
+    ]
+
+
+class Incident(_Metadata):
+    entity_type: Literal["incident"] = "incident"
+    scope: PatientScope
+    unique_source_key: NonblankStr
+    facts: dict[str, JsonValue]
+    severity: NonblankStr
+    verified_status: Literal["unverified", "verified"] = "unverified"
+    state: Literal["open", "resolved"] = "open"
+    raised_at: UtcInstant
+    review_obligation_id: NonblankStr
+    alert_intent_ids: tuple[NonblankStr, ...]
+    template_id: NonblankStr
 
 
 class AuditEvent(_Metadata):
@@ -122,6 +174,8 @@ class InboundReceipt(_Metadata):
     processing_claim: ProcessingClaim | None = None
     work_clock: OperationalClock | None
     result_event_ids: tuple[NonblankStr, ...] = ()
+    principal: Principal | None = None
+    review_obligation_id: NonblankStr | None = None
 
     @model_validator(mode="after")
     def recoverable(self) -> Self:
@@ -170,6 +224,17 @@ class OutboundIntent(_Metadata):
     last_error: NonblankStr | None = None
     suppression_reason: NonblankStr | None = None
     work_clock: OperationalClock | None
+    recipient_auth_epoch_seen: NonnegativeInt | None = None
+    doctor_auth_epoch_seen: NonnegativeInt | None = None
+    binding_epoch_seen: NonnegativeInt | None = None
+    consent_version_seen: PositiveVersion | None = None
+    safety_epoch_seen: NonnegativeInt | None = None
+    delivery_epoch_seen: NonnegativeInt | None = None
+    order_refs: tuple[VersionRef, ...] = ()
+    template_id: NonblankStr | None = None
+    review_obligation_id: NonblankStr | None = None
+    active_attempt_id: NonblankStr | None = None
+    retryable: StrictBool | None = None
 
     @model_validator(mode="after")
     def shape(self) -> Self:
@@ -181,7 +246,9 @@ class OutboundIntent(_Metadata):
             not isinstance(self.scope, IntakeScope) or self.audience != "doctor"
         ):
             raise ValueError("intake intent requires owning intake and doctor audience")
-        terminal = self.status in {"provider_accepted", "suppressed"}
+        terminal = self.status in {"provider_accepted", "suppressed"} or (
+            self.status in {"uncertain", "failed"} and self.review_obligation_id is not None
+        )
         if terminal != (self.work_clock is None):
             raise ValueError("unfinished delivery requires a work clock")
         if self.work_clock is not None and self.work_clock.work_lane != "delivery":
@@ -193,7 +260,7 @@ class OutboundIntent(_Metadata):
         return self
 
 
-type DeliveryOutcome = Literal["provider_accepted", "uncertain", "definite_failure"]
+type DeliveryOutcome = Literal["provider_accepted", "uncertain", "definite_failure", "suppressed"]
 
 
 class DeliveryAttempt(_Metadata):
@@ -205,7 +272,9 @@ class DeliveryAttempt(_Metadata):
     freshness_snapshot: tuple[VersionRef, ...]
     started_at: UtcInstant
     ended_at: UtcInstant | None = None
-    outcome: Literal["started", "provider_accepted", "uncertain", "definite_failure"] = "started"
+    outcome: Literal[
+        "started", "provider_accepted", "uncertain", "definite_failure", "suppressed"
+    ] = "started"
     provider_message_id: NonblankStr | None = None
     redacted_error_code: NonblankStr | None = None
 
@@ -287,10 +356,18 @@ MODELS: dict[str, type[BaseModel]] = {
     "outbound_intent": OutboundIntent,
     "delivery_attempt": DeliveryAttempt,
     "session_snapshot": SessionSnapshot,
+    "doctor_authority": DoctorAuthority,
+    "care_order": OrderAuthority,
+    "evidence_annotation": EvidenceAnnotation,
+    "incident": Incident,
 }
 
 
 def model_scope(model: BaseModel) -> Scope:
+    if isinstance(model, DoctorAuthority):
+        return TenantScope(doctor_id=model.doctor_id)
+    if isinstance(model, (OrderAuthority, EvidenceAnnotation, Incident)):
+        return model.scope
     if isinstance(model, (Mission, FollowUpTask, PatientProfile)):
         return PatientScope(doctor_id=model.doctor_id, patient_id=model.patient_id)
     if isinstance(model, ReviewObligation):
@@ -316,6 +393,14 @@ def scope_owns(scope: Scope, other: Scope) -> bool:
 
 
 def model_key(model: BaseModel, scope: Scope) -> Key:
+    if isinstance(model, DoctorAuthority):
+        return keys.doctor(scope)
+    if isinstance(model, OrderAuthority):
+        return keys.patient(model.scope, "ORDER", model.id)
+    if isinstance(model, EvidenceAnnotation):
+        return keys.patient(model.scope, "FACT", model.id)
+    if isinstance(model, Incident):
+        return keys.patient(model.scope, "INCIDENT", model.id)
     if isinstance(model, PatientProfile):
         assert isinstance(scope, PatientScope)
         return keys.patient(scope)
@@ -440,6 +525,7 @@ class CommandEnvelope(_BoundaryValue):
     requested_at: UtcInstant
     fence: Lease | None = None
     work_claim: Claim | None = None
+    worker: WorkerCapability | None = None
 
 
 class ReceiptCompletion(_BoundaryValue):
@@ -470,12 +556,28 @@ class CommitRequest(_BoundaryValue):
     intents: tuple[OutboundIntentRecord, ...] = ()
     markers: tuple[MarkerRecord, ...] = ()
     receipt_completion: ReceiptCompletion | None = None
+    command_status: Literal[
+        "accepted", "needs_confirmation", "invalid_input", "forbidden", "unsupported"
+    ] = "accepted"
+    reason_code: NonblankStr | None = None
+
+
+class DeliveryResolution(_BoundaryValue):
+    """A dispatcher-selected outcome applied atomically with its attempt and review."""
+
+    intent: StoredRecord
+    reviews: tuple[StoredRecord, ...] = ()
+    release_reservation: StrictBool = False
 
 
 class Accepted(_BoundaryValue):
     status: Literal["accepted"] = "accepted"
     event_ids: tuple[str, ...]
     resulting_versions: tuple[VersionRef, ...]
+    command_status: Literal[
+        "accepted", "needs_confirmation", "invalid_input", "forbidden", "unsupported"
+    ] = "accepted"
+    reason_code: NonblankStr | None = None
 
 
 class StaleVersion(_BoundaryValue):
@@ -563,3 +665,7 @@ def item_record(item: dict[str, Any]) -> StoredRecord:
     data["sk"] = data.pop("SK")
     data["body"] = json.loads(data["body"])
     return StoredRecord.model_validate(data)
+
+
+CommandEnvelope.model_rebuild()
+CommitRequest.model_rebuild()

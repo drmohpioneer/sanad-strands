@@ -5,6 +5,7 @@ from uuid import uuid4
 
 import pytest
 from domain_fixtures import NOW
+from harness import FakeClock
 
 from sanad.store._base import StoreBase
 from sanad.store.dynamodb import DynamoStore, ensure_table
@@ -13,7 +14,7 @@ from sanad.store.memory import MemoryStore
 
 
 @dataclass
-class Clock:
+class Clock(FakeClock):
     now: datetime = NOW
 
     def __call__(self) -> datetime:

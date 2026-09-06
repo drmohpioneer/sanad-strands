@@ -20,11 +20,13 @@ from sanad.domain import (
 from sanad.store.keys import Scope, ScopedKey
 from sanad.store.records import (
     Claim,
+    CommandEnvelope,
     CommitRequest,
     CommitResult,
     Cursor,
     DeliveryAttempt,
     DeliveryOutcome,
+    DeliveryResolution,
     DuePage,
     InboundAccept,
     InboundReceiptRecord,
@@ -40,6 +42,17 @@ from sanad.store.records import (
 
 
 class Store(Protocol):
+    def lookup_command(self, command: CommandEnvelope) -> CommitResult | None: ...
+    def list_records(
+        self, scope: Scope, entity_type: str, cursor: Cursor | None = None, limit: int = 100
+    ) -> RecordPage:
+        """Strongly read one scoped base partition, including terminal records."""
+        ...
+
+    def commit_incident(self, request: CommitRequest) -> CommitResult:
+        """Conditional urgent transaction, restricted to incident records and safety epoch."""
+        ...
+
     def get(self, scope: Scope, entity_type: str, id: str) -> StoredRecord | None: ...
     def get_mission(self, scope: PatientScope, id: str) -> Mission | None: ...
     def get_followup(self, scope: PatientScope, id: str) -> FollowUpTask | None: ...
@@ -68,6 +81,8 @@ class Store(Protocol):
         owner: str,
         now: datetime,
         ttl: timedelta,
+        *,
+        count_attempt: bool = True,
     ) -> Claim | None: ...
     def acquire_patient(
         self, scope: PatientScope, owner: str, now: datetime, ttl: timedelta
@@ -97,6 +112,7 @@ class Store(Protocol):
         now: datetime,
         *,
         scope: Scope,
+        freshness_versions: tuple[VersionRef, ...] = (),
     ) -> DeliveryAttempt | None:
         """Persist attempt and check source versions; dispatcher owns send-time policy in 03."""
         ...
@@ -108,6 +124,7 @@ class Store(Protocol):
         provider_message_id: str | None,
         *,
         scope: Scope,
+        resolution: DeliveryResolution | None = None,
     ) -> StoredRecord | None: ...
     def create_or_get_review(
         self, payload: ReviewCreation, now: datetime

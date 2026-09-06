@@ -52,6 +52,7 @@ from sanad.store.records import (
     Incident,
     Lease,
     MarkerRecord,
+    MediaWork,
     OperationalIssue,
     OutboundIntent,
     PatientProfile,
@@ -196,6 +197,7 @@ class StoreBase(ABC):
             "outbound_intent": "OUT",
             "incident": "INCIDENT",
             "evidence_annotation": "FACT",
+            "media_work": "MEDIA",
         }
         if entity_type in {"mission", "followup", "patient_profile"} and not isinstance(
             scope, PatientScope
@@ -361,6 +363,7 @@ class StoreBase(ABC):
             "outbound_intent": "OUT#",
             "evidence_annotation": "FACT#",
             "care_order": "ORDER#",
+            "media_work": "MEDIA#",
         }
         if entity_type not in prefixes:
             return (), None
@@ -489,7 +492,8 @@ class StoreBase(ABC):
             and worker.resolved_scope == scope
             and worker.auth_expiry > utc_instant(self._clock())
             and bool(
-                worker.permitted_lanes & {"mission", "followup", "review", "ingress", "urgent"}
+                worker.permitted_lanes
+                & {"mission", "followup", "review", "ingress", "media", "urgent"}
             )
         )
         if (
@@ -671,9 +675,16 @@ class StoreBase(ABC):
                 request.receipt_completion is not None
                 and request.receipt_completion.claim == work_claim
             )
-            checkpointing = claimed is not None and claimed.entity_type == "inbound_receipt"
+            checkpointing = claimed is not None and claimed.entity_type in {
+                "inbound_receipt",
+                "media_work",
+            }
             stored_token = (
-                from_record(claimed, InboundReceipt).processing_claim
+                (
+                    from_record(claimed, InboundReceipt).processing_claim
+                    if claimed.entity_type == "inbound_receipt"
+                    else from_record(claimed, MediaWork).processing_claim
+                )
                 if checkpointing and claimed is not None
                 else claimed.processing_claim
                 if claimed
@@ -751,6 +762,39 @@ class StoreBase(ABC):
             if record.entity_type in {"delivery_attempt", "session_snapshot"}:
                 return Forbidden()  # Their fenced operations own these writes.
             current = self._owned(actual_scope, record.key)
+            if isinstance(model, MediaWork):
+                if current is None:
+                    source = self.get(actual_scope, "inbound_receipt", model.receipt_id)
+                    if source is None or (
+                        from_record(source, InboundReceipt).provider_media_handle
+                        != model.provider_handle_ref
+                        or model.stage != "fetch"
+                        or model.state != "pending"
+                    ):
+                        return Forbidden()
+                    checks.append(Check(source.key, source.version))
+                else:
+                    old_media = from_record(current, MediaWork)
+                    if (
+                        command.work_claim is None
+                        or command.work_claim.record_key.key != record.key
+                    ):
+                        return Forbidden()
+                    if (old_media.scope, old_media.receipt_id, old_media.provider_handle_ref) != (
+                        model.scope,
+                        model.receipt_id,
+                        model.provider_handle_ref,
+                    ):
+                        return Forbidden()
+                    stages = ("fetch", "normalize", "extract", "associate")
+                    delta = stages.index(model.stage) - stages.index(old_media.stage)
+                    if old_media.state == "completed" or delta not in {0, 1}:
+                        return Forbidden()
+                    if old_media.source_blob_ref is not None and any(
+                        getattr(old_media, f) != getattr(model, f)
+                        for f in ("source_blob_ref", "byte_hash", "mime", "size")
+                    ):
+                        return Forbidden()
             if isinstance(model, InboundReceipt):
                 if (
                     current is None
@@ -1052,7 +1096,9 @@ class StoreBase(ABC):
             return None
         model = from_record(record, MODELS[record.entity_type])
         previous = (
-            model.processing_claim if isinstance(model, InboundReceipt) else record.processing_claim
+            model.processing_claim
+            if isinstance(model, (InboundReceipt, MediaWork))
+            else record.processing_claim
         )
         if previous is not None and previous.expires_at > now:
             return None
@@ -1062,7 +1108,7 @@ class StoreBase(ABC):
             claimed_at=now,
             expires_at=now + ttl,
         )
-        if isinstance(model, InboundReceipt):
+        if isinstance(model, (InboundReceipt, MediaWork)):
             if (
                 (model.state == "needs_attention" and count_attempt)
                 or model.work_clock is None
@@ -1613,6 +1659,14 @@ class StoreBase(ABC):
         profile = self._lease_record(fence, now)
         if profile is None:
             return False
+        if from_record(profile, PatientProfile).safety_epoch != snapshot.safety_epoch:
+            return False
+        order_checks: list[Check] = []
+        for ref in snapshot.source_order_versions:
+            order = self.get(scope, "care_order", ref.id)
+            if order is None or order.ref != ref or order.body.get("status") != "active":
+                return False
+            order_checks.append(Check(order.key, order.version))
         record = to_record(snapshot, scope)
         previous = self.get(scope, "session_snapshot", key)
         if previous is not None and (
@@ -1623,7 +1677,7 @@ class StoreBase(ABC):
             return False
         return self._atomic(
             [Write(record_item(record), expected_session_version or None)],
-            [Check(profile.key, profile.version)],
+            [Check(profile.key, profile.version), *order_checks],
         )
 
     def reconcile_partition(

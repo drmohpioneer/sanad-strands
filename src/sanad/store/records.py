@@ -590,6 +590,56 @@ class InboundReceipt(_Metadata):
         return self
 
 
+class MediaWork(_Metadata):
+    """Recoverable extraction work; association never follows merely from a read."""
+
+    entity_type: Literal["media_work"] = "media_work"
+    scope: PatientScope | IntakeScope
+    receipt_id: NonblankStr
+    provider_handle_ref: NonblankStr = Field(repr=False)
+    source_blob_ref: NonblankStr | None = None
+    normalized_blob_ref: NonblankStr | None = None
+    byte_hash: Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")] | None = None
+    mime: NonblankStr | None = None
+    size: NonnegativeInt | None = None
+    duration: Annotated[float, Field(gt=0, le=300, allow_inf_nan=False)] | None = None
+    stage: Literal["fetch", "normalize", "extract", "associate"] = "fetch"
+    state: Literal["pending", "processing", "completed", "needs_attention"] = "pending"
+    processing_claim: ProcessingClaim | None = None
+    work_clock: OperationalClock | None
+    last_error: NonblankStr | None = None
+    resend_intent_id: NonblankStr | None = None
+    review_obligation_id: NonblankStr | None = None
+
+    @model_validator(mode="after")
+    def recoverable(self) -> Self:
+        if self.id != keys.digest(self.receipt_id):
+            raise ValueError("media work identity must derive from its scoped receipt")
+        if (self.state == "completed") != (self.work_clock is None):
+            raise ValueError("unfinished media work requires a clock")
+        if self.work_clock and self.work_clock.work_lane != "media":
+            raise ValueError("media work requires media lane")
+        if self.state == "completed" and self.stage != "associate":
+            raise ValueError("extraction alone cannot complete association")
+        if self.state == "needs_attention" and not (
+            self.last_error and self.review_obligation_id and self.resend_intent_id
+        ):
+            raise ValueError("media failure requires timed review and resend intent")
+        if self.stage != "fetch" and any(
+            x is None
+            for x in (
+                self.source_blob_ref,
+                self.byte_hash,
+                self.mime,
+                self.size,
+            )
+        ):
+            raise ValueError("normalization requires durable source bytes")
+        if self.stage in {"extract", "associate"} and self.normalized_blob_ref is None:
+            raise ValueError("extraction requires normalized source")
+        return self
+
+
 class OutboundIntent(_Metadata):
     entity_type: Literal["outbound_intent"] = "outbound_intent"
     scope: Scope
@@ -795,6 +845,7 @@ MODELS: dict[str, type[BaseModel]] = {
     "patient_profile": PatientProfile,
     "audit_event": AuditEvent,
     "inbound_receipt": InboundReceipt,
+    "media_work": MediaWork,
     "outbound_intent": OutboundIntent,
     "delivery_attempt": DeliveryAttempt,
     "session_snapshot": SessionSnapshot,
@@ -842,7 +893,8 @@ def model_scope(model: BaseModel) -> Scope:
             raise ValueError("unassigned review requires an explicit intake source")
         return IntakeScope(doctor_id=model.owner_doctor_id, intake_id=model.source_id)
     if isinstance(
-        model, (AuditEvent, InboundReceipt, OutboundIntent, DeliveryAttempt, SessionSnapshot)
+        model,
+        (AuditEvent, InboundReceipt, MediaWork, OutboundIntent, DeliveryAttempt, SessionSnapshot),
     ):
         return model.scope
     raise ValueError("unsupported record model")
@@ -899,6 +951,8 @@ def model_key(model: BaseModel, scope: Scope) -> Key:
         return keys.event(model.scope, model.accepted_at, model.event_id)
     if isinstance(model, InboundReceipt):
         return keys.inbound(model.transport, keys.digest(model.transport_key))
+    if isinstance(model, MediaWork):
+        return Key(keys.partition(model.scope), f"MEDIA#{keys.component(model.id)}")
     if isinstance(model, OutboundIntent):
         return keys.outbox(scope, model.id)
     if isinstance(model, DeliveryAttempt):

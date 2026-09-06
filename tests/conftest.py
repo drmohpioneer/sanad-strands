@@ -1,5 +1,6 @@
 """Block internet sockets and DNS before test-module imports, not just in tests."""
 
+import os
 import socket
 
 import pytest
@@ -9,6 +10,7 @@ _REAL_GETADDRINFO = socket.getaddrinfo
 
 
 def pytest_addoption(parser: pytest.Parser) -> None:
+    parser.addoption("--live", action="store_true", help="explicit isolated live-check suite")
     parser.addoption("--ddb", action="store_true", help="include DynamoDB Local store parity")
     parser.addoption(
         "--require-ddb", action="store_true", help="fail rather than skip missing Local"
@@ -36,6 +38,10 @@ def _deny_dns(*args: object, **kwargs: object) -> None:
 
 
 def pytest_configure(config: pytest.Config) -> None:
+    if config.getoption("--live"):
+        if os.environ.get("SANAD_LIVE") != "1" or config.args != ["tests/live"]:
+            raise pytest.UsageError("--live requires SANAD_LIVE=1 and exactly tests/live")
+        return
     # asyncio uses a local socket pair; AF_UNIX permits no internet connection.
     pytest_socket.disable_socket(allow_unix_socket=True)
     patch = pytest.MonkeyPatch()

@@ -21,6 +21,8 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 from sanad.api.app import create_app
 from sanad.api.internal import process_event as process_event
 from sanad.channels.telegram.settings import TelegramSettings
+from sanad.media.storage import S3MediaStore
+from sanad.models.registry import ModelRegistry
 from sanad.ops.nonce_store import NonceStore, TickVerifier
 from sanad.ops.sweep import sweep_due
 from sanad.ops.worker import AsyncReceiptInvoker
@@ -83,6 +85,10 @@ def configure(revision: str) -> FastAPI:
         ),
         tick_verifier=verifier,
         tick_sweep=lambda: sweep_due(app.state.telegram, store, app.state.claim_lane),
+    )
+    app.state.model_registry = ModelRegistry()
+    app.state.media_store = S3MediaStore(
+        os.environ["SANAD_BUCKET"], boto3.client("s3", config=config)
     )
     return app
 

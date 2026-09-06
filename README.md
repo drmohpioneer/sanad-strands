@@ -2,7 +2,7 @@
 
 Sanad carries a doctor's plan after the visit: natural Telegram conversations become confirmed patient records and timed missions; patients receive follow-up and practical help; one doctor liaison reports danger, completion and unresolved deadlines.
 
-**Status: slices 00 to 04 accepted (2026-09-06); slice 05 implemented for review: verified Telegram ingress, doctor applications and approval, and a send adapter. Safety and account wording await owner review.** The package includes typed domain transitions, conditional memory/DynamoDB storage, fenced processing, recovery sweeps, a deterministic safety kernel and delivery through captured and Telegram transports, with synthetic local verification. The full care workflow and deployment remain planned. This is the single active project folder.
+**Status: slices 00–07 accepted; slice 08 adapters implemented for review, with unresolved live model checks.** The package includes typed domain transitions, conditional memory/DynamoDB storage, fenced processing, recovery sweeps, a deterministic safety kernel, Telegram account/enrollment flows and an AWS development deployment. The model adapters are not connected to care turns. The full care workflow remains in development. This is the single active project folder.
 
 Start with the [A–Z master plan](docs/master-plan.md), then the [full roadmap](docs/roadmap.md). The [architecture](docs/architecture.md), [domain model](docs/domain-model.md), [care policy](docs/care-policy.md), [agent design](docs/agent-design.md), [security](docs/safety-security.md), [verification matrix](docs/verification.md) and [operations plan](docs/operations.md) supply the implementation detail.
 
@@ -33,7 +33,29 @@ Domain values live in `sanad.domain.boundaries` and match the [canonical foundat
 
 `sanad.domain` also exposes typed missions, independent follow-up tasks and review obligations, creation factories, objective specifications, timing resolution and pure transition functions. Transitions return a new aggregate and inert effects or a typed rejection; documented replays return the original object without effects. Explicit doctor instants survive exactly, inferred timing retains its reason, and a supplied timing policy controls defaults and accountability intervals. Medication START and its independent day-three response produce separate completion intents; corrections preserve history and create review work. The shipped `draft-2026-09` policy is an operational draft. The layer performs no storage or delivery, and callers remain responsible for authenticated scope, current authority and deterministic evidence evaluation. See [contract 01](docs/contracts/01-domain-transitions-and-deadlines.md#report) for tests and conservative edge-case choices.
 
-Resolved versions are pinned in `pyproject.toml` and `uv.lock`: FastAPI 0.141.1, Pydantic 2.13.5, Uvicorn 0.52.4, tzdata 2026.3, boto3 1.43.89; pytest 9.1.1, pytest-socket 0.8.1, HTTPX 0.28.1, Ruff 0.16.6, mypy 1.20.2 and Hatchling 1.32.0. The lock was generated with uv 0.12.7. Model adapters belong to slice 08; the AWS development deployment is described below.
+Resolved versions are pinned in `pyproject.toml` and `uv.lock`: FastAPI 0.141.1, Pydantic 2.13.5, Uvicorn 0.52.4, tzdata 2026.3, boto3 1.43.89, strands-agents 1.54.0; pytest 9.1.1, pytest-socket 0.8.1, HTTPX 0.28.1, Ruff 0.16.6, mypy 1.20.2 and Hatchling 1.32.0. The lock was generated with uv 0.12.7. Adding Strands preserved every previous dependency version.
+
+## Models and media
+
+`ModelRegistry` fixes the measured Bedrock IDs in `us-east-1`, at temperature 0:
+
+| Role | Model ID |
+| --- | --- |
+| Worker; Scribe, Concierge, Coordinator, Resolver, Evidence Reader, Liaison | `us.amazon.nova-lite-v1:0` |
+| Independent cross-check | `us.amazon.nova-pro-v1:0` |
+| Classification only | `us.amazon.nova-micro-v1:0` |
+| Vision, first and second reader | Nova Lite and Nova Pro above |
+| Speech | `mistral.voxtral-small-24b-2507` |
+
+The registry records Nova 2 Lite's dropped instruction and Voxtral Mini's misheard number as reasons for rejection. `make_agent` constructs a fresh Strands agent with server-bound scope, explicit tool allow-lists, a six-call/20-second guard and a 25-second model ceiling. Tools recheck scope in their bodies. `propose` requests plain JSON using a field description, validates it with Pydantic and returns a complete candidate or a typed failure without a validation retry loop. List-shaped span claims become source provenance; absent, repeated or out-of-bounds claims stay unsupported. Patient fields must be declared by the caller; their sentences pass the existing safety validator and Arabic-language gate after reasoning text is removed. Conversation memory uses bounded `SessionSnapshot` data and the caller's patient lease; an outdated fence discards the output.
+
+Speech uses one user message containing mp3 audio and the versioned Egyptian-verbatim instruction, followed by a requested `NUMBERS:` line. The adapter separates the transcript from that final line and retains `numbers`, ordered `heard_numbers` entries (each number with its following word), and `disputed_numbers` found in only one reading. It never substitutes a disputed value into the transcript. A missing or malformed line is a typed failure. The container includes ffmpeg/ffprobe to convert ogg/opus, wav and m4a into 48 kbps mono mp3, with a shared 20-second conversion budget, a five-minute duration limit and a 20 MiB input cap. Number helpers normalize digit tokens, including Arabic-Indic digits and ranges. Slice 09 must show disputed numbers as uncertain fields on the doctor's editable confirmation card; agreement within one model reply cannot establish audio accuracy.
+
+Vision accepts PNG/JPEG up to 8 MiB, 8,000 pixels per edge and 20 million pixels. Bounded header checks precede model calls; no Pillow dependency or local pixel decode is used. A field description requests printed values, units, reference ranges and medication fields; echoed descriptions or the obsolete example return `template_echo`. Two independent reads produce field disagreements. **Printed identity is a low-reliability hint; only the doctor's selection determines the patient.** Missing units remain `cannot_judge`, and the deterministic kernel grades lab values independently of the model's flag.
+
+Media retrieval receives an explicit Telegram client and private S3 store. It sniffs bytes, uses scoped content hashes and server-side encryption, and persists claimed `MediaWork` through fetch and normalization. Interrupted work is recoverable; expired handles produce a timed review and resend intent. Extraction remains pending for its later workflow. The AWS composition root constructs the registry and S3 adapter only.
+
+Default tests use `ScriptedModel` through the real Strands/Bedrock adapter, scripted speech/vision/conversion, `FakeTelegramFiles` and `FakeS3`, with internet sockets disabled. `make test-ddb` separately checks the same durable behavior against DynamoDB Local. The explicit `SANAD_LIVE=1 make live-check` entry point reserves estimated spend before each request, caps it at $0.50 and refuses to overwrite existing evidence. The [attempt-2 live run](docs/evidence/live-08-2026-09-07.json) passed 14 of 15 checks: all ten guards, plain-JSON extraction, fenced session persistence, and both vision checks. Speech returned `missing_numbers_line`; no standalone final `NUMBERS:` line was recognized, so live speech readiness remains unresolved. The run made 16 provider calls at an estimated $0.01228546. The [earlier evidence](docs/evidence/live-08-2026-09-06.json) remains intact. See the [attempt-2 report](docs/contracts/08-strands-and-multimodal-adapters.md#report-attempt-2) for verification and remaining limitations.
 
 ## Store
 

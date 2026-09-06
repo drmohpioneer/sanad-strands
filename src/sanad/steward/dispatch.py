@@ -269,9 +269,11 @@ class Dispatcher:
         *,
         settings: IdentityConfig | None = None,
         payload_resolver: Callable[[OutboundIntent], dict[str, JsonValue]] | None = None,
+        extra_freshness: Callable[[OutboundIntent, datetime], str | None] | None = None,
     ):
         self.steward, self.store, self.transport = steward, steward.store, transport
         self.settings, self.payload_resolver = settings, payload_resolver
+        self.extra_freshness = extra_freshness
 
     def dispatch_one(
         self, intent_key: ScopedKey, owner: str, now: datetime
@@ -331,7 +333,7 @@ class Dispatcher:
             if intent.status == "uncertain" and intent.work_clock is not None:
                 return self._finish(intent, SendOutcome(status="uncertain"), now)
             return intent
-        reason = freshness(self.store, intent, self.steward.clock(), settings=self.settings)
+        reason = self._freshness(intent, self.steward.clock())
         if reason is not None:
             return self._finish(
                 intent, SendOutcome(status="uncertain"), self.steward.clock(), suppression=reason
@@ -370,7 +372,7 @@ class Dispatcher:
             or current.delivery_claim.expires_at <= at
         ):
             return current
-        reason = freshness(self.store, current, at, settings=self.settings)
+        reason = self._freshness(current, at)
         if reason is not None:
             return self._finish(
                 current, SendOutcome(status="uncertain"), at, suppression=reason, unsent=True
@@ -401,6 +403,11 @@ class Dispatcher:
         except TimeoutError:
             outcome = SendOutcome(status="uncertain")
         return self._finish(current, outcome, self.steward.clock(), unsent=unsent)
+
+    def _freshness(self, intent: OutboundIntent, now: datetime) -> str | None:
+        return freshness(self.store, intent, now, settings=self.settings) or (
+            self.extra_freshness(intent, now) if self.extra_freshness else None
+        )
 
     def _policy(self, intent: OutboundIntent) -> StewardPolicy:
         return (

@@ -56,10 +56,12 @@ class Sweeper:
         capability: WorkerCapability,
         *,
         elapsed_clock: Callable[[], float] = monotonic,
+        lane_handlers: dict[str, Callable[[StoredRecord], None]] | None = None,
     ):
         self.steward, self.store = steward, steward.store
         self.inbound, self.dispatcher, self.capability = inbound, dispatcher, capability
         self.elapsed_clock = elapsed_clock
+        self.lane_handlers = lane_handlers or {}
 
     def sweep(self, lane: str, shard: str, now: datetime, budget: SweepBudget) -> SweepReport:
         start = self.elapsed_clock()
@@ -95,11 +97,13 @@ class Sweeper:
                 ):
                     skipped += 1
                     continue
-                if not isinstance(scope, PatientScope):
+                if not isinstance(scope, PatientScope) and lane not in self.lane_handlers:
                     deferred += 1
                     continue
                 try:
-                    if lane == "delivery" and fresh.entity_type == "outbound_intent":
+                    if lane in self.lane_handlers:
+                        self.lane_handlers[lane](fresh)
+                    elif lane == "delivery" and fresh.entity_type == "outbound_intent":
                         self.dispatcher.dispatch_one(
                             hit.record_key, self.capability.service_subject, now
                         )
@@ -126,6 +130,7 @@ class Sweeper:
                                 and (task.due_at or task.review_at) <= now
                             ):
                                 kind = "_FollowupDeadline"
+                        assert isinstance(scope, PatientScope)
                         command = system_command(
                             scope,
                             f"sweep:{lane}:{fresh.id}:{fresh.version}",

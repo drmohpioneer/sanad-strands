@@ -99,6 +99,16 @@ Bound patient danger goes through the existing urgent Steward before ordinary pr
 
 The ops-only `register_webhook(settings, public_url, http=...)` calls `setWebhook` with the configured secret, `allowed_updates=["message", "callback_query"]` and `drop_pending_updates=False`. Slice 07 will invoke it against the authorized new deployment. It is never invoked by tests, startup or Make targets. Account wording review and admin ID configuration remain owner gates; slice 06 must recheck `auth_epoch` on every browser request and exchange.
 
+## Login and patient claim
+
+`WebSettings.from_env()` reads `SANAD_PUBLIC_BASE_URL` (the HTTPS origin every link is built from) and `SANAD_TELEGRAM_BOT_USERNAME` (for the `t.me` deep link). Pass it to `create_app(web_settings=...)` alongside the Telegram settings.
+
+An approved doctor sends `/login` in Telegram and receives a ten-minute single-use link. `GET /d/<token>` shows a neutral Continue page and never consumes the token, so link previews cannot burn it; only the same-origin `POST` consumes it, rotates the session cookie and redirects to `/a`. Every authenticated request re-reads the doctor's authorization epoch, so suspension ends the session immediately. Writes need the CSRF token from the `sanad_csrf` cookie in a form field or `X-CSRF-Token` header and an `Origin` header equal to the configured site.
+
+A doctor creates a patient record stub and issues an invitation: an opaque token behind `<site>/p/<token>`, stored hashed, 24-hour draft expiry. The landing page shows only the doctor's name and a Telegram deep link. In Telegram the patient's `/start <token>` records a pending claim (a second scanner is refused and the first claim is kept), the consent text is presented with accept/decline buttons, and the doctor then confirms the person's identity from the encounter. Confirmation is one transaction across invitation, claim, patient, binding, the global subject index and the delivery authority row; a subject already bound anywhere fails the whole transaction without disclosing the other record. Revocation raises the binding and delivery epochs so queued routine messages are suppressed while danger alerts are unaffected. A bound patient's `/login` opens `/pl/<token>` → `/pp` with the same discipline.
+
+Locally everything runs against the in-memory store, the FastAPI test client and captured transports; the same tests run on DynamoDB Local. Real HTTPS, cookies behind the proxy and the deep link are verified at deployment. All enrollment wording, including the consent text, is marked pending owner review.
+
 ## Prior work
 
 The original Sanad was developed in August 2026 for Google's All Things Agentic hackathon. Slice 04 copies five safety modules and four test files from the frozen Google source at `b65f569`, splitting its normalizer into a sixth module. The [typed reuse inventory](src/sanad/safety/_provenance.py) and [slice report](docs/contracts/04-safety-kernel.md#report) distinguish copied tables and tests from the new policy boundary. The source project remains frozen. Publication and clinical approval are separate gates; see [sources and contest requirements](docs/research/hackathon-and-sources.md).

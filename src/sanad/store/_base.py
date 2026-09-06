@@ -178,6 +178,11 @@ class StoreBase(ABC):
             tenant = TenantScope(doctor_id=scope.doctor_id)
             return self._owned(tenant, keys.doctor(tenant))
         prefixes = {
+            "patient": "PATIENT",
+            "consent": "CONSENT",
+            "patient_binding": "PATIENT_BINDING",
+            "token_head": "TOKEN_HEAD",
+            "patient_claim": "PATIENT_CLAIM",
             "application": "APPLICATION",
             "account_ack": "ACK",
             "mission": "MISSION",
@@ -205,6 +210,16 @@ class StoreBase(ABC):
             if id.startswith("SUBJECT#") and not id.startswith(prefix):
                 return None
             key = keys.subject(scope.bot_id, id.removeprefix(prefix))
+        elif entity_type in {
+            "doctor_login",
+            "patient_login",
+            "invitation",
+            "claim_callback",
+            "pre_session",
+        } and isinstance(scope, AccountScope):
+            key = keys.token(entity_type, id)
+        elif entity_type == "web_session" and isinstance(scope, AccountScope):
+            key = keys.web_session(id)
         elif entity_type == "callback_token" and isinstance(scope, AccountScope):
             key = keys.token("callback", id)
         elif entity_type == "operational_issue" and isinstance(scope, AccountScope):
@@ -323,6 +338,11 @@ class StoreBase(ABC):
         self, scope: Scope, entity_type: str, cursor: Cursor | None = None, limit: int = 100
     ) -> RecordPage:
         prefixes = {
+            "patient": "PATIENT#",
+            "consent": "CONSENT#",
+            "patient_binding": "PATIENT_BINDING#",
+            "token_head": "TOKEN_HEAD#",
+            "patient_claim": "PATIENT_CLAIM#",
             "application": "APPLICATION#",
             "account_ack": "ACK#",
             "doctor": "DOCTOR",
@@ -358,9 +378,13 @@ class StoreBase(ABC):
                 return Forbidden()
         elif command.principal.doctor_id != command.scope.doctor_id:
             return Forbidden()
-        if command.principal.actor_kind == "patient" and (
-            not isinstance(command.scope, PatientScope)
-            or command.principal.patient_id != command.scope.patient_id
+        if (
+            command.principal.actor_kind == "patient"
+            and not isinstance(command.scope, AccountScope)
+            and (
+                not isinstance(command.scope, PatientScope)
+                or command.principal.patient_id != command.scope.patient_id
+            )
         ):
             return Forbidden()
         return self._duplicate(
@@ -438,7 +462,12 @@ class StoreBase(ABC):
         return self._commit(request)
 
     def _commit(
-        self, request: CommitRequest, *, urgent: bool = False, account: bool = False
+        self,
+        request: CommitRequest,
+        *,
+        urgent: bool = False,
+        account: bool = False,
+        identity: bool = False,
     ) -> CommitResult:
         command = request.command
         scope = command.scope
@@ -483,6 +512,17 @@ class StoreBase(ABC):
             "expected_safety_epoch",
         )
         authority_checks: list[Check] = []
+        identity_expiry = None
+        if request.identity_reads and not identity:
+            return Forbidden()
+        if identity:
+            from sanad.store.identity import identity_guards
+
+            guarded = identity_guards(self, request, utc_instant(self._clock()))
+            if guarded is None:
+                return Forbidden()
+            authority_checks, identity_expiry = guarded
+
         if any(getattr(command, field) is not None for field in epoch_fields):
             if not isinstance(scope, PatientScope):
                 return Forbidden()
@@ -643,6 +683,20 @@ class StoreBase(ABC):
             ):
                 return StaleVersion(conflicts=("work_claim",))
         for record in records:
+            if not identity and record.entity_type in {
+                "patient",
+                "consent",
+                "patient_binding",
+                "token_head",
+                "doctor_login",
+                "patient_login",
+                "invitation",
+                "patient_claim",
+                "claim_callback",
+                "pre_session",
+                "web_session",
+            }:
+                return Forbidden()
             if not account and record.entity_type in {
                 "application",
                 "doctor",
@@ -660,7 +714,9 @@ class StoreBase(ABC):
             if scope != actual_scope:
                 if not account or not isinstance(scope, AccountScope):
                     return Forbidden()
-                if isinstance(model, Doctor):
+                if identity:
+                    pass  # Narrow identity guards checked every cross-partition row.
+                elif isinstance(model, Doctor):
                     if model.telegram_bot_id != scope.bot_id:
                         return Forbidden()
                 elif isinstance(model, InboundReceipt):
@@ -783,7 +839,7 @@ class StoreBase(ABC):
             completion = request.receipt_completion
             claim = completion.claim
             if (claim.record_key.scope != scope and not account) or (
-                account and isinstance(claim.record_key.scope, PatientScope)
+                account and not identity and isinstance(claim.record_key.scope, PatientScope)
             ):
                 return Forbidden()
             receipt = self._owned(claim.record_key.scope, claim.record_key.key)
@@ -840,6 +896,8 @@ class StoreBase(ABC):
         large = size_failure(writes, merged)
         if large:
             return large
+        if identity_expiry is not None and utc_instant(self._clock()) >= identity_expiry:
+            return Forbidden()
         if self._atomic(writes, merged):
             return result
         return self._duplicate(command_key, digest, scope) or StaleVersion(
@@ -1697,6 +1755,16 @@ class StoreBase(ABC):
     def commit_account(self, request: CommitRequest) -> CommitResult:
         command, scope = request.command, request.command.scope
         worker = command.worker
+        if worker is not None and worker.service_subject == "auth":
+            if (
+                not isinstance(scope, AccountScope)
+                or worker.resolved_scope != scope
+                or "account" not in worker.permitted_lanes
+                or worker.auth_expiry <= utc_instant(self._clock())
+                or command.principal.bot_id != scope.bot_id
+            ):
+                return Forbidden()
+            return self._commit(request, account=True, identity=True)
         if (
             not isinstance(scope, AccountScope)
             or worker is None
@@ -1757,9 +1825,11 @@ class StoreBase(ABC):
         """Deferred to slices 03/04."""
         raise NotImplementedError("raise_incident belongs to slices 03/04")
 
-    def confirm_claim(self) -> None:
-        """Deferred to slice 06."""
-        raise NotImplementedError("confirm_claim belongs to slice 06")
+    def confirm_claim(self, request: CommitRequest) -> CommitResult:
+        """The released confirmation uses the same audited account transaction."""
+        if request.command.payload.get("type") != "ConfirmPatientClaim":
+            return Forbidden()
+        return self.commit_account(request)
 
 
 INDEX_FIELDS = {

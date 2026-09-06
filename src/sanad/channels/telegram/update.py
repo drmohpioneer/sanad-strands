@@ -64,8 +64,8 @@ class TelegramMessage(TelegramValue):
     chat: TelegramChat
     sender: TelegramUser | None = Field(default=None, alias="from")
     via_bot: TelegramUser | None = None
-    text: Text | None = None
-    caption: Text | None = None
+    text: Text | None = Field(default=None, repr=False)
+    caption: Text | None = Field(default=None, repr=False)
     photo: Annotated[tuple[TelegramMedia, ...], Field(max_length=10)] = ()
     voice: TelegramMedia | None = None
     document: TelegramMedia | None = None
@@ -106,7 +106,7 @@ class TelegramCallback(TelegramValue):
     id: Handle
     sender: TelegramUser | None = Field(default=None, alias="from")
     message: CallbackMessage | None = None
-    data: Annotated[str, Field(strict=True, max_length=64)] = ""
+    data: Annotated[str, Field(strict=True, max_length=64)] = Field(default="", repr=False)
 
 
 class TelegramUpdate(TelegramValue):

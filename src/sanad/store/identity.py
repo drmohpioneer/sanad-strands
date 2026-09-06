@@ -1,0 +1,572 @@
+"""Store-clock and authority guards for the released identity transaction family.
+
+No auth/web/channel import: both backends use the same conditional read set.
+"""
+
+from datetime import datetime
+from typing import TYPE_CHECKING
+
+from sanad.domain import PatientScope, TenantScope
+from sanad.store import keys
+from sanad.store.keys import AccountScope, Key
+from sanad.store.records import (
+    MODELS,
+    ClaimCallback,
+    CommitRequest,
+    Consent,
+    Doctor,
+    Invitation,
+    LoginExchange,
+    Patient,
+    PatientBinding,
+    PatientClaim,
+    PatientProfile,
+    PreSession,
+    StoredRecord,
+    SubjectBinding,
+    TokenHead,
+    WebSession,
+    from_record,
+    model_scope,
+)
+
+if TYPE_CHECKING:
+    from sanad.store._base import Check, StoreBase
+
+DOCTOR_COMMANDS = {
+    "CreatePatientStub",
+    "IssueInvitation",
+    "ConfirmPatientClaim",
+    "RejectClaim",
+    "RevokeBinding",
+    "IssueDoctorLogin",
+}
+
+WRITE_SETS = {
+    "CreatePatientStub": {"patient", "patient_profile"},
+    "IssueInvitation": {"invitation", "token_head", "patient", "patient_claim"},
+    "ClaimInvitation": {"invitation", "patient_claim", "claim_callback"},
+    "RecordConsent": {"consent", "patient_claim", "claim_callback"},
+    "ConfirmPatientClaim": {
+        "invitation",
+        "patient_claim",
+        "patient_binding",
+        "subject_binding",
+        "patient",
+        "patient_profile",
+        "claim_callback",
+    },
+    "RejectClaim": {"invitation", "patient_claim", "claim_callback"},
+    "RevokeBinding": {"patient", "patient_profile", "patient_binding", "subject_binding"},
+    "IssueDoctorLogin": {"doctor_login", "token_head"},
+    "IssuePatientLogin": {"patient_login", "token_head"},
+    "ExchangeLogin": {"doctor_login", "patient_login", "pre_session", "web_session"},
+    "CreatePreSession": {"pre_session"},
+    "TouchWebSession": {"web_session"},
+    "RevokeWebSession": {"web_session"},
+    "ExpireInvitation": {"invitation", "patient_claim"},
+    "FinishIdentityReceipt": set(),
+}
+
+
+def identity_guards(
+    store: "StoreBase", request: CommitRequest, now: datetime
+) -> tuple[list["Check"], datetime | None] | None:
+    from sanad.store._base import Check
+
+    command, scope = request.command, request.command.scope
+    if (
+        not isinstance(scope, AccountScope)
+        or store._identity is None
+        or scope.bot_id != store._identity.bot_id
+    ):
+        return None
+    actor, kind = command.principal, command.payload.get("type")
+    if kind not in DOCTOR_COMMANDS | {
+        "ClaimInvitation",
+        "RecordConsent",
+        "IssuePatientLogin",
+        "ExchangeLogin",
+        "CreatePreSession",
+        "TouchWebSession",
+        "RevokeWebSession",
+        "ExpireInvitation",
+        "FinishIdentityReceipt",
+    }:
+        return None
+    if any(r.entity_type not in WRITE_SETS[str(kind)] for r in request.puts):
+        return None
+    checks: list[Check] = []
+    expiries: list[datetime] = []
+    if command.worker:
+        expiries.append(command.worker.auth_expiry)
+    if command.work_claim:
+        expiries.append(command.work_claim.expires_at)
+    reads: dict[tuple[str, str], StoredRecord | None] = {}
+    for read in request.identity_reads:
+        row = store.get(read.scope, read.entity_type, read.id)
+        if (row.version if row else None) != read.version:
+            return None
+        if row:
+            key = row.key
+        elif read.entity_type == "subject_binding" and read.scope == scope:
+            key = keys.subject(scope.bot_id, read.id.removeprefix(f"SUBJECT#{scope.bot_id}#"))
+        elif read.entity_type == "token_head" and read.scope == scope:
+            key = Key(keys.partition(scope), f"TOKEN_HEAD#{read.id}")
+        else:
+            return None
+        checks.append(Check(key, read.version))
+        reads[read.entity_type, read.id] = row
+    # Every revision is guarded by its exact old row, including actor-bound callbacks.
+    for row in request.puts:
+        if row.version > 1:
+            prior_row = reads.get((row.entity_type, row.id))
+            if prior_row is None or prior_row.version != row.version - 1:
+                return None
+    auth = store.authorize(scope.bot_id, actor.subject)
+    if kind in DOCTOR_COMMANDS:
+        if (
+            actor.actor_kind != "doctor"
+            or "doctor" not in actor.verified_roles
+            or auth.principal.actor_kind != "doctor"
+            or actor.doctor_id != auth.principal.doctor_id
+            or actor.auth_epoch != auth.auth_epoch
+            or auth.binding is None
+        ):
+            return None
+    if kind in DOCTOR_COMMANDS | {"IssuePatientLogin", "ClaimInvitation", "RecordConsent"}:
+        bound = store.get(scope, "subject_binding", actor.subject)
+        checks.append(
+            Check(keys.subject(scope.bot_id, actor.subject), bound.version if bound else None)
+        )
+        if kind in {"ClaimInvitation", "RecordConsent"} and (
+            bound is not None
+            or actor.subject == store._identity.admin_user_id
+            or auth.principal.verified_roles
+        ):
+            return None
+    doctor_ids = {str(r.body["doctor_id"]) for r in request.puts if r.body.get("doctor_id")} | {
+        r.doctor_id for r in request.puts if r.doctor_id
+    }
+    if kind in DOCTOR_COMMANDS and doctor_ids - {actor.doctor_id}:
+        return None
+    for doctor_id in doctor_ids:
+        row = store.get(TenantScope(doctor_id=doctor_id), "doctor", doctor_id)
+        if row is None or row.body.get("telegram_bot_id") != scope.bot_id:
+            return None
+        doctor = from_record(row, Doctor)
+        checks.append(Check(row.key, row.version))
+        if kind not in {"ExpireInvitation", "RevokeWebSession", "FinishIdentityReceipt"}:
+            if doctor.status != "approved":
+                return None
+        if kind in DOCTOR_COMMANDS and doctor.auth_epoch != actor.auth_epoch:
+            return None
+    for row in request.puts:
+        body = row.body
+        old_row = reads.get((row.entity_type, row.id))
+        old = old_row.body if old_row else {}
+        actual_scope = model_scope(from_record(row, MODELS[row.entity_type]))
+        if isinstance(actual_scope, AccountScope) and actual_scope != scope:
+            return None
+        if row.entity_type == "token_head":
+            head = from_record(row, TokenHead)
+            target = next(
+                (
+                    r
+                    for r in request.puts
+                    if r.id == head.token_hash and r.entity_type == head.purpose
+                ),
+                None,
+            )
+            if target is None or target.version != 1 or target.body.get("state") != "issued":
+                return None
+            expected_owner = (
+                keys.partition(
+                    PatientScope(
+                        doctor_id=str(target.body["doctor_id"]),
+                        patient_id=str(target.body["patient_id"]),
+                    )
+                )
+                if head.purpose == "invitation"
+                else actor.subject
+            )
+            if head.owner_key != expected_owner:
+                return None
+            if old:
+                if head.owner_key != old["owner_key"] or head.purpose != old["purpose"]:
+                    return None
+                old_token = store.get(scope, head.purpose, str(old["token_hash"]))
+                if old_token and old_token.body.get("state") in {"issued", "claimed"}:
+                    revoked = next(
+                        (
+                            r
+                            for r in request.puts
+                            if r.entity_type == head.purpose and r.id == old_token.id
+                        ),
+                        None,
+                    )
+                    if revoked is None or revoked.body.get("state") != "revoked":
+                        return None
+        if row.entity_type == "subject_binding":
+            binding = from_record(row, SubjectBinding)
+            if binding.role_set != frozenset({"patient"}):
+                return None
+            if kind == "ConfirmPatientClaim":
+                if row.version != 1 or binding.status != "active":
+                    return None
+                if binding.telegram_user_id == store._identity.admin_user_id:
+                    return None
+            elif kind == "RevokeBinding":
+                if binding.status != "revoked" or not old or old.get("status") != "active":
+                    return None
+                if binding.binding_epoch != int(str(old["binding_epoch"])) + 1:
+                    return None
+            else:
+                return None
+        if row.entity_type in {"doctor_login", "patient_login"}:
+            exchange = from_record(row, LoginExchange)
+            if row.version == 1:
+                if (
+                    kind
+                    != (
+                        "IssueDoctorLogin"
+                        if exchange.intended_role == "doctor"
+                        else "IssuePatientLogin"
+                    )
+                    or exchange.subject != actor.subject
+                ):
+                    return None
+            elif exchange.state == "consumed":
+                if kind != "ExchangeLogin" or old.get("state") != "issued":
+                    return None
+                if exchange.subject != actor.subject or exchange.expires_at <= now:
+                    return None
+                expiries.append(exchange.expires_at)
+            elif exchange.state not in {"revoked", "expired"} or old.get("state") != "issued":
+                return None
+            if old and any(
+                body.get(k) != v
+                for k, v in old.items()
+                if k not in {"version", "updated_at", "state", "consumed_at"}
+            ):
+                return None
+        if row.entity_type == "invitation":
+            inv = from_record(row, Invitation)
+            allowed: dict[str, set[tuple[str | None, str]]] = {
+                "IssueInvitation": {
+                    (None, "issued"),
+                    ("issued", "revoked"),
+                    ("claimed", "revoked"),
+                },
+                "ClaimInvitation": {("issued", "claimed")},
+                "ConfirmPatientClaim": {("claimed", "consumed")},
+                "RejectClaim": {("claimed", "revoked")},
+                "ExpireInvitation": {("issued", "expired"), ("claimed", "expired")},
+            }
+            if (str(old["state"]) if old else None, inv.state) not in allowed.get(str(kind), set()):
+                return None
+            if kind in {"ClaimInvitation", "ConfirmPatientClaim"} or (
+                kind == "IssueInvitation" and inv.state == "issued"
+            ):
+                if inv.expires_at <= now:
+                    return None
+                expiries.append(inv.expires_at)
+            if kind == "ExpireInvitation" and now < inv.expires_at:
+                return None
+        if row.entity_type == "patient_claim":
+            claim = from_record(row, PatientClaim)
+            if kind == "ClaimInvitation" and (
+                old
+                or claim.state != "pending"
+                or claim.candidate_subject != actor.subject
+                or claim.private_chat_id != actor.subject
+                or claim.consent_id is not None
+            ):
+                return None
+            if kind == "RecordConsent" and (
+                old.get("state") != "pending"
+                or old.get("consent_id") is not None
+                or claim.candidate_subject != actor.subject
+            ):
+                return None
+            if kind in {"RecordConsent", "ConfirmPatientClaim", "RejectClaim"}:
+                if claim.review_at <= now:
+                    return None
+                expiries.append(claim.review_at)
+        if row.entity_type == "claim_callback":
+            callback = from_record(row, ClaimCallback)
+            if old:
+                if any(
+                    body.get(k) != v
+                    for k, v in old.items()
+                    if k not in {"version", "updated_at", "consumed_at"}
+                ):
+                    return None
+                if (
+                    old.get("consumed_at") is not None
+                    or callback.consumed_at is None
+                    or callback.consumed_at > now
+                ):
+                    return None
+                if callback.actor_subject != actor.subject or callback.expires_at <= now:
+                    return None
+                expiries.append(callback.expires_at)
+                target_row = store.get(scope, "patient_claim", callback.claim_id)
+                if target_row is None:
+                    return None
+                callback_claim = from_record(target_row, PatientClaim)
+                for ref in callback.expected_versions:
+                    target_scope = PatientScope(
+                        doctor_id=callback_claim.doctor_id, patient_id=callback_claim.patient_id
+                    )
+                    source_row = store.get(
+                        target_scope if ref.entity_type in {"patient", "consent"} else scope,
+                        ref.entity_type,
+                        ref.id,
+                    )
+                    if source_row is None or source_row.version != ref.version:
+                        return None
+                    checks.append(Check(source_row.key, source_row.version))
+        if row.entity_type == "pre_session":
+            pre = from_record(row, PreSession)
+            if old:
+                if kind != "ExchangeLogin" or old.get("consumed_at") is not None:
+                    return None
+                if pre.expires_at <= now or pre.consumed_at is None or pre.consumed_at > now:
+                    return None
+                expiries.append(pre.expires_at)
+            elif kind != "CreatePreSession":
+                return None
+            elif pre.expires_at <= now:
+                return None
+            else:
+                expiries.append(pre.expires_at)
+        if row.entity_type == "web_session":
+            session = from_record(row, WebSession)
+            if old:
+                immutable = {
+                    "version",
+                    "updated_at",
+                    "last_seen_at",
+                    "idle_expires_at",
+                    "revoked_at",
+                }
+                if any(body.get(k) != v for k, v in old.items() if k not in immutable):
+                    return None
+                if kind in {"ExchangeLogin", "RevokeWebSession"} and (
+                    session.revoked_at is None or session.revoked_at > now
+                ):
+                    return None
+                if kind not in {"ExchangeLogin", "TouchWebSession", "RevokeWebSession"}:
+                    return None
+                if kind == "TouchWebSession":
+                    if old.get("revoked_at") or session.subject != actor.subject:
+                        return None
+                    expiries.extend(
+                        datetime.fromisoformat(str(old[k]))
+                        for k in ("idle_expires_at", "absolute_expires_at")
+                    )
+            else:
+                consumed = [
+                    r
+                    for r in request.puts
+                    if r.entity_type == session.role + "_login"
+                    and r.body.get("state") == "consumed"
+                ]
+                if kind != "ExchangeLogin" or len(consumed) != 1:
+                    return None
+                exchange = from_record(consumed[0], LoginExchange)
+                if any(
+                    getattr(session, k) != getattr(exchange, k)
+                    for k in (
+                        "subject",
+                        "doctor_id",
+                        "patient_id",
+                        "binding_id",
+                        "binding_epoch",
+                        "consent_version",
+                        "auth_epoch",
+                    )
+                ):
+                    return None
+        if row.entity_type == "patient" and kind not in {
+            "CreatePatientStub",
+            "IssueInvitation",
+            "ConfirmPatientClaim",
+            "RevokeBinding",
+        }:
+            return None
+    if kind == "ConfirmPatientClaim" and not _confirmation(request, reads, now):
+        return None
+    if kind in {"IssuePatientLogin", "ExchangeLogin", "TouchWebSession"}:
+        snapshots = [
+            r
+            for r in request.puts
+            if r.entity_type in {"doctor_login", "patient_login", "web_session"}
+            and (r.version == 1 or kind == "TouchWebSession")
+        ]
+        for row in snapshots:
+            if row.body.get("revoked_at"):
+                continue
+            if not live_snapshot(
+                store,
+                scope,
+                from_record(row, WebSession)
+                if row.entity_type == "web_session"
+                else from_record(row, LoginExchange),
+                checks,
+            ):
+                return None
+    return checks, min(expiries) if expiries else None
+
+
+def live_snapshot(
+    store: "StoreBase",
+    scope: AccountScope,
+    snapshot: LoginExchange | WebSession,
+    checks: list["Check"],
+) -> bool:
+    from sanad.store._base import Check
+
+    auth = store.authorize(scope.bot_id, snapshot.subject)
+    role = snapshot.role if isinstance(snapshot, WebSession) else snapshot.intended_role
+    if (
+        auth.binding is None
+        or auth.binding.status != "active"
+        or auth.principal.actor_kind != role
+        or auth.principal.doctor_id != snapshot.doctor_id
+        or auth.auth_epoch != snapshot.auth_epoch
+        or auth.doctor_status != "approved"
+    ):
+        return False
+    bound = store.get(scope, "subject_binding", snapshot.subject)
+    doctor = store.get(TenantScope(doctor_id=snapshot.doctor_id), "doctor", snapshot.doctor_id)
+    if bound is None or doctor is None:
+        return False
+    checks.extend([Check(bound.key, bound.version), Check(doctor.key, doctor.version)])
+    if role == "patient":
+        patient_scope = PatientScope(
+            doctor_id=snapshot.doctor_id, patient_id=snapshot.patient_id or ""
+        )
+        binding_row = store.get(patient_scope, "patient_binding", snapshot.binding_id or "")
+        patient_row = store.get(patient_scope, "patient", snapshot.patient_id or "")
+        profile_row = store.get(patient_scope, "patient_profile", snapshot.patient_id or "")
+        if not binding_row or not patient_row or not profile_row:
+            return False
+        binding = from_record(binding_row, PatientBinding)
+        patient = from_record(patient_row, Patient)
+        profile = from_record(profile_row, PatientProfile)
+        consent_row = store.get(patient_scope, "consent", binding.consent_id)
+        if not consent_row:
+            return False
+        consent = from_record(consent_row, Consent)
+        if (
+            binding.status != "active"
+            or binding.subject != snapshot.subject
+            or binding.binding_epoch != snapshot.binding_epoch
+            or auth.binding.binding_epoch != snapshot.binding_epoch
+            or auth.principal.patient_id != snapshot.patient_id
+            or patient.active_binding_id != snapshot.binding_id
+            or patient.contact_status != "active"
+            or consent.version != snapshot.consent_version
+            or binding.consent_version != consent.version
+            or patient.consent_version != consent.version
+            or consent.withdrawn_at is not None
+            or not consent.routine_contact_enabled
+            or "telegram" not in consent.permitted_channels
+            or not profile.binding_active
+            or not profile.consent_active
+            or profile.binding_epoch != snapshot.binding_epoch
+            or profile.consent_version != consent.version
+            or profile.recipient_subject != snapshot.subject
+            or profile.recipient_ref != binding.private_chat_id
+            or consent.binding_id != binding.id
+            or consent.accepted_by != snapshot.subject
+        ):
+            return False
+        checks.extend(
+            Check(r.key, r.version) for r in (binding_row, patient_row, profile_row, consent_row)
+        )
+    return True
+
+
+def _confirmation(
+    request: CommitRequest,
+    reads: dict[tuple[str, str], StoredRecord | None],
+    now: datetime,
+) -> bool:
+    def one(kind: str) -> StoredRecord | None:
+        return next((r for r in request.puts if r.entity_type == kind), None)
+
+    inv_row, claim_row, pat_row = one("invitation"), one("patient_claim"), one("patient")
+    binding_row, subject_row, profile_row = (
+        one("patient_binding"),
+        one("subject_binding"),
+        one("patient_profile"),
+    )
+    if (
+        inv_row is None
+        or claim_row is None
+        or pat_row is None
+        or binding_row is None
+        or subject_row is None
+        or profile_row is None
+    ):
+        return False
+    inv, claim, pat = (
+        from_record(inv_row, Invitation),
+        from_record(claim_row, PatientClaim),
+        from_record(pat_row, Patient),
+    )
+    binding, subject = (
+        from_record(binding_row, PatientBinding),
+        from_record(subject_row, SubjectBinding),
+    )
+    old_claim_row = reads.get(("patient_claim", claim.id))
+    old_pat_row = reads.get(("patient", pat.id))
+    consent_row = reads.get(("consent", claim.consent_id or ""))
+    if not old_claim_row or not old_pat_row or not consent_row:
+        return False
+    old_claim, old_pat, consent = (
+        from_record(old_claim_row, PatientClaim),
+        from_record(old_pat_row, Patient),
+        from_record(consent_row, Consent),
+    )
+    return (
+        old_claim.state == "pending"
+        and old_claim.consent_version == consent.version
+        and old_pat.contact_status in {"awaiting_link", "frozen"}
+        and old_pat.version == claim.patient_version
+        and old_pat.invitation_id == inv.id == claim.invitation_id
+        and inv.pending_claim_id == claim.id
+        and inv.generation == claim.invitation_generation == old_pat.invitation_generation
+        and claim.doctor_id == pat.scope.doctor_id == inv.doctor_id == subject.doctor_id
+        and claim.patient_id == pat.id == inv.patient_id == subject.patient_id
+        and binding.scope == pat.scope == consent.scope
+        and binding.id == claim.binding_id == pat.active_binding_id == consent.binding_id
+        and binding.claim_id == claim.id
+        and binding.subject
+        == claim.candidate_subject
+        == consent.accepted_by
+        == subject.telegram_user_id
+        and binding.private_chat_id == subject.private_chat_id == claim.private_chat_id
+        and claim.doctor_confirmed_by
+        == binding.doctor_confirmed_by
+        == request.command.principal.subject
+        and claim.doctor_confirmed_at == binding.doctor_confirmed_at
+        and binding.doctor_confirmed_at <= now
+        and consent.withdrawn_at is None
+        and consent.routine_contact_enabled
+        and consent.version
+        == claim.consent_version
+        == binding.consent_version
+        == pat.consent_version
+        and consent.id == binding.consent_id == pat.consent_id
+        and binding.binding_epoch == pat.binding_epoch == subject.binding_epoch
+        and profile_row.body["binding_active"] is True
+        and profile_row.body["consent_active"] is True
+        and profile_row.body["binding_epoch"] == binding.binding_epoch
+        and profile_row.body["consent_version"] == consent.version
+        and profile_row.body["recipient_subject"] == binding.subject
+        and profile_row.body["recipient_ref"] == binding.private_chat_id
+    )

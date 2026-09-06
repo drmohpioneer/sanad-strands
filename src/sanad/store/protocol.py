@@ -162,5 +162,6 @@ class Store(Protocol):
     def raise_incident(self) -> None:
         """Deferred to slices 03/04: urgent transaction and safety epoch."""
 
-    def confirm_claim(self) -> None:
-        """Deferred to slice 06: consent and intended-person confirmation."""
+    def confirm_claim(self, request: CommitRequest) -> CommitResult:
+        """Conditional cross-partition claim confirmation through commit_account."""
+        ...

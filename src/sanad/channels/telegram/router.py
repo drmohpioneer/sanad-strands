@@ -23,7 +23,7 @@ from sanad.steward.types import StewardPolicy
 from sanad.steward.urgent import UrgentService
 from sanad.store.keys import ScopedKey
 from sanad.store.protocol import Store
-from sanad.store.records import InboundReceipt, Incident, OutboundIntent, from_record
+from sanad.store.records import Authorization, InboundReceipt, Incident, OutboundIntent, from_record
 
 LANGUAGES: tuple[Literal["ar", "en"], ...] = ("ar", "en")
 
@@ -66,6 +66,9 @@ class TelegramRuntime:
             payload_resolver=self.patient_payload,
         )
         self.counters: dict[str, int] = {}
+        self.identity_route: (
+            Callable[[InboundReceipt, Authorization], RouteResult | None] | None
+        ) = None
 
     def count(self, reason: str) -> None:
         self.counters[reason] = self.counters.get(reason, 0) + 1
@@ -124,6 +127,10 @@ def route_receipt(
     verdict = ScreenVerdict.model_validate(receipt.safety_result)
     # Screening was done before authorize at ingress. Revalidate roles for every action.
     auth = store.authorize(runtime.settings.bot_id, receipt.source_subject)
+    if verdict.level != "danger" and runtime.identity_route is not None:
+        identity_result = runtime.identity_route(receipt, auth)
+        if identity_result is not None:
+            return identity_result
     active_patient = (
         auth.binding is not None
         and auth.binding.status == "active"

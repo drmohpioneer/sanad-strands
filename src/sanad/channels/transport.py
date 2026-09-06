@@ -1,6 +1,6 @@
 from collections import deque
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal, Protocol, Self
 
 from pydantic import JsonValue, StrictBool, model_validator
@@ -47,7 +47,7 @@ class Transport(Protocol):
 @dataclass(frozen=True)
 class CapturedSend:
     recipient_ref: str
-    payload: dict[str, JsonValue]
+    payload: dict[str, JsonValue] = field(repr=False)
 
 
 class CapturedTransport:

@@ -196,7 +196,7 @@ class OperationalIssue(_Metadata):
 
 
 class PatientProfile(_Metadata):
-    """Operational authority facts supplied by trusted fixtures until slice 06."""
+    """Operational authority facts, including the accepted enrollment facts."""
 
     entity_type: Literal["patient_profile"] = "patient_profile"
     doctor_id: NonblankStr
@@ -221,6 +221,262 @@ class PatientProfile(_Metadata):
             raise ValueError("profile ID must be the patient ID")
         if (self.lease_owner is None) != (self.lease_expires_at is None):
             raise ValueError("lease owner and expiry must be supplied together")
+        return self
+
+
+class Patient(_Metadata):
+    entity_type: Literal["patient"] = "patient"
+    scope: PatientScope
+    display_name: Annotated[str, Field(strict=True, min_length=1, max_length=160)]
+    language: Literal["ar", "en"]
+    timezone: IanaZone
+    contact_status: Literal["awaiting_link", "active", "frozen"] = "awaiting_link"
+    record_version: PositiveVersion = 1
+    delivery_epoch: NonnegativeInt = 0
+    binding_epoch: NonnegativeInt = 0
+    active_binding_id: NonblankStr | None = None
+    consent_id: NonblankStr | None = None
+    consent_version: PositiveVersion | None = None
+    invitation_id: NonblankStr | None = None
+    invitation_generation: NonnegativeInt = 0
+
+    @model_validator(mode="after")
+    def identity(self) -> Self:
+        if self.id != self.scope.patient_id or self.version != self.record_version:
+            raise ValueError("patient identity/version mismatch")
+        if self.contact_status == "active" and any(
+            x is None for x in (self.active_binding_id, self.consent_id, self.consent_version)
+        ):
+            raise ValueError("active patient requires binding and consent")
+        return self
+
+
+class Consent(_Metadata):
+    entity_type: Literal["consent"] = "consent"
+    scope: PatientScope
+    binding_id: NonblankStr
+    policy_text_version: NonblankStr
+    accepted_at: UtcInstant
+    accepted_by: NonblankStr
+    permitted_channels: frozenset[Literal["telegram"]] = frozenset({"telegram"})
+    routine_contact_enabled: StrictBool = True
+    urgent_response_policy_id: NonblankStr
+    scheduled_slot_consents: tuple[str, ...] = ()
+    quiet_hours: tuple[str, str]
+    timezone: IanaZone
+    policy_digest: NonblankStr
+    withdrawn_at: UtcInstant | None = None
+
+
+class PatientBinding(_Metadata):
+    entity_type: Literal["patient_binding"] = "patient_binding"
+    scope: PatientScope
+    bot_id: NonblankStr
+    subject: NonblankStr
+    private_chat_id: NonblankStr
+    status: Literal["active", "frozen", "revoked"] = "active"
+    binding_epoch: PositiveVersion = 1
+    claim_id: NonblankStr
+    consent_id: NonblankStr
+    consent_version: PositiveVersion
+    doctor_confirmed_by: NonblankStr
+    doctor_confirmed_at: UtcInstant
+    reason_code: NonblankStr | None = None
+
+
+class TokenHead(_Metadata):
+    """One serialization point per subject/purpose or patient invitation generation."""
+
+    entity_type: Literal["token_head"] = "token_head"
+    scope: AccountScope
+    purpose: Literal["doctor_login", "patient_login", "invitation"]
+    owner_key: NonblankStr
+    token_hash: NonblankStr
+
+    @model_validator(mode="after")
+    def hashed(self) -> Self:
+        keys.token(self.purpose, self.token_hash)
+        if self.id != keys.digest(f"{self.purpose}:{self.owner_key}"):
+            raise ValueError("token head identity mismatch")
+        return self
+
+
+class LoginExchange(_Metadata):
+    entity_type: Literal["doctor_login", "patient_login"]
+    scope: AccountScope
+    intended_role: Literal["doctor", "patient"]
+    subject: NonblankStr
+    doctor_id: NonblankStr
+    patient_id: NonblankStr | None = None
+    binding_id: NonblankStr | None = None
+    binding_epoch: NonnegativeInt | None = None
+    consent_version: PositiveVersion | None = None
+    auth_epoch: NonnegativeInt
+    issued_at: UtcInstant
+    expires_at: UtcInstant
+    state: Literal["issued", "consumed", "revoked", "expired"] = "issued"
+    consumed_at: UtcInstant | None = None
+    policy_version: NonblankStr
+
+    @model_validator(mode="after")
+    def identity(self) -> Self:
+        keys.token(self.entity_type, self.id)
+        if self.entity_type != self.intended_role + "_login":
+            raise ValueError("exchange role mismatch")
+        patient_fields = (
+            self.patient_id,
+            self.binding_id,
+            self.binding_epoch,
+            self.consent_version,
+        )
+        if (self.intended_role == "patient" and any(x is None for x in patient_fields)) or (
+            self.intended_role == "doctor" and any(x is not None for x in patient_fields)
+        ):
+            raise ValueError("exchange binding mismatch")
+        if (self.state == "consumed") != (self.consumed_at is not None):
+            raise ValueError("consumption requires timestamp")
+        return self
+
+
+class Invitation(_Metadata):
+    entity_type: Literal["invitation"] = "invitation"
+    scope: AccountScope
+    doctor_id: NonblankStr
+    patient_id: NonblankStr
+    issued_by: NonblankStr
+    generation: PositiveVersion
+    expires_at: UtcInstant
+    review_at: UtcInstant
+    state: Literal["issued", "claimed", "consumed", "revoked", "expired"] = "issued"
+    pending_claim_id: NonblankStr | None = None
+    consumed_at: UtcInstant | None = None
+    work_clock: OperationalClock | None
+    policy_version: NonblankStr
+
+    @model_validator(mode="after")
+    def lifecycle(self) -> Self:
+        keys.token("invitation", self.id)
+        if (self.state in {"issued", "claimed"}) != (self.work_clock is not None):
+            raise ValueError("unfinished invitation requires claim clock")
+        if self.work_clock and self.work_clock.work_lane != "claim":
+            raise ValueError("invitation requires claim lane")
+        if self.review_at != self.expires_at:
+            raise ValueError("invitation review must equal expiry")
+        if self.state in {"claimed", "consumed"} and self.pending_claim_id is None:
+            raise ValueError("claimed invitation requires claim")
+        if (self.state == "consumed") != (self.consumed_at is not None):
+            raise ValueError("consumption requires timestamp")
+        return self
+
+
+class PatientClaim(_Metadata):
+    entity_type: Literal["patient_claim"] = "patient_claim"
+    scope: AccountScope
+    doctor_id: NonblankStr
+    patient_id: NonblankStr
+    invitation_id: NonblankStr
+    invitation_generation: PositiveVersion
+    patient_version: PositiveVersion
+    candidate_subject: NonblankStr
+    private_chat_id: NonblankStr
+    minimal_claim_identifier: NonblankStr
+    binding_id: NonblankStr
+    consent_id: NonblankStr | None = None
+    consent_version: PositiveVersion | None = None
+    consent_policy: dict[str, JsonValue]
+    state: Literal["pending", "approved", "rejected", "expired"] = "pending"
+    proof_method: Literal["verified_private_telegram", "doctor_confirmation"]
+    proof_reference: NonblankStr
+    doctor_confirmed_by: NonblankStr | None = None
+    doctor_confirmed_at: UtcInstant | None = None
+    review_at: UtcInstant
+    work_clock: OperationalClock | None
+
+    @model_validator(mode="after")
+    def lifecycle(self) -> Self:
+        if (self.state == "pending") != (self.work_clock is not None):
+            raise ValueError("pending claim requires claim clock")
+        if self.work_clock and self.work_clock.work_lane != "claim":
+            raise ValueError("claim requires claim lane")
+        if self.private_chat_id != self.candidate_subject:
+            raise ValueError("claim requires verified private subject")
+        if self.state == "approved" and any(
+            x is None
+            for x in (
+                self.consent_id,
+                self.consent_version,
+                self.doctor_confirmed_by,
+                self.doctor_confirmed_at,
+            )
+        ):
+            raise ValueError("approved claim requires consent and confirmation")
+        return self
+
+
+class ClaimCallback(_Metadata):
+    entity_type: Literal["claim_callback"] = "claim_callback"
+    scope: AccountScope
+    claim_id: NonblankStr
+    actor_subject: NonblankStr
+    action: Literal["accept", "decline", "confirm", "reject"]
+    expected_versions: tuple[VersionRef, ...]
+    expires_at: UtcInstant
+    consumed_at: UtcInstant | None = None
+
+    @model_validator(mode="after")
+    def hashed(self) -> Self:
+        keys.token("claim_callback", self.id)
+        return self
+
+
+class PreSession(_Metadata):
+    entity_type: Literal["pre_session"] = "pre_session"
+    scope: AccountScope
+    csrf_secret_ref: NonblankStr
+    expires_at: UtcInstant
+    consumed_at: UtcInstant | None = None
+
+    @model_validator(mode="after")
+    def hashed(self) -> Self:
+        keys.token("pre_session", self.id)
+        keys.token("csrf", self.csrf_secret_ref)
+        return self
+
+
+class WebSession(_Metadata):
+    entity_type: Literal["web_session"] = "web_session"
+    scope: AccountScope
+    role: Literal["doctor", "patient"]
+    subject: NonblankStr
+    doctor_id: NonblankStr
+    patient_id: NonblankStr | None = None
+    binding_id: NonblankStr | None = None
+    auth_epoch: NonnegativeInt
+    binding_epoch: NonnegativeInt | None = None
+    consent_version: PositiveVersion | None = None
+    csrf_secret_ref: NonblankStr
+    issued_at: UtcInstant
+    last_seen_at: UtcInstant
+    idle_expires_at: UtcInstant
+    absolute_expires_at: UtcInstant
+    revoked_at: UtcInstant | None = None
+
+    @model_validator(mode="after")
+    def hashed(self) -> Self:
+        keys.web_session(self.id)
+        keys.token("csrf", self.csrf_secret_ref)
+        patient_fields = (
+            self.patient_id,
+            self.binding_id,
+            self.binding_epoch,
+            self.consent_version,
+        )
+        if (self.role == "patient" and any(x is None for x in patient_fields)) or (
+            self.role == "doctor" and any(x is not None for x in patient_fields)
+        ):
+            raise ValueError("session role/binding mismatch")
+        if not self.issued_at <= self.last_seen_at < self.absolute_expires_at:
+            raise ValueError("session time mismatch")
         return self
 
 
@@ -307,7 +563,7 @@ class InboundReceipt(_Metadata):
     source_chat: NonblankStr
     channel: NonblankStr
     kind: NonblankStr
-    payload: dict[str, JsonValue] | None = None
+    payload: dict[str, JsonValue] | None = Field(default=None, repr=False)
     payload_ref: NonblankStr | None = None
     provider_media_handle: NonblankStr | None = None
     received_at: UtcInstant
@@ -484,7 +740,7 @@ class StoredRecord(_BoundaryValue):
     version: PositiveVersion
     doctor_id: NonblankStr | None = None
     patient_id: NonblankStr | None = None
-    body: dict[str, JsonValue]
+    body: dict[str, JsonValue] = Field(repr=False)
     created_at: UtcInstant
     updated_at: UtcInstant
     ttl: NonnegativeInt | None = None
@@ -516,6 +772,17 @@ type InboundReceiptRecord = StoredRecord
 
 
 MODELS: dict[str, type[BaseModel]] = {
+    "patient": Patient,
+    "consent": Consent,
+    "patient_binding": PatientBinding,
+    "token_head": TokenHead,
+    "doctor_login": LoginExchange,
+    "patient_login": LoginExchange,
+    "invitation": Invitation,
+    "patient_claim": PatientClaim,
+    "claim_callback": ClaimCallback,
+    "pre_session": PreSession,
+    "web_session": WebSession,
     "application": Application,
     "doctor": Doctor,
     "subject_binding": SubjectBinding,
@@ -542,6 +809,16 @@ def model_scope(model: BaseModel) -> Scope:
     if isinstance(
         model,
         (
+            Patient,
+            Consent,
+            PatientBinding,
+            TokenHead,
+            LoginExchange,
+            Invitation,
+            PatientClaim,
+            ClaimCallback,
+            PreSession,
+            WebSession,
             Application,
             Doctor,
             SubjectBinding,
@@ -582,6 +859,12 @@ def scope_owns(scope: Scope, other: Scope) -> bool:
 
 
 def model_key(model: BaseModel, scope: Scope) -> Key:
+    if isinstance(model, (Patient, Consent, PatientBinding, TokenHead, PatientClaim)):
+        return Key(keys.partition(model.scope), f"{model.entity_type.upper()}#{model.id}")
+    if isinstance(model, (LoginExchange, Invitation, ClaimCallback, PreSession)):
+        return keys.token(model.entity_type, model.id)
+    if isinstance(model, WebSession):
+        return keys.web_session(model.id)
     if isinstance(model, Application):
         return Key(keys.partition(model.scope), f"APPLICATION#{model.id}")
     if isinstance(model, Doctor):
@@ -749,8 +1032,18 @@ class MarkerRecord(_BoundaryValue):
         return Key(self.pk, self.sk)
 
 
+class IdentityRead(_BoundaryValue):
+    """Internal scoped read/absence assertion, committed with identity mutations."""
+
+    scope: Scope
+    entity_type: NonblankStr
+    id: NonblankStr
+    version: PositiveVersion | None
+
+
 class CommitRequest(_BoundaryValue):
     command: CommandEnvelope
+    identity_reads: tuple[IdentityRead, ...] = ()
     expected: tuple[VersionRef, ...] = ()
     puts: tuple[StoredRecord, ...] = ()
     events: tuple[AuditEventRecord, ...] = ()

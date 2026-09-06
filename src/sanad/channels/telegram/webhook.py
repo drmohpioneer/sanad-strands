@@ -100,6 +100,9 @@ def telegram_router(runtime: TelegramRuntime | None, *, process_receipts: bool =
             handle = None
             if message:
                 payload.update(text=text, message_id=message.message_id)
+                parts = text.strip().split(maxsplit=1)
+                if len(parts) == 2 and parts[0] == "/start":
+                    payload.update(text="/start <redacted>", invitation_hash=keys.digest(parts[1]))
                 handle = message.media.file_id if message.media else None
                 if handle:
                     payload["media_handle"] = handle

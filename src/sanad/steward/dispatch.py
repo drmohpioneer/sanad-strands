@@ -1,25 +1,35 @@
 """One sending gateway. Source truth is re-read immediately before transport IO."""
 
-from datetime import datetime
+from collections.abc import Callable
+from datetime import datetime, timedelta
 
+from pydantic import JsonValue
+
+from sanad.accounts.delivery import account_freshness
 from sanad.channels.transport import ProvablyUnsent, SendOutcome, Transport
 from sanad.domain import (
+    DRAFT_POLICY_2026_09,
     CreateReview,
     FollowUpTask,
     Mission,
     PatientScope,
     ReviewKind,
+    TenantScope,
     create_review,
 )
 from sanad.domain.operations import transition_operational_clock
 from sanad.steward.service import Steward
 from sanad.steward.types import StewardPolicy
-from sanad.store.keys import ScopedKey
+from sanad.store.keys import AccountScope, ScopedKey
 from sanad.store.protocol import Store
 from sanad.store.records import (
     DeliveryOutcome,
     DeliveryResolution,
+    Doctor,
     DoctorAuthority,
+    IdentityConfig,
+    OperationalClock,
+    OperationalIssue,
     OutboundIntent,
     StoredRecord,
     from_record,
@@ -27,8 +37,12 @@ from sanad.store.records import (
 )
 
 
-def freshness(store: Store, intent: OutboundIntent, now: datetime) -> str | None:
+def freshness(
+    store: Store, intent: OutboundIntent, now: datetime, *, settings: IdentityConfig | None = None
+) -> str | None:
     scope = intent.scope
+    if intent.scope_kind == "account":
+        return account_freshness(store, intent, now, settings)
     if not isinstance(scope, PatientScope) or intent.scope_kind != "patient":
         return "unsupported_variant"
     profile = store.get_patient_profile(scope)
@@ -38,6 +52,31 @@ def freshness(store: Store, intent: OutboundIntent, now: datetime) -> str | None
     doctor = from_record(doctor_row, DoctorAuthority) if doctor_row else None
     safety = intent.notification_purpose == "patient_safety_response"
     if intent.audience == "doctor":
+        if intent.notification_purpose == "DANGER" and doctor is not None:
+            # Slice 05 can distinguish an actually suspended, previously approved
+            # doctor from the absent/unapproved fixture facts of slices 02–03.
+            row = store.get(TenantScope(doctor_id=scope.doctor_id), "doctor", scope.doctor_id)
+            account = from_record(row, Doctor) if row else None
+            binding = (
+                store.authorize(account.telegram_bot_id, account.telegram_user_id).binding
+                if account is not None
+                else None
+            )
+            if (
+                account is not None
+                and account.status == "suspended"
+                and binding is not None
+                and binding.status == "frozen"
+                and "doctor" in binding.role_set
+                and binding.doctor_id == scope.doctor_id
+                and binding.private_chat_id == account.private_chat_id
+                and account.private_chat_id == doctor.recipient_ref == intent.recipient_ref
+                and account.telegram_user_id == doctor.subject
+                and account.auth_epoch == doctor.auth_epoch
+                and intent.recipient_auth_epoch_seen is not None
+                and 1 <= intent.recipient_auth_epoch_seen <= account.auth_epoch
+            ):
+                return None
         if (
             doctor is None
             or not doctor.approved
@@ -129,9 +168,10 @@ def transition_delivery(
     policy: StewardPolicy,
     *,
     suppression: str | None = None,
+    settings: IdentityConfig | None = None,
 ) -> tuple[OutboundIntent, tuple[StoredRecord, ...]]:
     """Choose the next durable delivery state without mistaking uncertainty for success."""
-    assert intent.work_clock is not None and isinstance(intent.scope, PatientScope)
+    assert intent.work_clock is not None
     changes: dict[str, object] = {"version": intent.version + 1, "updated_at": now}
     review_needed = False
     if suppression is not None:
@@ -171,7 +211,12 @@ def transition_delivery(
                 status="queued",
                 work_clock=transition_operational_clock(
                     intent.work_clock,
-                    now + policy.operations.retry_backoff(count),
+                    now
+                    + (
+                        timedelta(seconds=outcome.retry_after_seconds)
+                        if outcome.retry_after_seconds is not None
+                        else policy.operations.retry_backoff(count)
+                    ),
                     attempt_delta=1,
                     error=outcome.code,
                 ),
@@ -179,7 +224,7 @@ def transition_delivery(
         else:
             review_needed = True
     reviews: tuple[StoredRecord, ...] = ()
-    if review_needed:
+    if review_needed and isinstance(intent.scope, PatientScope):
         result = create_review(
             CreateReview(
                 event_id="delivery:" + (intent.active_attempt_id or intent.id),
@@ -196,12 +241,37 @@ def transition_delivery(
         )
         changes.update(review_obligation_id=result.aggregate.id, work_clock=None)
         reviews = (to_record(result.aggregate, intent.scope),)
+    if review_needed and isinstance(intent.scope, AccountScope):
+        issue = OperationalIssue(
+            id="delivery:" + (intent.active_attempt_id or intent.id),
+            scope=intent.scope,
+            kind="delivery_failure",
+            affected_id=intent.id,
+            owner_id=settings.admin_user_id if settings else "unconfigured-admin",
+            due_at=now + policy.timing.result_review_interval,
+            reason="delivery_" + outcome.status,
+            created_at=now,
+            updated_at=now,
+            work_clock=OperationalClock(
+                next_action_at=now + policy.timing.result_review_interval, work_lane="operational"
+            ),
+        )
+        changes.update(review_obligation_id=issue.id, work_clock=None)
+        reviews = (to_record(issue, intent.scope),)
     return OutboundIntent.model_validate(intent.model_dump() | changes), reviews
 
 
 class Dispatcher:
-    def __init__(self, steward: Steward, transport: Transport):
+    def __init__(
+        self,
+        steward: Steward,
+        transport: Transport,
+        *,
+        settings: IdentityConfig | None = None,
+        payload_resolver: Callable[[OutboundIntent], dict[str, JsonValue]] | None = None,
+    ):
         self.steward, self.store, self.transport = steward, steward.store, transport
+        self.settings, self.payload_resolver = settings, payload_resolver
 
     def dispatch_one(
         self, intent_key: ScopedKey, owner: str, now: datetime
@@ -211,12 +281,12 @@ class Dispatcher:
         if row is None or row.key != intent_key.key:
             return None
         intent = from_record(row, OutboundIntent)
-        if not isinstance(scope, PatientScope):
+        if not isinstance(scope, (PatientScope, AccountScope)):
             # Such records are accepted by the passive store; no authority adapter is released here.
             return None
         if intent.work_clock is None or intent.work_clock.next_action_at > now:
             return intent
-        policy = self.steward.policy_provider(scope)
+        policy = self._policy(intent)
         if intent.status == "uncertain":
             return self._finish(intent, SendOutcome(status="uncertain"), now)
         if intent.status == "failed":
@@ -229,8 +299,16 @@ class Dispatcher:
                 ),
                 now,
             )
-        doctor_row = self.store.get(scope, "doctor_authority", scope.doctor_id)
-        profile_row = self.store.get(scope, "patient_profile", scope.patient_id)
+        doctor_row = (
+            self.store.get(scope, "doctor_authority", scope.doctor_id)
+            if isinstance(scope, PatientScope)
+            else None
+        )
+        profile_row = (
+            self.store.get(scope, "patient_profile", scope.patient_id)
+            if isinstance(scope, PatientScope)
+            else None
+        )
         authority = tuple(
             r.ref
             for r in (doctor_row, profile_row)
@@ -253,12 +331,12 @@ class Dispatcher:
             if intent.status == "uncertain" and intent.work_clock is not None:
                 return self._finish(intent, SendOutcome(status="uncertain"), now)
             return intent
-        reason = freshness(self.store, intent, self.steward.clock())
+        reason = freshness(self.store, intent, self.steward.clock(), settings=self.settings)
         if reason is not None:
             return self._finish(
                 intent, SendOutcome(status="uncertain"), self.steward.clock(), suppression=reason
             )
-        if intent.notification_purpose == "routine_prompt":
+        if intent.notification_purpose == "routine_prompt" and isinstance(scope, PatientScope):
             lease = self.store.acquire_patient(
                 scope, "dispatch:" + owner, self.steward.clock(), policy.operations.lease_ttl
             )
@@ -292,7 +370,7 @@ class Dispatcher:
             or current.delivery_claim.expires_at <= at
         ):
             return current
-        reason = freshness(self.store, current, at)
+        reason = freshness(self.store, current, at, settings=self.settings)
         if reason is not None:
             return self._finish(
                 current, SendOutcome(status="uncertain"), at, suppression=reason, unsent=True
@@ -301,7 +379,11 @@ class Dispatcher:
         try:
             outcome = self.transport.send(
                 current.recipient_ref,
-                {
+                current.payload
+                if current.payload is not None
+                else self.payload_resolver(current)
+                if self.payload_resolver
+                else {
                     "purpose": current.notification_purpose,
                     "payload_ref": current.payload_ref,
                     "template_id": current.template_id,
@@ -320,6 +402,13 @@ class Dispatcher:
             outcome = SendOutcome(status="uncertain")
         return self._finish(current, outcome, self.steward.clock(), unsent=unsent)
 
+    def _policy(self, intent: OutboundIntent) -> StewardPolicy:
+        return (
+            self.steward.policy_provider(intent.scope)
+            if isinstance(intent.scope, PatientScope)
+            else StewardPolicy(DRAFT_POLICY_2026_09)
+        )
+
     def _finish(
         self,
         intent: OutboundIntent,
@@ -329,13 +418,13 @@ class Dispatcher:
         suppression: str | None = None,
         unsent: bool = False,
     ) -> OutboundIntent | None:
-        assert isinstance(intent.scope, PatientScope)
         changed, reviews = transition_delivery(
             intent,
             outcome,
             now,
-            self.steward.policy_provider(intent.scope),
+            self._policy(intent),
             suppression=suppression,
+            settings=self.settings,
         )
         outcomes: dict[str, DeliveryOutcome] = {
             "accepted": "provider_accepted",

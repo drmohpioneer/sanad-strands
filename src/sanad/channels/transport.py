@@ -5,6 +5,7 @@ from typing import Literal, Protocol, Self
 
 from pydantic import JsonValue, StrictBool, model_validator
 
+from sanad.domain import NonnegativeInt
 from sanad.domain.boundaries import NonblankStr, _BoundaryValue
 
 
@@ -13,6 +14,7 @@ class SendOutcome(_BoundaryValue):
     provider_message_id: NonblankStr | None = None
     retryable: StrictBool = False
     code: NonblankStr | None = None
+    retry_after_seconds: NonnegativeInt | None = None
 
     @model_validator(mode="after")
     def evidence(self) -> Self:
@@ -27,8 +29,19 @@ class ProvablyUnsent(Exception):
     """Adapter guarantee: the attempt failed before transmitting any bytes."""
 
 
+class CallbackOutcome(_BoundaryValue):
+    status: Literal["accepted", "uncertain", "failed"]
+    code: NonblankStr | None = None
+
+
+class CapturedCallback(_BoundaryValue):
+    callback_query_id: NonblankStr
+    text: str
+
+
 class Transport(Protocol):
     def send(self, recipient_ref: str, payload: dict[str, JsonValue]) -> SendOutcome: ...
+    def answer_callback(self, callback_query_id: str, text: str) -> CallbackOutcome: ...
 
 
 @dataclass(frozen=True)
@@ -40,6 +53,7 @@ class CapturedSend:
 class CapturedTransport:
     def __init__(self, script: tuple[SendOutcome | Exception, ...] = ()):
         self.script = deque(script)
+        self.callback_calls: list[CapturedCallback] = []
         self.calls: list[CapturedSend] = []
         self.possibly_sent: list[CapturedSend] = []
 
@@ -56,3 +70,7 @@ class CapturedTransport:
         if isinstance(outcome, Exception):
             raise outcome
         return outcome
+
+    def answer_callback(self, callback_query_id: str, text: str) -> CallbackOutcome:
+        self.callback_calls.append(CapturedCallback(callback_query_id=callback_query_id, text=text))
+        return CallbackOutcome(status="accepted")

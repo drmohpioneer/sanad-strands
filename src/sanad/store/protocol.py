@@ -1,6 +1,7 @@
 """Store boundary. Scopes/capabilities must be established by trusted dispatch.
 
-Authentication is deferred to 05. Bare IDs never carry authority: delivery uses
+Identity is resolved from stored bindings and explicit admin settings.
+Bare IDs never carry authority: delivery uses
 an explicit scope keyword; work keys embed scope; due queries require a scoped
 service capability. Missing/foreign scope returns no record. Snapshot time is
 provided by an injectable store clock wherever the operation has no now argument.
@@ -17,8 +18,9 @@ from sanad.domain import (
     TenantScope,
     VersionRef,
 )
-from sanad.store.keys import Scope, ScopedKey
+from sanad.store.keys import AccountScope, Scope, ScopedKey
 from sanad.store.records import (
+    Authorization,
     Claim,
     CommandEnvelope,
     CommitRequest,
@@ -28,6 +30,7 @@ from sanad.store.records import (
     DeliveryOutcome,
     DeliveryResolution,
     DuePage,
+    IdentityConfig,
     InboundAccept,
     InboundReceiptRecord,
     Lease,
@@ -143,10 +146,13 @@ class Store(Protocol):
         self, scope: Scope, cursor: Cursor | None = None, limit: int = 100
     ) -> ReconcileReport: ...
 
-    # These named operations deliberately have no implementation in slice 02.
-    def authorize(self) -> None:
-        """Deferred to slice 05: current identity and authority checks."""
+    # Identity operations are shared by both backends.
+    def configure_identity(self, config: IdentityConfig) -> None: ...
+    def authorize(self, bot_id: str, telegram_user_id: str) -> Authorization: ...
+    def get_account_source(self, scope: AccountScope, ref: VersionRef) -> StoredRecord | None: ...
+    def commit_account(self, request: CommitRequest) -> CommitResult: ...
 
+    # Later slices own the remaining named operations.
     def acquire_intake(self) -> None:
         """Deferred to slice 09: intake processing fence."""
 

@@ -2,7 +2,7 @@
 
 Sanad carries a doctor's plan after the visit: natural Telegram conversations become confirmed patient records and timed missions; patients receive follow-up and practical help; one doctor liaison reports danger, completion and unresolved deadlines.
 
-**Status: slices 00 to 04 accepted (2026-09-06): typed foundation, domain transitions, conditional store, Steward with crash-safe processing and dispatch, and the deterministic safety kernel. Clinical re-approval of safety wording pending.** The package includes typed domain transitions, conditional memory/DynamoDB storage, fenced processing, recovery sweeps, a deterministic safety kernel and delivery through a captured transport. The full care workflow and deployment remain planned. This is the single active project folder.
+**Status: slices 00 to 04 accepted (2026-09-06); slice 05 implemented for review: verified Telegram ingress, doctor applications and approval, and a send adapter. Safety and account wording await owner review.** The package includes typed domain transitions, conditional memory/DynamoDB storage, fenced processing, recovery sweeps, a deterministic safety kernel and delivery through captured and Telegram transports, with synthetic local verification. The full care workflow and deployment remain planned. This is the single active project folder.
 
 Start with the [A–Z master plan](docs/master-plan.md), then the [full roadmap](docs/roadmap.md). The [architecture](docs/architecture.md), [domain model](docs/domain-model.md), [care policy](docs/care-policy.md), [agent design](docs/agent-design.md), [security](docs/safety-security.md), [verification matrix](docs/verification.md) and [operations plan](docs/operations.md) supply the implementation detail.
 
@@ -41,7 +41,7 @@ Resolved versions are pinned in `pyproject.toml` and `uv.lock`: FastAPI 0.141.1,
 
 Commands atomically persist versioned records, immutable audit events, outbound intents and uniqueness markers. `CommitRequest.expected` contains the **target write versions**: version 1 requires absence; version 2 requires stored version 1. `command.expected_versions` instead names current versions used as read guards. A duplicate command with the same canonical payload returns its original accepted result; a different payload returns a typed conflict. Oversized batches are rejected before submission.
 
-All reads require a trusted doctor/patient/intake scope. The patient profile contains operational authority facts; the doctor approval and order-head records are minimal snapshots supplied by trusted adapters or synthetic fixtures. Enrollment and authentication remain later slices. A profile that has been leased requires its current fence for subsequent ordinary commands; claimed work is committed with `command.work_claim`. Session writes require that same live patient fence and a version check. Receipt completion is committed with its processing claim. The store preserves delivery attempt-start and reports an expired started attempt as uncertain. The Steward checks current authority facts, and the dispatcher checks clinical eligibility immediately before sending.
+All reads require a trusted account/doctor/patient/intake scope. The patient profile contains operational authority facts; doctor approval snapshots now come from the account service. Patient enrollment and browser authentication remain in slice 06; order-head and patient fixtures remain synthetic. A profile that has been leased requires its current fence for subsequent ordinary commands; claimed work is committed with `command.work_claim`. Session writes require that same live patient fence and a version check. Receipt completion is committed with its processing claim. The store preserves delivery attempt-start and reports an expired started attempt as uncertain. The Steward checks current authority facts, and the dispatcher checks clinical eligibility immediately before sending.
 
 `to_record` and `from_record` preserve the accepted domain models and operational storage values. Model bodies are JSON strings inside DynamoDB items so JSON numbers remain lossless; callers receive a dictionary in `StoredRecord.body`. Keys use only opaque identifiers, with delimiter escaping. Patient names appear only in the explicitly specified, doctor-scoped board index.
 
@@ -74,6 +74,30 @@ Use the public policy-explicit functions, including `screen_text`, `grade_bp`, `
 Urgent templates cover emergency directions, doctor danger reports, unreadable-media resend and safety acknowledgment in Arabic/English and m/f/u grammatical forms. Their fields are checked at import and at render. Patient templates contain no drug or dose and make no doctor-delivery claim. `to_incident_facts(verdict, source=..., policy=...)` returns frozen `IncidentFacts` and severity; pass `facts.unique_source_key`, `facts.as_payload()` and severity to slice 03's `UrgentService.raise_incident`. This conversion and source deduplication are exercised against the real in-memory Steward.
 
 `SAFETY_POLICY_V1_CARDIOLOGY_DRAFT` retains Mohamed's original approval date and adult cardiology cohort while explicitly marking **Sanad v2 clinical re-approval pending**. The [reuse inventory](src/sanad/safety/_provenance.py) records copied paths, commit, date, modifications, source SHA-256 and 110 exact constant fingerprints. Copied module functions retain historical compatibility behavior; new callers use `sanad.safety`, whose stronger boundary rules are documented in the [slice 04 report](docs/contracts/04-safety-kernel.md#report). Narrow legacy style/type exemptions preserve copied source/test bodies; the new APIs and tests retain strict checks.
+
+## Telegram channel and accounts
+
+`TelegramSettings.from_env()` explicitly loads these environment names; the app factory never reads `.env`:
+
+| Name | Purpose |
+|---|---|
+| `SANAD_TELEGRAM_BOT_ID` | Decimal bot user ID |
+| `TELEGRAM_BOT_TOKEN_SANAD_STRANDS` | Bot credential, held as `SecretStr` |
+| `SANAD_TELEGRAM_WEBHOOK_SECRET` | Secret echoed by Telegram in `X-Telegram-Bot-Api-Secret-Token` |
+| `SANAD_ADMIN_TELEGRAM_USER_ID` | The single configured decimal administrator ID |
+| `SANAD_TELEGRAM_API_BASE` | Optional; defaults to `https://api.telegram.org`, overrides allowed only in explicit test mode |
+
+Pass validated settings and a persistent store to `create_app(telegram_settings=..., store=...)`. The factory mounts `POST /tg` and keeps `GET /health` available without configuration. An unconfigured webhook returns 503; a wrong or missing secret returns an empty 401. Invalid JSON or oversized permitted text returns 400. Bot senders, non-private chats, missing senders, mismatched private recipients and updates naming another bot receive a counted 200 drop. No account or patient data is stored for those dropped updates.
+
+The webhook screens the full permitted text/caption, resolves the numeric sender's current identity and persists a recoverable receipt before returning 200. Processing runs separately after acknowledgment and is also callable as `route_receipt(runtime, receipt_key)` for recovery. An unfinished duplicate joins that work; a completed duplicate does nothing, even if approval changed the sender's scope. Background processing is a latency aid; persisted ingress clocks and claims allow a worker to recover after restart. Deployment and tick composition remain in 07.
+
+An unknown sender's first text or bare `/start` creates one application. Display names, usernames and forwarded claims confer no role. The admin receives opaque, hashed, expiring, single-use approve/reject actions. Repeated applications are capped at one acknowledgment per 24 hours, and pending repeats do not notify the admin again. Rejection followed by `/start` starts a new pending version. The typed account service also supports suspension and reinstatement: each changes the authorization epoch atomically with coverage ownership. Old routine guidance remains invalid; a verified suspended doctor still receives DANGER under the explicit safety exception. Account administration grants no chart access.
+
+Bound patient danger goes through the existing urgent Steward before ordinary processing. Other senders receive only the general emergency template. Patient text is explicitly deferred without guessing a mission; patient media creates timed unresolved work. Doctor text/media gets a receipt acknowledgment describing the unavailable capability. No media is downloaded and no model is called. These bounded behaviors do not implement patient enrollment, dictation or clinical conversation.
+
+`Dispatcher` validates account recipients, source versions, application state, current admin configuration and applicable authorization epochs immediately before sending. `TelegramTransport` sends plain text with optional inline buttons and records provider acceptance separately from uncertainty or failure. It honors retry guidance, redacts URL string/repr logging, and implements callback acknowledgment. Application startup performs no provider request. Local tests inject `CapturedTransport`, `httpx.MockTransport` or ASGI transport; only the existing DynamoDB Local fixture opens numeric loopback connections.
+
+The ops-only `register_webhook(settings, public_url, http=...)` calls `setWebhook` with the configured secret, `allowed_updates=["message", "callback_query"]` and `drop_pending_updates=False`. Slice 07 will invoke it against the authorized new deployment. It is never invoked by tests, startup or Make targets. Account wording review and admin ID configuration remain owner gates; slice 06 must recheck `auth_epoch` on every browser request and exchange.
 
 ## Prior work
 

@@ -19,7 +19,11 @@ class IntakeScope(TenantScope):
     intake_id: NonblankStr
 
 
-type Scope = PatientScope | IntakeScope | TenantScope
+class AccountScope(_BoundaryValue):
+    bot_id: NonblankStr
+
+
+type Scope = PatientScope | IntakeScope | TenantScope | AccountScope
 
 
 class Key(NamedTuple):
@@ -56,6 +60,8 @@ def tenant_pk(scope: TenantScope) -> str:
 
 
 def partition(scope: Scope) -> str:
+    if isinstance(scope, AccountScope):
+        return f"ACCT#{component(scope.bot_id)}"
     pk = tenant_pk(scope)
     if isinstance(scope, PatientScope):
         return f"{pk}#P#{component(scope.patient_id)}"
@@ -129,7 +135,7 @@ def intake(
     return Key(partition(scope), sk)
 
 
-def event(scope: PatientScope, accepted_at: datetime, event_id: str) -> Key:
+def event(scope: Scope, accepted_at: datetime, event_id: str) -> Key:
     return Key(partition(scope), f"EVENT#{instant(accepted_at)}#{component(event_id)}")
 
 

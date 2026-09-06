@@ -25,11 +25,11 @@ from sanad.domain import (
     UtcInstant,
     VersionRef,
 )
-from sanad.domain.boundaries import _BoundaryValue
+from sanad.domain.boundaries import IanaZone, _BoundaryValue
 from sanad.domain.events import RecordEvidenceAssociation, RetainObservation, SupersedeEvidence
 from sanad.domain.operations import OperationalClock as OperationalClock
 from sanad.store import keys
-from sanad.store.keys import IntakeScope, Key, Scope, ScopedKey
+from sanad.store.keys import AccountScope, IntakeScope, Key, Scope, ScopedKey
 
 
 class ProcessingClaim(_BoundaryValue):
@@ -49,6 +49,149 @@ class _Metadata(_BoundaryValue):
     def times(self) -> Self:
         if self.updated_at < self.created_at:
             raise ValueError("updated_at precedes created_at")
+        return self
+
+
+class IdentityConfig(_BoundaryValue):
+    """Nonsecret settings projected into the persistence boundary."""
+
+    bot_id: NonblankStr
+    admin_user_id: NonblankStr
+
+
+class Application(_Metadata):
+    entity_type: Literal["application"] = "application"
+    scope: AccountScope
+    telegram_user_id: Annotated[str, Field(strict=True, pattern=r"^[0-9]+$", max_length=32)]
+    private_chat_id: NonblankStr
+    claimed_name: Annotated[str, Field(strict=True, max_length=160)] = ""
+    claimed_specialty: Annotated[str, Field(strict=True, max_length=160)] = ""
+    claimed_city: Annotated[str, Field(strict=True, max_length=160)] = ""
+    status: Literal["pending", "approved", "rejected"] = "pending"
+    reviewer_id: NonblankStr | None = None
+    reviewed_at: UtcInstant | None = None
+    approval_reference: NonblankStr | None = None
+    doctor_id: NonblankStr | None = None
+    work_clock: OperationalClock | None
+
+    @model_validator(mode="after")
+    def lifecycle(self) -> Self:
+        if self.id != keys.digest(f"{self.scope.bot_id}:{self.telegram_user_id}"):
+            raise ValueError("application ID must identify the bot and verified subject")
+        if (self.status == "pending") != (self.work_clock is not None):
+            raise ValueError("pending applications require an account clock")
+        if self.work_clock is not None and self.work_clock.work_lane != "account":
+            raise ValueError("application requires account lane")
+        if (self.status == "approved") != (self.doctor_id is not None):
+            raise ValueError("only approved applications have a doctor ID")
+        if self.status != "pending" and (self.reviewer_id is None or self.reviewed_at is None):
+            raise ValueError("decisions require a reviewer and timestamp")
+        return self
+
+
+class Doctor(_Metadata):
+    entity_type: Literal["doctor"] = "doctor"
+    scope: TenantScope
+    telegram_bot_id: NonblankStr
+    telegram_user_id: NonblankStr
+    private_chat_id: NonblankStr
+    name: Annotated[str, Field(strict=True, max_length=160)] = ""
+    specialty: Annotated[str, Field(strict=True, max_length=160)] = ""
+    city: Annotated[str, Field(strict=True, max_length=160)] = ""
+    language: Literal["ar", "en"] = "ar"
+    timezone: IanaZone = "Africa/Cairo"
+    status: Literal["pending", "approved", "rejected", "suspended", "revoked"]
+    approved_by: NonblankStr | None = None
+    approved_at: UtcInstant | None = None
+    auth_epoch: NonnegativeInt
+    policy_version: NonblankStr
+    application_id: NonblankStr
+
+    @model_validator(mode="after")
+    def identity(self) -> Self:
+        if type(self.scope) is not TenantScope or self.id != self.scope.doctor_id:
+            raise ValueError("doctor requires its exact tenant and opaque doctor ID")
+        if self.status in {"approved", "suspended"} and (
+            self.approved_by is None or self.approved_at is None or self.auth_epoch < 1
+        ):
+            raise ValueError("activated doctors require approval evidence")
+        return self
+
+
+class SubjectBinding(_Metadata):
+    entity_type: Literal["subject_binding"] = "subject_binding"
+    scope: AccountScope
+    telegram_user_id: Annotated[str, Field(strict=True, pattern=r"^[0-9]+$", max_length=32)]
+    role_set: frozenset[Literal["admin", "doctor", "patient"]] = frozenset()
+    doctor_id: NonblankStr | None = None
+    patient_id: NonblankStr | None = None
+    status: Literal["active", "frozen", "revoked"] = "active"
+    binding_epoch: NonnegativeInt = 1
+    private_chat_id: NonblankStr
+
+    @model_validator(mode="after")
+    def roles(self) -> Self:
+        if self.id != keys.subject(self.scope.bot_id, self.telegram_user_id).pk:
+            raise ValueError("subject binding requires its deterministic global key")
+        if "patient" in self.role_set and self.role_set & {"admin", "doctor"}:
+            raise ValueError("patient role is exclusive")
+        if self.role_set & {"doctor", "patient"} and self.doctor_id is None:
+            raise ValueError("bound role requires a doctor ID")
+        if ("patient" in self.role_set) != (self.patient_id is not None):
+            raise ValueError("only patient bindings require a patient ID")
+        return self
+
+
+class Authorization(_BoundaryValue):
+    principal: Principal
+    binding: SubjectBinding | None = None
+    doctor_status: Literal["pending", "approved", "rejected", "suspended", "revoked"] | None = None
+    auth_epoch: NonnegativeInt | None = None
+    private_chat_id: NonblankStr | None = None
+
+
+class CallbackToken(_Metadata):
+    entity_type: Literal["callback_token"] = "callback_token"
+    scope: AccountScope
+    application_id: NonblankStr
+    expected_application_version: PositiveVersion
+    actor_subject: NonblankStr
+    action: Literal["approve", "reject"]
+    expires_at: UtcInstant
+    consumed_at: UtcInstant | None = None
+
+    @model_validator(mode="after")
+    def hashed(self) -> Self:
+        keys.token("callback", self.id)
+        return self
+
+
+class AccountAcknowledgment(_Metadata):
+    entity_type: Literal["account_ack"] = "account_ack"
+    scope: AccountScope
+    application_id: NonblankStr
+    application_version: PositiveVersion
+    last_queued_at: UtcInstant
+
+
+class OperationalIssue(_Metadata):
+    entity_type: Literal["operational_issue"] = "operational_issue"
+    scope: AccountScope
+    kind: Literal["coverage_review", "delivery_failure", "inbound_failure"]
+    affected_id: NonblankStr
+    owner_role: Literal["admin"] = "admin"
+    owner_id: NonblankStr
+    status: Literal["open", "acknowledged", "resolved"] = "open"
+    due_at: UtcInstant
+    reason: NonblankStr
+    work_clock: OperationalClock | None
+
+    @model_validator(mode="after")
+    def accountable(self) -> Self:
+        if (self.status == "resolved") != (self.work_clock is None):
+            raise ValueError("unresolved issues require an operational clock")
+        if self.work_clock is not None and self.work_clock.work_lane != "operational":
+            raise ValueError("issue requires operational lane")
         return self
 
 
@@ -82,7 +225,7 @@ class PatientProfile(_Metadata):
 
 
 class DoctorAuthority(_Metadata):
-    """Approval/recipient snapshot only; enrollment and authentication remain 05/06."""
+    """Patient dispatch authority snapshot, written atomically by the account service."""
 
     entity_type: Literal["doctor_authority"] = "doctor_authority"
     doctor_id: NonblankStr
@@ -135,7 +278,7 @@ class AuditEvent(_Metadata):
     entity_type: Literal["audit_event"] = "audit_event"
     event_id: NonblankStr
     command_id: NonblankStr
-    scope: PatientScope
+    scope: Scope
     event_type: NonblankStr
     aggregate_refs: tuple[VersionRef, ...] = ()
     before_versions: tuple[VersionRef, ...] = ()
@@ -175,6 +318,7 @@ class InboundReceipt(_Metadata):
     work_clock: OperationalClock | None
     result_event_ids: tuple[NonblankStr, ...] = ()
     principal: Principal | None = None
+    safety_result: dict[str, JsonValue] | None = None
     review_obligation_id: NonblankStr | None = None
 
     @model_validator(mode="after")
@@ -235,11 +379,36 @@ class OutboundIntent(_Metadata):
     review_obligation_id: NonblankStr | None = None
     active_attempt_id: NonblankStr | None = None
     retryable: StrictBool | None = None
+    bot_id: NonblankStr | None = None
+    recipient_subject: NonblankStr | None = None
+    payload: dict[str, JsonValue] | None = Field(default=None, repr=False)
 
     @model_validator(mode="after")
     def shape(self) -> Self:
         if self.scope_kind == "account":
-            raise ValueError("account scope is deferred; a tenant is not an account capability")
+            if (
+                not isinstance(self.scope, AccountScope)
+                or self.bot_id != self.scope.bot_id
+                or self.recipient_subject is None
+                or self.audience not in {"applicant", "admin", "doctor"}
+                or self.notification_purpose not in {"solicited_reply", "patient_safety_response"}
+                or not self.source_versions
+                or self.payload is None
+                or self.payload_digest != keys.digest(canonical_json(self.payload).decode())
+                or any(
+                    value is not None
+                    for value in (
+                        self.binding_epoch_seen,
+                        self.consent_version_seen,
+                        self.safety_epoch_seen,
+                        self.delivery_epoch_seen,
+                        self.doctor_auth_epoch_seen,
+                        self.slot_id,
+                    )
+                )
+                or self.order_refs
+            ):
+                raise ValueError("account intent requires its own recipient, source and payload")
         if self.scope_kind == "patient" and not isinstance(self.scope, PatientScope):
             raise ValueError("patient intent requires patient scope")
         if self.scope_kind == "intake" and (
@@ -347,6 +516,12 @@ type InboundReceiptRecord = StoredRecord
 
 
 MODELS: dict[str, type[BaseModel]] = {
+    "application": Application,
+    "doctor": Doctor,
+    "subject_binding": SubjectBinding,
+    "callback_token": CallbackToken,
+    "account_ack": AccountAcknowledgment,
+    "operational_issue": OperationalIssue,
     "mission": Mission,
     "followup": FollowUpTask,
     "review": ReviewObligation,
@@ -364,6 +539,18 @@ MODELS: dict[str, type[BaseModel]] = {
 
 
 def model_scope(model: BaseModel) -> Scope:
+    if isinstance(
+        model,
+        (
+            Application,
+            Doctor,
+            SubjectBinding,
+            CallbackToken,
+            AccountAcknowledgment,
+            OperationalIssue,
+        ),
+    ):
+        return model.scope
     if isinstance(model, DoctorAuthority):
         return TenantScope(doctor_id=model.doctor_id)
     if isinstance(model, (OrderAuthority, EvidenceAnnotation, Incident)):
@@ -385,6 +572,8 @@ def model_scope(model: BaseModel) -> Scope:
 
 
 def scope_owns(scope: Scope, other: Scope) -> bool:
+    if isinstance(scope, AccountScope) or isinstance(other, AccountScope):
+        return scope == other
     if scope.doctor_id != other.doctor_id:
         return False
     if type(scope) is TenantScope:
@@ -393,8 +582,20 @@ def scope_owns(scope: Scope, other: Scope) -> bool:
 
 
 def model_key(model: BaseModel, scope: Scope) -> Key:
+    if isinstance(model, Application):
+        return Key(keys.partition(model.scope), f"APPLICATION#{model.id}")
+    if isinstance(model, Doctor):
+        return Key(keys.partition(model.scope), "DOCTOR")
+    if isinstance(model, SubjectBinding):
+        return keys.subject(model.scope.bot_id, model.telegram_user_id)
+    if isinstance(model, CallbackToken):
+        return keys.token("callback", model.id)
+    if isinstance(model, AccountAcknowledgment):
+        return Key(keys.partition(model.scope), f"ACK#{model.id}")
+    if isinstance(model, OperationalIssue):
+        return keys.operational(model.scope.bot_id, "ISSUE", model.id)
     if isinstance(model, DoctorAuthority):
-        return keys.doctor(scope)
+        return keys.doctor(TenantScope(doctor_id=model.doctor_id))
     if isinstance(model, OrderAuthority):
         return keys.patient(model.scope, "ORDER", model.id)
     if isinstance(model, EvidenceAnnotation):
@@ -467,7 +668,7 @@ def to_record(model: BaseModel, scope: Scope) -> StoredRecord:
             "entity_type": body["entity_type"],
             "id": body["id"],
             "version": body["version"],
-            "doctor_id": actual.doctor_id,
+            "doctor_id": None if isinstance(actual, AccountScope) else actual.doctor_id,
             "patient_id": actual.patient_id if isinstance(actual, PatientScope) else None,
             "body": body,
             "created_at": body["created_at"],

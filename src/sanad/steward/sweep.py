@@ -13,7 +13,14 @@ from sanad.steward.dispatch import Dispatcher
 from sanad.steward.inbound import InboundProcessor
 from sanad.steward.service import Steward, system_command
 from sanad.store.keys import Scope
-from sanad.store.records import Cursor, ReconcileReport, StoredRecord, WorkerCapability, from_record
+from sanad.store.records import (
+    Cursor,
+    ReconcileReport,
+    StoredRecord,
+    WorkerCapability,
+    from_record,
+    scope_owns,
+)
 
 
 class SweepBudget(_BoundaryValue):
@@ -162,11 +169,7 @@ class Sweeper:
         self, scope: Scope, cursor: Cursor | None = None, limit: int = 100
     ) -> ReconcileReport:
         if (
-            scope.doctor_id != self.capability.resolved_scope.doctor_id
-            or (
-                isinstance(self.capability.resolved_scope, PatientScope)
-                and scope != self.capability.resolved_scope
-            )
+            not scope_owns(self.capability.resolved_scope, scope)
             or self.capability.auth_expiry <= self.steward.clock()
         ):
             return ReconcileReport()

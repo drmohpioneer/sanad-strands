@@ -403,6 +403,7 @@ source = { editable = "." }
 dependencies = [
     { name = "boto3" },
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "pydantic" },
     { name = "tzdata" },
     { name = "uvicorn" },
@@ -411,7 +412,6 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "hatchling" },
-    { name = "httpx" },
     { name = "mypy" },
     { name = "pytest" },
     { name = "pytest-socket" },
@@ -422,6 +422,7 @@ dev = [
 requires-dist = [
     { name = "boto3", specifier = "==1.43.89" },
     { name = "fastapi", specifier = "==0.141.1" },
+    { name = "httpx", specifier = "==0.28.1" },
     { name = "pydantic", specifier = "==2.13.5" },
     { name = "tzdata", specifier = "==2026.3" },
     { name = "uvicorn", specifier = "==0.52.4" },
@@ -430,7 +431,6 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "hatchling", specifier = "==1.32.0" },
-    { name = "httpx", specifier = "==0.28.1" },
     { name = "mypy", specifier = "==1.20.2" },
     { name = "pytest", specifier = "==9.1.1" },
     { name = "pytest-socket", specifier = "==0.8.1" },

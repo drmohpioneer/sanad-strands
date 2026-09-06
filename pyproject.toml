@@ -14,12 +14,12 @@ dependencies = [
     "uvicorn==0.52.4",
     "tzdata==2026.3",
     "boto3==1.43.89",
+    "httpx==0.28.1",
 ]
 
 [dependency-groups]
 dev = [
     "hatchling==1.32.0",
-    "httpx==0.28.1",
     "mypy==1.20.2",
     "pytest==9.1.1",
     "pytest-socket==0.8.1",

@@ -94,6 +94,8 @@ class InboundProcessor:
         if exhausted:
             return self._failure(receipt, claim, "attempts_exhausted")
         try:
+            if receipt.transport == "telegram":
+                return self._defer_telegram(receipt, claim)
             command = self._normalize(receipt, claim)
             result = self.steward.handle(command)
             if result.status != "accepted":
@@ -107,6 +109,52 @@ class InboundProcessor:
             # Store only a fixed code. Neither patient text nor provider exceptions enter logs.
             self._failure_current(receipt, claim, "processing_exception")
             raise
+
+    def _defer_telegram(self, receipt: InboundReceipt, claim: Claim) -> CommandResult:
+        """No aggregate association or hidden media interpretation is released in 05."""
+        from sanad.domain import create_review
+        from sanad.store.records import CommitRequest
+
+        assert isinstance(receipt.scope, PatientScope)
+        scope, now = receipt.scope, self.steward.clock()
+        policy = self.steward.policy_provider(scope)
+        lease = self.store.acquire_patient(
+            scope, "telegram-ordinary", now, policy.operations.lease_ttl
+        )
+        if lease is None:
+            return CommandResult(status="stale_version", reason_code="patient_busy")
+        try:
+            command = system_command(
+                scope, "telegram:" + receipt.id, {"receipt_id": receipt.id}, now, lane="ingress"
+            )
+            command = CommandEnvelope.model_validate(
+                command.model_dump() | {"fence": lease, "work_claim": claim}
+            )
+            builder = CommitBuilder(scope, command, now, policy, self.store)
+            if receipt.provider_media_handle is not None:
+                builder.add(
+                    create_review(
+                        ev.CreateReview(
+                            event_id=command.command_id,
+                            source_type="inbound_receipt",
+                            source_id=receipt.id,
+                            source_version=receipt.version + 1,
+                            review_kind=ReviewKind.media_failure,
+                            owner_doctor_id=scope.doctor_id,
+                            patient_id=scope.patient_id,
+                            review_at=now + policy.timing.result_review_interval,
+                        ),
+                        now,
+                        policy.timing,
+                    )
+                )
+            builder.audit("telegram_deferred_capability", keys.digest(command.command_id), ())
+            request = CommitRequest.model_validate(
+                builder.finish().model_dump() | {"reason_code": "deferred_capability"}
+            )
+            return command_result(self.store.commit(request))
+        finally:
+            self.store.release_patient(lease)
 
     def _normalize(self, receipt: InboundReceipt, claim: Claim) -> CommandEnvelope:
         scope = receipt.scope

@@ -15,6 +15,7 @@ from sanad.domain import (
     FollowUpTask,
     Mission,
     PatientScope,
+    Principal,
     ReviewObligation,
     TenantScope,
     VersionRef,
@@ -22,12 +23,15 @@ from sanad.domain import (
 from sanad.domain.deadlines import utc_instant
 from sanad.domain.operations import transition_operational_clock
 from sanad.store import keys
-from sanad.store.keys import Key, Scope, ScopedKey
+from sanad.store.keys import AccountScope, Key, Scope, ScopedKey
 from sanad.store.records import (
     MODELS,
     PROJECTION_FIELDS,
     Accepted,
+    Application,
     AuditEvent,
+    Authorization,
+    CallbackToken,
     Claim,
     CommandEnvelope,
     CommitRequest,
@@ -36,16 +40,19 @@ from sanad.store.records import (
     DeliveryAttempt,
     DeliveryOutcome,
     DeliveryResolution,
+    Doctor,
     DoctorAuthority,
     DueItem,
     DuePage,
     Duplicate,
     Forbidden,
+    IdentityConfig,
     InboundAccept,
     InboundReceipt,
     Incident,
     Lease,
     MarkerRecord,
+    OperationalIssue,
     OutboundIntent,
     PatientProfile,
     ProcessingClaim,
@@ -55,6 +62,7 @@ from sanad.store.records import (
     SessionSnapshot,
     StaleVersion,
     StoredRecord,
+    SubjectBinding,
     TooLarge,
     WorkerCapability,
     canonical_json,
@@ -115,6 +123,7 @@ def size_failure(writes: list[Write], checks: list[Check]) -> TooLarge | None:
 class StoreBase(ABC):
     def __init__(self, *, clock: Callable[[], datetime] = utc_now):
         self._clock = clock
+        self._identity: IdentityConfig | None = None
         # Global index continuation keys can name another tenant. Keep them server-side;
         # a caller receives only a bounded, scope-bound opaque continuation handle.
         self._due_cursors: OrderedDict[str, tuple[str, Cursor]] = OrderedDict()
@@ -144,7 +153,9 @@ class StoreBase(ABC):
 
     def _owned(self, scope: Scope, key: Key) -> StoredRecord | None:
         raw = self._read(key)
-        if raw is None or raw.get("doctor_id") != scope.doctor_id:
+        if raw is None or raw.get("doctor_id") != (
+            None if isinstance(scope, AccountScope) else scope.doctor_id
+        ):
             return None
         if isinstance(scope, PatientScope) and raw.get("patient_id") != scope.patient_id:
             return None
@@ -155,12 +166,20 @@ class StoreBase(ABC):
         return record if scope_owns(scope, model_scope(model)) else None
 
     def get(self, scope: Scope, entity_type: str, id: str) -> StoredRecord | None:
+        if entity_type == "doctor" and not isinstance(scope, AccountScope):
+            if id != scope.doctor_id:
+                return None
+            return self._owned(TenantScope(doctor_id=id), Key(keys.tenant_pk(scope), "DOCTOR"))
         if entity_type == "doctor_authority":
+            if isinstance(scope, AccountScope):
+                return None
             if id != scope.doctor_id:
                 return None
             tenant = TenantScope(doctor_id=scope.doctor_id)
             return self._owned(tenant, keys.doctor(tenant))
         prefixes = {
+            "application": "APPLICATION",
+            "account_ack": "ACK",
             "mission": "MISSION",
             "followup": "FOLLOWUP",
             "review": "REVIEW",
@@ -181,6 +200,15 @@ class StoreBase(ABC):
             key = keys.patient(scope, "ORDER", id)
         elif entity_type in prefixes:
             key = Key(keys.partition(scope), f"{prefixes[entity_type]}#{keys.component(id)}")
+        elif entity_type == "subject_binding" and isinstance(scope, AccountScope):
+            prefix = keys.subject(scope.bot_id, "0").pk[:-1]
+            if id.startswith("SUBJECT#") and not id.startswith(prefix):
+                return None
+            key = keys.subject(scope.bot_id, id.removeprefix(prefix))
+        elif entity_type == "callback_token" and isinstance(scope, AccountScope):
+            key = keys.token("callback", id)
+        elif entity_type == "operational_issue" and isinstance(scope, AccountScope):
+            key = keys.operational(scope.bot_id, "ISSUE", id)
         elif entity_type == "inbound_receipt":
             if not id.startswith("IN#"):
                 return None
@@ -295,6 +323,12 @@ class StoreBase(ABC):
         self, scope: Scope, entity_type: str, cursor: Cursor | None = None, limit: int = 100
     ) -> RecordPage:
         prefixes = {
+            "application": "APPLICATION#",
+            "account_ack": "ACK#",
+            "doctor": "DOCTOR",
+            "audit_event": "EVENT#",
+            "delivery_attempt": "ATTEMPT#",
+            "operational_issue": "ISSUE#",
             "mission": "MISSION#",
             "followup": "FOLLOWUP#",
             "review": "REVIEW#",
@@ -306,12 +340,23 @@ class StoreBase(ABC):
         if entity_type not in prefixes:
             return (), None
         rows, cursor = self._list(
-            scope, keys.partition(scope), cursor, limit, prefix=prefixes[entity_type]
+            scope,
+            (
+                keys.operational(scope.bot_id, "ISSUE", "lookup").pk
+                if entity_type == "operational_issue" and isinstance(scope, AccountScope)
+                else keys.partition(scope)
+            ),
+            cursor,
+            limit,
+            prefix=prefixes[entity_type],
         )
         return tuple(r for r in rows if r.entity_type == entity_type), cursor
 
     def lookup_command(self, command: CommandEnvelope) -> CommitResult | None:
-        if command.principal.doctor_id != command.scope.doctor_id:
+        if isinstance(command.scope, AccountScope):
+            if command.principal.bot_id != command.scope.bot_id:
+                return Forbidden()
+        elif command.principal.doctor_id != command.scope.doctor_id:
             return Forbidden()
         if command.principal.actor_kind == "patient" and (
             not isinstance(command.scope, PatientScope)
@@ -392,14 +437,19 @@ class StoreBase(ABC):
     def commit(self, request: CommitRequest) -> CommitResult:
         return self._commit(request)
 
-    def _commit(self, request: CommitRequest, *, urgent: bool = False) -> CommitResult:
+    def _commit(
+        self, request: CommitRequest, *, urgent: bool = False, account: bool = False
+    ) -> CommitResult:
         command = request.command
         scope = command.scope
         actor = command.principal
+        if isinstance(scope, AccountScope) and not account:
+            return Forbidden()
+        doctor_id = None if isinstance(scope, AccountScope) else scope.doctor_id
         worker = command.worker
         system = (
             actor.actor_kind == "system"
-            and actor.doctor_id == scope.doctor_id
+            and actor.doctor_id == doctor_id
             and worker is not None
             and worker.service_subject == actor.subject
             and worker.resolved_scope == scope
@@ -408,14 +458,20 @@ class StoreBase(ABC):
                 worker.permitted_lanes & {"mission", "followup", "review", "ingress", "urgent"}
             )
         )
-        if not system and (
-            actor.doctor_id != scope.doctor_id
-            or actor.actor_kind not in {"doctor", "patient"}
-            or actor.actor_kind not in actor.verified_roles
+        if (
+            not account
+            and not system
+            and (
+                actor.doctor_id != doctor_id
+                or actor.actor_kind not in {"doctor", "patient"}
+                or actor.actor_kind not in actor.verified_roles
+            )
         ):
             return Forbidden()
-        if actor.actor_kind == "patient" and (
-            not isinstance(scope, PatientScope) or actor.patient_id != scope.patient_id
+        if (
+            not account
+            and actor.actor_kind == "patient"
+            and (not isinstance(scope, PatientScope) or actor.patient_id != scope.patient_id)
         ):
             return Forbidden()
         # Missing authoritative facts remain a denial, preserving slice 02's safe default.
@@ -560,9 +616,9 @@ class StoreBase(ABC):
             checks.append(Check(fenced.key, fenced.version))
         if command.work_claim is not None:
             work_claim = command.work_claim
-            if work_claim.record_key.scope != scope:
+            if work_claim.record_key.scope != scope and not account:
                 return Forbidden()
-            claimed = self._owned(scope, work_claim.record_key.key)
+            claimed = self._owned(work_claim.record_key.scope, work_claim.record_key.key)
             token = ProcessingClaim.model_validate(
                 work_claim.model_dump(exclude={"record_key", "version"})
             )
@@ -587,12 +643,44 @@ class StoreBase(ABC):
             ):
                 return StaleVersion(conflicts=("work_claim",))
         for record in records:
+            if not account and record.entity_type in {
+                "application",
+                "doctor",
+                "subject_binding",
+                "callback_token",
+                "account_ack",
+                "operational_issue",
+            }:
+                return Forbidden()
             try:
                 model = from_record(record, MODELS[record.entity_type])
             except (KeyError, ValueError, ValidationError):
                 return Forbidden()
-            if scope != model_scope(model):
-                return Forbidden()
+            actual_scope = model_scope(model)
+            if scope != actual_scope:
+                if not account or not isinstance(scope, AccountScope):
+                    return Forbidden()
+                if isinstance(model, Doctor):
+                    if model.telegram_bot_id != scope.bot_id:
+                        return Forbidden()
+                elif isinstance(model, InboundReceipt):
+                    if (
+                        isinstance(actual_scope, PatientScope)
+                        or command.work_claim is None
+                        or command.work_claim.record_key.scope != actual_scope
+                    ):
+                        return Forbidden()
+                elif isinstance(model, DoctorAuthority):
+                    doctor_rows = [
+                        r for r in records if r.entity_type == "doctor" and r.id == model.id
+                    ]
+                    if (
+                        len(doctor_rows) != 1
+                        or doctor_rows[0].body.get("telegram_bot_id") != scope.bot_id
+                    ):
+                        return Forbidden()
+                else:
+                    return Forbidden()
             if isinstance(model, AuditEvent) and (
                 model.command_id != command.command_id
                 or model.actor != actor
@@ -601,7 +689,7 @@ class StoreBase(ABC):
                 return Forbidden()
             if record.entity_type in {"delivery_attempt", "session_snapshot"}:
                 return Forbidden()  # Their fenced operations own these writes.
-            current = self._owned(scope, record.key)
+            current = self._owned(actual_scope, record.key)
             if isinstance(model, InboundReceipt):
                 if (
                     current is None
@@ -647,7 +735,7 @@ class StoreBase(ABC):
                 return Forbidden()
             if isinstance(model, OutboundIntent) and model.status not in {"queued", "suppressed"}:
                 return Forbidden()
-            canonical = to_record(model, scope)
+            canonical = to_record(model, actual_scope)
             canonical = StoredRecord.model_validate(
                 canonical.model_dump()
                 | {
@@ -670,7 +758,11 @@ class StoreBase(ABC):
                     Write(self._marker_item(marker_key, model_scope(model), record.key, now), None)
                 )
         for ref in command.expected_versions:
-            current = self.get(scope, ref.entity_type, ref.id)
+            current = (
+                self.get_account_source(scope, ref)
+                if isinstance(scope, AccountScope)
+                else self.get(scope, ref.entity_type, ref.id)
+            )
             if current is None or current.version != ref.version:
                 return StaleVersion(conflicts=("source_version",))
             checks.append(Check(current.key, ref.version))
@@ -690,9 +782,11 @@ class StoreBase(ABC):
         if request.receipt_completion is not None:
             completion = request.receipt_completion
             claim = completion.claim
-            if claim.record_key.scope != scope:
+            if (claim.record_key.scope != scope and not account) or (
+                account and isinstance(claim.record_key.scope, PatientScope)
+            ):
                 return Forbidden()
-            receipt = self._owned(scope, claim.record_key.key)
+            receipt = self._owned(claim.record_key.scope, claim.record_key.key)
             if (
                 receipt is None
                 or receipt.entity_type != "inbound_receipt"
@@ -828,6 +922,29 @@ class StoreBase(ABC):
         if self._atomic([Write(record_item(canonical), None)], []):
             return InboundAccept(status="created", record=canonical, state="pending")
         existing = self._owned(model.scope, receipt.key)
+        if (
+            existing is None
+            and model.transport == "telegram"
+            and model.principal is not None
+            and model.principal.bot_id is not None
+        ):
+            # A completed application can change scope between Telegram retries.
+            raw = self._read(receipt.key)
+            if raw is not None:
+                saved = item_record(raw)
+                prior = from_record(saved, InboundReceipt)
+                if (
+                    prior.transport_key == model.transport_key
+                    and prior.source_subject == model.source_subject
+                    and prior.source_chat == model.source_chat
+                    and prior.principal is not None
+                    and prior.principal.bot_id == model.principal.bot_id
+                    and (
+                        isinstance(prior.scope, AccountScope)
+                        or isinstance(model.scope, AccountScope)
+                    )
+                ):
+                    existing = saved
         if existing is None:
             return InboundAccept(status="forbidden")
         return InboundAccept(status="existing", record=existing, state=str(existing.body["state"]))
@@ -1098,15 +1215,19 @@ class StoreBase(ABC):
         checks = []
         # DANGER is authority-only: never invalidate it through routine expiry/source rules.
         danger = intent.notification_purpose == "DANGER"
-        valid = danger or intent.expires_at > now
-        for ref in () if danger else intent.source_versions:
+        valid = danger or isinstance(scope, AccountScope) or intent.expires_at > now
+        for ref in () if danger or isinstance(scope, AccountScope) else intent.source_versions:
             current = self.get(scope, ref.entity_type, ref.id)
             if current is None or current.version != ref.version:
                 valid = False
                 break
             checks.append(Check(current.key, ref.version))
         for ref in freshness_versions:
-            current = self.get(scope, ref.entity_type, ref.id)
+            current = (
+                self.get_account_source(scope, ref)
+                if isinstance(scope, AccountScope)
+                else self.get(scope, ref.entity_type, ref.id)
+            )
             if current is None or current.version != ref.version:
                 return None
             checks.append(Check(current.key, ref.version))
@@ -1317,6 +1438,16 @@ class StoreBase(ABC):
             writes.append(Write(record_item(ended), attempt_record.version))
         checks: list[Check] = []
         for record in resolution.reviews:
+            if isinstance(scope, AccountScope):
+                issue = from_record(record, OperationalIssue)
+                if (
+                    issue.scope != scope
+                    or issue.kind != "delivery_failure"
+                    or issue.affected_id != new.id
+                ):
+                    return None
+                writes.append(Write(record_item(record), None))
+                continue
             review = from_record(record, ReviewObligation)
             if (
                 model_scope(review) != scope
@@ -1441,7 +1572,9 @@ class StoreBase(ABC):
         conflicts: list[Key] = []
         unrepairable: list[Key] = []
         for item in items:
-            if item.get("entity_type") not in MODELS or item.get("doctor_id") != scope.doctor_id:
+            if item.get("entity_type") not in MODELS or item.get("doctor_id") != (
+                None if isinstance(scope, AccountScope) else scope.doctor_id
+            ):
                 continue
             key = Key(item["PK"], item["SK"])
             try:
@@ -1469,9 +1602,148 @@ class StoreBase(ABC):
             cursor=next_cursor,
         )
 
-    def authorize(self) -> None:
-        """Deferred to slice 05."""
-        raise NotImplementedError("authorize belongs to slice 05")
+    def configure_identity(self, config: IdentityConfig) -> None:
+        """Explicit startup configuration, containing no credential or clinical access."""
+        self._identity = config
+
+    def authorize(self, bot_id: str, telegram_user_id: str) -> Authorization:
+        subject_key = keys.subject(bot_id, telegram_user_id)
+        unknown = Principal(
+            subject=telegram_user_id, user_id=telegram_user_id, bot_id=bot_id, actor_kind="unknown"
+        )
+        for _ in range(3):
+            raw = self._read(subject_key)
+            binding = None
+            doctor = None
+            checks = [Check(subject_key, raw.get("version") if raw else None)]
+            if raw is not None:
+                try:
+                    binding = from_record(item_record(raw), SubjectBinding)
+                except (KeyError, ValueError, TypeError):
+                    return Authorization(principal=unknown)
+                if binding.doctor_id is not None:
+                    key = Key(keys.tenant_pk(TenantScope(doctor_id=binding.doctor_id)), "DOCTOR")
+                    row = self._read(key)
+                    checks.append(Check(key, row.get("version") if row else None))
+                    if row is not None:
+                        doctor = from_record(item_record(row), Doctor)
+                        if doctor.telegram_bot_id != bot_id:
+                            doctor = None
+            # Validate a single consistent version cut across the two strong reads.
+            if not self._atomic([], checks):
+                continue
+            roles: set[Literal["admin", "doctor", "patient"]] = set()
+            configured_admin = (
+                self._identity is not None
+                and self._identity.bot_id == bot_id
+                and self._identity.admin_user_id == telegram_user_id
+            )
+            if binding is not None and binding.status == "active" and doctor is not None:
+                if "patient" in binding.role_set and not configured_admin:
+                    roles.add("patient")
+                elif (
+                    "doctor" in binding.role_set
+                    and doctor.status == "approved"
+                    and doctor.telegram_user_id == telegram_user_id
+                    and doctor.private_chat_id == binding.private_chat_id
+                ):
+                    roles.add("doctor")
+            if configured_admin:
+                roles.add("admin")
+            kind: Literal["unknown", "admin", "doctor", "patient"] = (
+                "doctor"
+                if "doctor" in roles
+                else "admin"
+                if "admin" in roles
+                else "patient"
+                if "patient" in roles
+                else "unknown"
+            )
+            principal = Principal(
+                subject=telegram_user_id,
+                user_id=telegram_user_id,
+                bot_id=bot_id,
+                actor_kind=kind,
+                verified_roles=frozenset(roles),
+                doctor_id=binding.doctor_id if binding and roles & {"doctor", "patient"} else None,
+                patient_id=binding.patient_id if binding and "patient" in roles else None,
+                auth_epoch=doctor.auth_epoch if doctor else None,
+            )
+            return Authorization(
+                principal=principal,
+                binding=binding,
+                doctor_status=doctor.status if doctor else None,
+                auth_epoch=doctor.auth_epoch if doctor else None,
+                private_chat_id=binding.private_chat_id
+                if binding
+                else (telegram_user_id if configured_admin else None),
+            )
+        return Authorization(principal=unknown)
+
+    def get_account_source(self, scope: AccountScope, ref: VersionRef) -> StoredRecord | None:
+        """Narrow account metadata read; never a tenant/patient enumeration capability."""
+        if ref.entity_type in {"doctor", "doctor_authority"}:
+            tenant = TenantScope(doctor_id=ref.id)
+            doctor_row = self.get(tenant, "doctor", ref.id)
+            if doctor_row is None or doctor_row.body.get("telegram_bot_id") != scope.bot_id:
+                return None
+            return (
+                doctor_row
+                if ref.entity_type == "doctor"
+                else self.get(tenant, "doctor_authority", ref.id)
+            )
+        return self.get(scope, ref.entity_type, ref.id)
+
+    def commit_account(self, request: CommitRequest) -> CommitResult:
+        command, scope = request.command, request.command.scope
+        worker = command.worker
+        if (
+            not isinstance(scope, AccountScope)
+            or worker is None
+            or worker.service_subject != "accounts"
+            or worker.resolved_scope != scope
+            or "account" not in worker.permitted_lanes
+            or worker.auth_expiry <= utc_instant(self._clock())
+            or command.principal.bot_id != scope.bot_id
+        ):
+            return Forbidden()
+        allowed = {
+            "application",
+            "doctor",
+            "doctor_authority",
+            "subject_binding",
+            "callback_token",
+            "account_ack",
+            "operational_issue",
+            "inbound_receipt",
+        }
+        if any(r.entity_type not in allowed for r in request.puts):
+            return Forbidden()
+        actor = command.principal
+        admin = self.authorize(scope.bot_id, actor.subject).principal
+        is_admin = "admin" in actor.verified_roles and "admin" in admin.verified_roles
+        for row in request.puts:
+            if row.entity_type == "subject_binding":
+                binding = from_record(row, SubjectBinding)
+                if binding.role_set != frozenset({"doctor"}) or not is_admin:
+                    return Forbidden()
+            if row.entity_type in {"doctor", "doctor_authority", "callback_token"} and not is_admin:
+                # Applicants may create only admin-bound action tokens for their own application.
+                if row.entity_type != "callback_token" or row.version != 1:
+                    return Forbidden()
+                token = from_record(row, CallbackToken)
+                if self._identity is None or token.actor_subject != self._identity.admin_user_id:
+                    return Forbidden()
+            if row.entity_type == "application" and not is_admin:
+                application = from_record(row, Application)
+                old = self.get(scope, "application", application.id)
+                if (
+                    application.telegram_user_id != actor.subject
+                    or application.status != "pending"
+                    or (old is not None and old.body.get("status") != "rejected")
+                ):
+                    return Forbidden()
+        return self._commit(request, account=True)
 
     def acquire_intake(self) -> None:
         """Deferred to slice 09."""

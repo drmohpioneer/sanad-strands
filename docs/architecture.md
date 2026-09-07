@@ -105,6 +105,58 @@ Approved deterministic patient safety guidance is delivered independently of the
 
 ## Doctor dictation and patient support
 
+Contract 11c extends doctor dictation with correction while a confirmation card is
+open. Ordinary replies address that card's numbered questions, preserving its
+patient, unanswered fields and original expiry. Each revision fences the old
+buttons. Explicit new-patient commands and a different patient found by the
+existing scoped lookup supersede it; a new-patient phrase mid-message asks which
+operation the doctor intends before extraction.
+
+The Scribe proposes Latin names and clinical English while retaining the spoken
+text. Code checks source numbers and generic identity. Its bound `lookup_drug`
+tool reads doctor memory, clinic memory, cached/live RxNorm, then the seed list.
+Unknown names remain marked for the doctor's confirmation. Learned names are
+written with that confirmation in the same transaction. In the accepted account
+model a clinic is the configured bot's `AccountScope`; this shares terminology,
+never patient records or doctor-private memory. Public RxNorm cache records use
+a separate fixed account partition and contain drug vocabulary only. All remote
+requests are fixed-host, timed and bounded; model/tool text is untrusted data.
+Speech and Scribe vocabulary are built per request from cached scoped reads.
+RxNorm has at most six HTTP calls per card, with a three-second lookup cap
+inside the existing fifteen-second extraction deadline. Novel tool queries are
+deferred until the extracted patient identity can be excluded; known vocabulary
+can be verified during extraction. Corrections quote the words authorizing each
+changed item; deterministic dose slots reject numbers belonging to other items.
+Binding addenda 2 and 3 replace free clinical-English rewriting with source-aligned
+term pairs. Each pair must quote a normalized substring of its fact and source;
+values and percent signs must be supported by that fragment. Memory, seed or
+bounded phonetic identity verifies the term; otherwise its English reading is
+shown with (؟) for the doctor's tap. Invalid or unanchored pairs keep the spoken
+fallback. One shared, nonblocking term question covers all uncertain fragments.
+Mixed term kinds split into separate ECG, Echo, Complaint,
+History or Dx lines. The new-patient marker never becomes a fact. Free
+`clinical_en` fields are retained only for compatibility and never rendered.
+TEST lines use spoken-form resolver readings; other mission prose stays spoken.
+Confirmation teaches the displayed terms atomically, including unchanged Arabic
+fallback fragments; unseen model translations cannot enter memory. Numerical
+results are removed from vocabulary. Corrections keep a previous verified drug
+resolution unless its name is disputed, and a compound-dose answer retires its
+associated compressed-number question. Unsupported order fields are omitted
+from medication lines and quoted once for clarification; their existing numeric
+block remains in force. Spoken frequency words do not manufacture digits.
+Extraction retries schema-validation or
+model-unavailable failures once with an identical request and fresh agent,
+inside the existing extraction deadline; metadata records the retry. Tool
+budgets remain shared across the retry. The same single retry also covers a
+transcript containing a request cue but no TEST/VISIT/TASK/SEND_RECORDS mission.
+If the request remains absent, one persisted whole-card issue blocks confirmation
+until a correction supplies the mission. Corrections check the merged candidate
+against the retained source, so an unrelated answer cannot clear the block.
+Bare single-token facts already represented by another fact's displayed terms
+are removed with a metadata-only count; quantities and substantive facts remain.
+Empty medication fields omit literal
+null/None values. Patient-facing plan wording and clinical authority are unchanged.
+
 The Scribe accepts text, voice transcription and prescription/history/medication photos. For prescription photos the Evidence Reader independently extracts the same fields; the Steward compares the two candidates and marks disagreements uncertain on the card, where every field stays editable (Decision 018). Code handles explicit commands, then typed proposals for search/create/update/missions. Reads are doctor-scoped; ambiguous patient matches ask. A confirmation shows patient identity, old/new fields, active order changes, objectives, predicates and exact deadlines with reasons. It references base versions, expiry and a one-use nonce.
 
 Missing deadlines are inferred from task-specific approved defaults and contextual proposals, shown on the existing confirmation card. An explicit valid time survives exactly, including hours. The reconciled default notification grace is **zero**; only an explicit visible doctor policy adds grace, showing `escalation_at = due_at + grace`. Inference cannot invent drug, dose, treatment duration, preparation or other absent clinical content. Necessary ambiguity asks; independent valid items can be confirmed separately. Incomplete drafts and awaiting-link care retain review times without authority to send incomplete treatment instructions.
@@ -119,6 +171,40 @@ Coordinator chooses guarded mission proposals. Resolver addresses practical barr
 
 ## Fulfillment, evidence and clocks
 
+Decision 023 supports printed or typed Latin-script documents; handwriting and
+Arabic script in images remain unsupported. Contract 11d normalizes document
+uploads and channel photos through one image path before reading: bounded Pillow/HEIF decode, EXIF orientation, grayscale,
+autocontrast (cutoff 1), up to 2x Lanczos enlargement (2600-pixel enlargement
+ceiling; larger delivered pages keep their dimensions), and JPEG quality 85.
+The original and the exact normalized reader input remain separate private
+objects linked by MediaWork. Nova Lite and Pro read concurrently with their
+existing per-call timeout and one JSON-only retry each. A failed reader stays
+explicitly failed. An editable card requires two successful readers and name
+agreement on at least `ceil(max(first row count, second row count) / 2)` rows.
+Agreement uses the attempt-3 scorer's NFKC/case/punctuation normalization and
+Levenshtein distance of at most two, with maximum one-to-one row matching.
+Blank/unreadable names cannot agree; empty documents remain unreadable. Below
+this threshold the reads stay private and the honest fallback adds
+«قريت الورقة قراءتين مختلفتين، مش هسجّل منها حاجة»;
+one survivor is retained privately and receives only the honest fallback plus
+«قريت الورقة قراءة واحدة بس، مش هسجّل منها حاجة», with no proposal or buttons.
+It cannot raise a document-derived incident by corroborating itself. This gate
+also applies to cached reads, association rereads and older proposals at
+rendering, button generation and confirmation. Existing disagreements, number
+checks and shifted-row blocks remain on cards that pass the gate. Two failed
+readers also select the honest fallback. On fallback documents, danger requires
+a critical row readable by both successful readers.
+
+The Arabic document-output allow-list starts empty. Arabic-bearing fields are
+nulled before clinical grading and candidate creation, with code-owned
+`arabic_dropped` field metadata. No vision vocabulary hint or transcription
+intermediate is used. For prescription rows with dropped Arabic, Pillow crops
+the instruction column using page/layout fractions and horizontal ink bands.
+That private crop is linked to the read and queued atomically after the card,
+with the same proposal/doctor freshness checks and ordered delivery. Telegram
+sends its bytes as a photo; Arabic instructions are never prefilled. These
+are engineering controls, not Arabic OCR or clinical validation.
+
 Mission execution and clinical review are separate. `fulfilled` means the explicit objective predicate is met; `DONE` is a message class, not clinical clearance or a state name. Old `pending_review` becomes a derived review status of fulfilled work. Unsuccessful disposal is `closed_unfulfilled`, never fulfillment. See the exact [state/event contract](domain-model.md#mission-state-and-event-contract).
 
 TEST checks identity, ordered analytes, units and collection window; permitted partial reports may jointly satisfy coverage. Ambiguous identity/units remain candidates. Every route, including mismatched/unexpected documents, evaluates supported danger rules and can create an unverified incident without accepting data onto the wrong record. SEND_RECORDS defines categories, historical period and count/completeness: old dates are valid, unrelated readable files are not. It never silently fulfills a new TEST. MONITOR assigns readings to explicit slots and preserves missing/duplicate/late distinctions and threshold hits. Receipt/collection and extraction times differ. Domain-model defines objective_received_at and timeliness separately from fulfilled_at. Pending extraction at the deadline is reported as verification pending, not a fabricated patient-late submission; receipt alone still cannot prove completeness.
@@ -128,6 +214,10 @@ Doctor confirmation of a START instruction creates an independent `MEDICATION_DA
 Every mission stores due time/provenance, visible grace, review time and next action; pauses also have resume time. ReviewObligations and FollowUpTasks have independent clocks. A doctor BundleSchedule owns weekly reminders. Fulfillment/cancellation clears only mission execution wakes, never these independent clocks.
 
 Tick processes accountability before contact eligibility: unmet deadlines, unlinked patients, review, incidents and bundles survive contact pause/stop. Three budgets distinguish daily patient-wide chase, consented scheduled monitoring/check-in slots and urgent messaging. Scheduled slots preserve clinical timing and require explicit quiet-hour exceptions. Never shift a prescription or burst stale reminders after an outage.
+
+Contract 11 adds a deterministic contact scheduler after the existing mission/follow-up accountability wake. Confirmation and binding retain an immediate discovery clock; the scheduler records future contact times or atomically emits patient routine intents through `ContactScheduled` / `PromptScheduled`. Chases use the patient's local day, quiet hours and pause floor; MONITOR and day-three prompts keep their original clinical slots and bounded send windows. Expired windows receive code-only audit. Persisted first/last accepted chase times support the ladder across restarts. Only provider acceptance applies idempotent contact feedback through the Steward; accepted intents retain a delivery recovery clock until feedback is recorded. Scheduled contacts use their own slots and do not exhaust the chase budget. STOP/CHANGE acknowledgment missions and QUESTION work receive no chase. Expired patient pauses and reply-based reachability are code-rendered projections in the guarded scheduling transaction.
+
+The same delivery gateway stamps a DEADLINE obligation's first provider acceptance and arms its doctor's `BundleSchedule` atomically with delivery completion. A doctor-scoped bundle intent references that schedule's generation; it re-reads unresolved, sufficiently old obligations and renders bounded bilingual template lines immediately before transport. Accepted delivery advances the weekly generation and clock; uncertainty retains timed disposition without advancing the interval. Bundle eligibility and delivery never require patient routine consent. Contact policy numbers and all new wording remain pending owner review. Bundle delivery uncertainty retains an independent, doctor-scoped delivery-failure review and does not advance acceptance cadence or resend automatically. Empty or authority-suppressed generations may be retired so a later eligible first notice is not blocked by an old logical key.
 
 ## Doctor communication and review
 

@@ -7,7 +7,7 @@ from fastapi.responses import Response
 
 from sanad.auth.claim import ClaimService
 from sanad.domain import PatientScope, TenantScope
-from sanad.scribe.card import render_card
+from sanad.scribe.crosscheck import render_card
 from sanad.scribe.policy import DRAFT_SCRIBE_POLICY
 from sanad.scribe.proposal import Proposal
 from sanad.steward.types import records

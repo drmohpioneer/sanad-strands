@@ -30,6 +30,13 @@ For medication lists and old documents, collection does not mean medication reco
 
 ## Deadline inference and the three clocks
 
+Contract 11b draft (`OWNER_REVIEW_PENDING`): a type-default deadline uses the
+local date of anchor plus offset, at `default_deadline_local_time="10:00"` in
+the doctor's policy timezone. Computed DST gaps/folds choose the later instant.
+Explicit doctor times and Scribe proposals keep their exact instants, including
+seconds; the card displays only hours and minutes. Escalation remains due plus
+the visible grace.
+
 The user requested automatic deadlines. Missing timing normally produces a proposed `due_at` with a short reason on the existing confirmation card, not a separate request for the doctor to supply every date.
 
 Precedence is the explicit doctor date/time, otherwise the Scribe's contextual proposal validated against the applicable timing policy, otherwise the mission-type default. Record source, reason and policy version. The doctor's confirmation accepts the resulting deadline. Preserve an explicit four-hour instruction exactly; never clamp it to tomorrow. Ask only when the date is ambiguous/invalid or the underlying clinical instruction cannot be executed safely without missing information.
@@ -38,7 +45,7 @@ The current proposed operational defaults are TEST 14 days, MONITOR schedule end
 
 `due_at` is when the objective is wanted. `review_at` is when unfinished/review work must be revisited. `escalation_at = due_at + grace` is when an unmet objective produces a DEADLINE notice. The reconciled recommendation is zero default grace for every mission type, matching the accepted behavior that an unfinished mission reaches the doctor's phone when its date passes. A doctor can explicitly choose grace on the confirmation card or in an approved policy; the card always displays the resulting escalation time. This zero-default change is part of the plan for the final audit, not a claim that the clinical approver separately approved every numeric default. A policy change never retroactively moves an existing explicit doctor instruction without a visible revision.
 
-A result's review clock starts from its fulfilment event; a draft's intake-review time is not reused as if it were the review deadline for a later result. The proposed result-review interval is three days, subject to the approved policy and risk context. QUESTION has a 48-hour deadline and zero grace. Pausing contact does not pause `due_at`, review work or safety incidents; a pause has `resume_at`, bounded by the approved policy.
+A result's review clock starts from its fulfilment event; a draft's intake-review time is not reused as if it were the review deadline for a later result. The proposed result-review interval is three days, subject to the approved policy and risk context. QUESTION uses a 48-hour default offset snapped to the policy local clock on that date, with zero grace (11b draft, OWNER_REVIEW_PENDING). Pausing contact does not pause `due_at`, review work or safety incidents; a pause has `resume_at`, bounded by the approved policy.
 
 Every nonterminal mission, pending claim, open review obligation, outstanding check-in and owed message has a next action or an explicit timed exception. Late enrollment cannot silently shift an explicit deadline. A patient who never scans the QR still appears in unfinished-work review and eventually reaches the doctor through the deadline policy.
 

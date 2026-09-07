@@ -64,6 +64,8 @@ def make_intent(
     slot: str = "",
     order_refs: tuple[VersionRef, ...] = (),
     template_id: str | None = None,
+    contact_kind: str | None = None,
+    expires_at: datetime | None = None,
 ) -> OutboundIntent:
     logical = keys.digest(f"{source_event_id}|{audience}|{purpose}|{slot}")
     recipient = doctor.recipient_ref if audience == "doctor" else profile.recipient_ref
@@ -87,7 +89,12 @@ def make_intent(
             "payload_digest": keys.digest(facts_ref),
             "conversation_sequence": 0,
             "slot_id": slot or None,
-            "expires_at": now + policy.timing.overdue_review_interval,
+            "expires_at": expires_at or now + policy.timing.overdue_review_interval,
+            "contact_kind": contact_kind,
+            "contact_feedback": "pending"
+            if purpose == "routine_prompt"
+            and any(r.entity_type in {"mission", "followup"} for r in source_versions)
+            else "not_applicable",
             "status": "queued",
             "created_at": now,
             "updated_at": now,
@@ -121,6 +128,7 @@ class CommitBuilder:
         self.puts: dict[tuple[str, str], StoredRecord] = {}
         self.events: dict[str, StoredRecord] = {}
         self.intents: dict[str, StoredRecord] = {}
+        self.deadline_reviews: dict[tuple[str, str], str] = {}
 
     def put(self, record: StoredRecord) -> None:
         identity = (record.entity_type, record.id)
@@ -194,6 +202,7 @@ class CommitBuilder:
             self.audit(effect.event_type, effect.event_id, (ref,), before)
         elif isinstance(effect, ev.CreateReview):
             result = create_review(effect, self.now, self.policy.timing)
+            self.deadline_reviews[effect.source_type, effect.source_id] = result.aggregate.id
             if self.store.get_review(self.scope, result.aggregate.id) is None:
                 self.add(result, child=True)  # Same REVIEWKEY as create_or_get_review.
         elif isinstance(effect, ev.CreateFollowUp):
@@ -293,7 +302,16 @@ class CommitBuilder:
                 order_refs=aggregate.order_refs
                 if isinstance(aggregate, (Mission, FollowUpTask))
                 else (),
+                audience=effect.audience,
+                slot=effect.slot,
+                template_id=effect.template_id,
+                contact_kind=effect.contact_kind,
+                expires_at=effect.expires_at,
             )
+            if effect.purpose == "DEADLINE":
+                review_id = self.deadline_reviews.get((aggregate.entity_type, aggregate.id))
+                if review_id:
+                    intent = intent.model_copy(update={"review_obligation_id": review_id})
             self.intents[intent.id] = to_record(intent, self.scope)
         elif isinstance(
             effect, (ev.RetainObservation, ev.RecordEvidenceAssociation, ev.SupersedeEvidence)

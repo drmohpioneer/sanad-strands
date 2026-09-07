@@ -9,8 +9,10 @@ at import. The public event path requires the same stored service replay guard.
 import logging
 import os
 import threading
+from time import monotonic
 
 import boto3  # type: ignore[import-untyped]
+import httpx
 from botocore.config import Config  # type: ignore[import-untyped]
 from fastapi import FastAPI
 from pydantic import SecretStr
@@ -21,8 +23,14 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 from sanad.api.app import create_app
 from sanad.api.internal import process_event as process_event
 from sanad.channels.telegram.settings import TelegramSettings
+from sanad.media.audio import FFmpegConverter
 from sanad.media.storage import S3MediaStore
 from sanad.models.registry import ModelRegistry
+from sanad.models.timeouts import (
+    PROVIDER_CONNECT_TIMEOUT,
+    SPEECH_READ_TIMEOUT,
+    TRANSCRIPTION_TIMEOUT,
+)
 from sanad.ops.nonce_store import NonceStore, TickVerifier
 from sanad.ops.sweep import sweep_due
 from sanad.ops.worker import AsyncReceiptInvoker
@@ -31,6 +39,10 @@ from sanad.store.dynamodb import DynamoStore
 from sanad.web.settings import WebSettings
 
 logger = logging.getLogger(__name__)
+_audio_converter = FFmpegConverter()
+_warm_started = monotonic()
+_audio_converter.warm()
+logger.info("ffmpeg_warm_ms=%d", round((monotonic() - _warm_started) * 1000))
 
 
 class MetadataOnlyErrors(logging.Filter):
@@ -93,34 +105,45 @@ def configure(revision: str) -> FastAPI:
     )
     from sanad.channels.telegram.transport import TelegramTransport
     from sanad.domain import DRAFT_POLICY_2026_09, Provenance
-    from sanad.media.audio import FFmpegConverter
     from sanad.media.retrieve import MediaRetriever
     from sanad.media.speech import SpeechAdapter
     from sanad.media.telegram import TelegramFileClient
     from sanad.media.vision import VisionAdapter
-    from sanad.models.io import BedrockCaller
+    from sanad.models.io import CALL_TIMEOUT, BedrockCaller
     from sanad.scribe.turn import ScribeTurn
     from sanad.steward.types import StewardPolicy
     from sanad.store.keys import IntakeScope, digest
 
     runtime = app.state.telegram
+    runtime.dispatcher.media_store = app.state.media_store
     scribe: ScribeTurn = app.state.scribe
+    scribe.rxnorm_client = httpx.Client(timeout=3, follow_redirects=False, trust_env=False)
 
-    def speech(source: Provenance) -> SpeechAdapter:
+    def speech(
+        source: Provenance,
+        read_timeout: float = SPEECH_READ_TIMEOUT,
+        timeout: float = TRANSCRIPTION_TIMEOUT,
+    ) -> SpeechAdapter:
         caller = BedrockCaller(
             boto3.client(
                 "bedrock-runtime",
                 region_name=app.state.model_registry.region,
                 config=Config(
-                    connect_timeout=2, read_timeout=22, retries={"total_max_attempts": 1}
+                    connect_timeout=PROVIDER_CONNECT_TIMEOUT,
+                    read_timeout=read_timeout,
+                    retries={"total_max_attempts": 1},
                 ),
             ),
             runtime.safety_policy.policy_version,
+            timeout=timeout,
         )
-        return SpeechAdapter(caller, FFmpegConverter(), source, app.state.model_registry)
+        return SpeechAdapter(caller, _audio_converter, source, app.state.model_registry)
 
     scribe.vision_factory = lambda source: VisionAdapter(
-        speech(source).caller, source, runtime.safety_policy, app.state.model_registry
+        speech(source, read_timeout=22, timeout=CALL_TIMEOUT).caller,
+        source,
+        runtime.safety_policy,
+        app.state.model_registry,
     )
     scribe.speech_factory = speech
     app.state.concierge.speech_factory = speech
@@ -129,7 +152,7 @@ def configure(revision: str) -> FastAPI:
             runtime.steward,
             app.state.media_store,
             TelegramFileClient(runtime.transport),
-            FFmpegConverter(),
+            _audio_converter,
             IntakeScope(doctor_id=principal.doctor_id or "", intake_id=digest(receipt.id)),
             principal,
             lambda: app.state.claims.doctor(principal) is not None,
@@ -141,7 +164,7 @@ def configure(revision: str) -> FastAPI:
             runtime.steward,
             app.state.media_store,
             TelegramFileClient(runtime.transport),
-            FFmpegConverter(),
+            _audio_converter,
             PatientScope(
                 doctor_id=principal.doctor_id or "", patient_id=principal.patient_id or ""
             ),

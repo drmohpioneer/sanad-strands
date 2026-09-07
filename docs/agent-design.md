@@ -12,7 +12,7 @@ Sessions preserve conversational continuity. They never own the patient record, 
 
 | Role | Responsibility | Scoped reads | Typed outputs/proposal tools | Boundaries |
 |---|---|---|---|---|
-| Scribe | Doctor free-text/voice/prescription workflow, patient lookup and record/plan changes | Authenticated doctor's panel search; selected patient's current orders, history and requested evidence | `find_patient`, `get_record`, `propose_new_patient`, `propose_update`, `propose_missions`, read-only `Answer` | Writes are proposals shown on a confirmation card. Ambiguous patient selection requires a choice. No cross-doctor search or invented prescription. |
+| Scribe | Doctor free-text/voice/prescription workflow, patient lookup and record/plan changes | Authenticated doctor's panel search; selected patient's current orders, history and requested evidence | `find_patient`, `get_record`, read-only `lookup_drug`, `propose_new_patient`, `propose_update`, `propose_missions`, read-only `Answer` | Writes are proposals shown on a confirmation card. Ambiguous patient selection requires a choice. No cross-doctor search or invented prescription. |
 | Concierge | Consistent patient conversation, active-plan explanation, general education and question handling | Own approved plan, relevant mission/evidence status, preferences and reviewed education sources | `ConciergeAnswer`, patient-report/clarification proposal, QUESTION-ticket proposal, intent for Steward routing | No other patient's records, private doctor notes, diagnosis or treatment change. Every generated patient sentence passes the output gates. |
 | Coordinator | Choose the next useful permitted move for a mission over time | Current mission, evidence completeness, patient response/barrier, policy and event context | `schedule_next_contact`, `request_missing_evidence`, `classify_barrier`, `escalate_barrier`, `mark_evidence_received`, `close_verified_mission`, `pause_mission` proposals | Code computes clocks, completion and eligibility. Tool names do not grant state mutation. Cannot bypass limits, invent evidence, move a clinical deadline or close review obligations. |
 | Resolver | Solve practical obstacles within the doctor's plan | Current mission, patient-stated barrier, stated area where consented, verified clinic/resources results | `ask_patient`, `find_places`, proposed `reschedule_visit`, `resume_chase`, `hand_to_doctor`; `BarrierProposal` with attempted steps | No substitute drug/test, unverified price/booking, silent clinical postponement or unsolicited doctor send. A reschedule proposal still needs the applicable human confirmation. |
@@ -20,6 +20,27 @@ Sessions preserve conversational continuity. They never own the patient record, 
 | Liaison | Compose all unsolicited doctor reports and updates from accepted facts | An authorized fact bundle for one doctor: mission/evidence, uncertainty, attempted work, review status and allowed actions | `ReportDraft` for a preclassified DANGER, DONE or DEADLINE; source/number-preserving summary | Cannot choose a fourth class, add facts, change clinical instructions, send directly, or delay the deterministic safety fallback. |
 
 The Scribe can directly answer a doctor's requested lookup and present a confirmation card through the doctor interaction channel. The single-Liaison rule applies to unsolicited patient-status messages. The outward patient response uses the Concierge/channel composition path; specialist wording is never an unvalidated second bot persona.
+
+Scribe `lookup_drug` is bound to the doctor's vocabulary and a timed public drug
+lookup. Source text and patient identity are excluded from requests. Each fact
+has source-aligned term pairs and a fixed kind prefix. Code verifies the spoken
+fragment and fragment-local values. Vocabulary or phonetic identity removes the
+question mark; other anchored English pairs remain visible with (؟) and one
+shared, nonblocking confirmation line. Unanchored or invalid pairs retain their
+spoken fallback. Mixed term kinds split into separate lines. Confirmation teaches
+the displayed English pairs and fallback fragments in the care-plan transaction. Test
+names must resolve from their spoken forms. No free `clinical_en` string is
+rendered. Redundant bare labels already carried by another fact's displayed
+terms are dropped with a metadata-only count. Extraction retries a transient schema/model failure or
+a request cue without any supported mission once with a fresh
+agent and identical request, within the existing deadline and shared lookup
+budget. RxNorm failures preserve metadata and allow the seed or doctor-confirmation
+path to proceed. A still-missing request becomes one whole-card blocking issue;
+an unrelated correction cannot dismiss it.
+
+A correction retains a previous verified drug name unless disputed. Unsupported
+order fields stay blocked, are omitted from order lines, and are quoted once in
+the clarification section. Source frequency words remain words.
 
 ## The Steward owns orchestration and all writes
 

@@ -16,6 +16,7 @@ from sanad.safety import find_bp, grade_bp, grade_lab
 from sanad.safety.models import LabCandidate, LabVerdict, Quantity, ScreenVerdict, VitalVerdict
 from sanad.safety.policy import SafetyPolicy
 from sanad.scribe.extract import OrderCandidate
+from sanad.scribe.names import entry_for
 from sanad.scribe.records import ClinicalFact
 from sanad.steward.patient import PatientTurnCommit
 from sanad.store import keys
@@ -157,12 +158,16 @@ def start_missions(snapshot: Snapshot, text: str) -> tuple[Mission, ...]:
         for o in snapshot.orders
         if isinstance(o.structured_instruction, OrderCandidate)
     }
+
+    def mentions(name: str) -> bool:
+        entry = entry_for(name)
+        aliases = (name, *entry.arabic_spellings) if entry else (name,)
+        return any(contains(text, alias) for alias in aliases)
+
     named = tuple(
         m
         for m in eligible
-        if any(
-            contains(text, name) for id, name in names.items() if id in {r.id for r in m.order_refs}
-        )
+        if any(mentions(name) for id, name in names.items() if id in {r.id for r in m.order_refs})
     )
     if named:
         return named

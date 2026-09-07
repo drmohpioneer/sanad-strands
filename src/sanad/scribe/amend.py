@@ -8,6 +8,7 @@ from sanad.scribe.extract import DictationCandidate, OrderCandidate, ProposalIss
 from sanad.store import keys
 
 if TYPE_CHECKING:
+    from sanad.scribe.records import CareOrderHead
     from sanad.scribe.repository import ScribeRepository
 
 FIELDS = ("dose", "frequency", "route", "timing", "duration")
@@ -15,8 +16,29 @@ FIELDS = ("dose", "frequency", "route", "timing", "duration")
 
 def order_key(name: str) -> str:
     from sanad.scribe.card import plain
+    from sanad.scribe.names import entry_for
 
-    return keys.digest("medication:" + plain(name).casefold())
+    entry = entry_for(name)
+    return keys.digest("medication:" + plain(entry.latin if entry else name).casefold())
+
+
+def find_head(repo: "ScribeRepository", scope: PatientScope, name: str) -> "CareOrderHead | None":
+    """Keep pre-11b identities when a known spelling now renders in Latin."""
+    from sanad.scribe.records import CareOrderHead
+    from sanad.store.records import from_record
+
+    cursor = None
+    matches: list[CareOrderHead] = []
+    while True:
+        rows, cursor = repo.store.list_records(scope, "care_order_head", cursor=cursor)
+        matches.extend(
+            from_record(r, CareOrderHead)
+            for r in rows
+            if order_key(str(r.body["name"])) == order_key(name)
+        )
+        if cursor is None:
+            break
+    return matches[0] if len(matches) == 1 else None
 
 
 class OrderChange(_BoundaryValue):
@@ -35,18 +57,14 @@ def prepare(
     *,
     creating: bool = False,
 ) -> tuple[DictationCandidate, tuple[OrderChange, ...], tuple[ProposalIssue, ...]]:
-    from sanad.scribe.records import CareOrderHead, CareOrderVersion
+    from sanad.scribe.records import CareOrderVersion
 
     if scope is None and not creating:
         return candidate, (), ()
 
     orders, changes, issues = [], [], []
     for i, supplied in enumerate(candidate.orders):
-        head = (
-            repo.load(scope, "care_order_head", order_key(supplied.drug), CareOrderHead)
-            if scope
-            else None
-        )
+        head = find_head(repo, scope, supplied.drug) if scope else None
         version = (
             repo.load(scope, "care_order_version", head.current_version_id, CareOrderVersion)
             if scope and head
@@ -75,10 +93,7 @@ def prepare(
                 )
             elif supplied.action == "start" and head.status == "active":
                 order = supplied.model_copy(update={"action": "change"})
-        elif supplied.action == "change":
-            order = supplied.model_copy(update={"action": "start"})
-            note = "مفيش أمر سابق؛ هيتسجل كبداية."
-        elif supplied.action in {"stop", "continue"}:
+        elif supplied.action in {"stop", "change"}:
             issues.append(ProposalIssue(item=f"order:{i}", code="order_missing"))
         orders.append(order)
         if head or note or supplied.action in {"stop", "continue"}:

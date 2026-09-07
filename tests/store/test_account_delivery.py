@@ -48,7 +48,10 @@ def test_approval_http_to_patient_danger_and_captured_delivery(accounts: Account
 
 def test_suspension_suppresses_routine_but_both_old_and_new_danger_survive(
     accounts: AccountWorld,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # Preserve this test's pre-send suspension window; 11b tests cover inline sends.
+    monkeypatch.setattr("sanad.api.internal.dispatch_inline", lambda *args: None)
     doctor = accounts.approve()
     scope = accounts.patient(doctor)
     profile = accounts.store.get_patient_profile(scope)

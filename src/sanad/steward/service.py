@@ -51,7 +51,9 @@ SUPPORTED = frozenset(
         "SetContactPreference",
     }
 )
-INTERNAL = frozenset({"_Deadline", "_FollowupDeadline", "_Wake"})
+INTERNAL = frozenset(
+    {"_Deadline", "_FollowupDeadline", "_Wake", "_ScheduleContact", "_ContactFeedback"}
+)
 DOCTOR_COMMANDS = SUPPORTED - {
     "RecordPatientReply",
     "RecordObjectiveFulfilled",
@@ -144,6 +146,9 @@ class Steward:
         if not isinstance(result, ev.TransitionResult):
             raise EffectsRejected("mission_confirmation_invalid")
         mission = Mission.model_validate(result.aggregate.model_dump() | {"version": 1})
+        from sanad.contact.scheduler import prime
+
+        mission = prime(mission, self.clock())
         followups: list[FollowUpTask] = []
         for effect in result.effects:
             if isinstance(effect, ev.CreateFollowUp):
@@ -267,6 +272,12 @@ class Steward:
             )
             if kind == "SetContactPreference":
                 return self._preference(command, profile)
+            if kind == "_ContactFeedback":
+                from sanad.contact.feedback import prepare
+
+                builder = CommitBuilder(scope, command, now, policy, self.store)
+                prepare(builder, profile)
+                return command_result(self.store.commit(builder.finish()))
             return self._transition(command, profile)
         except (InvalidCommandPayload, EffectsRejected) as error:
             # Only validation failures are translated. Storage/network failures propagate.
@@ -400,6 +411,14 @@ class Steward:
                     ),
                 }
             )
+        if command.payload.get("type") == "_ScheduleContact":
+            from sanad.contact.scheduler import prepare
+
+            if not isinstance(aggregate, (Mission, FollowUpTask)):
+                return CommandResult(status="invalid_input")
+            builder = CommitBuilder(scope, command, now, policy, self.store)
+            prepare(builder, aggregate, profile)
+            return command_result(self.store.commit(builder.finish()))
         try:
             event = self._event(command, aggregate, profile)
         except ValidationError as error:

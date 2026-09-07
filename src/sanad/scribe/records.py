@@ -7,12 +7,21 @@ from pydantic import ConfigDict, model_validator
 from sanad.concierge.records import ReportFactPayload
 from sanad.domain import PatientScope, Provenance, VersionRef
 from sanad.domain.boundaries import NonblankStr, PositiveVersion, UtcInstant, _BoundaryValue
-from sanad.scribe.extract import LabRowCandidate, OrderCandidate, ProposalIssue
+from sanad.scribe.extract import (
+    ClinicalKind,
+    FactTerm,
+    LabRowCandidate,
+    OrderCandidate,
+    ProposalIssue,
+)
 from sanad.scribe.proposal import ScribeRecord
 
 
 class FactPayload(_BoundaryValue):
     text: NonblankStr
+    clinical_en: str | None = None
+    clinical_kind: ClinicalKind = "History"
+    terms: tuple[FactTerm, ...] = ()
     tags: tuple[Literal["alert_text"], ...] = ()
 
 

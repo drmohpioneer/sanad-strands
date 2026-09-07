@@ -107,6 +107,7 @@ class IdentityService:
         *,
         reads: tuple[IdentityRead, ...] = (),
         claim: Claim | None = None,
+        domain_events: tuple[AuditEvent, ...] = (),
     ) -> CommitResult:
         now = self.clock()
         rows = tuple(to_record(m, model_scope(m)) for m in models)
@@ -136,7 +137,7 @@ class IdentityService:
             policy_versions=(self.policy.version,),
         )
         outgoing = tuple(to_record(i, i.scope) for i in intents)
-        events = (to_record(event, self.scope),)
+        events = (to_record(event, self.scope), *(to_record(e, self.scope) for e in domain_events))
         request = CommitRequest(
             command=self.envelope(command, claim),
             puts=rows,

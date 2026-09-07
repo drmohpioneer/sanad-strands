@@ -63,6 +63,63 @@ class IdentityConfig(_BoundaryValue):
     admin_user_id: NonblankStr
 
 
+class NameMemory(_Metadata):
+    entity_type: Literal["name_memory"] = "name_memory"
+    scope: TenantScope | AccountScope
+    latin: Annotated[str, Field(min_length=1, max_length=120)]
+    generic: Annotated[str, Field(max_length=240)] = ""
+    kind: Literal["drug", "test", "finding"]
+    spoken_forms: Annotated[tuple[str, ...], Field(max_length=10)] = Field(default=(), repr=False)
+    strengths_seen: tuple[str, ...] = ()
+    confirmations: PositiveVersion = 1
+    last_confirmed_at: UtcInstant
+    source: Literal["doctor_confirmation", "rxnorm", "seed"]
+
+    @model_validator(mode="after")
+    def vocabulary_scope(self) -> Self:
+        from sanad.scribe.names import normalize
+
+        if type(self.scope) is not TenantScope and type(self.scope) is not AccountScope:
+            raise ValueError("name memory requires exact doctor or clinic scope")
+        if self.id != keys.digest(
+            keys.partition(self.scope) + ":" + self.kind + ":" + normalize(self.latin)
+        ):
+            raise ValueError("name memory requires its vocabulary digest")
+        if (self.kind != "finding" and not self.latin.isascii()) or any(
+            len(s) > 120 for s in self.spoken_forms
+        ):
+            raise ValueError("name memory contains invalid vocabulary")
+        return self
+
+
+NAME_CACHE_SCOPE = AccountScope(bot_id="rxnorm-name-cache")
+
+
+class NameCache(_Metadata):
+    entity_type: Literal["name_cache"] = "name_cache"
+    scope: AccountScope = NAME_CACHE_SCOPE
+    query: Annotated[str, Field(min_length=1, max_length=120)]
+    canonical: Annotated[str, Field(min_length=1, max_length=120)]
+    generic: Annotated[str, Field(min_length=1, max_length=240)]
+    strengths: tuple[str, ...] = ()
+    source: Literal["rxnorm"] = "rxnorm"
+    expires_at: UtcInstant
+
+    @model_validator(mode="after")
+    def public_vocabulary(self) -> Self:
+        from sanad.scribe.names import normalize
+
+        if self.scope != NAME_CACHE_SCOPE or self.id != keys.digest(normalize(self.query)):
+            raise ValueError("RxNorm cache requires its fixed partition and query digest")
+        if not all(
+            s.isascii() for s in (self.query, self.canonical, self.generic, *self.strengths)
+        ):
+            raise ValueError("RxNorm cache accepts public Latin vocabulary only")
+        if self.expires_at <= self.updated_at:
+            raise ValueError("cache expiry must follow the fetch")
+        return self
+
+
 class Application(_Metadata):
     entity_type: Literal["application"] = "application"
     scope: AccountScope
@@ -216,6 +273,7 @@ class PatientProfile(_Metadata):
     consent_active: StrictBool = False
     routine_contact_enabled: StrictBool = True
     routine_paused_until: UtcInstant | None = None
+    last_chase_accepted_at: UtcInstant | None = None
     binding_active: StrictBool = False
     recipient_ref: NonblankStr | None = None
     recipient_subject: NonblankStr | None = None
@@ -762,10 +820,38 @@ class MediaWork(_Metadata):
         return self
 
 
+class BundleSchedule(_Metadata):
+    entity_type: Literal["bundle_schedule"] = "bundle_schedule"
+    scope: TenantScope
+    doctor_id: NonblankStr
+    generation: PositiveVersion = 1
+    next_action_at: UtcInstant | None
+    last_provider_accepted_at: UtcInstant | None = None
+    pending_intent_id: NonblankStr | None = None
+    work_clock: OperationalClock | None
+
+    @model_validator(mode="after")
+    def shape(self) -> Self:
+        if (
+            type(self.scope) is not TenantScope
+            or self.id != self.doctor_id
+            or self.scope.doctor_id != self.doctor_id
+        ):
+            raise ValueError("bundle requires its doctor's tenant scope")
+        if (self.next_action_at is None) != (self.work_clock is None):
+            raise ValueError("bundle time and clock must agree")
+        if self.work_clock and (
+            self.work_clock.work_lane != "bundle"
+            or self.work_clock.next_action_at != self.next_action_at
+        ):
+            raise ValueError("bundle clock mismatch")
+        return self
+
+
 class OutboundIntent(_Metadata):
     entity_type: Literal["outbound_intent"] = "outbound_intent"
     scope: Scope
-    scope_kind: Literal["patient", "intake", "account"]
+    scope_kind: Literal["patient", "intake", "account", "doctor"]
     audience: Literal["patient", "doctor", "applicant", "admin"]
     logical_key: NonblankStr
     source_event_ids: tuple[NonblankStr, ...]
@@ -785,6 +871,9 @@ class OutboundIntent(_Metadata):
     payload_digest: NonblankStr
     conversation_sequence: NonnegativeInt
     slot_id: NonblankStr | None = None
+    contact_kind: Literal["chase", "scheduled"] | None = None
+    contact_feedback: Literal["not_applicable", "pending", "applied"] = "not_applicable"
+    notice_feedback_pending: StrictBool = False
     expires_at: UtcInstant
     status: Literal["queued", "sending", "provider_accepted", "uncertain", "failed", "suppressed"]
     delivery_claim: ProcessingClaim | None = None
@@ -813,6 +902,28 @@ class OutboundIntent(_Metadata):
 
     @model_validator(mode="after")
     def shape(self) -> Self:
+        if self.scope_kind == "doctor" and (
+            type(self.scope) is not TenantScope
+            or self.audience != "doctor"
+            or self.notification_purpose != "DEADLINE"
+            or self.eligibility_class != "bundle"
+            or self.payload is not None
+            or self.template_id != "doctor_weekly_bundle"
+            or self.recipient_auth_epoch_seen is None
+            or self.bot_id is None
+            or any(
+                v is not None
+                for v in (
+                    self.binding_epoch_seen,
+                    self.consent_version_seen,
+                    self.safety_epoch_seen,
+                    self.delivery_epoch_seen,
+                    self.slot_id,
+                )
+            )
+            or self.order_refs
+        ):
+            raise ValueError("doctor bundle requires tenant authority and no patient fields")
         if self.scope_kind == "account":
             if (
                 not isinstance(self.scope, AccountScope)
@@ -843,8 +954,14 @@ class OutboundIntent(_Metadata):
             not isinstance(self.scope, IntakeScope) or self.audience != "doctor"
         ):
             raise ValueError("intake intent requires owning intake and doctor audience")
-        terminal = self.status in {"provider_accepted", "suppressed"} or (
-            self.status in {"uncertain", "failed"} and self.review_obligation_id is not None
+        terminal = (
+            self.status == "suppressed"
+            or (
+                self.status == "provider_accepted"
+                and self.contact_feedback != "pending"
+                and not self.notice_feedback_pending
+            )
+            or (self.status in {"uncertain", "failed"} and self.review_obligation_id is not None)
         )
         if terminal != (self.work_clock is None):
             raise ValueError("unfinished delivery requires a work clock")
@@ -944,6 +1061,9 @@ type InboundReceiptRecord = StoredRecord
 
 
 MODELS: dict[str, type[BaseModel]] = {
+    "name_memory": NameMemory,
+    "name_cache": NameCache,
+    "bundle_schedule": BundleSchedule,
     "patient_action": PatientAction,
     "photo_association_work": PhotoAssociationWork,
     "intake_draft": IntakeDraft,
@@ -993,6 +1113,10 @@ MODELS: dict[str, type[BaseModel]] = {
 
 
 def model_scope(model: BaseModel) -> Scope:
+    if isinstance(model, (NameMemory, NameCache)):
+        return model.scope
+    if isinstance(model, BundleSchedule):
+        return model.scope
     if isinstance(model, PatientAction):
         return model.scope
     if isinstance(model, InvitationWork):
@@ -1046,9 +1170,10 @@ def model_scope(model: BaseModel) -> Scope:
     if isinstance(model, ReviewObligation):
         if model.patient_id is not None:
             return PatientScope(doctor_id=model.owner_doctor_id, patient_id=model.patient_id)
-        # Only the blueprint's intake row supports unassigned review in this slice.
+        if model.source_type == "outbound_intent" and model.review_kind == "delivery_failure":
+            return TenantScope(doctor_id=model.owner_doctor_id)
         if model.source_type != "intake":
-            raise ValueError("unassigned review requires an explicit intake source")
+            raise ValueError("unassigned review requires intake or doctor delivery failure")
         return IntakeScope(doctor_id=model.owner_doctor_id, intake_id=model.source_id)
     if isinstance(
         model,
@@ -1069,6 +1194,14 @@ def scope_owns(scope: Scope, other: Scope) -> bool:
 
 
 def model_key(model: BaseModel, scope: Scope) -> Key:
+    if isinstance(model, NameMemory):
+        if type(model.scope) is TenantScope:
+            return keys.doctor(model.scope, "NAME", model.id)
+        return Key(keys.partition(model.scope), f"NAME#{keys.component(model.id)}")
+    if isinstance(model, NameCache):
+        return Key(keys.partition(model.scope), f"NAME_CACHE#{keys.component(model.id)}")
+    if isinstance(model, BundleSchedule):
+        return keys.doctor(model.scope, "BUNDLE")
     if isinstance(model, PatientAction):
         return Key(keys.partition(model.scope), f"PATIENT_ACTION#{keys.component(model.id)}")
     if isinstance(model, InvitationWork):
@@ -1194,6 +1327,7 @@ def to_record(model: BaseModel, scope: Scope) -> StoredRecord:
             "body": body,
             "created_at": body["created_at"],
             "updated_at": body["updated_at"],
+            "ttl": int(model.expires_at.timestamp()) if isinstance(model, NameCache) else None,
             **projections(model),
         }
     )
@@ -1300,6 +1434,10 @@ class DeliveryResolution(_BoundaryValue):
     intent: StoredRecord
     reviews: tuple[StoredRecord, ...] = ()
     release_reservation: StrictBool = False
+    obligation_stamp: StoredRecord | None = None
+    obligation_expected_version: PositiveVersion | None = None
+    bundle_schedule: StoredRecord | None = None
+    bundle_expected_version: PositiveVersion | None = None
 
 
 class Accepted(_BoundaryValue):

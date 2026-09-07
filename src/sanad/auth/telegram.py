@@ -6,8 +6,10 @@ from sanad.auth.login import LoginService
 from sanad.auth.service import InternalCommand, revise
 from sanad.channels.telegram import wording
 from sanad.channels.telegram.router import RouteResult, TelegramRuntime
+from sanad.domain import PatientScope
 from sanad.store.records import (
     Authorization,
+    ClaimCallback,
     InboundReceipt,
     OutboundIntent,
     from_record,
@@ -106,6 +108,16 @@ class IdentityRouting:
                 intents=intents,
                 claim=work,
             )
+        delivery_patient = None
+        if known_callback and accepted:
+            token = self.claims.load(
+                self.claims.scope, "claim_callback", callback_hash, ClaimCallback
+            )
+            pending = self.claims.patient_claim(token.claim_id) if token else None
+            if pending and token and token.actor_subject == receipt.source_subject:
+                delivery_patient = PatientScope(
+                    doctor_id=pending.doctor_id, patient_id=pending.patient_id
+                )
         return RouteResult(
             route="callback"
             if known_callback
@@ -116,4 +128,5 @@ class IdentityRouting:
             else "unknown",
             status=result.status if result else "forbidden",
             template_id=template,
+            delivery_patient=delivery_patient,
         )

@@ -95,7 +95,7 @@ def test_voice_start_via_real_adapter(world: PatientWorld) -> None:
     fact = next(r for r in world.rows("clinical_fact") if r.body["category"] == "patient_report")
     provenance = from_record(fact, ClinicalFact).provenance
     assert provenance.source_span
-    assert provenance.prompt_version == "egyptian-verbatim-numbers-v3"
+    assert provenance.prompt_version == "egyptian-verbatim-numbers-v4"
     assert any(i.template_id == "patient_start_recorded" for i in world.patient_intents())
 
 

@@ -10,6 +10,9 @@ FROM public.ecr.aws/docker/library/python:3.12-slim
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
 COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.9.1 /lambda-adapter /opt/extensions/lambda-adapter
 COPY --from=build /runtime /usr/local
+# HEIF wheels provide their native libraries; fail this image build if the
+# decoder cannot load on the target architecture. Bundled notices stay installed.
+RUN python -c "from pillow_heif.as_plugin import register_heif_opener; register_heif_opener()"
 ENV PORT=8080 AWS_LWA_READINESS_CHECK_PATH=/health AWS_LWA_PASS_THROUGH_PATH=/events AWS_LWA_ERROR_STATUS_CODES=500-599 PYTHONDONTWRITEBYTECODE=1
 WORKDIR /app
 CMD ["uvicorn", "sanad.api.lambda_entry:create_runtime_app", "--factory", "--host", "0.0.0.0", "--port", "8080", "--no-access-log"]

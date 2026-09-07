@@ -81,6 +81,7 @@ class TelegramTransport:
         *,
         result_id: str | None = None,
         photo: bytes | None = None,
+        photo_mime: str = "image/png",
     ) -> SendOutcome:
         url = (
             f"{self.settings.api_base.rstrip('/')}/bot"
@@ -93,7 +94,13 @@ class TelegramTransport:
                 else self.http.post(
                     url,
                     data={k: str(v) for k, v in data.items()},
-                    files={"photo": ("invitation.png", photo, "image/png")},
+                    files={
+                        "photo": (
+                            "photo.jpg" if photo_mime == "image/jpeg" else "invitation.png",
+                            photo,
+                            photo_mime,
+                        )
+                    },
                     follow_redirects=False,
                 )
             )
@@ -167,6 +174,22 @@ class TelegramTransport:
         if "reply_markup" in payload:
             data["reply_markup"] = payload["reply_markup"]
         return self._call("sendMessage", data)
+
+    def send_photo(self, recipient_ref: str, photo: bytes, caption: str) -> SendOutcome:
+        from sanad.media.limits import MediaInvalid, image_info
+
+        if not caption or len(caption) > 1024:
+            raise ProvablyUnsent("telegram_photo_caption_required")
+        try:
+            info = image_info(photo)
+        except MediaInvalid:
+            raise ProvablyUnsent("telegram_invalid_photo") from None
+        return self._call(
+            "sendPhoto",
+            {"chat_id": recipient_ref, "caption": caption},
+            photo=photo,
+            photo_mime=info.mime,
+        )
 
     def answer_callback(self, callback_query_id: str, text: str) -> CallbackOutcome:
         try:

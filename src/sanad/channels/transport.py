@@ -41,6 +41,7 @@ class CapturedCallback(_BoundaryValue):
 
 class Transport(Protocol):
     def send(self, recipient_ref: str, payload: dict[str, JsonValue]) -> SendOutcome: ...
+    def send_photo(self, recipient_ref: str, photo: bytes, caption: str) -> SendOutcome: ...
     def answer_callback(self, callback_query_id: str, text: str) -> CallbackOutcome: ...
 
 
@@ -56,6 +57,11 @@ class CapturedTransport:
         self.callback_calls: list[CapturedCallback] = []
         self.calls: list[CapturedSend] = []
         self.possibly_sent: list[CapturedSend] = []
+        self.photos: list[bytes] = []
+
+    def send_photo(self, recipient_ref: str, photo: bytes, caption: str) -> SendOutcome:
+        self.photos.append(photo)
+        return self.send(recipient_ref, {"text": caption, "media_kind": "photo"})
 
     def send(self, recipient_ref: str, payload: dict[str, JsonValue]) -> SendOutcome:
         call = CapturedSend(recipient_ref, deepcopy(payload))

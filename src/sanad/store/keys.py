@@ -75,7 +75,7 @@ def partition(scope: Scope) -> str:
 
 def doctor(
     scope: TenantScope,
-    kind: Literal["PROFILE", "POLICY", "APPLICATION", "BUNDLE"] = "PROFILE",
+    kind: Literal["PROFILE", "POLICY", "APPLICATION", "BUNDLE", "NAME"] = "PROFILE",
     id: str | None = None,
 ) -> Key:
     return Key(tenant_pk(scope), kind if kind in {"PROFILE", "BUNDLE"} else _suffix(kind, id))

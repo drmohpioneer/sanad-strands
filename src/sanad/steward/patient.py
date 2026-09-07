@@ -19,6 +19,7 @@ from sanad.store.records import (
     Lease,
     PatientProfile,
     canonical_json,
+    from_record,
     to_record,
 )
 
@@ -111,6 +112,42 @@ class PatientTurnCommit:
         )
 
     def finish(self, template: str, text: str, *, emit: bool = True) -> CommandResult:
+        from sanad.contact.scheduler import prime
+        from sanad.domain import Mission, PatientReplied, TransitionResult, transition_mission
+
+        for mission in self.snapshot.missions:
+            if ("mission", mission.id) in self.builder.puts or mission.state not in {
+                "open",
+                "waiting_patient",
+                "blocked",
+                "unreachable",
+                "overdue",
+            }:
+                continue
+            result = transition_mission(
+                mission,
+                PatientReplied(event_id=self.id + ":reply:" + mission.id),
+                self.now,
+                self.builder.policy.timing,
+            )
+            if isinstance(result, TransitionResult) and isinstance(result.aggregate, Mission):
+                self.builder.add(
+                    result.model_copy(update={"aggregate": prime(result.aggregate, self.now)})
+                )
+                # Buttons made during this turn must name its accepted reply revision.
+                for key, row in tuple(self.builder.puts.items()):
+                    if row.entity_type != "patient_action" or row.version != 1:
+                        continue
+                    action = from_record(row, PatientAction)
+                    if action.target_ref == to_record(mission, self.snapshot.scope).ref:
+                        self.builder.puts[key] = to_record(
+                            action.model_copy(
+                                update={
+                                    "target_ref": self.builder.puts[("mission", mission.id)].ref
+                                }
+                            ),
+                            self.snapshot.scope,
+                        )
         self.builder.audit(
             str(self.builder.command.payload["type"]),
             keys.digest(self.id),

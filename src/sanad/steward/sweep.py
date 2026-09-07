@@ -112,36 +112,7 @@ class Sweeper:
                             hit.record_key, self.capability.service_subject, now
                         )
                     elif lane in {"mission", "followup", "review"} and fresh.entity_type == lane:
-                        kind = "_Wake"
-                        if lane == "mission":
-                            mission = from_record(fresh, Mission)
-                            if (
-                                mission.state != "proposed"
-                                and mission.escalation_at <= now
-                                and mission.handled_deadline_generation
-                                < mission.deadline_generation
-                            ):
-                                kind = "_Deadline"
-                        elif lane == "followup":
-                            task = from_record(fresh, FollowUpTask)
-                            if (
-                                task.state not in {"overdue", "contact_suppressed"}
-                                and not task.deadline_handled
-                                and (task.due_at or task.review_at) <= now
-                            ):
-                                kind = "_FollowupDeadline"
-                        assert isinstance(scope, PatientScope)
-                        command = system_command(
-                            scope,
-                            f"sweep:{lane}:{fresh.id}:{fresh.version}",
-                            {
-                                "type": kind,
-                                ("review_id" if lane == "review" else lane + "_id"): fresh.id,
-                            },
-                            now,
-                            lane=lane,
-                        )
-                        self.steward.handle(command)
+                        self.accountability(fresh, now)
                     else:
                         deferred += 1
                         continue
@@ -169,6 +140,39 @@ class Sweeper:
             budget_exhausted=True,
             cursor=cursor,
         )
+
+    def accountability(self, fresh: StoredRecord, now: datetime) -> None:
+        lane = fresh.entity_type
+        scope = PatientScope(doctor_id=str(fresh.doctor_id), patient_id=str(fresh.patient_id))
+        kind = "_Wake"
+        if lane == "mission":
+            mission = from_record(fresh, Mission)
+            if (
+                mission.state != "proposed"
+                and mission.escalation_at <= now
+                and mission.handled_deadline_generation < mission.deadline_generation
+            ):
+                kind = "_Deadline"
+        elif lane == "followup":
+            task = from_record(fresh, FollowUpTask)
+            if (
+                task.state not in {"overdue", "contact_suppressed"}
+                and not task.deadline_handled
+                and (task.due_at or task.review_at) <= now
+            ):
+                kind = "_FollowupDeadline"
+        assert isinstance(scope, PatientScope)
+        command = system_command(
+            scope,
+            f"sweep:{lane}:{fresh.id}:{fresh.version}",
+            {
+                "type": kind,
+                ("review_id" if lane == "review" else lane + "_id"): fresh.id,
+            },
+            now,
+            lane=lane,
+        )
+        self.steward.handle(command)
 
     def reconcile(
         self, scope: Scope, cursor: Cursor | None = None, limit: int = 100

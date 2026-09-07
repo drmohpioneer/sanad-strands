@@ -59,7 +59,7 @@ def test_versions_missions_epochs_and_explicit_followup(world: ScribeWorld, acti
     old_patient = world.claims.patient(world.doctor.id, scope.patient_id)
     assert old_patient is not None
     assert (
-        "أتورفاستاتين: 20 مج بالليل ← " + ("40 مج بالليل" if action == "change" else "إيقاف")
+        "Atorvastatin: 20 مج بالليل ← " + ("40 مج بالليل" if action == "change" else "إيقاف")
     ) in "\n".join(render_card(p))
     world.tap(id=21)
     versions = world.store.list_records(scope, "care_order_version")[0]
@@ -90,11 +90,11 @@ def test_identical_continue_has_no_clinical_writes(world: ScribeWorld, source: s
         p = amendment(world, "continue", dose="20 مج", timing="بالليل")
     else:
         providers(
-            world, prescription("20 مج", "أتورفاستاتين"), prescription("20 مج", "أتورفاستاتين")
+            world, prescription("20 mg", "Atorvastatin"), prescription("20 mg", "Atorvastatin")
         )
         world.post(photo(id=11))
         world.tap("✏️ تعديل", id=21)
-        world.post(update(APPLICANT, "صف 1: الإجراء=continue", 12))
+        world.post(update(APPLICANT, "صف 1: الإجراء=continue؛ الجرعة=20 مج؛ التوقيت=بالليل", 12))
         p = world.proposal
     assert p.amendments[0].noop and "زي ما هو" in "\n".join(render_card(p))
     patient = world.claims.patient(world.doctor.id, p.selected_patient_id or "")
@@ -119,7 +119,7 @@ def test_identical_continue_has_no_clinical_writes(world: ScribeWorld, source: s
 
 
 def test_photo_existing_drug_becomes_change(world: ScribeWorld) -> None:
-    providers(world, prescription("40 مج", "أتورفاستاتين"), prescription("40 مج", "أتورفاستاتين"))
+    providers(world, prescription("40 mg", "Atorvastatin"), prescription("40 mg", "Atorvastatin"))
     world.post(photo(id=11))
     p = world.proposal
     assert p.candidate.orders[0].action == "change"

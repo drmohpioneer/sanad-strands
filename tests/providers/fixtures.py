@@ -35,7 +35,10 @@ def png(width: int = 2, height: int = 2) -> bytes:
     return (
         b"\x89PNG\r\n\x1a\n"
         + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
-        + (chunk(b"IDAT", zlib.compress(b"\0" + b"\0" * 6)) + chunk(b"IEND", b""))
+        + (
+            chunk(b"IDAT", zlib.compress((b"\0" + b"\0" * (width * 3)) * height))
+            + chunk(b"IEND", b"")
+        )
     )
 
 
@@ -165,7 +168,7 @@ def document(**changes: Any) -> str:
     return json.dumps(
         {
             "document_type": "lab",
-            "printed_name": "اسم غير موثوق",
+            "printed_name": "Untrusted printed name",
             "printed_date": "2026-09-06",
             "items": [
                 {"name": "Potassium", "value": "6.3", "unit": "mmol/L", "flag": "normal"},

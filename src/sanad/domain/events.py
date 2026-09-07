@@ -82,8 +82,20 @@ class PatientBound(_Event):
     consent_active: StrictBool
 
 
+class ContactScheduled(_Event):
+    event_type: Literal["CONTACT_SCHEDULED"] = "CONTACT_SCHEDULED"
+    next_contact_at: UtcInstant
+    slot_id: NonblankStr
+    template_id: NonblankStr
+    kind: Literal["chase", "scheduled"]
+    emit: StrictBool = True
+    expires_at: UtcInstant | None = None
+
+
 class ContactAccepted(_Event):
     event_type: Literal["CONTACT_ACCEPTED"] = "CONTACT_ACCEPTED"
+    accepted_at: UtcInstant | None = None
+    kind: Literal["chase", "scheduled"] = "chase"
 
 
 class PatientReplied(_Event):
@@ -224,6 +236,7 @@ type MissionEvent = Annotated[
     | ConfirmMission
     | CreateSupportTicket
     | PatientBound
+    | ContactScheduled
     | ContactAccepted
     | PatientReplied
     | BarrierRecorded
@@ -277,6 +290,12 @@ class AnchorConfirmed(_Event):
     replace_existing: StrictBool = False
 
 
+class PromptScheduled(_Event):
+    event_type: Literal["PROMPT_SCHEDULED"] = "PROMPT_SCHEDULED"
+    slot_id: NonblankStr
+    expires_at: UtcInstant | None = None
+
+
 class PromptAccepted(_Event):
     event_type: Literal["PROMPT_ACCEPTED"] = "PROMPT_ACCEPTED"
 
@@ -306,6 +325,7 @@ class CancelFollowUp(_Event):
 type FollowUpEvent = Annotated[
     ConfirmFollowUp
     | AnchorConfirmed
+    | PromptScheduled
     | PromptAccepted
     | ResponseReceived
     | FollowUpDeadline
@@ -388,7 +408,12 @@ class AnchorFollowUp(_BoundaryValue):
 
 class EmitIntent(_BoundaryValue):
     effect_type: Literal["emit_intent"] = "emit_intent"
-    purpose: Literal["DANGER", "DONE:FULFILLMENT", "DONE:CORRECTION", "DEADLINE"]
+    purpose: Literal["DANGER", "DONE:FULFILLMENT", "DONE:CORRECTION", "DEADLINE", "routine_prompt"]
+    audience: Literal["doctor", "patient"] = "doctor"
+    slot: str = ""
+    template_id: NonblankStr | None = None
+    contact_kind: Literal["chase", "scheduled"] | None = None
+    expires_at: UtcInstant | None = None
     source_event_id: NonblankStr
     source_version: PositiveVersion
     facts_ref: NonblankStr

@@ -31,6 +31,7 @@ from sanad.store.records import (
     Application,
     AuditEvent,
     Authorization,
+    BundleSchedule,
     CallbackToken,
     Claim,
     CommandEnvelope,
@@ -181,6 +182,10 @@ class StoreBase(ABC):
             "scribe_callback",
         }:
             return self.get(TenantScope(doctor_id=scope.doctor_id), entity_type, id)
+        if entity_type == "bundle_schedule":
+            if type(scope) is not TenantScope or id != scope.doctor_id:
+                return None
+            return self._owned(scope, keys.doctor(scope, "BUNDLE"))
         if entity_type == "doctor" and not isinstance(scope, AccountScope):
             if id != scope.doctor_id:
                 return None
@@ -193,6 +198,8 @@ class StoreBase(ABC):
             tenant = TenantScope(doctor_id=scope.doctor_id)
             return self._owned(tenant, keys.doctor(tenant))
         prefixes = {
+            "name_memory": "NAME",
+            "name_cache": "NAME_CACHE",
             "photo_association_work": "PHOTO_ASSOCIATION_WORK",
             "intake_draft": "INTAKE_DRAFT",
             "intake_callback": "INTAKE_CALLBACK",
@@ -368,6 +375,8 @@ class StoreBase(ABC):
         self, scope: Scope, entity_type: str, cursor: Cursor | None = None, limit: int = 100
     ) -> RecordPage:
         prefixes = {
+            "name_memory": "NAME#",
+            "name_cache": "NAME_CACHE#",
             "photo_association_work": "PHOTO_ASSOCIATION_WORK#",
             "intake_draft": "INTAKE_DRAFT#",
             "intake_callback": "INTAKE_CALLBACK#",
@@ -540,7 +549,17 @@ class StoreBase(ABC):
             and worker.auth_expiry > utc_instant(self._clock())
             and bool(
                 worker.permitted_lanes
-                & {"mission", "followup", "review", "ingress", "media", "urgent", "scribe"}
+                & {
+                    "mission",
+                    "followup",
+                    "review",
+                    "ingress",
+                    "media",
+                    "urgent",
+                    "scribe",
+                    "bundle",
+                    "delivery",
+                }
             )
         )
         if (
@@ -647,6 +666,8 @@ class StoreBase(ABC):
                 and not (concierge and record.entity_type == "clinical_fact")
                 and record.entity_type
                 in {
+                    "name_memory",
+                    "name_cache",
                     "photo_association_work",
                     "intake_draft",
                     "intake_callback",
@@ -781,7 +802,20 @@ class StoreBase(ABC):
             ):
                 return StaleVersion(conflicts=("work_claim",))
         for record in records:
-            if not (identity or scribe or concierge) and record.entity_type in {
+            contact_projection = (
+                system
+                and command.fence is not None
+                and command.payload.get("type") in {"_ScheduleContact", "_ContactFeedback"}
+                and record.entity_type == "patient"
+            )
+            if contact_projection:
+                from sanad.contact.scheduler import valid_patient_projection
+
+                if not valid_patient_projection(self, record):
+                    return Forbidden()
+            if not (
+                identity or scribe or concierge or contact_projection
+            ) and record.entity_type in {
                 "patient_action",
                 "patient",
                 "consent",
@@ -1335,6 +1369,21 @@ class StoreBase(ABC):
             public_cursor = Cursor(query=binding, position={"token": token})
         return tuple(hints), public_cursor
 
+    def mark_contact_feedback(self, scope: PatientScope, intent_id: str) -> StoredRecord | None:
+        row = self.get(scope, "outbound_intent", intent_id)
+        if row is None:
+            return None
+        intent = from_record(row, OutboundIntent)
+        receipt = self._read(keys.uniqueness(scope, "CMD", "contact:" + intent.id))
+        if intent.status != "provider_accepted" or receipt is None:
+            return None
+        if intent.contact_feedback == "applied":
+            return row
+        changed = self._revision(
+            row, utc_instant(self._clock()), contact_feedback="applied", work_clock=None
+        )
+        return changed if self._atomic([Write(record_item(changed), row.version)], []) else None
+
     def reserve_contact(
         self, scope: PatientScope, slot_key: str, intent_id: str, expected_fence: Lease
     ) -> Literal["reserved", "already_taken"]:
@@ -1633,6 +1682,7 @@ class StoreBase(ABC):
             "suppression_reason",
             "review_obligation_id",
             "retryable",
+            "notice_feedback_pending",
         }
         if new.model_dump(exclude=mutable) != old.model_dump(exclude=mutable):
             return None
@@ -1675,8 +1725,10 @@ class StoreBase(ABC):
             writes.append(Write(record_item(to_record(review, scope)), None))
             marker = keys.uniqueness(scope, "REVIEWKEY", keys.digest(review.unique_source_key))
             writes.append(Write(self._marker_item(marker, scope, record.key, now), None))
-        if new.review_obligation_id is not None and not any(
-            r.id == new.review_obligation_id for r in resolution.reviews
+        if (
+            new.review_obligation_id is not None
+            and new.review_obligation_id != old.review_obligation_id
+            and not any(r.id == new.review_obligation_id for r in resolution.reviews)
         ):
             return None
         if (
@@ -1697,9 +1749,94 @@ class StoreBase(ABC):
                         "state": "consumed" if outcome == "provider_accepted" else "released",
                     }
                     writes.append(Write(changed, reservation["version"]))
+        extra = self._notice_writes(old, new, resolution)
+        if extra is None:
+            return None
+        writes.extend(extra)
         if self._atomic(writes, checks):
             return to_record(new, scope)
         return None
+
+    def _notice_writes(
+        self, old: OutboundIntent, new: OutboundIntent, resolution: DeliveryResolution
+    ) -> list[Write] | None:
+        writes: list[Write] = []
+        if resolution.obligation_stamp:
+            if new.status != "provider_accepted" or new.notification_purpose != "DEADLINE":
+                return None
+            stamp = from_record(resolution.obligation_stamp, ReviewObligation)
+            row = self.get(new.scope, "review", stamp.id)
+            current = from_record(row, ReviewObligation) if row else None
+            if (
+                not current
+                or current.first_notice_at is not None
+                or current.id != old.review_obligation_id
+                or stamp.first_notice_at != new.accepted_at
+                or row is None
+                or row.version != resolution.obligation_expected_version
+                or stamp.version != row.version + 1
+                or model_scope(stamp) != new.scope
+                or stamp.model_dump(exclude={"version", "updated_at", "first_notice_at"})
+                != current.model_dump(exclude={"version", "updated_at", "first_notice_at"})
+            ):
+                return None
+            writes.append(Write(record_item(resolution.obligation_stamp), row.version))
+        if resolution.bundle_schedule:
+            schedule = from_record(resolution.bundle_schedule, BundleSchedule)
+            if (
+                isinstance(new.scope, AccountScope)
+                or schedule.doctor_id != new.scope.doctor_id
+                or new.status != "provider_accepted"
+            ):
+                return None
+            row = self.get(schedule.scope, "bundle_schedule", schedule.id)
+            if (
+                row.version if row else None
+            ) != resolution.bundle_expected_version or schedule.version != (
+                row.version + 1 if row else 1
+            ):
+                return None
+            if new.scope_kind == "doctor":
+                current_schedule = from_record(row, BundleSchedule) if row else None
+                if (
+                    not current_schedule
+                    or current_schedule.pending_intent_id != new.id
+                    or schedule.generation != current_schedule.generation + 1
+                    or schedule.last_provider_accepted_at != new.accepted_at
+                ):
+                    return None
+            elif not resolution.obligation_stamp:
+                return None
+            writes.append(
+                Write(record_item(resolution.bundle_schedule), row.version if row else None)
+            )
+        return writes
+
+    def complete_notice_feedback(
+        self, scope: Scope, intent_id: str, resolution: DeliveryResolution
+    ) -> StoredRecord | None:
+        row = self.get(scope, "outbound_intent", intent_id)
+        if row is None:
+            return None
+        old, new = from_record(row, OutboundIntent), from_record(resolution.intent, OutboundIntent)
+        mutable = {"version", "updated_at", "notice_feedback_pending", "work_clock"}
+        if (
+            old.status != "provider_accepted"
+            or not old.notice_feedback_pending
+            or new.notice_feedback_pending
+            or new.work_clock
+            or new.version != old.version + 1
+            or old.model_dump(exclude=mutable) != new.model_dump(exclude=mutable)
+        ):
+            return None
+        extra = self._notice_writes(old, new, resolution)
+        if extra is None:
+            return None
+        return (
+            resolution.intent
+            if self._atomic([Write(record_item(resolution.intent), row.version), *extra], [])
+            else None
+        )
 
     def create_or_get_review(
         self, payload: ReviewCreation, now: datetime

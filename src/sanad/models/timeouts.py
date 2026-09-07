@@ -1,0 +1,7 @@
+"""Contract 11b addendum 4: shared production and live-check model budgets."""
+
+PROVIDER_CONNECT_TIMEOUT = 2.0
+TRANSCRIPTION_TIMEOUT = 30.0
+SPEECH_READ_TIMEOUT = 28.0
+EXTRACTION_TIMEOUT = 15.0
+EXTRACTION_READ_TIMEOUT = 13.0

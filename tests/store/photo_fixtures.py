@@ -15,6 +15,7 @@ from pydantic import JsonValue
 from sanad.domain import DRAFT_POLICY_2026_09
 from sanad.media.retrieve import MediaRetriever
 from sanad.media.vision import VisionAdapter
+from sanad.scribe.crosscheck import HANDWRITING_REPLY, SHIFT_WARNING
 from sanad.steward.types import StewardPolicy
 from sanad.store import keys
 from sanad.store.keys import IntakeScope
@@ -33,9 +34,9 @@ class PhotoExample:
     unreadable: bool = False
 
 
-def prescription(dose: str = "5 مج", drug: str = "بيزوبرولول") -> str:
+def prescription(dose: str = "5 mg", drug: str = "Bisoprolol") -> str:
     return document(
-        document_type="prescription", items=[{"name": drug, "dose": dose, "timing": "بالليل"}]
+        document_type="prescription", items=[{"name": drug, "dose": dose, "timing": "evening"}]
     )
 
 
@@ -49,27 +50,26 @@ SHIFT = document(
 MISSING = document(items=[{"name": "Potassium", "value": "4.1"}])
 TWO = document(notes=["two documents in one photo"])
 TABLE = (
-    PhotoExample("agree", prescription(), prescription(), "• بيزوبرولول 5 مج، بالليل (بداية)"),
+    PhotoExample("agree", prescription(), prescription(), "• Bisoprolol 5 mg، evening (بداية)"),
     PhotoExample(
-        "dose", prescription(), prescription("50 مج"), "⚠️ قراءتين مختلفتين: 5 مج / 50 مج", True
+        "dose", prescription(), prescription("50 mg"), "⚠️ قراءتين مختلفتين: 5 mg / 50 mg", True
     ),
     PhotoExample(
         "drug",
         prescription(),
-        prescription(drug="أتورفاستاتين"),
-        "⚠️ قراءتين مختلفتين: بيزوبرولول / أتورفاستاتين",
+        prescription(drug="Atorvastatin"),
+        HANDWRITING_REPLY,
         True,
+        unreadable=True,
     ),
-    PhotoExample(
-        "shift", SHIFT, SHIFT, "⚠️ الأرقام ممكن تكون متزحزحة عن الأسماء، راجع الصورة", True
-    ),
+    PhotoExample("shift", SHIFT, SHIFT, SHIFT_WARNING, True),
     PhotoExample("missing_unit", MISSING, MISSING, "Potassium 4.1 بدون وحدة"),
     PhotoExample("danger", document(), document(), "⚠️ تم تنبيهك", danger=True),
     PhotoExample(
         "unreadable",
-        document(unreadable=True),
-        document(unreadable=True),
-        "صوّر من فوق في نور كويس",
+        document(unreadable=True, items=[]),
+        document(unreadable=True, items=[]),
+        HANDWRITING_REPLY,
         unreadable=True,
     ),
     PhotoExample("two_documents", TWO, TWO, "الصورة محتاجة توضيح", True, True),
@@ -119,4 +119,5 @@ def providers(
         vision, source, world.runtime.safety_policy
     )
     world.app.state.media_store = s3
+    world.runtime.dispatcher.media_store = s3
     return vision, files, s3

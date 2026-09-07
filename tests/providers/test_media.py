@@ -24,7 +24,13 @@ from sanad.media.speech import (
     split_transcript,
 )
 from sanad.media.telegram import FileBytes, MediaFailure, TelegramFileClient
-from sanad.media.vision import VISION_PROMPT, DocumentFailure, DocumentRead, VisionAdapter
+from sanad.media.vision import (
+    VISION_PROMPT,
+    DocumentFailure,
+    DocumentRead,
+    VisionAdapter,
+    vision_prompt,
+)
 from sanad.models.io import ModelUnavailable
 from sanad.safety.policy import SAFETY_POLICY_V1_CARDIOLOGY_DRAFT as POLICY
 
@@ -62,10 +68,10 @@ def test_speech_one_user_message_dialect_and_numbers() -> None:
     converter = ScriptedConverter()
     result = asyncio.run(SpeechAdapter(caller, converter, SOURCE).transcribe(b"OggSfake", "opus"))
     assert isinstance(result, Transcript) and result.numbers == ("200", "60", "12-15")
-    assert result.heard_numbers == ("200 جرام", "60 مرة", "12-15 دقيقة")
+    assert result.heard_numbers == ("200", "60", "12-15")
     assert result.disputed_numbers == () and result.prompt_version == PROMPT_VERSION
     assert result.numbers_line == "parsed"
-    assert result.prompt_version == "egyptian-verbatim-numbers-v3"
+    assert result.prompt_version == "egyptian-verbatim-numbers-v4"
     assert result.provenance[0].prompt_version == result.prompt_version
     assert result.spans[0].end_ms == 15000 and result.provenance[0].source_span == result.spans[0]
     assert caller.calls[0][1] == [
@@ -75,10 +81,10 @@ def test_speech_one_user_message_dialect_and_numbers() -> None:
     assert "Standard Arabic" in VERBATIM_PROMPT and "digits" in VERBATIM_PROMPT
     assert "اكتب التفريغ فقط." not in VERBATIM_PROMPT
     assert "Output the transcript only." not in VERBATIM_PROMPT
-    assert VERBATIM_PROMPT.endswith(
+    assert (
         "Then on a final line starting with NUMBERS: list every number you heard, in order, "
         "each followed by the word spoken right after it."
-    )
+    ) in VERBATIM_PROMPT
 
 
 @pytest.mark.parametrize(
@@ -88,35 +94,35 @@ def test_speech_one_user_message_dialect_and_numbers() -> None:
             "١٠٠ جرام و٦٠ جرام\nNUMBERS: ٢٠٠ جرام، ٦٠ جرام",
             "١٠٠ جرام و٦٠ جرام",
             ("100", "60"),
-            ("200 جرام", "60 جرام"),
+            ("200", "60"),
             ("100", "200"),
         ),
         (
             "٢٠٠ جرام\nNUMBERS: ٢٠٠ جرام، ٦٠ جرام",
             "٢٠٠ جرام",
             ("200",),
-            ("200 جرام", "60 جرام"),
+            ("200", "60"),
             ("60",),
         ),
         (
             "٢٠٠ جرام و٦٠ جرام\nNUMBERS: ٢٠٠ جرام",
             "٢٠٠ جرام و٦٠ جرام",
             ("200", "60"),
-            ("200 جرام",),
+            ("200",),
             ("60",),
         ),
         (
             "٦٫٣ وبعدها 6.30\nNUMBERS: 6.30 mmol/L, ٦٫٣ mmol/L",
             "٦٫٣ وبعدها 6.30",
             ("6.3",),
-            ("6.3 mmol/L", "6.3 mmol/L"),
+            ("6.3", "6.3"),
             (),
         ),
         (
             "٥-٦ مجم\nNUMBERS: ٥ مجم، ٦ مجم",
             "٥-٦ مجم",
             ("5-6",),
-            ("5 مجم", "6 مجم"),
+            ("5", "6"),
             ("5-6", "5", "6"),
         ),
         ("أهلاً بيك\nNUMBERS: none", "أهلاً بيك", (), (), ()),
@@ -125,7 +131,7 @@ def test_speech_one_user_message_dialect_and_numbers() -> None:
             "أهلاً\nNUMBERS: ١٠ مجم\nNUMBERS: ٢٠ مجم",
             "أهلاً\nNUMBERS: ١٠ مجم",
             ("10",),
-            ("20 مجم",),
+            ("20",),
             ("10", "20"),
         ),
     ],
@@ -142,7 +148,7 @@ def test_speech_numbers_line_keeps_both_readings_and_disputes(
         SpeechAdapter(caller, ScriptedConverter(), SOURCE).transcribe(b"OggS", "ogg")
     )
     assert isinstance(result, Transcript)
-    assert result.numbers_line == "parsed"
+    assert result.numbers_line == ("parsed" if heard else "malformed")
     assert (result.text, result.numbers, result.heard_numbers, result.disputed_numbers) == (
         text,
         numbers,
@@ -160,12 +166,7 @@ def test_speech_numbers_line_keeps_both_readings_and_disputes(
         ("١٠٠ جرام و٦٠ ثم ١٠٠", "١٠٠ جرام و٦٠ ثم ١٠٠", "missing", ("100", "60")),
         ("أهلاً\nNUMBERS:", "أهلاً", "malformed", ()),
         ("٦٠ جرام\nNUMBERS: unknown", "٦٠ جرام", "malformed", ("60",)),
-        (
-            "١٠٠ جرام و٦٠ جرام\nNUMBERS: 60 جرام\nunexpected trailing prose",
-            "١٠٠ جرام و٦٠ جرام",
-            "malformed",
-            ("100", "60"),
-        ),
+        ("٢٠ مجم\nNUMBERS: none", "٢٠ مجم", "malformed", ("20",)),
     ],
 )
 def test_speech_missing_or_malformed_numbers_line_retains_uncertain_transcript(
@@ -224,7 +225,7 @@ def test_speech_injection_is_only_unconfirmed_source_and_outage_resends() -> Non
     assert isinstance(failed, TranscriptFailure) and failed.reason == "timeout"
 
 
-def test_converter_exact_argv_no_shell_and_one_shared_twenty_second_budget() -> None:
+def test_converter_exact_argv_no_shell_and_separate_caps() -> None:
     calls = []
 
     def run(argv: list[str], **kwargs: Any) -> subprocess.CompletedProcess[bytes]:
@@ -278,7 +279,8 @@ def test_converter_exact_argv_no_shell_and_one_shared_twenty_second_budget() -> 
         "mp3",
         "pipe:1",
     ]
-    assert all(c[1]["shell"] is False and 0 < c[1]["timeout"] <= 20 for c in calls)
+    assert all(c[1]["shell"] is False for c in calls)
+    assert [c[1]["timeout"] for c in calls] == [10, 40]
     assert not Path(source).exists()
 
 
@@ -363,7 +365,7 @@ def test_missing_unit_cannot_judge_even_when_model_says_normal() -> None:
 )
 def test_vision_parse_failure_is_typed(text: str) -> None:
     result = asyncio.run(
-        VisionAdapter(ScriptedVision(text), SOURCE, POLICY).read_document(
+        VisionAdapter(ScriptedVision(text, text, text, text), SOURCE, POLICY).read_document(
             png(), "png", kind_hint="lab"
         )
     )
@@ -396,18 +398,18 @@ def test_vision_template_echo_is_typed_and_never_a_read(reader: int, kind: str) 
         VISION_PROMPT
         if kind == "description"
         else (
-            VISION_PROMPT + "Caller kind hint: lab"
+            vision_prompt("lab")
             if kind == "request"
             else "```json\n" + json.dumps(old_example, sort_keys=True) + "\n```"
         )
     )
-    caller = ScriptedVision(*([document()] * reader), echo)
+    caller = ScriptedVision(*([document(), echo, echo] if reader else [echo, document(), echo]))
     result = asyncio.run(
         VisionAdapter(caller, SOURCE, POLICY).read_document(png(), "png", kind_hint="lab")
     )
-    assert isinstance(result, DocumentFailure) and result.reason == "template_echo"
-    assert len(caller.calls) == len(result.metadata) == reader + 1
-    assert not hasattr(result, "first")
+    assert isinstance(result, DocumentRead) and result.single_reader
+    assert result.second.status == "failed" and result.second.failure_reason == "template_echo"
+    assert len(caller.calls) == len(result.metadata) == 3
 
 
 def test_vision_field_description_and_reference_ranges_reach_both_readers() -> None:
@@ -421,9 +423,7 @@ def test_vision_field_description_and_reference_ranges_reach_both_readers() -> N
     assert isinstance(result, DocumentRead) and result.disagreements == ()
     assert result.first.items[0].item.ref == result.second.items[0].item.ref == "3.5-5.1"
     assert "{" not in VISION_PROMPT and "lab|prescription|other" not in VISION_PROMPT
-    assert all(
-        call[1][1]["text"] == VISION_PROMPT + "Caller kind hint: lab" for call in caller.calls
-    )
+    assert all(call[1][1]["text"] == vision_prompt("lab") for call in caller.calls)
     assert result.first.items[0].lab_verdict is not None
     assert result.first.items[0].lab_verdict.level == "critical"
 

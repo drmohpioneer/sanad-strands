@@ -18,6 +18,7 @@ from sanad.domain.deadlines import (
 from sanad.domain.entities import (
     TERMINAL_STATES,
     CoverageStatus,
+    DeadlineHistory,
     DoctorTimingPolicy,
     FollowUpKind,
     FollowUpState,
@@ -75,6 +76,7 @@ LEGAL_TRANSITIONS: dict[MissionState, frozenset[type[ev.MissionEvent]]] = {
     | _UNFINISHED
     | {
         ev.ContactAccepted,
+        ev.ContactScheduled,
         ev.PatientReplied,
         ev.BarrierRecorded,
         ev.ContactExhausted,
@@ -83,6 +85,7 @@ LEGAL_TRANSITIONS: dict[MissionState, frozenset[type[ev.MissionEvent]]] = {
     | _UNFINISHED
     | {
         ev.ContactAccepted,
+        ev.ContactScheduled,
         ev.PatientReplied,
         ev.BarrierRecorded,
         ev.ContactExhausted,
@@ -132,6 +135,7 @@ LEGAL_FOLLOWUP_TRANSITIONS: dict[FollowUpState, frozenset[type[ev.FollowUpEvent]
         {
             ev.AnchorConfirmed,
             ev.PromptAccepted,
+            ev.PromptScheduled,
             ev.ResponseReceived,
             ev.FollowUpDeadline,
             ev.SuppressFollowUpContact,
@@ -242,13 +246,17 @@ def _audit(event: Event, before: int, after: int) -> ev.RecordAudit:
 def _intent(
     event: Event,
     version: int,
-    purpose: Literal["DANGER", "DONE:FULFILLMENT", "DEADLINE"],
+    purpose: Literal["DANGER", "DONE:FULFILLMENT", "DEADLINE", "routine_prompt"],
+    **fields: object,
 ) -> ev.EmitIntent:
-    return ev.EmitIntent(
-        purpose=purpose,
-        source_event_id=event.event_id,
-        source_version=version,
-        facts_ref=event.event_id,
+    return ev.EmitIntent.model_validate(
+        dict(
+            purpose=purpose,
+            source_event_id=event.event_id,
+            source_version=version,
+            facts_ref=event.event_id,
+        )
+        | fields
     )
 
 
@@ -356,7 +364,18 @@ def transition_mission(
 ) -> Outcome:
     if isinstance(event, AccountabilityWake):
         return _accountability_wake(mission, event, now, policy)
-    if type(event) not in LEGAL_TRANSITIONS[mission.state]:
+    historical_contact = (
+        isinstance(event, ev.ContactAccepted)
+        and event.accepted_at is not None
+        and (
+            mission.state in TERMINAL_STATES | {MissionState.blocked}
+            or (
+                mission.last_patient_reply_at is not None
+                and event.accepted_at <= mission.last_patient_reply_at
+            )
+        )
+    )
+    if not historical_contact and type(event) not in LEGAL_TRANSITIONS[mission.state]:
         return _illegal(mission, event)
     now = utc_instant(now)
     if now < mission.updated_at:
@@ -510,6 +529,12 @@ def transition_mission(
             timing_anchor=TimingAnchor(
                 kind="extension" if isinstance(event, ev.DoctorExtend) else "reopen", instant=now
             ),
+            timing_history=(
+                *mission.timing_history,
+                DeadlineHistory.model_validate(
+                    mission.model_dump(include=set(DeadlineHistory.model_fields))
+                ),
+            ),
             deadline_generation=mission.deadline_generation + 1,
             resume_at=None,
             next_contact_at=None,
@@ -614,14 +639,58 @@ def transition_mission(
             if event.predicate_result.satisfied
             else FulfillmentValidity.invalidated_pending_review
         )
+    elif isinstance(event, ev.ContactScheduled):
+        if event.emit and (
+            event.next_contact_at > now or (event.expires_at and event.expires_at <= now)
+        ):
+            return _reject(mission, event, "contact_not_due", "Contact is outside its send window.")
+        changes["next_contact_at"] = event.next_contact_at
+        if event.emit:
+            effects.append(
+                _intent(
+                    event,
+                    mission.version + 1,
+                    "routine_prompt",
+                    audience="patient",
+                    slot=event.slot_id,
+                    template_id=event.template_id,
+                    contact_kind=event.kind,
+                    expires_at=event.expires_at,
+                )
+            )
     elif isinstance(event, ev.ContactAccepted):
         changes.update(
-            state=MissionState.waiting_patient if active == MissionState.open else active,
+            state=mission.state
+            if historical_contact
+            else MissionState.waiting_patient
+            if active == MissionState.open
+            else active,
             contact_count=mission.contact_count + 1,
-            unanswered_delivered_count=mission.unanswered_delivered_count + 1,
+            unanswered_delivered_count=mission.unanswered_delivered_count
+            + (
+                event.kind == "chase"
+                and (
+                    mission.last_patient_reply_at is None
+                    or (event.accepted_at or now) > mission.last_patient_reply_at
+                )
+            ),
+            next_contact_at=mission.next_contact_at if historical_contact else None,
         )
+        if event.kind == "chase":
+            accepted = event.accepted_at or now
+            if accepted > now:
+                return _reject(
+                    mission,
+                    event,
+                    "future_contact",
+                    "Provider acceptance must not be in the future.",
+                )
+            changes.update(
+                first_chase_accepted_at=mission.first_chase_accepted_at or accepted,
+                last_chase_accepted_at=accepted,
+            )
     elif isinstance(event, ev.PatientReplied):
-        changes.update(state=active, unanswered_delivered_count=0)
+        changes.update(state=active, unanswered_delivered_count=0, last_patient_reply_at=now)
     elif isinstance(event, (ev.BarrierRecorded, ev.PauseContact)):
         if not now < event.resume_at <= now + policy.pause_max_interval:
             return _reject(
@@ -715,6 +784,13 @@ def transition_mission(
         effects.append(ev.SuppressRoutineIntents(reason=event.reason))
     else:
         return _illegal(mission, event)
+    if historical_contact:
+        updated = Mission.model_validate(
+            mission.model_dump() | changes | {"version": mission.version + 1, "updated_at": now}
+        )
+        return ev.TransitionResult(
+            aggregate=updated, effects=(_audit(event, mission.version, updated.version),)
+        )
     return _finish_mission(mission, event, now, policy, changes, effects)
 
 
@@ -776,6 +852,25 @@ def transition_followup(
             due_at=due,
             review_at=due,
             deadline_handled=False,
+        )
+    elif isinstance(event, ev.PromptScheduled):
+        if (
+            task.prompt_at is None
+            or now < task.prompt_at
+            or (event.expires_at and now >= event.expires_at)
+        ):
+            return _reject(task, event, "prompt_not_due", "Prompt is outside its send window.")
+        effects.append(
+            _intent(
+                event,
+                task.version + 1,
+                "routine_prompt",
+                audience="patient",
+                slot=event.slot_id,
+                template_id="patient_day3_prompt",
+                contact_kind="scheduled",
+                expires_at=event.expires_at,
+            )
         )
     elif isinstance(event, ev.PromptAccepted):
         if task.prompt_at is None or now < task.prompt_at:

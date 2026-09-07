@@ -52,6 +52,56 @@ ClinicalFact payloads and mission details are discriminated typed objects. A gen
 
 ## Identity, consent and patient records
 
+Contract 11c adds `NameMemory` in exact doctor `TenantScope` and clinic
+`AccountScope(bot_id=Doctor.telegram_bot_id)`: Latin name, generic identity,
+drug/test/finding kind, at most ten spoken forms, observed strengths, confirmation
+count, last confirmation time and source. IDs hash the scope partition, kind and normalized Latin
+name; doctor and clinic rows have distinct record identities. Doctor and clinic vocabulary updates are conditionally written alongside
+the confirmed card; replay cannot increment counts twice and an interrupted
+transaction cannot save the care plan without its name updates. Clinic rows
+contain vocabulary only, without patient or contributing-doctor identities.
+
+`NameCache` contains validated public RxNorm name/generic/strength results,
+hashed query identity and explicit 30-day expiry in a fixed tenant-independent
+account partition. Application reads enforce expiry; TTL is cleanup only.
+Neither cache nor memory constitutes a clinical order. The Scribe's narrow
+transaction guard permits only these named cross-partition vocabulary writes.
+`GET /api/names` returns only the signed-in doctor's memory.
+
+Dictation facts retain spoken `text`, fixed `clinical_kind` (input `kind`, with
+`clinical_kind` accepted for compatibility), and `terms` containing `spoken`,
+`english` and optional fixed `kind`. Code-built `NameReading` values carry the
+rendered fragments and verification results. An anchored, valid English pair is
+stored in `NameReading.latin` even without a vocabulary match; `verified=False`
+adds (؟) and the shared nonblocking term question. The doctor's tap teaches that
+displayed English value as `source=doctor_confirmation`. Mixed-kind terms split into
+separate fact payloads in source order. Confirmation retains the aligned terms
+beside each spoken fact and its prefix. Legacy `clinical_en` is never rendered.
+TEST lines use independently resolved spoken analytes; other mission text stays
+spoken. The original observation remains provenance. Finding memory keeps only
+displayed terminology, with numerical results stripped; its existing `latin`
+field may hold unchanged Arabic for a doctor-accepted fallback, solely for
+`kind=finding`. This teaches the wording the doctor saw without promoting an
+invisible English proposal. Drug and test vocabulary keep their Latin constraint.
+A correction keeps the proposal ID and increments its version, retains original
+patient/expiry, and rotates every callback. A pending reply-choice stores private
+source data until the doctor chooses correction or new patient. Superseded
+numeric fragments are tracked explicitly so answering a dose question does not
+create a new unassigned-number question for its old value.
+Corrections retain verified readings for undisputed drug identities while updating
+their dose observations. A full compound-dose answer retires its associated
+compressed source prefix even when the model had already proposed the blocked
+full dose. Unsupported order fields remain in the candidate and validation issues
+for review; presentation omits them from order lines and quotes them once as doubts.
+The code-owned `request_missing` ProposalIssue uses `item=all` and `blocked=True`
+when a transcript has a request cue but the merged candidate has no supported
+mission. It is persisted with the proposal, removes the confirm action and is
+rechecked by the existing whole-card confirmation guard. An unrelated reply
+retains the block through the original source; supplying the requested mission
+clears it on a new card version. No inferred mission is written. Redundant bare
+fact labels are removed before persistence; surviving readings and issue indices
+are remapped together and the original source remains in provenance.
+
 | Entity | Fields beyond common metadata / rules |
 |---|---|
 | Doctor | telegram_bot_id, telegram_user_id, private_chat_id, name, specialty, city, language, timezone, status (pending/approved/rejected/suspended/revoked), approved_by/at optional, auth_epoch, policy_version, clinical_policy_version optional, approval_reference optional |
@@ -88,7 +138,7 @@ Contract 10 adds `ReportFactPayload` to patient-released `ClinicalFact` values: 
 | Card | card_class (DANGER/DONE/DEADLINE/CONFIRM/QUESTION/INFO), source_event_id, source_version, review_obligation_ids, allowed_action_types with expected_versions, acknowledged_at optional, resolved_at optional, rendered_payload_ref, delivery_intent_ids; mutable presentation derived from immutable events and current obligations |
 | IntakeConcern | intake_id, unique_source_key, source_receipt/evidence_refs, rule_family/version, severity, facts_ref, state (open/associated/resolved), owner_doctor_id, review_obligation_id, associated_patient_id/event_id optional, prior_delivery_refs; doctor-private concern before patient association, independently timed through its ReviewObligation |
 | Incident | unique_source_key, observation/evidence_id and version, rule_family/version, severity, verified_status (unverified/verified), facts_ref, state (open/resolved), resolution_event_id optional, raised_at, review_obligation_id, alert_intent_ids; source dedupe does not suppress a later independent event |
-| BundleSchedule | doctor_id, next_action_at, last_provider_accepted_at optional, generation, pending_bundle_intent_id optional, interval_seconds (7 days by recorded policy), WorkClock; unresolved eligibility is queried from obligations and rechecked before send |
+| BundleSchedule | `src/sanad/store/records.py`: TenantScope, doctor_id, generation, next_action_at, last_provider_accepted_at optional, pending_intent_id optional, OperationalClock in the bundle lane; interval is the single draft ContactPolicy's 7 days. Unresolved eligibility is queried from obligations and rechecked before send |
 | ContactReservation | patient_id, local_day or explicit slot_id, budget_kind, source_intent_id, state (reserved/consumed/released), fence_generation, reserved_at, delivery_attempt_id optional; one atomic key owns each allowed budget slot |
 
 `Mission.review_status` is a **derived projection**, not another writable clinical decision: `not_required | pending | acknowledged | reviewed | correction_requested`. Pending/acknowledged/resolved ReviewObligations determine it; an open correction takes priority over older reviewed evidence. A done-looking execution card cannot hide open reviews.
@@ -108,7 +158,7 @@ Review source uniqueness is `(doctor, source_type, source_id, source_version, re
 | MEDICATION | action START/STOP/CHANGE, exact CareOrderVersion, patient-report predicate; START requires the patient explicitly reporting the confirmed action. It does not prove ingestion/adherence. For START, independently create MEDICATION_DAY3 on doctor confirmation, with an explicit anchor or awaiting_anchor state and required review clock. START acknowledgment anchors/preserves it. STOP/CHANGE create no automatic day-three task; only an explicitly doctor-requested CLINICAL_CHECKIN adds follow-up. |
 | SEND_RECORDS | categories, historical period optional, required document count/completeness; correct readable historical documents fulfill without the TEST post-order date rule. |
 | VISIT | requested/booking/attendance/report objective chosen explicitly, requested date/window, approved preparation optional, pre_visit_brief_at if enabled; a booking report is not attendance. |
-| QUESTION | patient's original question, source observation, owner doctor, due_at=created_at+48 hours, zero default grace; automatically opened support ticket, not a treatment order; answer command fulfills. |
+| QUESTION | patient's original question, source observation, owner doctor, due_at=(created_at+48 hours) snapped to the default local clock on that date (11b draft), zero default grace; automatically opened support ticket, not a treatment order; answer command fulfills. |
 | TASK | supported task category, exact doctor instruction, measurable completion/report predicate, required patient response, optional approved symptom/self-care/preparation questions. Unsupported clinical actions stay proposed with timed clarification. |
 
 A generic task cannot execute arbitrary model-generated code or substitute for an unsupported treatment. Symptom checks, self-care/preparation and administrative requests remain required supported workflows when explicitly doctor-defined and validated by the clinical policy.
@@ -123,14 +173,15 @@ Aliases used in the table: A = open/waiting_patient/blocked/unreachable/overdue;
 
 The mission event enum is:
 
-`PROPOSAL_CREATED`, `CONFIRM_MISSION`, `CREATE_SUPPORT_TICKET`, `PATIENT_BOUND`, `CONTACT_ACCEPTED`, `PATIENT_REPLIED`, `BARRIER_RECORDED`, `BARRIER_RESOLVED`, `CONTACT_EXHAUSTED`, `PAUSE_CONTACT`, `RESUME_CONTACT`, `DEADLINE_REACHED`, `OBJECTIVE_FULFILLED`, `DOCTOR_EXTEND`, `DOCTOR_CANCEL`, `DOCTOR_CLOSE_UNFULFILLED`, `DOCTOR_REOPEN`, `ORDER_SUPERSEDED`, `CORRECT_ACCEPTED_EVIDENCE`, `VALIDATE_CORRECTION`, `LATE_INPUT_RECORDED`, `EVIDENCE_ASSOCIATED`, `REVIEW_ACKNOWLEDGED`, `REVIEW_RESOLVED`, `SAFETY_INCIDENT_RAISED`, `CONTACT_PREFERENCE_CHANGED`.
+`PROPOSAL_CREATED`, `CONFIRM_MISSION`, `CREATE_SUPPORT_TICKET`, `PATIENT_BOUND`, `CONTACT_SCHEDULED`, `CONTACT_ACCEPTED`, `PATIENT_REPLIED`, `BARRIER_RECORDED`, `BARRIER_RESOLVED`, `CONTACT_EXHAUSTED`, `PAUSE_CONTACT`, `RESUME_CONTACT`, `DEADLINE_REACHED`, `OBJECTIVE_FULFILLED`, `DOCTOR_EXTEND`, `DOCTOR_CANCEL`, `DOCTOR_CLOSE_UNFULFILLED`, `DOCTOR_REOPEN`, `ORDER_SUPERSEDED`, `CORRECT_ACCEPTED_EVIDENCE`, `VALIDATE_CORRECTION`, `LATE_INPUT_RECORDED`, `EVIDENCE_ASSOCIATED`, `REVIEW_ACKNOWLEDGED`, `REVIEW_RESOLVED`, `SAFETY_INCIDENT_RAISED`, `CONTACT_PREFERENCE_CHANGED`.
 
 | Event | Allowed source | Result and guard |
 |---|---|---|
 | PROPOSAL_CREATED | creation only | proposed with administrative review clock; unconfirmed clinical fields remain candidates |
 | CONFIRM_MISSION | proposed | open when consented binding is active, else awaiting_link; only doctor-authorized, complete valid instructions; establish immutable confirmed_at and order refs |
-| CREATE_SUPPORT_TICKET | creation only | open QUESTION from authenticated patient lane, no doctor tap; create linked question-answer obligation, 48-hour due, no treatment order |
+| CREATE_SUPPORT_TICKET | creation only | open QUESTION from authenticated patient lane, no doctor tap; create linked question-answer obligation, 48-hour default offset at the policy local clock, no treatment order |
 | PATIENT_BOUND | awaiting_link/overdue | from awaiting_link: open before escalation_at, otherwise overdue; from overdue: remain overdue while activating the confirmed binding. Preserve due time and outstanding deadline review; consent/binding proof required. Repeated binding is idempotent, never an implicit extension |
+| CONTACT_SCHEDULED | open/waiting_patient | State preserving; set next_contact_at, slot_id, template_id and kind (chase/scheduled). Emit a routine_prompt to the patient only when emit=True and next_contact_at <= now; a future event only arms work. Clinical instants are unchanged. |
 | CONTACT_ACCEPTED | open/waiting_patient/unreachable/overdue | waiting_patient if not overdue, else overdue; count only a provider-accepted permitted contact, never queued/uncertain output |
 | PATIENT_REPLIED | A | open if before escalation_at, else overdue; reset relevant unanswered sequence only; raw reply alone never fulfills |
 | BARRIER_RECORDED | A | blocked before escalation, otherwise overdue with barrier; set reason/resume_at within policy and preserve due_at |
@@ -155,7 +206,16 @@ The mission event enum is:
 
 Event effects are one command transaction when they touch current truth. Incident persistence happens independently before any optional mission annotation; `danger_history` safety guard also queries linked incident records so a delayed projection cannot permit unsafe close. For an overdue mission whose evidence is later verified, OBJECTIVE_FULFILLED records receipt-based timeliness separately from fulfillment time; delayed processing alone never proves late patient submission.
 
-FollowUpTask events are CONFIRM_FOLLOWUP, ANCHOR_CONFIRMED, PROMPT_ACCEPTED, RESPONSE_RECEIVED, FOLLOWUP_DEADLINE, SUPPRESS_FOLLOWUP_CONTACT, CANCEL_FOLLOWUP. Confirmation creates awaiting_anchor when actual start/change date is unknown, otherwise scheduled from the explicit doctor date. ANCHOR_CONFIRMED records the patient-reported effective date or doctor-approved date and schedules the independent task. Scheduled → waiting_response only after accepted prompt; valid response → fulfilled plus a DONE:FULFILLMENT intent (merged into a same-source DANGER when danger rules apply); deadline → overdue plus review and a DEADLINE notice; suppression → contact_suppressed plus timed disposition; explicit cancellation → cancelled while existing clinical/incident reviews survive. No parent mission terminal state performs these transitions automatically.
+FollowUpTask events are CONFIRM_FOLLOWUP, ANCHOR_CONFIRMED, PROMPT_SCHEDULED, PROMPT_ACCEPTED, RESPONSE_RECEIVED, FOLLOWUP_DEADLINE, SUPPRESS_FOLLOWUP_CONTACT, CANCEL_FOLLOWUP. Confirmation creates awaiting_anchor when actual start/change date is unknown, otherwise scheduled from the explicit doctor date. ANCHOR_CONFIRMED records the patient-reported effective date or doctor-approved date and schedules the independent task. Scheduled → waiting_response only after accepted prompt; valid response → fulfilled plus a DONE:FULFILLMENT intent (merged into a same-source DANGER when danger rules apply); deadline → overdue plus review and a DEADLINE notice; suppression → contact_suppressed plus timed disposition; explicit cancellation → cancelled while existing clinical/incident reviews survive. No parent mission terminal state performs these transitions automatically.
+
+| Follow-up event | Allowed source | Result and guard |
+|---|---|---|
+| PROMPT_SCHEDULED | scheduled | State preserving at or after prompt_at; emit patient_day3_prompt to the explicit slot. Never count delivery or change prompt_at/due_at. |
+| PROMPT_ACCEPTED | scheduled | waiting_response only on provider acceptance; queued or uncertain prompts count nothing. |
+
+DoctorExtend appends the prior explicit/inferred deadline and its original source, reason, anchor, expression, zone and policy to Mission.timing_history before applying the new doctor time, preserving provenance across long-horizon restarts.
+
+Contract 11 persists Mission.last_patient_reply_at, first_chase_accepted_at and last_chase_accepted_at and PatientProfile.last_chase_accepted_at. ContactAccepted carries the provider acceptance instant and chase/scheduled kind; delayed feedback for an already accepted send updates contact counters while preserving a later terminal or blocked execution state and any subsequent patient reply. Accepted patient turns apply the existing PatientReplied event to remaining active missions, resetting unanswered counts without fulfillment; scheduled MONITOR prompts count delivered contact but cannot exhaust the chase ladder. ContactScheduled carries an explicit emit flag and expiry; future planning does not emit. The scheduler exposes a typed ineligibility reason separately from the optional ContactPlan. Its operational projections and missed-window audit never edit clinical instants. Computed local contact times use the later valid instant for a DST fold/gap; explicit doctor timing continues to reject ambiguous local input. Confirmation and intended-person binding prime discovery work without moving clinical deadlines. Existing monitor consent IDs from contract 10 remain recognized alongside the canonical monitor:<mission>:<index> IDs.
 
 Review events are CREATE_REVIEW, ACKNOWLEDGE_REVIEW, RESOLVE_REVIEW, BLOCK_COVERAGE, RESTORE_COVERAGE, MATERIAL_CHANGE. Acknowledge preserves open responsibility; only an authorized resolution with the required source versions/reason ends it. Superseding a reviewed source creates a fresh obligation when needed.
 
@@ -167,6 +227,13 @@ At escalation_at, an unverified on-time candidate cannot prove fulfillment. The 
 
 ## Clock calculations
 
+Contract 11b draft policy (`OWNER_REVIEW_PENDING`): type-default deadlines use
+`DoctorTimingPolicy.default_deadline_local_time="10:00"`. Calculate anchor plus
+the type offset, take that date in the policy timezone, then resolve 10:00 on
+that date through `local_to_utc`. Computed folds/gaps choose the later valid
+instant. Scribe proposals and explicit doctor instants retain their full
+precision. Grace is still added to the resulting due instant.
+
 `due_at` is the objective target. `escalation_at = due_at + grace_seconds`; reconciled default grace is zero for every type. A doctor-configured nonzero grace is explicit on the confirmation card. Inferred-only bounds of 1–180 days validate timing candidates, never clamp explicit clinical instructions. Original local time/anchor/source/reason is retained. Invalid explicit or clinically incomplete instructions ask on the existing card; no guessed dose/duration.
 
 `review_at` is the administrative accountability deadline; it is not a new prescribed test/medication date. Proposed, awaiting-link, blocked and unreachable states all retain it. `resume_at` is a bounded proposed contact pause ending, never a replacement due time. ReviewObligation.review_at is independent of Mission.review_at: a result review is due at fulfilled_at plus the approved result-review interval (proposed three days), never three days after the original draft. It remains visible after execution ends.
@@ -175,7 +242,9 @@ For each nonterminal mission, `next_action_at = min(eligible next_contact_at, du
 
 Independent records contribute separate due-index entries: each ReviewObligation, FollowUpTask, BundleSchedule, receipt, media job and outbox item. Their clocks do not depend on a terminal mission retaining a wake. The day-three anchor rule is printed on confirmation: use the reported effective start/change date, or an explicit doctor date. Plan confirmation time is never evidence the patient started. Awaiting-anchor tasks retain review_at and next_action_at, ask for the missing date and create disposition if unanswered. Once anchored, prompt_at is anchor plus three days; a later correction requires an explicit source/version update and revalidation. The response window and clinical policy are separately approved defaults.
 
-Bundle eligibility starts seven days after the first accepted DEADLINE notice for an unresolved item. One per-doctor BundleSchedule collects eligible items and sends at most one accepted weekly bundle. Only accepted delivery advances last_provider_accepted_at; uncertain delivery takes the bounded uncertainty/review path. Each candidate obligation is re-read, with resolved items omitted. An empty bundle clears its current due work; a new eligible obligation re-arms it transactionally.
+Bundle eligibility starts seven days after the first accepted DEADLINE notice for an unresolved item. One per-doctor BundleSchedule collects eligible items and sends at most one accepted weekly bundle. Only accepted delivery advances last_provider_accepted_at; uncertain delivery takes the bounded uncertainty/review path. A doctor-bundle delivery failure uses a tenant-owned, patient-unassigned delivery_failure ReviewObligation with source_type=outbound_intent; its review clock re-arms through the same pure review transition. A provably suppressed generation is retired before new work uses another logical key, without changing the last accepted interval. Each candidate obligation is re-read, with resolved items omitted. An empty bundle clears its current due work; a new eligible obligation re-arms it transactionally.
+
+OutboundIntent.contact_feedback is not_applicable, pending or applied. Mission/follow-up routine prompts start pending; provider acceptance retains a delivery clock until the idempotent contact:<intent_id> Steward command and conditional feedback marker complete. Recovery never sends accepted intents again. DeliveryResolution can carry an exact-version obligation stamp and a guarded BundleSchedule revision alongside the accepted attempt; a stamp conflict is re-read once and durable recovery retains acceptance if contention persists.
 
 ReviewObligation `first_notice_at` records provider acceptance, not queuing or acknowledgment. Its original `review_at` remains unchanged for overdue visibility; after each handled review wake, `next_action_at` becomes the next policy accountability check or material-change work time. Routine rechecks do not re-ring individual cards. BundleSchedule handles the approved weekly message; incident response retains its own earlier policy clock. A fulfilled or contact-suppressed follow-up may drop its execution clock only when any required unresolved review is durably linked and independently scheduled in the same transaction.
 
@@ -206,6 +275,7 @@ OutboundIntent has common delivery metadata plus a discriminated `scope_kind` an
 | Variant | Required authority/freshness fields and guard |
 |---|---|
 | account → applicant/admin/doctor | bot_id, recipient_subject, application/account source version, recipient role/status and auth_epoch when an approved account exists. Application acknowledgments may reach the verified pending applicant; approval actions still need current admin authority. No patient fields or clinical payload |
+| doctor → owning doctor bundle | TenantScope only; approved doctor, configured bot, private chat and recipient auth epoch; DEADLINE/bundle purpose, generation-bound logical key, no patient authority fields. Re-read unresolved obligations with first_notice_at at least seven days old; suppress bundle_empty when none remain. Render payload from those reads at send time. |
 | intake → owning doctor | doctor_id, intake_id, intake_safety_epoch, current approved-doctor auth_epoch, source concern/proposal versions. No patient_id, patient binding, consent or order is invented |
 | patient → owning doctor | doctor_id, patient_id, approved recipient-doctor auth_epoch, authoritative patient ownership, source mission/evidence/review versions and purpose-specific predicates. Patient opt-out, missing binding or cancelled mission cannot suppress valid doctor accountability; patient-only routine consent is not a prerequisite |
 | patient → patient routine | doctor_id/patient_id, active recipient PatientBinding+epoch, current doctor coverage/status, consent_version, patient delivery/safety epochs, active order refs and relevant mission/follow-up/evidence versions, valid slot/expiry. Stop or stale instruction suppresses the send |

@@ -10,13 +10,21 @@ from pydantic import Field
 from sanad.agents.hygiene import clean_text
 from sanad.domain import AudioSpan, Provenance
 from sanad.domain.boundaries import _BoundaryValue
-from sanad.media.audio import AudioConverter, ConversionFailure
+from sanad.media.audio import (
+    CONVERSION_TIMEOUT,
+    PROBE_TIMEOUT,
+    AudioConverter,
+    ConversionFailure,
+    ConvertedAudio,
+)
 from sanad.media.numbers import number_mentions, numbers_in
 from sanad.media.numbers import unsupported_numbers as unsupported_numbers
 from sanad.models.io import CallMetadata, ModelCaller, ModelUnavailable
 from sanad.models.registry import ModelRegistry
+from sanad.models.timeouts import TRANSCRIPTION_TIMEOUT as TRANSCRIPTION_TIMEOUT
+from sanad.scribe.names import known_names
 
-PROMPT_VERSION: Literal["egyptian-verbatim-numbers-v3"] = "egyptian-verbatim-numbers-v3"
+PROMPT_VERSION: Literal["egyptian-verbatim-numbers-v4"] = "egyptian-verbatim-numbers-v4"
 # Reproduces the bilingual instruction constraints recorded in experiments.md.
 VERBATIM_PROMPT = (
     "فرّغ التسجيل حرفياً بنفس اللهجة المصرية ونفس الكلمات. لا تترجم للفصحى، ولا تلخّص، "
@@ -26,7 +34,13 @@ VERBATIM_PROMPT = (
     "Write numbers as digits. "
     "Then on a final line starting with NUMBERS: list every number you heard, in order, "
     "each followed by the word spoken right after it."
+    "\n\nNames that may be spoken (drugs, tests, findings); write them exactly like this "
+    "when you hear them: " + known_names()
 )
+
+
+def vocabulary_prompt(names: str) -> str:
+    return VERBATIM_PROMPT.rsplit("when you hear them: ", 1)[0] + "when you hear them: " + names
 
 
 class Transcript(_BoundaryValue):
@@ -34,7 +48,7 @@ class Transcript(_BoundaryValue):
     spans: tuple[AudioSpan, ...]
     duration: float
     model_id: str
-    prompt_version: Literal["egyptian-verbatim-numbers-v3"] = PROMPT_VERSION
+    prompt_version: Literal["egyptian-verbatim-numbers-v4"] = PROMPT_VERSION
     numbers: tuple[str, ...] = Field(repr=False)
     numbers_line: Literal["parsed", "missing", "malformed"]
     heard_numbers: tuple[str, ...] = Field(repr=False)
@@ -54,27 +68,16 @@ class TranscriptFailure(_BoundaryValue):
 def split_transcript(
     reply: str,
 ) -> tuple[str, tuple[str, ...], Literal["parsed", "missing", "malformed"]]:
-    """Only the last standalone NUMBERS line is metadata; prior content stays source."""
-    markers = list(re.finditer(r"(?m)^[ \t]*NUMBERS:[ \t]*([^\r\n]*)", reply))
+    """Only the last NUMBERS marker is metadata; prior content stays source."""
+    markers = list(re.finditer(r"NUMBERS:", reply))
     if not markers:
         return clean_text(reply), (), "missing"
     marker = markers[-1]
     text = clean_text(reply[: marker.start()])
-    if reply[marker.end() :].strip():
-        return text, (), "malformed"
-    line = marker[1].strip()
-    heard = number_mentions(line)
-    if not heard and line.lower() not in {
-        "none",
-        "none.",
-        "[]",
-        "لا يوجد",
-        "لا توجد",
-        "لا توجد أرقام",
-        "لا يوجد أرقام",
-    }:
-        return text, (), "malformed"
-    return text, heard, "parsed"
+    # V4 permits arbitrary annotations and separators across the whole remainder.
+    # Strip following words, keeping canonical numeric tokens, ranges and repeats.
+    heard = tuple(numbers_in(n)[0] for n in number_mentions(reply[marker.end() :]))
+    return text, heard, "parsed" if heard else "malformed"
 
 
 @dataclass
@@ -83,6 +86,7 @@ class SpeechAdapter:
     converter: AudioConverter
     source: Provenance
     registry: ModelRegistry = ModelRegistry()
+    vocabulary_hint: str | None = None
 
     async def transcribe(
         self,
@@ -94,19 +98,33 @@ class SpeechAdapter:
         if expected_language not in {"ar-EG", "ar", "en"}:
             return TranscriptFailure(reason="unsupported_language")
         try:
-            async with asyncio.timeout(20):
+            async with asyncio.timeout(PROBE_TIMEOUT + CONVERSION_TIMEOUT):
                 converted = await asyncio.to_thread(self.converter.convert, audio, fmt)
         except Exception:
             return TranscriptFailure(reason="conversion_failed")
         if isinstance(converted, ConversionFailure):
             return TranscriptFailure(reason=converted.reason)
-        response = await self.caller.call(
-            self.registry.speech,
-            [
-                {"audio": {"format": "mp3", "source": {"bytes": converted.data}}},
-                {"text": VERBATIM_PROMPT},
-            ],
-        )
+        return await self.transcribe_converted(converted)
+
+    async def transcribe_converted(
+        self, converted: ConvertedAudio
+    ) -> Transcript | TranscriptFailure:
+        """Internal path for media already normalized and persisted by the retriever."""
+        try:
+            async with asyncio.timeout(TRANSCRIPTION_TIMEOUT):
+                response = await self.caller.call(
+                    self.registry.speech,
+                    [
+                        {"audio": {"format": "mp3", "source": {"bytes": converted.data}}},
+                        {
+                            "text": vocabulary_prompt(self.vocabulary_hint)
+                            if self.vocabulary_hint is not None
+                            else VERBATIM_PROMPT
+                        },
+                    ],
+                )
+        except TimeoutError:
+            return TranscriptFailure(reason="timeout")
         if isinstance(response, ModelUnavailable):
             return TranscriptFailure(reason=response.reason, metadata=response.metadata)
         cleaned = clean_text(response.text)

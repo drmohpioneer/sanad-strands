@@ -18,6 +18,7 @@ from sanad.domain import (
     create_review,
 )
 from sanad.domain.operations import transition_operational_clock
+from sanad.media.storage import MediaStore
 from sanad.steward.service import Steward
 from sanad.steward.types import StewardPolicy
 from sanad.store.keys import AccountScope, IntakeScope, ScopedKey
@@ -41,6 +42,10 @@ def freshness(
     store: Store, intent: OutboundIntent, now: datetime, *, settings: IdentityConfig | None = None
 ) -> str | None:
     scope = intent.scope
+    if intent.scope_kind == "doctor":
+        from sanad.contact.bundle import freshness as bundle_freshness
+
+        return bundle_freshness(store, intent, now, settings)
     if intent.scope_kind == "account":
         return account_freshness(store, intent, now, settings)
     if intent.scope_kind == "intake" and isinstance(scope, IntakeScope):
@@ -66,7 +71,7 @@ def freshness(
             row = store.get(scope, ref.entity_type, ref.id)
             if row is None or row.version != ref.version:
                 return "source_version"
-            if intent.template_id == "scribe_card" and (
+            if intent.template_id in {"scribe_card", "scribe_photo_column"} and (
                 row.body.get("status") != "pending" or row.body.get("editing")
             ):
                 return "proposal_not_pending"
@@ -191,6 +196,10 @@ def freshness(
         return "safety_template_or_incident_missing"
     if intent.notification_purpose == "routine_prompt" and intent.slot_id is None:
         return "slot_required"
+    if intent.notification_purpose == "routine_prompt" and intent.contact_kind:
+        from sanad.contact.delivery import contact_freshness
+
+        return contact_freshness(store, intent, now)
     return None
 
 
@@ -214,7 +223,11 @@ def transition_delivery(
             status="provider_accepted",
             accepted_message_id=outcome.provider_message_id,
             accepted_at=now,
-            work_clock=None,
+            work_clock=OperationalClock(
+                work_lane="delivery", next_action_at=now + policy.operations.retry_backoff(1)
+            )
+            if intent.contact_feedback == "pending"
+            else None,
         )
     elif outcome.status == "uncertain":
         count = intent.uncertain_retry_count + 1
@@ -307,6 +320,22 @@ def transition_delivery(
         )
         changes.update(review_obligation_id=result.aggregate.id, work_clock=None)
         reviews = (to_record(result.aggregate, intent.scope),)
+    if review_needed and type(intent.scope) is TenantScope:
+        result = create_review(
+            CreateReview(
+                event_id="delivery:" + (intent.active_attempt_id or intent.id),
+                source_type="outbound_intent",
+                source_id=intent.id,
+                source_version=intent.version + 1,
+                review_kind=ReviewKind.delivery_failure,
+                owner_doctor_id=intent.scope.doctor_id,
+                review_at=now + policy.timing.result_review_interval,
+            ),
+            now,
+            policy.timing,
+        )
+        changes.update(review_obligation_id=result.aggregate.id, work_clock=None)
+        reviews = (to_record(result.aggregate, intent.scope),)
     return OutboundIntent.model_validate(intent.model_dump() | changes), reviews
 
 
@@ -319,10 +348,12 @@ class Dispatcher:
         settings: IdentityConfig | None = None,
         payload_resolver: Callable[[OutboundIntent], dict[str, JsonValue]] | None = None,
         extra_freshness: Callable[[OutboundIntent, datetime], str | None] | None = None,
+        media_store: MediaStore | None = None,
     ):
         self.steward, self.store, self.transport = steward, steward.store, transport
         self.settings, self.payload_resolver = settings, payload_resolver
         self.extra_freshness = extra_freshness
+        self.media_store = media_store
 
     def dispatch_one(
         self, intent_key: ScopedKey, owner: str, now: datetime
@@ -332,22 +363,37 @@ class Dispatcher:
         if row is None or row.key != intent_key.key:
             return None
         intent = from_record(row, OutboundIntent)
-        if not isinstance(scope, (PatientScope, AccountScope, IntakeScope)):
+        if not isinstance(scope, (PatientScope, AccountScope, IntakeScope, TenantScope)):
             # Such records are accepted by the passive store; no authority adapter is released here.
             return None
         if intent.work_clock is None or intent.work_clock.next_action_at > now:
             return intent
-        if intent.template_id == "scribe_card" and intent.conversation_sequence:
+        if intent.status == "provider_accepted":
+            from sanad.contact.bundle import recover_notice
+            from sanad.contact.feedback import apply
+
+            if intent.contact_feedback == "pending":
+                return apply(self.steward, intent)
+            if intent.notice_feedback_pending:
+                return recover_notice(self.steward, intent)
+            return intent
+        if (
+            intent.template_id in {"scribe_card", "scribe_photo_column"}
+            and intent.conversation_sequence
+        ):
             from sanad.steward.types import records
 
             earlier = [
                 from_record(r, OutboundIntent)
                 for r in records(self.store, scope, "outbound_intent")
                 if r.body.get("source_event_ids") == list(intent.source_event_ids)
-                and r.body.get("template_id") == intent.template_id
+                and r.body.get("template_id") in {"scribe_card", "scribe_photo_column"}
                 and int(str(r.body.get("conversation_sequence", 0))) < intent.conversation_sequence
             ]
-            if any(i.status != "provider_accepted" for i in earlier):
+            if (
+                any(i.status != "provider_accepted" for i in earlier)
+                and self._freshness(intent, now) is None
+            ):
                 return intent
         policy = self._policy(intent)
         if intent.status == "uncertain":
@@ -393,6 +439,8 @@ class Dispatcher:
         if attempt is None:
             if intent.status == "uncertain" and intent.work_clock is not None:
                 return self._finish(intent, SendOutcome(status="uncertain"), now)
+            if intent.status == "suppressed":
+                self._reschedule_contact(intent)
             return intent
         reason = self._freshness(intent, self.steward.clock())
         if reason is not None:
@@ -438,23 +486,117 @@ class Dispatcher:
             return self._finish(
                 current, SendOutcome(status="uncertain"), at, suppression=reason, unsent=True
             )
+        from sanad.contact.bundle import payload as bundle_payload
+        from sanad.contact.delivery import doctor_payload
+        from sanad.contact.delivery import payload as contact_payload
+
+        resolved = (
+            bundle_payload(self.store, current, at)
+            if current.scope_kind == "doctor"
+            else contact_payload(self.store, current)
+            if current.contact_kind
+            else doctor_payload(self.store, current)
+            if current.audience == "doctor"
+            and isinstance(current.scope, PatientScope)
+            and current.notification_purpose in {"DONE:FULFILLMENT", "DEADLINE"}
+            and current.payload is None
+            and self.payload_resolver is not None
+            else current.payload
+            if current.payload is not None
+            else self.payload_resolver(current)
+            if self.payload_resolver
+            else None
+        )
+        photo: bytes | None = None
+        if current.template_id == "scribe_photo_column":
+            from sanad.scribe.photo_delivery import load_crop
+
+            try:
+                if self.media_store is None:
+                    raise ValueError("media_unavailable")
+                photo = load_crop(self.store, self.media_store, current)
+            except Exception:
+                return self._finish(
+                    current,
+                    SendOutcome(status="failed", retryable=True, code="photo_unavailable"),
+                    self.steward.clock(),
+                    unsent=True,
+                )
+            # Blob IO can outlive a delivery lease or race a replacement worker.
+            row_after_blob = self.store.get(scope, "outbound_intent", current.id)
+            latest_after_blob = (
+                from_record(row_after_blob, OutboundIntent) if row_after_blob else None
+            )
+            if (
+                latest_after_blob is None
+                or latest_after_blob.status != "sending"
+                or (
+                    latest_after_blob.active_attempt_id != attempt.id
+                    or latest_after_blob.delivery_claim is None
+                    or latest_after_blob.delivery_claim.expires_at <= self.steward.clock()
+                )
+            ):
+                return latest_after_blob
+        # Payload rendering re-reads obligations/orders. Revalidate after these reads as well.
+        reason = self._freshness(current, self.steward.clock())
+        if reason:
+            return self._finish(
+                current,
+                SendOutcome(status="uncertain"),
+                self.steward.clock(),
+                suppression=reason,
+                unsent=True,
+            )
+        if current.scope_kind == "doctor":
+            from sanad.contact.bundle import eligible, payload_snapshot
+            from sanad.store.records import model_scope
+
+            assert type(current.scope) is TenantScope
+            for _ in range(2):
+                resolved, basis = payload_snapshot(self.store, current, self.steward.clock())
+                reason = self._freshness(current, self.steward.clock())
+                if reason:
+                    return self._finish(
+                        current,
+                        SendOutcome(status="uncertain"),
+                        self.steward.clock(),
+                        suppression=reason,
+                        unsent=True,
+                    )
+                latest_refs = tuple(
+                    to_record(r, model_scope(r)).ref
+                    for r in eligible(self.store, current.scope, self.steward.clock())
+                )
+                if basis == latest_refs:
+                    break
+            else:
+                return self._finish(
+                    current,
+                    SendOutcome(status="failed", retryable=True, code="bundle_changed"),
+                    self.steward.clock(),
+                    unsent=True,
+                )
         unsent = False
         try:
-            outcome = self.transport.send(
-                current.recipient_ref,
-                current.payload
-                if current.payload is not None
-                else self.payload_resolver(current)
-                if self.payload_resolver
-                else {
-                    "purpose": current.notification_purpose,
-                    "payload_ref": current.payload_ref,
-                    "template_id": current.template_id,
-                    "logical_key": current.logical_key,
-                    "source_event_ids": list(current.source_event_ids),
-                    "same_incident_resend": current.notification_purpose == "DANGER"
-                    and current.uncertain_retry_count > 0,
-                },
+            outcome = (
+                self.transport.send_photo(
+                    current.recipient_ref, photo, str((resolved or {}).get("text", ""))
+                )
+                if photo is not None
+                else self.transport.send(
+                    current.recipient_ref,
+                    resolved
+                    if resolved is not None
+                    else {
+                        "purpose": current.notification_purpose,
+                        "payload_ref": current.payload_ref,
+                        "template_id": current.template_id,
+                        "logical_key": current.logical_key,
+                        "source_event_ids": list(current.source_event_ids),
+                        "same_incident_resend": current.notification_purpose == "DANGER"
+                        and current.uncertain_retry_count > 0,
+                    },
+                )
             )
         except ProvablyUnsent:
             outcome, unsent = (
@@ -500,17 +642,60 @@ class Dispatcher:
             "failed": "definite_failure",
         }
         state: DeliveryOutcome = "suppressed" if suppression else outcomes[outcome.status]
-        row = self.store.complete_delivery(
-            intent.active_attempt_id or "",
-            state,
-            outcome.provider_message_id,
-            scope=intent.scope,
-            resolution=DeliveryResolution(
-                intent=to_record(changed, intent.scope), reviews=reviews, release_reservation=unsent
-            ),
-        )
+        from sanad.contact.bundle import accepted_schedule, stamp
+
+        row = None
+        for attempt in range(3):
+            fields = (
+                (
+                    accepted_schedule(self.store, changed, now)
+                    if changed.scope_kind == "doctor"
+                    else stamp(self.store, changed, now)
+                )
+                if state == "provider_accepted"
+                else {}
+            )
+            if attempt == 2 and fields:
+                # Preserve acceptance under contention; the delivery sweep retries the stamp.
+                changed = changed.model_copy(
+                    update={
+                        "notice_feedback_pending": True,
+                        "work_clock": OperationalClock(
+                            work_lane="delivery",
+                            next_action_at=now + self._policy(intent).operations.retry_backoff(1),
+                        ),
+                    }
+                )
+                fields = {}
+            row = self.store.complete_delivery(
+                intent.active_attempt_id or "",
+                state,
+                outcome.provider_message_id,
+                scope=intent.scope,
+                resolution=DeliveryResolution.model_validate(
+                    {
+                        "intent": to_record(changed, intent.scope),
+                        "reviews": reviews,
+                        "release_reservation": unsent,
+                        **fields,
+                    }
+                ),
+            )
+            if row is not None or state != "provider_accepted":
+                break
         if row is not None:
-            return from_record(row, OutboundIntent)
+            finished = from_record(row, OutboundIntent)
+            if finished.status == "provider_accepted" and finished.contact_feedback == "pending":
+                from sanad.contact.feedback import apply
+
+                return apply(self.steward, finished)
+            if (
+                finished.notification_purpose == "routine_prompt"
+                and finished.contact_kind
+                and finished.status in {"suppressed", "uncertain", "failed"}
+            ):
+                self._reschedule_contact(finished)
+            return finished
         # A send can outlive its lease. Persisted attempt-start remains uncertain.
         saved = self.store.get(intent.scope, "outbound_intent", intent.id)
         if saved is not None:
@@ -523,6 +708,17 @@ class Dispatcher:
             )
             saved = self.store.get(intent.scope, "outbound_intent", intent.id)
         return from_record(saved, OutboundIntent) if saved else None
+
+    def _reschedule_contact(self, intent: OutboundIntent) -> None:
+        if intent.notification_purpose != "routine_prompt" or not intent.contact_kind:
+            return
+        from sanad.contact.scheduler import schedule
+
+        for ref in intent.source_versions:
+            if ref.entity_type in {"mission", "followup"}:
+                source = self.store.get(intent.scope, ref.entity_type, ref.id)
+                if source:
+                    schedule(self.steward, source)
 
 
 def _intent_id(key: ScopedKey) -> str:

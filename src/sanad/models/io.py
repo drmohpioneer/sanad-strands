@@ -10,6 +10,7 @@ from typing import Any, Literal, Protocol
 from pydantic import Field
 
 from sanad.domain.boundaries import NonnegativeInt, _BoundaryValue
+from sanad.models.timeouts import TRANSCRIPTION_TIMEOUT
 
 CALL_TIMEOUT = 25.0
 
@@ -69,8 +70,8 @@ class BedrockCaller:
     timeout: float = CALL_TIMEOUT
 
     def __post_init__(self) -> None:
-        if not 0 < self.timeout <= CALL_TIMEOUT:
-            raise ValueError("provider timeout must be within 25 seconds")
+        if not 0 < self.timeout <= TRANSCRIPTION_TIMEOUT:
+            raise ValueError("provider timeout must be within 30 seconds")
         private_provider_logs()
 
     async def call(

@@ -51,10 +51,9 @@ def test_callback_refusals_are_neutral_and_change_no_account_state(
     assert CallbackRefused.model_validate_json(result.model_dump_json()) == result
     assert accounts.post(callback(raw, actor.subject, id=99)).status_code == 200
     assert accounts.transport.callback_calls[-1].text == wording.render("callback_refused")
-    assert (
-        accounts.runtime.accounts.application(app.id) == before
-        and accounts.intents() == intents_before
-    )
+    assert accounts.runtime.accounts.application(app.id) == before and [
+        (i.id, i.payload, i.source_versions) for i in accounts.intents()
+    ] == [(i.id, i.payload, i.source_versions) for i in intents_before]
     assert raw not in accounts.receipt(99).model_dump_json()
 
 

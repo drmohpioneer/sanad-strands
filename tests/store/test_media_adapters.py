@@ -137,7 +137,7 @@ def test_media_fetch_normalize_then_pending_extraction(store: StoreBase, clock: 
     assert isinstance(result, StoredMedia)
     saved = work(world, receipt_id)
     assert saved.state == "pending" and saved.stage == "extract" and saved.work_clock is not None
-    assert saved.source_blob_ref == saved.normalized_blob_ref
+    assert saved.source_blob_ref != saved.normalized_blob_ref
     assert saved.work_clock.next_action_at > clock()
     assert store.get(OTHER, "media_work", saved.id) is None
     assert not store.list_records(SCOPE, "care_order")[0][0].body.get("model_id")

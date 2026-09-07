@@ -11,6 +11,7 @@ from sanad.domain.operations import OperationalClock
 from sanad.scribe.amend import OrderChange
 from sanad.scribe.crosscheck import PhotoReview
 from sanad.scribe.extract import PROMPT_VERSION, DictationCandidate, ProposalIssue, ScribeIntent
+from sanad.scribe.names import NameReading
 from sanad.store import keys
 
 
@@ -32,6 +33,14 @@ class PatientChoice(_BoundaryValue):
 class ItemTiming(_BoundaryValue):
     item: str
     resolved: ResolvedTiming
+
+
+class PendingReply(_BoundaryValue):
+    text: str = Field(repr=False)
+    source: Provenance
+    disputed: tuple[str, ...] = ()
+    heard: tuple[str, ...] = ()
+    transcript_ref: str | None = None
 
 
 class Proposal(ScribeRecord):
@@ -66,6 +75,11 @@ class Proposal(ScribeRecord):
     prompt_version: str = PROMPT_VERSION
     photo: PhotoReview | None = None
     amendments: tuple[OrderChange, ...] = ()
+    names: tuple[NameReading, ...] = Field(default=(), repr=False)
+    rxnorm_calls: int = Field(default=0, ge=0, le=6)
+    corrected: bool = False
+    resolved_numbers: tuple[str, ...] = ()
+    pending_reply: PendingReply | None = Field(default=None, repr=False)
 
     @model_validator(mode="after")
     def lifecycle(self) -> Self:
@@ -83,6 +97,10 @@ class Proposal(ScribeRecord):
         return self
 
     def blocked(self, item: str) -> bool:
+        from sanad.scribe.crosscheck import unreadable_read
+
+        if self.photo and unreadable_read(self.photo.reads):
+            return True
         return any(i.blocked and i.item in {"all", item} for i in self.issues)
 
 
@@ -113,7 +131,9 @@ class ScribeCallback(ScribeRecord):
     proposal_id: NonblankStr
     proposal_version: PositiveVersion
     actor_subject: NonblankStr
-    action: Literal["confirm", "edit", "reject", "select", "new", "reading"]
+    action: Literal[
+        "confirm", "edit", "reject", "select", "new", "reading", "correct_reply", "new_reply"
+    ]
     patient_id: str | None = None
     field: str | None = None
     reading: Literal[0, 1] | None = None

@@ -32,7 +32,7 @@ def test_live_runner_is_hermetic_with_injected_models_and_refuses_replay(
         run_check(destination, model_factory=lambda registry, role: next(remaining))
     )
     assert report["state"] == "passed" and report["run_count"] == 1
-    assert report["attempt"] == 2 and report["prompt_version"] == "scribe-v3"
+    assert report["attempt"] == 2 and report["prompt_version"] == "scribe-v7"
     assert all(c["candidate_validated"] and c["orders_count_matches"] for c in report["checks"])
     assert all(len(model.script.calls) == 1 for model in models)
     assert all(example.input not in destination.read_text() for example in MEASURED)

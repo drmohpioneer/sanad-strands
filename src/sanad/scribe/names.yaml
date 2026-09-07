@@ -1,0 +1,2179 @@
+{
+  "version": "egyptian-names-v2",
+  "review_status": "OWNER_REVIEW_PENDING",
+  "description": "Draft spelling inventory for doctor confirmation; Latin ASR variants include contract 11b measured spellings and additional draft variants for owner review. No market-availability or clinical-validation claim. JSON-compatible YAML.",
+  "entries": [
+    {
+      "kind": "drug",
+      "latin": "Exforge HCT",
+      "generic": "amlodipine/valsartan/hydrochlorothiazide",
+      "arabic_spellings": [
+        "إكس فورش إتش سي تي",
+        "إكسفورج إتش سي تي",
+        "اكسفورج اتش سي تي",
+        "إكس فورج إتش سي تي"
+      ],
+      "fixed_combination_strengths": [
+        "5/160/12.5",
+        "10/160/12.5"
+      ],
+      "latin_spellings": [
+        "X-Force HCT",
+        "X4 HCT",
+        "X Force HCT",
+        "Exforj HCT",
+        "Exforge H C T"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Concor",
+      "generic": "bisoprolol",
+      "arabic_spellings": [
+        "كونكور"
+      ],
+      "latin_spellings": [
+        "Concord",
+        "Konkor",
+        "Concore"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Forxiga",
+      "generic": "dapagliflozin",
+      "arabic_spellings": [
+        "فورسيجا",
+        "فوركسيجا",
+        "فورزيجا"
+      ],
+      "latin_spellings": [
+        "Forsige",
+        "Forsiga",
+        "Forciga",
+        "Forxega"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Exforge",
+      "generic": "amlodipine/valsartan",
+      "arabic_spellings": [
+        "إكسفورج",
+        "اكسفورج"
+      ],
+      "fixed_combination_strengths": [
+        "5/160",
+        "10/160"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Norvasc",
+      "generic": "amlodipine",
+      "arabic_spellings": [
+        "نورفاسك"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Amlor",
+      "generic": "amlodipine",
+      "arabic_spellings": [
+        "أملور"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Amlodipine",
+      "generic": "amlodipine",
+      "arabic_spellings": [
+        "أملوديبين",
+        "املودبين"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Bisoprolol",
+      "generic": "bisoprolol",
+      "arabic_spellings": [
+        "بيزوبرولول",
+        "بيسوبرولول"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Nebilet",
+      "generic": "nebivolol",
+      "arabic_spellings": [
+        "نيبليت",
+        "نيبيليت"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Nebivolol",
+      "generic": "nebivolol",
+      "arabic_spellings": [
+        "نيبيفولول"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Dilatrend",
+      "generic": "carvedilol",
+      "arabic_spellings": [
+        "ديلاترند"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Carvedilol",
+      "generic": "carvedilol",
+      "arabic_spellings": [
+        "كارفيديلول"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Carvid",
+      "generic": "carvedilol",
+      "arabic_spellings": [
+        "كارفيد"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Seloken",
+      "generic": "metoprolol",
+      "arabic_spellings": [
+        "سيلوكين"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Betaloc",
+      "generic": "metoprolol",
+      "arabic_spellings": [
+        "بيتالوك"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Metoprolol",
+      "generic": "metoprolol",
+      "arabic_spellings": [
+        "ميتوبرولول"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Inderal",
+      "generic": "propranolol",
+      "arabic_spellings": [
+        "إندرال",
+        "اندرال"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Propranolol",
+      "generic": "propranolol",
+      "arabic_spellings": [
+        "بروبرانولول"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Tenormin",
+      "generic": "atenolol",
+      "arabic_spellings": [
+        "تينورمين"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Atenolol",
+      "generic": "atenolol",
+      "arabic_spellings": [
+        "أتينولول"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Coversyl",
+      "generic": "perindopril",
+      "arabic_spellings": [
+        "كوفرسيل"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Perindopril",
+      "generic": "perindopril",
+      "arabic_spellings": [
+        "بيريندوبريل"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Tritace",
+      "generic": "ramipril",
+      "arabic_spellings": [
+        "تريتاس",
+        "ترايتاس"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Ramipril",
+      "generic": "ramipril",
+      "arabic_spellings": [
+        "راميبريل"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Zestril",
+      "generic": "lisinopril",
+      "arabic_spellings": [
+        "زيستريل"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Lisinopril",
+      "generic": "lisinopril",
+      "arabic_spellings": [
+        "ليزينوبريل",
+        "ليسينوبريل"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Renitec",
+      "generic": "enalapril",
+      "arabic_spellings": [
+        "رينيتك"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Enalapril",
+      "generic": "enalapril",
+      "arabic_spellings": [
+        "إنالابريل"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Capoten",
+      "generic": "captopril",
+      "arabic_spellings": [
+        "كابوتين"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Captopril",
+      "generic": "captopril",
+      "arabic_spellings": [
+        "كابتوبريل"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Diovan",
+      "generic": "valsartan",
+      "arabic_spellings": [
+        "ديوفان"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Valsartan",
+      "generic": "valsartan",
+      "arabic_spellings": [
+        "فالسارتان"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Co-Diovan",
+      "generic": "valsartan/hydrochlorothiazide",
+      "arabic_spellings": [
+        "كو ديوفان"
+      ],
+      "fixed_combination_strengths": [
+        "80/12.5",
+        "160/12.5",
+        "160/25"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Atacand",
+      "generic": "candesartan",
+      "arabic_spellings": [
+        "أتاكاند",
+        "اتاكاند"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Candesartan",
+      "generic": "candesartan",
+      "arabic_spellings": [
+        "كانديسارتان"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Atacand Plus",
+      "generic": "candesartan/hydrochlorothiazide",
+      "arabic_spellings": [
+        "أتاكاند بلس"
+      ],
+      "fixed_combination_strengths": [
+        "16/12.5",
+        "32/12.5"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Aprovel",
+      "generic": "irbesartan",
+      "arabic_spellings": [
+        "أبروفيل"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Irbesartan",
+      "generic": "irbesartan",
+      "arabic_spellings": [
+        "إربيسارتان"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "CoAprovel",
+      "generic": "irbesartan/hydrochlorothiazide",
+      "arabic_spellings": [
+        "كو أبروفيل"
+      ],
+      "fixed_combination_strengths": [
+        "150/12.5",
+        "300/12.5"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Micardis",
+      "generic": "telmisartan",
+      "arabic_spellings": [
+        "ميكارديس"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Telmisartan",
+      "generic": "telmisartan",
+      "arabic_spellings": [
+        "تلميسارتان"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Micardis Plus",
+      "generic": "telmisartan/hydrochlorothiazide",
+      "arabic_spellings": [
+        "ميكارديس بلس"
+      ],
+      "fixed_combination_strengths": [
+        "40/12.5",
+        "80/12.5"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Cozaar",
+      "generic": "losartan",
+      "arabic_spellings": [
+        "كوزار"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Losartan",
+      "generic": "losartan",
+      "arabic_spellings": [
+        "لوسارتان"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Hyzaar",
+      "generic": "losartan/hydrochlorothiazide",
+      "arabic_spellings": [
+        "هايزار"
+      ],
+      "fixed_combination_strengths": [
+        "50/12.5",
+        "100/25"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Tareg",
+      "generic": "valsartan",
+      "arabic_spellings": [
+        "تارج"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Entresto",
+      "generic": "sacubitril/valsartan",
+      "arabic_spellings": [
+        "إنتريستو",
+        "انتريستو"
+      ],
+      "fixed_combination_strengths": [
+        "24/26",
+        "49/51",
+        "97/103"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Sacubitril/valsartan",
+      "generic": "sacubitril/valsartan",
+      "arabic_spellings": [
+        "ساكوبيتريل فالسارتان"
+      ],
+      "fixed_combination_strengths": [
+        "24/26",
+        "49/51",
+        "97/103"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Lasix",
+      "generic": "furosemide",
+      "arabic_spellings": [
+        "لازيكس",
+        "لازكس"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Furosemide",
+      "generic": "furosemide",
+      "arabic_spellings": [
+        "فيوروسيميد",
+        "فوروسيميد"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Examide",
+      "generic": "torsemide",
+      "arabic_spellings": [
+        "إكسامايد",
+        "اكساميد"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Torsemide",
+      "generic": "torsemide",
+      "arabic_spellings": [
+        "تورسيميد"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Burinex",
+      "generic": "bumetanide",
+      "arabic_spellings": [
+        "بيورينيكس"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Bumetanide",
+      "generic": "bumetanide",
+      "arabic_spellings": [
+        "بيوميتانيد"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Aldactone",
+      "generic": "spironolactone",
+      "arabic_spellings": [
+        "ألداكتون",
+        "الداكتون"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Spironolactone",
+      "generic": "spironolactone",
+      "arabic_spellings": [
+        "سبيرونولاكتون"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Inspra",
+      "generic": "eplerenone",
+      "arabic_spellings": [
+        "إنسبرا"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Eplerenone",
+      "generic": "eplerenone",
+      "arabic_spellings": [
+        "إبليرينون"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Natrilix",
+      "generic": "indapamide",
+      "arabic_spellings": [
+        "ناتريليكس"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Indapamide",
+      "generic": "indapamide",
+      "arabic_spellings": [
+        "إنداباميد"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Hydrochlorothiazide",
+      "generic": "hydrochlorothiazide",
+      "arabic_spellings": [
+        "هيدروكلوروثيازيد"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Chlorthalidone",
+      "generic": "chlorthalidone",
+      "arabic_spellings": [
+        "كلورثاليدون"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Procoralan",
+      "generic": "ivabradine",
+      "arabic_spellings": [
+        "بروكورالان"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Ivabradine",
+      "generic": "ivabradine",
+      "arabic_spellings": [
+        "إيفابرادين"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Lanoxin",
+      "generic": "digoxin",
+      "arabic_spellings": [
+        "لانوكسين"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Digoxin",
+      "generic": "digoxin",
+      "arabic_spellings": [
+        "ديجوكسين"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Cordarone",
+      "generic": "amiodarone",
+      "arabic_spellings": [
+        "كوردارون"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Amiodarone",
+      "generic": "amiodarone",
+      "arabic_spellings": [
+        "أميودارون"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Isoptin",
+      "generic": "verapamil",
+      "arabic_spellings": [
+        "إيزوبتين"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Verapamil",
+      "generic": "verapamil",
+      "arabic_spellings": [
+        "فيراباميل"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Diltiazem",
+      "generic": "diltiazem",
+      "arabic_spellings": [
+        "ديلتيازيم"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Adalat",
+      "generic": "nifedipine",
+      "arabic_spellings": [
+        "أدالات"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Nifedipine",
+      "generic": "nifedipine",
+      "arabic_spellings": [
+        "نيفيديبين"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Cardura",
+      "generic": "doxazosin",
+      "arabic_spellings": [
+        "كاردورا"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Doxazosin",
+      "generic": "doxazosin",
+      "arabic_spellings": [
+        "دوكسازوسين"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Aldomet",
+      "generic": "methyldopa",
+      "arabic_spellings": [
+        "ألدوميت"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Methyldopa",
+      "generic": "methyldopa",
+      "arabic_spellings": [
+        "ميثيل دوبا"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Apresoline",
+      "generic": "hydralazine",
+      "arabic_spellings": [
+        "أبريزولين"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Hydralazine",
+      "generic": "hydralazine",
+      "arabic_spellings": [
+        "هيدرالازين"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Nitromak",
+      "generic": "nitroglycerin",
+      "arabic_spellings": [
+        "نيتروماك"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Nitroglycerin",
+      "generic": "nitroglycerin",
+      "arabic_spellings": [
+        "نيتروجليسرين"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Effox",
+      "generic": "isosorbide mononitrate",
+      "arabic_spellings": [
+        "إفوكس",
+        "ايفوكس"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Isosorbide mononitrate",
+      "generic": "isosorbide mononitrate",
+      "arabic_spellings": [
+        "إيزوسوربيد مونونيترات"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Isordil",
+      "generic": "isosorbide dinitrate",
+      "arabic_spellings": [
+        "إيزورديل"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Isosorbide dinitrate",
+      "generic": "isosorbide dinitrate",
+      "arabic_spellings": [
+        "إيزوسوربيد داينيترات"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Vastarel",
+      "generic": "trimetazidine",
+      "arabic_spellings": [
+        "فاستاريل"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Trimetazidine",
+      "generic": "trimetazidine",
+      "arabic_spellings": [
+        "ترايميتازيدين"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Ranolazine",
+      "generic": "ranolazine",
+      "arabic_spellings": [
+        "رانولازين"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Jardiance",
+      "generic": "empagliflozin",
+      "arabic_spellings": [
+        "جارديانس",
+        "جارديانز"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Empagliflozin",
+      "generic": "empagliflozin",
+      "arabic_spellings": [
+        "إمباجليفلوزين"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Dapagliflozin",
+      "generic": "dapagliflozin",
+      "arabic_spellings": [
+        "داباجليفلوزين"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Invokana",
+      "generic": "canagliflozin",
+      "arabic_spellings": [
+        "إنفوكانا"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Canagliflozin",
+      "generic": "canagliflozin",
+      "arabic_spellings": [
+        "كاناجليفلوزين"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Glucophage",
+      "generic": "metformin",
+      "arabic_spellings": [
+        "جلوكوفاج",
+        "جلوكو فاج"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Metformin",
+      "generic": "metformin",
+      "arabic_spellings": [
+        "ميتفورمين"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Cidophage",
+      "generic": "metformin",
+      "arabic_spellings": [
+        "سيدوفاج"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Amaryl",
+      "generic": "glimepiride",
+      "arabic_spellings": [
+        "أماريل",
+        "اماريل"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Glimepiride",
+      "generic": "glimepiride",
+      "arabic_spellings": [
+        "جليميبرايد"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Diamicron",
+      "generic": "gliclazide",
+      "arabic_spellings": [
+        "دياميكرون"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Gliclazide",
+      "generic": "gliclazide",
+      "arabic_spellings": [
+        "جليكلازيد"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Januvia",
+      "generic": "sitagliptin",
+      "arabic_spellings": [
+        "جانوفيا"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Sitagliptin",
+      "generic": "sitagliptin",
+      "arabic_spellings": [
+        "سيتاجليبتين"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Janumet",
+      "generic": "sitagliptin/metformin",
+      "arabic_spellings": [
+        "جانوميت"
+      ],
+      "fixed_combination_strengths": [
+        "50/500",
+        "50/850",
+        "50/1000"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Galvus",
+      "generic": "vildagliptin",
+      "arabic_spellings": [
+        "جالفس"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Vildagliptin",
+      "generic": "vildagliptin",
+      "arabic_spellings": [
+        "فيلداجليبتين"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Galvus Met",
+      "generic": "vildagliptin/metformin",
+      "arabic_spellings": [
+        "جالفس مت"
+      ],
+      "fixed_combination_strengths": [
+        "50/500",
+        "50/850",
+        "50/1000"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Trajenta",
+      "generic": "linagliptin",
+      "arabic_spellings": [
+        "تراجينتا"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Linagliptin",
+      "generic": "linagliptin",
+      "arabic_spellings": [
+        "ليناجليبتين"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Victoza",
+      "generic": "liraglutide",
+      "arabic_spellings": [
+        "فيكتوزا"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Liraglutide",
+      "generic": "liraglutide",
+      "arabic_spellings": [
+        "ليراجلوتايد"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Ozempic",
+      "generic": "semaglutide",
+      "arabic_spellings": [
+        "أوزيمبك",
+        "اوزيمبيك"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Semaglutide",
+      "generic": "semaglutide",
+      "arabic_spellings": [
+        "سيماجلوتايد"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Trulicity",
+      "generic": "dulaglutide",
+      "arabic_spellings": [
+        "تروليستي"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Dulaglutide",
+      "generic": "dulaglutide",
+      "arabic_spellings": [
+        "دولاجلوتايد"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Lantus",
+      "generic": "insulin glargine",
+      "arabic_spellings": [
+        "لانتوس"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Tresiba",
+      "generic": "insulin degludec",
+      "arabic_spellings": [
+        "تريسيبا"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "NovoRapid",
+      "generic": "insulin aspart",
+      "arabic_spellings": [
+        "نوفورابيد"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Apidra",
+      "generic": "insulin glulisine",
+      "arabic_spellings": [
+        "أبيدرا"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Mixtard",
+      "generic": "biphasic human insulin",
+      "arabic_spellings": [
+        "ميكستارد"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Actrapid",
+      "generic": "human insulin",
+      "arabic_spellings": [
+        "أكترابيد"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Aspirin",
+      "generic": "acetylsalicylic acid",
+      "arabic_spellings": [
+        "أسبرين",
+        "اسبرين"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Aspocid",
+      "generic": "acetylsalicylic acid",
+      "arabic_spellings": [
+        "أسبوسيد",
+        "اسبوسيد"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Aspirin Protect",
+      "generic": "acetylsalicylic acid",
+      "arabic_spellings": [
+        "أسبرين بروتكت"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Plavix",
+      "generic": "clopidogrel",
+      "arabic_spellings": [
+        "بلافيكس"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Clopidogrel",
+      "generic": "clopidogrel",
+      "arabic_spellings": [
+        "كلوبيدوجريل"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Brilique",
+      "generic": "ticagrelor",
+      "arabic_spellings": [
+        "بريليك"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Ticagrelor",
+      "generic": "ticagrelor",
+      "arabic_spellings": [
+        "تيكاجريلور"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Efient",
+      "generic": "prasugrel",
+      "arabic_spellings": [
+        "إيفينت"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Prasugrel",
+      "generic": "prasugrel",
+      "arabic_spellings": [
+        "براسوجريل"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Xarelto",
+      "generic": "rivaroxaban",
+      "arabic_spellings": [
+        "زاريلتو",
+        "كساريلتو"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Rivaroxaban",
+      "generic": "rivaroxaban",
+      "arabic_spellings": [
+        "ريفاروكسابان"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Eliquis",
+      "generic": "apixaban",
+      "arabic_spellings": [
+        "إليكويس",
+        "اليكويس"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Apixaban",
+      "generic": "apixaban",
+      "arabic_spellings": [
+        "أبيكسابان"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Pradaxa",
+      "generic": "dabigatran",
+      "arabic_spellings": [
+        "براداكسا"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Dabigatran",
+      "generic": "dabigatran",
+      "arabic_spellings": [
+        "دابيجاتران"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Marevan",
+      "generic": "warfarin",
+      "arabic_spellings": [
+        "ماريفان"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Warfarin",
+      "generic": "warfarin",
+      "arabic_spellings": [
+        "وارفارين"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Clexane",
+      "generic": "enoxaparin",
+      "arabic_spellings": [
+        "كليكسان"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Enoxaparin",
+      "generic": "enoxaparin",
+      "arabic_spellings": [
+        "إينوكسابارين"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Heparin",
+      "generic": "heparin",
+      "arabic_spellings": [
+        "هيبارين"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Arixtra",
+      "generic": "fondaparinux",
+      "arabic_spellings": [
+        "أريكسترا"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Fondaparinux",
+      "generic": "fondaparinux",
+      "arabic_spellings": [
+        "فوندابارينوكس"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Lipitor",
+      "generic": "atorvastatin",
+      "arabic_spellings": [
+        "ليبيتور"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Atorvastatin",
+      "generic": "atorvastatin",
+      "arabic_spellings": [
+        "أتورفاستاتين"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Ator",
+      "generic": "atorvastatin",
+      "arabic_spellings": [
+        "أتور"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Crestor",
+      "generic": "rosuvastatin",
+      "arabic_spellings": [
+        "كريستور"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Rosuvastatin",
+      "generic": "rosuvastatin",
+      "arabic_spellings": [
+        "روزوفاستاتين"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Zocor",
+      "generic": "simvastatin",
+      "arabic_spellings": [
+        "زوكور"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Simvastatin",
+      "generic": "simvastatin",
+      "arabic_spellings": [
+        "سيمفاستاتين"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Ezetrol",
+      "generic": "ezetimibe",
+      "arabic_spellings": [
+        "إيزيترول"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Ezetimibe",
+      "generic": "ezetimibe",
+      "arabic_spellings": [
+        "إيزيتيميب"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Lipanthyl",
+      "generic": "fenofibrate",
+      "arabic_spellings": [
+        "ليبانثيل"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Fenofibrate",
+      "generic": "fenofibrate",
+      "arabic_spellings": [
+        "فينوفيبرات"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Nexium",
+      "generic": "esomeprazole",
+      "arabic_spellings": [
+        "نيكسيوم"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Esomeprazole",
+      "generic": "esomeprazole",
+      "arabic_spellings": [
+        "إيزوميبرازول"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Controloc",
+      "generic": "pantoprazole",
+      "arabic_spellings": [
+        "كونترولوك"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Pantoprazole",
+      "generic": "pantoprazole",
+      "arabic_spellings": [
+        "بانتوبرازول"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Losec",
+      "generic": "omeprazole",
+      "arabic_spellings": [
+        "لوسيك"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Omeprazole",
+      "generic": "omeprazole",
+      "arabic_spellings": [
+        "أوميبرازول"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Pepcid",
+      "generic": "famotidine",
+      "arabic_spellings": [
+        "بيبسيد"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Famotidine",
+      "generic": "famotidine",
+      "arabic_spellings": [
+        "فاموتيدين"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Ibuprofen",
+      "generic": "ibuprofen",
+      "arabic_spellings": [
+        "إيبوبروفين",
+        "ايبوبروفين"
+      ]
+    },
+    {
+      "kind": "drug",
+      "latin": "Penicillin",
+      "generic": "penicillin",
+      "arabic_spellings": [
+        "بنسلين"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "BUN",
+      "generic": "bun",
+      "arabic_spellings": [
+        "بي يو إن",
+        "بانو",
+        "نيتروجين اليوريا"
+      ],
+      "latin_spellings": [
+        "Bano",
+        "B U N"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "creatinine",
+      "generic": "creatinine",
+      "arabic_spellings": [
+        "كرياتينين",
+        "كرياتنين",
+        "كريات",
+        "كرياتن"
+      ],
+      "latin_spellings": [
+        "Creatine",
+        "Creatinin",
+        "Createnine"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "Na",
+      "generic": "na",
+      "arabic_spellings": [
+        "صوديوم",
+        "سوديوم"
+      ],
+      "latin_spellings": [
+        "sodium"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "K",
+      "generic": "k",
+      "arabic_spellings": [
+        "بوتاسيوم"
+      ],
+      "latin_spellings": [
+        "potassium"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "lipid profile",
+      "generic": "lipid profile",
+      "arabic_spellings": [
+        "ليبيد بروفايل",
+        "دهون الدم"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "HbA1c",
+      "generic": "hba1c",
+      "arabic_spellings": [
+        "إتش بي إيه وان سي",
+        "سكر تراكمي"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "FBS",
+      "generic": "fbs",
+      "arabic_spellings": [
+        "إف بي إس",
+        "سكر صايم",
+        "سكر صائم"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "CBC",
+      "generic": "cbc",
+      "arabic_spellings": [
+        "سي بي سي",
+        "صورة دم كاملة"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "TSH",
+      "generic": "tsh",
+      "arabic_spellings": [
+        "تي إس إتش"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "ALT/AST",
+      "generic": "alt/ast",
+      "arabic_spellings": [
+        "إيه إل تي إيه إس تي",
+        "إنزيمات كبد"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "uric acid",
+      "generic": "uric acid",
+      "arabic_spellings": [
+        "يوريك أسيد",
+        "حمض اليوريك"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "albumin/creatinine ratio",
+      "generic": "albumin/creatinine ratio",
+      "arabic_spellings": [
+        "ألبومين كرياتينين ريشيو",
+        "البومين كرياتينين ريشيو"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "INR",
+      "generic": "inr",
+      "arabic_spellings": [
+        "آي إن آر",
+        "اي ان ار"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "Troponin",
+      "generic": "troponin",
+      "arabic_spellings": [
+        "تروبونين"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "BNP",
+      "generic": "bnp",
+      "arabic_spellings": [
+        "بي إن بي"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "ECG",
+      "generic": "ecg",
+      "arabic_spellings": [
+        "إي سي جي",
+        "رسم قلب",
+        "اي سي جي"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "Echo",
+      "generic": "echo",
+      "arabic_spellings": [
+        "إيكو",
+        "أكو",
+        "ايكو"
+      ],
+      "latin_spellings": [
+        "Ecko",
+        "Ekko"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "EF",
+      "generic": "ef",
+      "arabic_spellings": [
+        "إي إف",
+        "إيه إف",
+        "كفاءة القلب"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "Holter",
+      "generic": "holter",
+      "arabic_spellings": [
+        "هولتر"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "stress test",
+      "generic": "stress test",
+      "arabic_spellings": [
+        "سترس تست",
+        "رسم قلب بالمجهود"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "T wave inversion",
+      "generic": "t wave inversion",
+      "arabic_spellings": [
+        "تي ويف إنفرجن",
+        "تي ويف انفرتد",
+        "تي أوف إنفرجين",
+        "تي ويف انفريجن"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "segmental hypokinesia",
+      "generic": "segmental hypokinesia",
+      "arabic_spellings": [
+        "سيجمنتال هايبوكينيزيا",
+        "سيجمنتال هيبوكينيزيا"
+      ],
+      "latin_spellings": [
+        "Segmental Hypokinesie",
+        "Segmental Hypokinesya"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "angina",
+      "generic": "angina",
+      "arabic_spellings": [
+        "أنجينا",
+        "ذبحة صدرية"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "urea",
+      "generic": "urea",
+      "arabic_spellings": [
+        "يوريا",
+        "بولينا"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "eGFR",
+      "generic": "egfr",
+      "arabic_spellings": [
+        "إي جي إف آر",
+        "معدل الترشيح الكبيبي"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "RBS",
+      "generic": "rbs",
+      "arabic_spellings": [
+        "آر بي إس",
+        "سكر عشوائي"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "PPBS",
+      "generic": "ppbs",
+      "arabic_spellings": [
+        "بي بي بي إس",
+        "سكر بعد الأكل"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "OGTT",
+      "generic": "ogtt",
+      "arabic_spellings": [
+        "أو جي تي تي",
+        "منحنى السكر"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "fasting insulin",
+      "generic": "fasting insulin",
+      "arabic_spellings": [
+        "إنسولين صايم"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "C-peptide",
+      "generic": "c-peptide",
+      "arabic_spellings": [
+        "سي بيبتايد"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "LDL",
+      "generic": "ldl",
+      "arabic_spellings": [
+        "إل دي إل"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "HDL",
+      "generic": "hdl",
+      "arabic_spellings": [
+        "إتش دي إل"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "triglycerides",
+      "generic": "triglycerides",
+      "arabic_spellings": [
+        "ترايجليسرايد",
+        "دهون ثلاثية"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "total cholesterol",
+      "generic": "total cholesterol",
+      "arabic_spellings": [
+        "توتال كوليسترول",
+        "كوليسترول كلي"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "ALT",
+      "generic": "alt",
+      "arabic_spellings": [
+        "إيه إل تي",
+        "اس جي بي تي"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "AST",
+      "generic": "ast",
+      "arabic_spellings": [
+        "إيه إس تي",
+        "اس جي او تي"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "ALP",
+      "generic": "alp",
+      "arabic_spellings": [
+        "ألكالين فوسفاتاز"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "GGT",
+      "generic": "ggt",
+      "arabic_spellings": [
+        "جي جي تي"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "bilirubin",
+      "generic": "bilirubin",
+      "arabic_spellings": [
+        "بيليروبين"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "albumin",
+      "generic": "albumin",
+      "arabic_spellings": [
+        "ألبومين",
+        "البومين"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "total protein",
+      "generic": "total protein",
+      "arabic_spellings": [
+        "توتال بروتين"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "Ca",
+      "generic": "ca",
+      "arabic_spellings": [
+        "كالسيوم"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "Mg",
+      "generic": "mg",
+      "arabic_spellings": [
+        "ماغنسيوم",
+        "مغنيسيوم"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "phosphate",
+      "generic": "phosphate",
+      "arabic_spellings": [
+        "فوسفات"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "bicarbonate",
+      "generic": "bicarbonate",
+      "arabic_spellings": [
+        "بيكربونات"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "chloride",
+      "generic": "chloride",
+      "arabic_spellings": [
+        "كلوريد"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "CRP",
+      "generic": "crp",
+      "arabic_spellings": [
+        "سي آر بي"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "ESR",
+      "generic": "esr",
+      "arabic_spellings": [
+        "إي إس آر",
+        "سرعة ترسيب"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "PT",
+      "generic": "pt",
+      "arabic_spellings": [
+        "بي تي",
+        "زمن البروثرومبين"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "aPTT",
+      "generic": "aptt",
+      "arabic_spellings": [
+        "إيه بي تي تي"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "D-dimer",
+      "generic": "d-dimer",
+      "arabic_spellings": [
+        "دي دايمر"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "ferritin",
+      "generic": "ferritin",
+      "arabic_spellings": [
+        "فيريتين"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "iron",
+      "generic": "iron",
+      "arabic_spellings": [
+        "حديد"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "TIBC",
+      "generic": "tibc",
+      "arabic_spellings": [
+        "تي آي بي سي"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "vitamin D",
+      "generic": "vitamin d",
+      "arabic_spellings": [
+        "فيتامين دال"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "vitamin B12",
+      "generic": "vitamin b12",
+      "arabic_spellings": [
+        "فيتامين بي تويلف"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "FT4",
+      "generic": "ft4",
+      "arabic_spellings": [
+        "إف تي فور"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "FT3",
+      "generic": "ft3",
+      "arabic_spellings": [
+        "إف تي ثري"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "urinalysis",
+      "generic": "urinalysis",
+      "arabic_spellings": [
+        "تحليل بول"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "urine culture",
+      "generic": "urine culture",
+      "arabic_spellings": [
+        "مزرعة بول"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "UPCR",
+      "generic": "upcr",
+      "arabic_spellings": [
+        "بروتين كرياتينين ريشيو"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "NT-proBNP",
+      "generic": "nt-probnp",
+      "arabic_spellings": [
+        "إن تي برو بي إن بي"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "CK-MB",
+      "generic": "ck-mb",
+      "arabic_spellings": [
+        "سي كي إم بي"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "CXR",
+      "generic": "cxr",
+      "arabic_spellings": [
+        "أشعة صدر"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "ABG",
+      "generic": "abg",
+      "arabic_spellings": [
+        "إيه بي جي",
+        "غازات دم"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "BP",
+      "generic": "bp",
+      "arabic_spellings": [
+        "ضغط الدم"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "heart rate",
+      "generic": "heart rate",
+      "arabic_spellings": [
+        "معدل ضربات القلب"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "oxygen saturation",
+      "generic": "oxygen saturation",
+      "arabic_spellings": [
+        "تشبع الأكسجين"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "lateral",
+      "generic": "lateral",
+      "arabic_spellings": [
+        "لاترال"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "inferoposterolateral",
+      "generic": "inferoposterolateral",
+      "arabic_spellings": [
+        "إنفيرو بوستيرو لاترال",
+        "انفيرو بوستيرو لاترال"
+      ],
+      "latin_spellings": [
+        "Infero Postero Lateral",
+        "Inferoposterolaterel"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "LVH",
+      "generic": "lvh",
+      "arabic_spellings": [
+        "إل في إتش",
+        "تضخم البطين الأيسر"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "RBBB",
+      "generic": "rbbb",
+      "arabic_spellings": [
+        "آر بي بي بي"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "LBBB",
+      "generic": "lbbb",
+      "arabic_spellings": [
+        "إل بي بي بي"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "AF",
+      "generic": "af",
+      "arabic_spellings": [
+        "إيه إف ريثم",
+        "رجفان أذيني"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "sinus rhythm",
+      "generic": "sinus rhythm",
+      "arabic_spellings": [
+        "ساينس ريثم"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "ST depression",
+      "generic": "st depression",
+      "arabic_spellings": [
+        "إس تي ديبريشن"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "ST elevation",
+      "generic": "st elevation",
+      "arabic_spellings": [
+        "إس تي إليفيشن"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "BUN, creatinine",
+      "generic": "bun, creatinine",
+      "arabic_spellings": [
+        "بانو كريات"
+      ],
+      "latin_spellings": [
+        "Bano Creatine",
+        "Bano Creatinin",
+        "Bano Creatinine"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "Echo: EF",
+      "generic": "echo: ef",
+      "arabic_spellings": [
+        "الأكو فانكشن",
+        "الايكو فانكشن"
+      ],
+      "latin_spellings": [
+        "Echo Function",
+        "Ecko Function"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "glucose",
+      "generic": "glucose",
+      "arabic_spellings": [
+        "تحليل سكر",
+        "جلوكوز"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "T wave inversion in lateral leads",
+      "generic": "t wave inversion in lateral leads",
+      "arabic_spellings": [
+        "تي ويف انفريجن في لاترال ليدز"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "lateral leads",
+      "generic": "lateral leads",
+      "arabic_spellings": [
+        "في اللاترال",
+        "في لاترال ليدز"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "segmental hypokinesia inferoposterolateral",
+      "generic": "segmental hypokinesia inferoposterolateral",
+      "arabic_spellings": [
+        "سيجمنتال إنفروبوسترو لاترال",
+        "سيجمنتال هايبوقنيزيا إنفروبوسترو لاترال"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "hypertension, diabetes",
+      "generic": "hypertension, diabetes",
+      "arabic_spellings": [
+        "ضغطه سكر",
+        "ضغط وسكر"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "hypertension",
+      "generic": "hypertension",
+      "arabic_spellings": [
+        "ضغط"
+      ]
+    },
+    {
+      "kind": "term",
+      "latin": "diabetes",
+      "generic": "diabetes",
+      "arabic_spellings": [
+        "سكر"
+      ]
+    }
+  ]
+}

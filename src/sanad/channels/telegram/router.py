@@ -41,6 +41,7 @@ class RouteResult(_BoundaryValue):
     ]
     status: str
     template_id: str | None = None
+    delivery_patient: PatientScope | None = None
 
 
 class TelegramRuntime:

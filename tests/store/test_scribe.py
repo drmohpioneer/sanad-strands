@@ -2,7 +2,8 @@ from datetime import timedelta
 
 import pytest
 from harness import FakeClock
-from scribe.dictations import SYNTHETIC_TABLE, TABLE, DictationExample
+from providers.fixtures import ScriptedModel, candidate
+from scribe.dictations import OWNER_SYNTHETIC, SYNTHETIC_TABLE, TABLE, DictationExample
 
 from sanad.domain import PatientScope
 from sanad.scribe.card import render_card
@@ -11,6 +12,7 @@ from sanad.scribe.proposal import Proposal
 from sanad.scribe.records import ClinicalFact
 from sanad.store._base import StoreBase
 from sanad.store.records import from_record
+from store.account_fixtures import APPLICANT, update
 from store.scribe_fixtures import ScribeWorld
 
 
@@ -25,7 +27,26 @@ def world(store: StoreBase, clock: FakeClock) -> ScribeWorld:
 def test_handwritten_cards_through_real_receipt(
     world: ScribeWorld, example: DictationExample
 ) -> None:
-    proposal = world.dictate(example.input, example.candidate.model_dump())
+    if example is OWNER_SYNTHETIC:
+        from store.test_scribe_voice_web import providers, voice
+
+        providers(world, example.input + " NUMBERS: 53 560 12.5 5")
+        model = ScriptedModel(candidate(example.candidate.model_dump()))
+        world.scribe.model_factory = lambda registry, role: model
+        world.post(voice())
+        proposal = world.proposal
+        assert proposal.disputed_numbers == ("45",)
+    else:
+        model = ScriptedModel(
+            *(candidate(example.candidate.model_dump()) for _ in range(example.extraction_calls))
+        )
+        world.scribe.model_factory = lambda registry, role: model
+        world.post(update(APPLICANT, example.input, 10))
+        assert world.receipt(10).state == "completed"
+        assert len(model.script.calls) == example.extraction_calls
+        if example.extraction_calls == 2:
+            assert model.script.calls[0] == model.script.calls[1]
+        proposal = world.proposal
     assert render_card(proposal) == (example.card,)
     assert panel(world.store, world.doctor.scope) == ()
     card = next(i for i in world.cards() if i.template_id == "scribe_card")

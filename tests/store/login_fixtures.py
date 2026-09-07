@@ -27,6 +27,7 @@ from sanad.store._base import StoreBase, Write
 from sanad.store.keys import ScopedKey
 from sanad.store.records import (
     Doctor,
+    OutboundIntent,
     Patient,
     PatientClaim,
     from_record,
@@ -178,21 +179,22 @@ class LoginWorld(AccountWorld):
         return active
 
     def login_path(self, subject: str = APPLICANT, id: int = 200) -> str:
-        assert self.post(update(subject, "/login", id)).status_code == 200
-        if subject == APPLICANT:
-            intents = self.intents()
-        else:
+        def login_intents() -> list[OutboundIntent]:
+            if subject == APPLICANT:
+                return self.intents()
             actor = self.actor(subject)
             from sanad.domain import PatientScope
+            from sanad.store.records import OutboundIntent
 
             scope = PatientScope(doctor_id=actor.doctor_id or "", patient_id=actor.patient_id or "")
             rows, _ = self.store.list_records(scope, "outbound_intent")
-            from sanad.store.records import OutboundIntent
+            return [from_record(row, OutboundIntent) for row in rows]
 
-            intents = [from_record(row, OutboundIntent) for row in rows]
+        previous = {i.id for i in login_intents()}
+        assert self.post(update(subject, "/login", id)).status_code == 200
         template = "doctor_login_link" if subject == APPLICANT else "patient_login_link"
         intent = next(
-            i for i in reversed(intents) if i.template_id == template and i.status == "queued"
+            i for i in login_intents() if i.id not in previous and i.template_id == template
         )
         assert self.dispatch(intent).status == "provider_accepted"
         assert intent.payload

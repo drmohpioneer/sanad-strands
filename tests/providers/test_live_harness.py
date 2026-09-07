@@ -105,7 +105,7 @@ def test_entire_live_harness_offline_redaction_and_run_once(
         assert speech["arabic_ratio"] > 0.8
         if numbers_line == "parsed":
             assert speech["numbers"] == ["100", "60"]
-            assert speech["heard_numbers"] == ["200 جرام", "60 جرام"]
+            assert speech["heard_numbers"] == ["200", "60"]
             assert speech["disputed_numbers"] == ["100", "200"]
         else:
             assert speech["numbers"] == speech["disputed_numbers"] == ["60"]

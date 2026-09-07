@@ -18,7 +18,9 @@ type PositiveDuration = Annotated[timedelta, Field(gt=timedelta())]
 
 class OperationalClock(_BoundaryValue):
     next_action_at: UtcInstant
-    work_lane: Literal["ingress", "media", "delivery", "account", "operational", "claim", "scribe"]
+    work_lane: Literal[
+        "ingress", "media", "delivery", "account", "operational", "claim", "scribe", "bundle"
+    ]
     work_shard: NonblankStr = "0"
     work_generation: PositiveVersion = 1
     attempt_count: NonnegativeInt = 0

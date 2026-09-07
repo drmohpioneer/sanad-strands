@@ -215,12 +215,25 @@ class _Aggregate(_BoundaryValue):
             raise ValueError("work_clock has the wrong work_lane")
 
 
+class DeadlineHistory(_BoundaryValue):
+    due_at: UtcInstant
+    due_source: DueSource
+    due_reason: NonblankStr
+    timing_anchor: TimingAnchor
+    original_time_expression: NonblankStr | None
+    timezone: IanaZone
+    grace_seconds: NonnegativeInt
+    escalation_at: UtcInstant
+    policy_version: NonblankStr
+
+
 class Mission(_Aggregate):
     entity_type: Literal["mission"] = "mission"
     doctor_id: NonblankStr
     patient_id: NonblankStr
     kind: MissionKind
     title: NonblankStr
+    clinical_en: str | None = Field(default=None, max_length=120)
     details: MissionDetails
     objective_predicate: ObjectivePredicate
     order_refs: tuple[VersionRef, ...] = ()
@@ -247,8 +260,12 @@ class Mission(_Aggregate):
     policy_version: NonblankStr
     resume_at: UtcInstant | None = None
     next_contact_at: UtcInstant | None = None
+    timing_history: tuple[DeadlineHistory, ...] = ()
     deadline_generation: PositiveVersion = 1
     handled_deadline_generation: NonnegativeInt = 0
+    last_patient_reply_at: UtcInstant | None = None
+    first_chase_accepted_at: UtcInstant | None = None
+    last_chase_accepted_at: UtcInstant | None = None
     contact_count: NonnegativeInt = 0
     unanswered_delivered_count: NonnegativeInt = 0
     evidence_request_count: NonnegativeInt = 0
@@ -486,6 +503,10 @@ class DoctorTimingPolicy(_BoundaryValue):
     policy_version: NonblankStr
     timezone: IanaZone
     default_deadlines: dict[MissionKind, DefaultDeadline]
+    # Contract 11b draft policy: OWNER_REVIEW_PENDING.
+    default_deadline_local_time: Annotated[str, Field(pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$")] = (
+        "10:00"
+    )
     default_grace_seconds: NonnegativeInt
     inferred_min_days: NonnegativeInt
     inferred_max_days: PositiveVersion

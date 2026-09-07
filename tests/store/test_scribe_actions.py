@@ -123,14 +123,16 @@ def test_unsupported_numbers_block_only_affected_items(world: ScribeWorld) -> No
         },
     )
     assert proposal.blocked("order:0") and not proposal.blocked("fact:0")
-    assert "50" not in render_card(proposal)[0]
+    card = render_card(proposal)[0]
+    assert "50" not in card.split("محتاج تأكيد:")[0]
+    assert card.count('سمعت "50 مج" بس مش لاقي الرقم ده في كلامك') == 1
     world.tap()
     patient = panel(world.store, world.doctor.scope)[0]
     assert len(world.store.list_records(patient.scope, "clinical_fact")[0]) == 1
     assert not world.store.list_records(patient.scope, "care_order_head")[0]
 
 
-def test_correction_supersedes_and_preserves_number_union(world: ScribeWorld) -> None:
+def test_correction_versions_card_and_preserves_number_union(world: ScribeWorld) -> None:
     first = world.dictate(TABLE[0].input, TABLE[0].candidate.model_dump())
     old = world.button("✅ تمام")
     world.tap("✏️ تعديل")
@@ -138,9 +140,11 @@ def test_correction_supersedes_and_preserves_number_union(world: ScribeWorld) ->
     corrected = TABLE[0].candidate.model_dump()
     corrected["orders"][0]["dose"] = "2.5 مج"
     second = world.dictate("خلي الجرعة 2.5 مج", corrected, id=11)
-    assert second.prompt_version == "scribe-correction-v3"
-    assert second.supersedes_id == first.id and not second.blocked("alert:0")
-    assert saved(world, first).status == "superseded"
+    assert second.prompt_version == "scribe-correction-v7"
+    assert (
+        second.id == first.id and second.version > first.version and not second.blocked("alert:0")
+    )
+    assert saved(world, first).status == "pending"
     world.tap(raw=old, id=21)
     assert not panel(world.store, world.doctor.scope)
     world.tap(id=22)
@@ -349,7 +353,7 @@ def test_card_split_keeps_buttons_on_last_and_sends_in_order(world: ScribeWorld)
     )
     assert cards[0].payload and "reply_markup" not in cards[0].payload
     assert cards[1].payload and "reply_markup" in cards[1].payload
-    assert world.dispatch(cards[1]).status == "queued"
+    assert [i.status for i in cards] == ["provider_accepted", "provider_accepted"]
     assert world.dispatch(cards[0]).status == "provider_accepted"
     assert world.dispatch(cards[1]).status == "provider_accepted"
 
@@ -385,7 +389,7 @@ def test_delayed_confirmation_preserves_shown_deadlines_and_provenance(world: Sc
     world.scribe.model_factory = lambda registry, role: model
     world.post(update(APPLICANT, text, 10))
     proposal = world.proposal
-    assert "العمر: 60" in render_card(proposal)[0] and "النوع: ذكر" in render_card(proposal)[0]
+    assert "60 سنة" in render_card(proposal)[0] and "ذكر" in render_card(proposal)[0]
     world.clock.advance(timedelta(minutes=25))
     world.tap()
     patient = panel(world.store, world.doctor.scope)[0]
@@ -402,7 +406,7 @@ def test_delayed_confirmation_preserves_shown_deadlines_and_provenance(world: Sc
     allergy = next(f for f in facts if f.category == "allergy")
     assert allergy.provenance.source_span is None
     assert allergy.provenance.source_observation_id == proposal.source_receipt_id
-    assert allergy.provenance.prompt_version == "scribe-v3"
+    assert allergy.provenance.prompt_version == "scribe-v7"
     assert allergy.provenance.model_id == "us.amazon.nova-lite-v1:0"
     assert patient.age == "60" and any(f.category == "demographic" for f in facts)
 
@@ -462,7 +466,7 @@ def test_omitted_number_is_visible_and_valid_items_remain_confirmable(world: Scr
         },
     )
     assert any(i.code == "unassigned_number" for i in proposal.issues)
-    assert "سمعت الرقم 90 ومش عارف يتحط فين" in render_card(proposal)[0]
+    assert 'سمعت "90"، ده يخص إيه؟' in render_card(proposal)[0]
     assert not proposal.blocked("order:0") and world.button("✅ تمام")
     assert not panel(world.store, world.doctor.scope)
     world.tap()
@@ -490,11 +494,11 @@ def test_nested_numeric_order_is_durable_clarification_and_never_committed(
         },
     )
     assert len(proposal.candidate.orders) == 1
-    assert "سمعت الرقم 5 ومش عارف يتحط فين" in render_card(proposal)[0]
+    assert 'سمعت "5"، ده يخص إيه؟' in render_card(proposal)[0]
     world.tap()
     patient = panel(world.store, world.doctor.scope)[0]
     heads = world.store.list_records(patient.scope, "care_order_head")[0]
-    assert len(heads) == 1 and heads[0].body["name"] == "أملوديبين"
+    assert len(heads) == 1 and heads[0].body["name"] == "Amlodipine"
     assert saved(world, proposal).issues == proposal.issues
 
 
@@ -509,7 +513,7 @@ def test_nonnumeric_malformed_item_does_not_become_a_silent_patient_lookup(
             "orders": [{"action": "wrong", "drug": "الدوا"}],
         },
     )
-    assert "محتاج توضيح: فيه بند مش واضح" in render_card(proposal)[0]
+    assert "فيه بند مش واضح" in render_card(proposal)[0]
     assert proposal.candidate.orders == () and proposal.blocked("all")
     assert world.claims.patient(world.doctor.id, own.id) == own
 
@@ -536,7 +540,7 @@ def test_correction_checks_original_and_new_numbers_without_blocking_valid_order
     assert [i.numbers for i in changed.issues if i.code == "unassigned_number"] == [("5",), ("90",)]
     assert changed.source_text == original.source_text + "\nالجرعة 2.5 مج وبلغني لو الضغط تحت 90"
     assert not changed.blocked("order:0")
-    assert "سمعت الرقم 90 ومش عارف يتحط فين" in render_card(changed)[0]
+    assert 'سمعت "90"، ده يخص إيه؟' in render_card(changed)[0]
     world.tap(id=21)
     patient = panel(world.store, world.doctor.scope)[0]
     orders = world.store.list_records(patient.scope, "care_order_version")[0]
@@ -563,7 +567,7 @@ def test_name_only_extraction_cannot_hide_unassigned_clinical_number(world: Scri
         "أحمد رضا ابدأ أملوديبين 5 مج",
         {"patient": {"name_as_spoken": "أحمد رضا"}},
     )
-    assert "سمعت الرقم 5 ومش عارف يتحط فين" in render_card(proposal)[0]
+    assert 'سمعت "5"، ده يخص إيه؟' in render_card(proposal)[0]
     assert world.claims.patient(world.doctor.id, own.id) == own
 
 
@@ -614,7 +618,7 @@ def test_explicit_iso_deadline_is_stored_exactly_and_card_uses_arabic(world: Scr
         },
     )
     card = render_card(proposal)[0]
-    assert "الموعد: الأحد 6 سبتمبر، 3:07:30 العصر (صريح)" in card
-    assert "لو متعملش هبلّغك: الأحد 6 سبتمبر، 3:07:30 العصر" in card
+    assert "الموعد: الأحد 6 سبتمبر، 3:07 العصر (صريح)" in card
+    assert "لو متعملش هبلّغك: الأحد 6 سبتمبر، 3:07 العصر" in card
     assert "2026-09-06T12:07:30Z" not in card
     assert proposal.timings[0].resolved.due_at.isoformat() == "2026-09-06T12:07:30+00:00"

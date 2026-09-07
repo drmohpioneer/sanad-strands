@@ -26,7 +26,17 @@ from sanad.store.records import (
     model_scope,
 )
 
-LANES = ("ingress", "delivery", "mission", "followup", "review", "claim", "scribe", "media")
+LANES = (
+    "ingress",
+    "review",
+    "bundle",
+    "mission",
+    "followup",
+    "claim",
+    "scribe",
+    "media",
+    "delivery",
+)
 DEFAULT_BUDGET = SweepBudget()
 
 
@@ -91,6 +101,13 @@ def sweep_due(
                     auth_expiry=now + timedelta(seconds=120),
                     invocation_id="tick:" + keys.instant(now),
                 )
+                sweeper = Sweeper(
+                    runtime.steward,
+                    runtime.inbound,
+                    runtime.dispatcher,
+                    capability,
+                    elapsed_clock=elapsed_clock,
+                )
                 handlers: dict[str, Callable[[StoredRecord], None]] = {}
 
                 def ingress(row: StoredRecord) -> None:
@@ -103,7 +120,33 @@ def sweep_due(
                         row.scoped_key(resolved), "tick", runtime.clock()
                     )
 
-                handlers.update(ingress=ingress, delivery=delivery)
+                def contact(row: StoredRecord, worker: Sweeper = sweeper) -> None:
+                    from sanad.contact.scheduler import schedule
+
+                    worker.accountability(row, runtime.clock())
+                    schedule(runtime.steward, row)
+
+                def bundle(row: StoredRecord) -> None:
+                    from sanad.contact.bundle import wake
+
+                    wake(runtime.steward, row)
+
+                def review(row: StoredRecord, worker: Sweeper = sweeper) -> None:
+                    from sanad.contact.bundle import review_wake
+
+                    if row.patient_id is None:
+                        review_wake(runtime.steward, row)
+                    else:
+                        worker.accountability(row, runtime.clock())
+
+                handlers.update(
+                    ingress=ingress,
+                    delivery=delivery,
+                    mission=contact,
+                    followup=contact,
+                    bundle=bundle,
+                    review=review,
+                )
                 if claim_handler:
                     handlers["claim"] = claim_handler
                 if runtime.scribe_route is not None:
@@ -120,14 +163,7 @@ def sweep_due(
                         scope, PatientScope
                     ):
                         handlers["media"] = runtime.concierge_route.sweep
-                sweeper = Sweeper(
-                    runtime.steward,
-                    runtime.inbound,
-                    runtime.dispatcher,
-                    capability,
-                    lane_handlers=handlers,
-                    elapsed_clock=elapsed_clock,
-                )
+                sweeper.lane_handlers = handlers
                 report = sweeper.sweep(
                     lane,
                     "0",

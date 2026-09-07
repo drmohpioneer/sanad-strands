@@ -518,12 +518,17 @@ class ClaimService(IdentityService):
         )
         if session:
             reads += (read_of(session),)
+        from sanad.contact.binding import prepare_binding
+
+        bound_models, bound_intents, bound_events = prepare_binding(self, command, patient)
+        models += bound_models
         result = self.commit(
             command,
             models,
-            (self.patient_intent(binding, authority, doctor, "binding_confirmed"),),
+            (self.patient_intent(binding, authority, doctor, "binding_confirmed"), *bound_intents),
             reads=reads,
             claim=claim,
+            domain_events=bound_events,
         )
         if result.status in {"forbidden", "stale_version"}:
             if self.store.authorize(self.scope.bot_id, pending.candidate_subject).binding:

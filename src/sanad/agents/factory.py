@@ -30,6 +30,7 @@ from sanad.domain import CandidateRef, Provenance, TextSpan
 from sanad.domain.boundaries import NonblankStr, NonnegativeInt, _BoundaryValue
 from sanad.models.io import CALL_TIMEOUT, CallMetadata, ModelUnavailable, private_provider_logs
 from sanad.models.registry import ModelRegistry, ModelRole
+from sanad.models.timeouts import PROVIDER_CONNECT_TIMEOUT
 
 PROPOSAL_PROMPT_VERSION = "proposal-json-v2"
 
@@ -79,7 +80,9 @@ class Classification(_BoundaryValue):
     metadata: tuple[CallMetadata, ...]
 
 
-def bedrock_model(registry: ModelRegistry, role: ModelRole) -> Model:
+def bedrock_model(
+    registry: ModelRegistry, role: ModelRole, *, timeout: float = CALL_TIMEOUT
+) -> Model:
     return BedrockModel(
         model_id=registry.model_id(role),
         region_name=registry.region,
@@ -87,7 +90,9 @@ def bedrock_model(registry: ModelRegistry, role: ModelRole) -> Model:
         max_tokens=2048,
         streaming=False,
         boto_client_config=Config(
-            connect_timeout=2, read_timeout=22, retries={"total_max_attempts": 1}
+            connect_timeout=PROVIDER_CONNECT_TIMEOUT,
+            read_timeout=min(22, timeout - PROVIDER_CONNECT_TIMEOUT),
+            retries={"total_max_attempts": 1},
         ),
     )
 

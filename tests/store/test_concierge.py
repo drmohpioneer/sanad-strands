@@ -104,7 +104,7 @@ def test_six_adversarial_model_replies(world: PatientWorld, name: str, unsafe: s
 def test_question_due_and_dedupe_boundary(world: PatientWorld) -> None:
     world.send("عايز أكلم الدكتور")
     original = next(r for r in world.rows("mission") if r.body["kind"] == "QUESTION")
-    assert original.body["due_at"] == (world.clock() + timedelta(hours=48)).isoformat().replace(
+    assert original.body["due_at"] == (world.clock() + timedelta(hours=43)).isoformat().replace(
         "+00:00", "Z"
     )
     assert original.body["grace_seconds"] == 0
@@ -625,7 +625,16 @@ def test_reading_does_not_fulfill_monitor(world: PatientWorld) -> None:
     )
     world.seed(monitor)
     world.send("ضغطي ١٥٠ على ٩٥")
-    assert world.store.get_mission(world.patient_scope, monitor.id) == monitor
+    saved = world.store.get_mission(world.patient_scope, monitor.id)
+    assert saved is not None and saved.state == monitor.state
+    assert (saved.details, saved.due_at, saved.escalation_at, saved.evidence_refs) == (
+        monitor.details,
+        monitor.due_at,
+        monitor.escalation_at,
+        monitor.evidence_refs,
+    )
+    assert saved.fulfillment_validity == monitor.fulfillment_validity
+    assert saved.last_patient_reply_at == world.clock()
     fact = next(
         from_record(r, ClinicalFact)
         for r in world.rows("clinical_fact")

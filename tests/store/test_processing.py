@@ -273,7 +273,9 @@ def test_contact_collision_and_only_proven_unsent_refunds(world: World) -> None:
     assert world.dispatch(second).status == "provider_accepted"
     assert len(world.transport.possibly_sent) == 1
     world.clock.advance(timedelta(minutes=1))
-    assert world.dispatch(first).suppression_reason == "budget"
+    # Accepted feedback advances the mission before this retry reaches the consumed budget.
+    assert world.dispatch(first).suppression_reason == "stale_source_or_expired"
+    assert len(world.transport.possibly_sent) == 1
     uncertain, blocked = world.prompt(slot="day-two"), world.prompt(slot="day-two")
     world.transport.script.append(TimeoutError())
     assert world.dispatch(uncertain).status == "uncertain"

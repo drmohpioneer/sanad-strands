@@ -9,8 +9,11 @@ from sanad.store import keys
 from sanad.store.keys import AccountScope, IntakeScope, Key
 from sanad.store.records import (
     MODELS,
+    NAME_CACHE_SCOPE,
     CommitRequest,
     Doctor,
+    NameCache,
+    NameMemory,
     Patient,
     from_record,
     model_scope,
@@ -21,12 +24,14 @@ if TYPE_CHECKING:
 
 COMMANDS = frozenset(
     {
+        "PhotoUnreadable",
         "PhotoAssociate",
         "IntakeCreate",
         "IntakeAction",
         "IntakeReview",
         "IntakeDanger",
         "ScribePropose",
+        "ScribeNameCache",
         "ScribeAction",
         "ScribeConfirm",
         "ScribeExpire",
@@ -50,6 +55,12 @@ CLINICAL_TYPES = {
     "followup",
     "review",
 }
+
+
+def _patient_revision(previous: Proposal, changed: Proposal) -> bool:
+    from sanad.scribe.corrections import valid_patient_revision
+
+    return valid_patient_revision(previous, changed)
 
 
 def scribe_guards(
@@ -105,13 +116,29 @@ def scribe_guards(
             return None
         checks.append(Check(bound.key, bound.version))
     allowed = PROPOSAL_TYPES | (CLINICAL_TYPES if kind == "ScribeConfirm" else set())
+    if kind == "ScribeConfirm":
+        allowed |= {"name_memory"}
+    if kind == "ScribeNameCache":
+        allowed = {"name_cache"}
     if kind in {"IntakeCreate", "IntakeAction", "IntakeReview", "IntakeDanger", "ScribePropose"}:
         allowed |= {"intake_draft", "intake_callback", "intake_concern", "review"}
     if kind == "PhotoAssociate":
         allowed = {"photo_association_work", "intake_draft", "intake_concern"}
+    if kind == "PhotoUnreadable":
+        allowed = {"intake_draft", "patient_media"}
     if any(r.entity_type not in allowed for r in request.puts):
         return None
     for read in request.identity_reads:
+        if (
+            read.entity_type == "name_memory"
+            and kind == "ScribeConfirm"
+            and read.scope in {scope, AccountScope(bot_id=doctor.telegram_bot_id)}
+        ):
+            current = store.get(read.scope, read.entity_type, read.id)
+            if (current.version if current else None) != read.version:
+                return None
+            checks.append(Check(Key(keys.partition(read.scope), f"NAME#{read.id}"), read.version))
+            continue
         if not isinstance(read.scope, (TenantScope, PatientScope, IntakeScope)):
             return None
         if read.scope.doctor_id != scope.doctor_id:
@@ -135,6 +162,17 @@ def scribe_guards(
             return None
     for written in (*request.puts, *request.events, *request.intents):
         actual = model_scope(from_record(written, MODELS[written.entity_type]))
+        if written.entity_type == "name_memory":
+            if kind != "ScribeConfirm" or actual not in {
+                scope,
+                AccountScope(bot_id=doctor.telegram_bot_id),
+            }:
+                return None
+            continue
+        if written.entity_type == "name_cache":
+            if kind != "ScribeNameCache" or actual != NAME_CACHE_SCOPE:
+                return None
+            continue
         if isinstance(actual, AccountScope) or actual.doctor_id != scope.doctor_id:
             return None
         if written.entity_type in {"clinical_fact", "care_order_version", "care_plan"}:
@@ -152,6 +190,22 @@ def scribe_guards(
     proposals = [
         from_record(r, Proposal) for r in request.puts if r.entity_type == "scribe_proposal"
     ]
+    if kind == "ScribeNameCache":
+        from sanad.scribe.policy import DRAFT_SCRIBE_POLICY
+
+        if (
+            len(request.puts) != 1
+            or request.intents
+            or request.identity_reads
+            or command.work_claim
+        ):
+            return None
+        cache = from_record(request.puts[0], NameCache)
+        if (
+            cache.updated_at > now
+            or cache.expires_at != cache.updated_at + DRAFT_SCRIBE_POLICY.name_cache_ttl
+        ):
+            return None
     if kind.startswith("Intake"):
         from sanad.store.intake import intake_guards
 
@@ -168,6 +222,13 @@ def scribe_guards(
         if photo_checks is None:
             return None
         checks.extend(photo_checks)
+    if kind == "PhotoUnreadable":
+        from sanad.store.intake import unreadable_media_guards
+
+        media_checks = unreadable_media_guards(store, request, now)
+        if media_checks is None:
+            return None
+        checks.extend(media_checks)
     if kind == "ScribeWork":
         if len(request.puts) != 1 or request.intents or proposals:
             return None
@@ -200,7 +261,7 @@ def scribe_guards(
         extra_checks, deadline = association
         checks.extend(extra_checks)
         expiry = min(expiry, deadline)
-        fresh = [p for p in proposals if p.version == 1 and p.status == "pending"]
+        fresh = [p for p in proposals if p.status == "pending"]
         state = next(
             (from_record(r, ScribeState) for r in request.puts if r.entity_type == "scribe_state"),
             None,
@@ -209,6 +270,30 @@ def scribe_guards(
             return None
         if any(p is not fresh[0] and p.status != "superseded" for p in proposals):
             return None
+        if fresh[0].version != 1:
+            changed = fresh[0]
+            old_row = store.get(scope, "scribe_proposal", changed.id)
+            state_row = store.get(scope, "scribe_state", "current")
+            if old_row is None or state_row is None:
+                return None
+            old = from_record(old_row, Proposal)
+            if (
+                len(proposals) != 1
+                or old.status != "pending"
+                or old.expires_at <= now
+                or changed.version != old.version + 1
+                or changed.expires_at != old.expires_at
+                or changed.selected_patient_id != old.selected_patient_id
+                or changed.creating_patient != old.creating_patient
+                or not _patient_revision(old, changed)
+                or state_row.body.get("pending_proposal_id") != old.id
+                or not (changed.corrected or changed.pending_reply)
+            ):
+                return None
+            checks.extend(
+                (Check(old_row.key, old_row.version), Check(state_row.key, state_row.version))
+            )
+            expiry = min(expiry, old.expires_at)
     elif kind in {"ScribeAction", "ScribeExpire", "ScribeInvalidate"}:
         if len(proposals) != 1:
             return None
@@ -305,6 +390,7 @@ def scribe_guards(
             proposal.status != "pending"
             or proposal.expires_at <= now
             or proposal.editing
+            or proposal.pending_reply
             or token.id != proposal.confirmation_nonce_hash
             or token.action != "confirm"
             or token.consumed_at
@@ -418,5 +504,16 @@ def scribe_guards(
             or consumed.id != token.id
             or not consumed.body.get("consumed_at")
         ):
+            return None
+        from sanad.scribe.memory import confirmation_names
+
+        confirmed_at = from_record(changed_row, Proposal).updated_at
+        expected_names = confirmation_names(store, doctor, proposal, lambda: confirmed_at)
+        supplied_names = tuple(
+            from_record(r, NameMemory) for r in request.puts if r.entity_type == "name_memory"
+        )
+        if {(keys.partition(n.scope), n.id): n for n in expected_names} != {
+            (keys.partition(n.scope), n.id): n for n in supplied_names
+        }:
             return None
     return checks, expiry

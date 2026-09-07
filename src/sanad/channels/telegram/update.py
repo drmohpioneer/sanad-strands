@@ -50,6 +50,10 @@ class TelegramChat(TelegramValue):
 
 class TelegramMedia(TelegramValue):
     file_id: Handle
+    width: Annotated[int, Field(strict=True, ge=0)] = 0
+    height: Annotated[int, Field(strict=True, ge=0)] = 0
+    file_size: Annotated[int, Field(strict=True, ge=0)] = 0
+    mime_type: str | None = None
 
 
 class TelegramEntity(TelegramValue):
@@ -83,7 +87,11 @@ class TelegramMessage(TelegramValue):
 
     @property
     def media(self) -> TelegramMedia | None:
-        return self.photo[-1] if self.photo else self.voice or self.document
+        return (
+            max(reversed(self.photo), key=lambda p: (p.width * p.height, p.file_size))
+            if self.photo
+            else self.voice or self.document
+        )
 
     @property
     def kind(self) -> Literal["photo", "voice", "document", "text", "unsupported"]:

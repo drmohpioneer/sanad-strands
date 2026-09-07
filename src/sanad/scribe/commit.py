@@ -22,6 +22,7 @@ from sanad.domain.entities import (
 )
 from sanad.domain.events import ProposalCreated
 from sanad.domain.predicates import EvidencePredicate, PatientReportPredicate
+from sanad.scribe.amend import find_head
 from sanad.scribe.amend import order_key as order_key
 from sanad.scribe.card import REASONS, plain
 from sanad.scribe.proposal import InvitationWork, Proposal, ScribeCallback
@@ -228,7 +229,12 @@ class ScribeCommit:
                     category=fact.category,
                     payload=LabFactPayload(**fact.lab.model_dump(), text=fact.text)
                     if fact.lab
-                    else FactPayload(text=fact.text),
+                    else FactPayload(
+                        text=fact.text,
+                        clinical_en=fact.clinical_en,
+                        clinical_kind=fact.clinical_kind,
+                        terms=fact.terms,
+                    ),
                     provenance=self._provenance(proposal, actor, fact.text),
                     **metadata,
                 )
@@ -279,6 +285,10 @@ class ScribeCommit:
                 proposed,
                 profile,
             )
+            if item.startswith("mission:"):
+                confirmed = confirmed.model_copy(
+                    update={"clinical_en": candidate.missions[int(item.split(":")[1])].clinical_en}
+                )
             models.extend((confirmed, *followups))
             mission_ids.append(mission_id)
             followup_ids.extend(f.id for f in followups)
@@ -290,8 +300,8 @@ class ScribeCommit:
             amendment = next((a for a in proposal.amendments if a.item == item), None)
             if amendment and amendment.noop:
                 continue
-            id = order_key(order.drug)
-            old = self.repo.load(scope, "care_order_head", id, CareOrderHead)
+            old = find_head(self.repo, scope, order.drug)
+            id = old.id if old else order_key(order.drug)
             version = old.current_order_version + 1 if old else 1
             status: Literal["stopped", "active"] = "stopped" if order.action == "stop" else "active"
             version_id = f"{id}:{version}"
@@ -551,6 +561,7 @@ class ScribeCommit:
         if (
             proposal.status != "pending"
             or proposal.editing
+            or proposal.pending_reply
             or token.consumed_at
             or token.id != proposal.confirmation_nonce_hash
             or token.proposal_id != proposal.id
@@ -592,6 +603,10 @@ class ScribeCommit:
                             proposal, actor, command_id, reason="stale_version", claim=claim
                         )
             models, patient, accepted = self._compile(proposal, actor, doctor)
+            from sanad.scribe.memory import confirmation_names
+
+            learned = confirmation_names(self.repo.store, doctor, proposal, lambda: now)
+            models += learned
             if proposal.creating_patient or proposal.invitation_requested:
                 models += (
                     InvitationWork(
@@ -616,7 +631,7 @@ class ScribeCommit:
                 )
                 or "مفيش بنود صالحة للتسجيل."
             )
-            if proposal.issues:
+            if any(i.blocked for i in proposal.issues):
                 body += "\nمش هيتسجل:\n" + "\n".join(
                     "• " + REASONS[code]
                     for code in dict.fromkeys(i.code for i in proposal.issues if i.blocked)

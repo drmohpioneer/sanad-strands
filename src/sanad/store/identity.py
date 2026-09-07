@@ -48,6 +48,8 @@ WRITE_SETS = {
     "ClaimInvitation": {"invitation", "patient_claim", "claim_callback"},
     "RecordConsent": {"consent", "patient_claim", "claim_callback"},
     "ConfirmPatientClaim": {
+        "mission",
+        "review",
         "invitation",
         "patient_claim",
         "patient_binding",
@@ -168,6 +170,15 @@ def identity_guards(
         actual_scope = model_scope(from_record(row, MODELS[row.entity_type]))
         if isinstance(actual_scope, AccountScope) and actual_scope != scope:
             return None
+        if row.entity_type == "mission":
+            from sanad.contact.binding import valid_binding_mission
+
+            if (
+                kind != "ConfirmPatientClaim"
+                or not old_row
+                or not valid_binding_mission(old_row, row, now)
+            ):
+                return None
         if row.entity_type == "token_head":
             head = from_record(row, TokenHead)
             target = next(

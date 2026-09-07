@@ -36,7 +36,7 @@ def test_schema_ignores_model_bookkeeping_and_unknown_keys_at_every_level() -> N
     assert all(name not in description for name in ("intent", "numbers_used", "_dropped_numbers"))
     assert "foreign" not in value.model_dump_json() and "999" not in value.model_dump_json()
     assert not candidate_issues(value, "أحمد أملوديبين 5 مج وبنسلين وتحليل سكر بعد أسبوعين")
-    assert "scribe-correction-v3" in CORRECTION_PROMPT
+    assert "scribe-correction-v7" in CORRECTION_PROMPT
     assert "apply this correction" in CORRECTION_PROMPT.lower()
 
 
@@ -128,12 +128,11 @@ def test_coverage_checks_all_clinical_fields_and_runs_alongside_blocked_items() 
     issues = candidate_issues(
         value, "أحمد 60 سنة من 3 أيام 5 مج كل 8 ساعات 7 أيام تحليل بعد 4 ساعات و5.5 و90"
     )
-    assert extracted_numbers(value) == ("99", "8", "7", "4", "3", "5.5")
+    assert extracted_numbers(value) == ("60", "99", "8", "7", "4", "3", "5.5")
     assert [(i.code, i.numbers) for i in issues if i.code == "unsupported_number"] == [
         ("unsupported_number", ("99",))
     ]
     assert [i.numbers for i in issues if i.code == "unassigned_number"] == [
-        ("60",),
         ("5",),
         ("90",),
     ]
@@ -163,7 +162,7 @@ def test_spoken_word_numbers_are_not_converted_into_supported_digits() -> None:
     "instant,timezone,expected",
     [
         ("2026-09-20T12:00:00+00:00", "Africa/Cairo", "الأحد 20 سبتمبر، 3 العصر"),
-        ("2026-09-06T21:05:30+00:00", "Africa/Cairo", "الاثنين 7 سبتمبر، 12:05:30 بعد منتصف الليل"),
+        ("2026-09-06T21:05:30+00:00", "Africa/Cairo", "الاثنين 7 سبتمبر، 12:05 بعد منتصف الليل"),
         ("2026-09-06T09:00:00+00:00", "Africa/Cairo", "الأحد 6 سبتمبر، 12 الظهر"),
         ("2026-09-06T12:07:00+00:00", "UTC", "الأحد 6 سبتمبر، 12:07 الظهر"),
         ("2026-10-30T12:00:00+00:00", "Africa/Cairo", "الجمعة 30 أكتوبر، 2 الظهر"),

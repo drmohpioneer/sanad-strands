@@ -1,9 +1,10 @@
 """Mechanical comparison of two untrusted reads, independent of identity lookup."""
 
 import re
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from sanad.domain.boundaries import _BoundaryValue
+from sanad.media.agreement import agreed_rows
 from sanad.media.vision import DocumentItem, DocumentRead, ReaderResult
 from sanad.safety.kernel import grade_lab
 from sanad.safety.models import LabCandidate, Quantity
@@ -16,7 +17,50 @@ from sanad.scribe.extract import (
     ProposalIssue,
 )
 
+if TYPE_CHECKING:
+    from sanad.scribe.proposal import Proposal
+
 SHIFT_WARNING = "⚠️ الأرقام ممكن تكون متزحزحة عن الأسماء، راجع الصورة"
+# Contract 11d / Decision 023. OWNER_REVIEW_PENDING.
+PHOTO_SUPPORTED_SCOPE = (
+    "المدعوم حاليًا: مستندات مطبوعة أو مكتوبة بالكمبيوتر بحروف لاتينية؛ "
+    "خط اليد والكتابة العربية في الصور لسه مش مدعومين."
+)
+HANDWRITING_REPLY = (
+    ("مش قادر أقرا الورقة دي بثقة. صوّرها من فوق في نور كويس، أو قول لي اللي فيها وهسجّلها")
+    + "\n"
+    + PHOTO_SUPPORTED_SCOPE
+)
+SINGLE_READER_WARNING = "قريت الورقة قراءة واحدة بس، مش هسجّل منها حاجة"
+AGREEMENT_WARNING = "قريت الورقة قراءتين مختلفتين، مش هسجّل منها حاجة"
+COLUMN_CAPTION = "التعليمات بالعربي زي ما هي في الورقة؛ الصفوف جنبها في الكارت"
+
+
+def two_readers(read: DocumentRead) -> bool:
+    # Check both the persisted marker and actual slots, including older caches.
+    return not read.single_reader and len(read.readers) == 2
+
+
+def unreadable_reply(read: DocumentRead) -> str:
+    if not two_readers(read):
+        return HANDWRITING_REPLY + "\n" + SINGLE_READER_WARNING
+    return HANDWRITING_REPLY + ("\n" + AGREEMENT_WARNING if unreadable_read(read) else "")
+
+
+def render_card(proposal: "Proposal") -> tuple[str, ...]:
+    """Keep the accepted layout behind the minimum-independent-read gate."""
+    from sanad.scribe.card import render_card as accepted_card
+
+    if proposal.photo and unreadable_read(proposal.photo.reads):
+        return (unreadable_reply(proposal.photo.reads),)
+    return accepted_card(proposal)
+
+
+def unreadable_read(read: DocumentRead) -> bool:
+    if not two_readers(read):
+        return True
+    total = max(len(read.first.items), len(read.second.items))
+    return total == 0 or agreed_rows(read) < (total + 1) // 2
 
 
 class PhotoReview(_BoundaryValue):
@@ -44,7 +88,7 @@ def shift_guard(first: ReaderResult, second: ReaderResult) -> bool:
         if len(pairs) >= 2 and all(
             x.item.value is not None
             and x.item.value == y.item.value
-            and x.item.name.strip().casefold() != y.item.name.strip().casefold()
+            and (x.item.name or "").strip().casefold() != (y.item.name or "").strip().casefold()
             for x, y in pairs
         ):
             return True
@@ -53,7 +97,7 @@ def shift_guard(first: ReaderResult, second: ReaderResult) -> bool:
 
 def first_items(read: DocumentRead) -> tuple[DocumentItem, ...]:
     return tuple(r.item for r in read.first.items) + tuple(
-        DocumentItem(name="غير مقروء")
+        DocumentItem(name=None)
         for _ in range(max(0, len(read.second.items) - len(read.first.items)))
     )
 
@@ -62,7 +106,7 @@ def prescription_items(read: DocumentRead) -> tuple[OrderCandidate, ...]:
     return tuple(
         OrderCandidate(
             action="start",
-            drug=r.name,
+            drug=r.name or "",
             dose=" ".join(v for v in (r.dose, r.unit) if v) or None,
             frequency=r.frequency,
             route=r.route,
@@ -98,7 +142,7 @@ def lab_rows(read: DocumentRead, policy: SafetyPolicy) -> tuple[LabRowCandidate,
     return tuple(
         grade_row(
             LabRowCandidate(
-                analyte=r.name,
+                analyte=r.name or "",
                 value=r.value,
                 unit=r.unit,
                 flag=r.flag,
@@ -110,12 +154,14 @@ def lab_rows(read: DocumentRead, policy: SafetyPolicy) -> tuple[LabRowCandidate,
 
 
 def lab_text(row: LabRowCandidate) -> str:
-    return " ".join((row.analyte, row.value or "غير مقروء", row.unit or "بدون وحدة")) + (
+    return " ".join((row.analyte, row.value or "", row.unit or "بدون وحدة")) + (
         "؛ علامة مطبوعة: " + row.flag if row.flag else ""
     )
 
 
 def candidate_from(read: DocumentRead, kind: str, policy: SafetyPolicy) -> DictationCandidate:
+    if unreadable_read(read):
+        return DictationCandidate()
     if kind == "prescription":
         return DictationCandidate(orders=prescription_items(read))
     if kind == "lab":
@@ -133,17 +179,31 @@ def source_text(read: DocumentRead) -> str:
     # caption supplies identity only; a printed drug need not occur in it.
     return "\n".join(
         str(value)
-        for reader in (read.first, read.second)
+        for reader in read.readers
         for item in reader.items
-        for value in item.item.model_dump().values()
+        for key, value in item.item.model_dump().items()
+        if key != "note"
         if value is not None
     )
 
 
-def review_issues(review: PhotoReview) -> tuple[ProposalIssue, ...]:
+def review_issues(review: PhotoReview, candidate: DictationCandidate) -> tuple[ProposalIssue, ...]:
+    if unreadable_read(review.reads):
+        return (ProposalIssue(item="all", code="document_unclear"),)
     issues = []
     family = "order" if review.kind == "prescription" else "fact"
     count = max(len(review.reads.first.items), len(review.reads.second.items))
+    current_names = (
+        [order.drug for order in candidate.orders]
+        if review.kind == "prescription"
+        else [fact.lab.analyte if fact.lab else "" for fact in candidate.facts]
+    )
+    for i, name in enumerate(current_names):
+        if not name.strip():
+            issues.append(ProposalIssue(item=f"{family}:{i}", code="reader_disagreement"))
+    for i, item in enumerate(first_items(review.reads)):
+        if not item.name and f"items.{i}.name" not in review.resolved_fields:
+            issues.append(ProposalIssue(item=f"{family}:{i}", code="reader_disagreement"))
     for disagreement in review.reads.disagreements:
         if disagreement.field in review.resolved_fields:
             continue

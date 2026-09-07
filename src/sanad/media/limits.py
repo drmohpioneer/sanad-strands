@@ -34,6 +34,11 @@ def sniff(data: bytes) -> str:
     if data.startswith(b"RIFF") and data[8:12] == b"WAVE":
         return "wav"
     if data[4:8] == b"ftyp":
+        brands = data[8:64]
+        if any(brand in brands for brand in (b"heic", b"heix", b"hevc", b"hevx", b"mif1", b"msf1")):
+            return "heif"
+        if b"avif" in brands or b"avis" in brands:
+            return "avif"
         return "m4a"
     if data.startswith(b"ID3") or (len(data) > 1 and data[0] == 255 and data[1] & 224 == 224):
         return "mp3"

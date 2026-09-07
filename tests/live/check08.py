@@ -388,9 +388,13 @@ async def run_check(destination: Path = EVIDENCE) -> dict[str, Any]:
                     k = [
                         i.item.value
                         for i in reader.items
-                        if "potassium" in i.item.name.lower() or i.item.name == "K"
+                        if "potassium" in (i.item.name or "").lower() or i.item.name == "K"
                     ]
-                    cr = [i.item.value for i in reader.items if "creatinine" in i.item.name.lower()]
+                    cr = [
+                        i.item.value
+                        for i in reader.items
+                        if "creatinine" in (i.item.name or "").lower()
+                    ]
                     passed &= expected in k and (fixture != "lab_synthetic.png" or "2.4" in cr)
                     extracted.append(
                         {

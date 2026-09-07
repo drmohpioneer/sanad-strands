@@ -8,9 +8,12 @@ from fastapi import APIRouter, Request, Response
 from starlette.concurrency import run_in_threadpool
 
 from sanad.channels.telegram.router import TelegramRuntime, route_receipt
+from sanad.domain import PatientScope
 from sanad.ops.nonce_store import TickVerifier
 from sanad.ops.worker import worker_body
-from sanad.store.keys import ScopedKey
+from sanad.steward.inline import DeliveryScope, dispatch_inline
+from sanad.store.keys import AccountScope, IntakeScope, ScopedKey, digest
+from sanad.store.records import InboundReceipt, from_record
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +23,51 @@ def process_event(runtime: TelegramRuntime, event: dict[str, Any]) -> dict[str, 
         raise ValueError("unsupported worker event")
     key = ScopedKey.model_validate(event["receipt"])
     result = route_receipt(runtime, key, owner="lambda-worker")
+    # Authority comes from the saved receipt and the fresh binding, never the event.
+    try:
+        row = runtime.store.get(key.scope, "inbound_receipt", key.pk)
+        if row is not None:
+            receipt = from_record(row, InboundReceipt)
+            scopes = [DeliveryScope(key.scope)]
+            principal = receipt.principal
+            if principal and principal.actor_kind == "doctor" and principal.doctor_id:
+                scopes.extend(
+                    (
+                        DeliveryScope(
+                            IntakeScope(doctor_id=principal.doctor_id, intake_id="scribe")
+                        ),
+                        DeliveryScope(
+                            IntakeScope(doctor_id=principal.doctor_id, intake_id=digest(receipt.id))
+                        ),
+                        DeliveryScope(runtime.accounts.scope, receipt.source_subject),
+                    )
+                )
+            elif isinstance(key.scope, AccountScope):
+                scopes = [DeliveryScope(key.scope, receipt.source_subject)]
+                auth = runtime.store.authorize(runtime.settings.bot_id, receipt.source_subject)
+                if auth.principal.actor_kind == "patient":
+                    scopes.append(
+                        DeliveryScope(
+                            PatientScope(
+                                doctor_id=auth.principal.doctor_id or "",
+                                patient_id=auth.principal.patient_id or "",
+                            )
+                        )
+                    )
+            if (
+                result.delivery_patient is not None
+                and principal
+                and principal.doctor_id == result.delivery_patient.doctor_id
+                and (
+                    principal.actor_kind == "doctor"
+                    or principal.patient_id == result.delivery_patient.patient_id
+                )
+            ):
+                scopes.append(DeliveryScope(result.delivery_patient))
+            dispatch_inline(runtime.dispatcher, tuple(scopes))
+    except Exception:
+        # No exception body, no rollback, no send retry: the minute tick recovers.
+        logger.warning("inline_dispatch_failed")
     runtime.count("route_" + result.route)
     logger.info("receipt worker completed status=%s", result.status)
     return {"route": result.route, "status": result.status}

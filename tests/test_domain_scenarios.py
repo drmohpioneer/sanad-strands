@@ -459,7 +459,7 @@ def test_question_factory_has_its_own_source_clock_and_doctor_answer_authority()
     assert (
         ticket.kind == MissionKind.QUESTION and ticket.objective_predicate.kind == "doctor_answer"
     )
-    assert ticket.due_at == ticket.escalation_at == ticket.review_at == NOW + timedelta(hours=48)
+    assert ticket.due_at == ticket.escalation_at == ticket.review_at == NOW + timedelta(hours=43)
     assert ticket.grace_seconds == 0 and ticket.order_refs == ()
     assert (
         ticket.confirmed_at == ticket.created_at == NOW

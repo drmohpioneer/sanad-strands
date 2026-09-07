@@ -274,3 +274,77 @@ def photo_work_guards(
                 return None
             checks.append(Check(current.key, current.version))
     return checks
+
+
+def unreadable_media_guards(
+    store: "StoreBase",
+    request: CommitRequest,
+    now: datetime,
+) -> list["Check"] | None:
+    """11b media-only association: retained reads, no candidate or clinical mutation."""
+    from sanad.scribe.crosscheck import unreadable_read, unreadable_reply
+    from sanad.store._base import Check
+    from sanad.store.keys import IntakeScope
+    from sanad.store.records import MediaWork, OutboundIntent, PatientMedia
+
+    drafts = [from_record(r, IntakeDraft) for r in request.puts if r.entity_type == "intake_draft"]
+    if len(drafts) != 1 or len(request.intents) != 1:
+        return None
+    draft = drafts[0]
+    old_row = store.get(draft.scope, "intake_draft", draft.id)
+    if old_row is None:
+        return None
+    old = from_record(old_row, IntakeDraft)
+    if (
+        old.state != "pending"
+        or draft.version != old.version + 1
+        or draft.reads != old.reads
+        or not unreadable_read(draft.reads)
+        or draft.source_receipt_ids != old.source_receipt_ids
+        or draft.media_work_ids != old.media_work_ids
+        or draft.proposal_id is not None
+        or draft.safety_epoch != old.safety_epoch
+    ):
+        return None
+    intent = from_record(request.intents[0], OutboundIntent)
+    if intent.template_id != "doctor_photo_unreadable" or intent.payload != {
+        "text": unreadable_reply(draft.reads)
+    }:
+        return None
+    checks = [Check(old_row.key, old_row.version)]
+    media_rows = [r for r in request.puts if r.entity_type == "patient_media"]
+    if draft.selected_patient_id is None:
+        return checks if not media_rows and draft.state == "pending" else None
+    scope = PatientScope(doctor_id=draft.owner_doctor_id, patient_id=draft.selected_patient_id)
+    patient = store.get(scope, "patient", scope.patient_id)
+    if (
+        patient is None
+        or draft.state != "associated"
+        or draft.work_clock is not None
+        or request.command.fence is None
+        or request.command.fence.scope != scope
+        or {r.id for r in media_rows} != set(draft.media_work_ids)
+    ):
+        return None
+    checks.append(Check(patient.key, patient.version))
+    for row in media_rows:
+        media = from_record(row, PatientMedia)
+        media_scope = IntakeScope(doctor_id=draft.owner_doctor_id, intake_id=draft.id)
+        work_row = store.get(media_scope, "media_work", media.media_work_id)
+        if work_row is None:
+            return None
+        work = from_record(work_row, MediaWork)
+        if (
+            media.scope != scope
+            or media.media_scope != media_scope
+            or media.source_receipt_id != work.receipt_id
+            or work.receipt_id not in draft.source_receipt_ids
+            or media.mime != work.mime
+            or media.kind != draft.kind
+            or media.version != 1
+            or not work.source_blob_ref
+            or not work.transcript_ref
+        ):
+            return None
+        checks.append(Check(work_row.key, work_row.version))
+    return checks

@@ -49,8 +49,9 @@ def test_full_doctor_claim_patient_browser_journey(enrollment: LoginWorld) -> No
     rows, _ = world.store.list_records(patient.scope, "outbound_intent")
     confirmed = from_record(rows[0], OutboundIntent)
     assert confirmed.template_id == "binding_confirmed"
+    assert confirmed.status == "provider_accepted"
     assert world.dispatch(confirmed).status == "provider_accepted"
-    assert len([c for c in world.transport.calls if c.recipient_ref == PATIENT]) == 2
+    assert len([c for c in world.transport.calls if c.recipient_ref == PATIENT]) == 3
     patient_path = world.login_path(PATIENT, id=201)
     with world.client() as browser:
         result = browser_login(browser, patient_path)

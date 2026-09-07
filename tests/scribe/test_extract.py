@@ -36,6 +36,5 @@ def test_western_digit_storage_keeps_exact_source_support() -> None:
     )
     assert value.patient.age == "60" and value.orders[0].dose == "2.5 مج"
     issues = candidate_issues(value, "أحمد ٦٠ سنة أملوديبين ٢٫٥ مج")
-    # The addendum counts coverage in clinical fields, not demographic/identity fields.
-    assert len(issues) == 1 and issues[0].code == "unassigned_number"
-    assert issues[0].numbers == ("60",) and not issues[0].blocked
+    # Contract 11b includes demographic fields in coverage.
+    assert issues == ()

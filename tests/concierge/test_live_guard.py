@@ -23,7 +23,7 @@ def test_live_runner_hermetic_five_messages_and_refuses_second_allowance(
         run_check(target)
     monkeypatch.setenv("SANAD_LIVE", "1")
     lines: list[tuple[str, list[str]]] = [
-        ("الدكتور قالك: أتورفاستاتين، 40 مج، مرة يوميا، بالليل", [])
+        ("الدكتور قالك: Atorvastatin، 40 مج، مرة يوميا، بالليل", [])
     ]
     for query in MESSAGES[1:]:
         entry = retrieve(query, synthetic=True)[0]

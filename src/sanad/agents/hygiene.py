@@ -8,6 +8,56 @@ from sanad.safety.kernel import validate_patient_output
 from sanad.safety.models import OutputContext
 from sanad.safety.policy import SafetyPolicy
 
+# Measured in contract 11d; adding a reader requires a separately accepted probe.
+ARABIC_CAPABLE_READERS: frozenset[str] = frozenset()
+ARABIC_SCRIPT = re.compile(
+    r"[\u0600-\u06ff\u0750-\u077f\u0870-\u089f\u08a0-\u08ff\ufb50-\ufdff\ufe70-\ufeff\U00010e60-\U00010e7f\U0001ee00-\U0001eeff]"
+)
+DOCUMENT_ITEM_FIELDS = (
+    "name",
+    "value",
+    "unit",
+    "flag",
+    "ref",
+    "dose",
+    "frequency",
+    "route",
+    "timing",
+)
+
+
+def document_rail(raw: dict[str, Any], model_id: str) -> tuple[dict[str, Any], tuple[str, ...]]:
+    """Null whole Arabic-bearing fields, including mixed Latin/Arabic values.
+
+    Drop paths are code-owned metadata, never provider-supplied notes. Blank
+    cells retain row positions, so the doctor can edit the same row on the card.
+    """
+    dropped: list[str] = []
+
+    def field(value: Any, path: str) -> Any:
+        if not isinstance(value, str):
+            return value
+        if model_id not in ARABIC_CAPABLE_READERS and ARABIC_SCRIPT.search(value):
+            dropped.append(path)
+            return None
+        if "[unreadable]" in value.casefold() or "[غير مقروء]" in value:
+            return None
+        return value
+
+    result = dict(raw)
+    for name in ("printed_name", "printed_date"):
+        result[name] = field(raw.get(name), name)
+    if isinstance(raw.get("items"), list):
+        result["items"] = [
+            {key: field(row.get(key), f"items.{i}.{key}") for key in DOCUMENT_ITEM_FIELDS}
+            if isinstance(row, dict)
+            else row
+            for i, row in enumerate(raw["items"])
+        ]
+    if isinstance(raw.get("notes"), list):
+        result["notes"] = [field(note, f"notes.{i}") for i, note in enumerate(raw["notes"])]
+    return result, tuple(dropped)
+
 
 def clean_text(text: str) -> str:
     text = re.sub(

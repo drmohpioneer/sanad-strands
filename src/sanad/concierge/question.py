@@ -1,4 +1,4 @@
-"""Patient-created QUESTION with a durable original observation and 48-hour clock."""
+"""Patient-created QUESTION with a durable observation and default policy clock."""
 
 from sanad.concierge.policy import DRAFT_CONCIERGE_POLICY as POLICY
 from sanad.concierge.records import ReportFactPayload
@@ -62,8 +62,6 @@ def open_ticket(tx: PatientTurnCommit, text: str) -> Mission:
     tx.builder.add(result)
     assert isinstance(result, TransitionResult)
     assert isinstance(result.aggregate, Mission)
-    assert (
-        result.aggregate.due_at == tx.now + POLICY.question_due
-        and result.aggregate.grace_seconds == 0
-    )
+    # The 48-hour default offset now selects a local date at the policy clock (11b).
+    assert result.aggregate.grace_seconds == 0
     return result.aggregate

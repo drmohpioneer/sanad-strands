@@ -149,7 +149,7 @@ MISSION_EVENTS: tuple[ev.MissionEvent, ...] = (
 )
 
 # 26 literal cells per row, transcribed from the domain table and A02–A03/A04.
-MISSION_TABLE = {
+MISSION_TABLE: dict[str, tuple[str, ...]] = {
     "proposed": (
         "reject",
         "open",
@@ -479,7 +479,7 @@ FOLLOWUP_EVENTS: tuple[ev.FollowUpEvent, ...] = (
     ev.SuppressFollowUpContact(event_id="suppress", reason="Synthetic opt-out"),
     ev.CancelFollowUp(event_id="followup-cancel", reason="Synthetic cancellation"),
 )
-FOLLOWUP_TABLE = {
+FOLLOWUP_TABLE: dict[str, tuple[str, ...]] = {
     "awaiting_anchor": (
         "reject",
         "scheduled",
@@ -549,12 +549,49 @@ REVIEW_TABLE = {
 }
 
 
+# Contract 11 columns: only active mission contact and scheduled follow-up.
+MISSION_EVENTS += (
+    ev.ContactScheduled(
+        event_id="schedule",
+        next_contact_at=NOW,
+        slot_id="chase:2026-09-06",
+        template_id="patient_chase_test",
+        kind="chase",
+    ),
+)
+for state, cell in {
+    "proposed": "reject",
+    "awaiting_link": "reject",
+    "open": "unchanged",
+    "waiting_patient": "unchanged",
+    "blocked": "reject",
+    "unreachable": "reject",
+    "overdue": "reject",
+    "fulfilled": "reject",
+    "cancelled": "reject",
+    "closed_unfulfilled": "reject",
+    "superseded": "reject",
+}.items():
+    MISSION_TABLE[state] += (cell,)
+FOLLOWUP_EVENTS += (ev.PromptScheduled(event_id="schedule-prompt", slot_id="day3"),)
+for state, cell in {
+    "awaiting_anchor": "reject",
+    "scheduled": "unchanged",
+    "waiting_response": "reject",
+    "fulfilled": "reject",
+    "overdue": "reject",
+    "contact_suppressed": "reject",
+    "cancelled": "reject",
+}.items():
+    FOLLOWUP_TABLE[state] += (cell,)
+
+
 def test_handwritten_tables_cover_every_state_and_event_once() -> None:
     assert set(MISSION_TABLE) == {state.value for state in MissionState}
     assert set(FOLLOWUP_TABLE) == {state.value for state in FollowUpState}
     assert set(REVIEW_TABLE) == {state.value for state in ReviewState}
-    assert len(MISSION_EVENTS) == len({type(e) for e in MISSION_EVENTS}) == 26
-    assert len(FOLLOWUP_EVENTS) == len({type(e) for e in FOLLOWUP_EVENTS}) == 7
+    assert len(MISSION_EVENTS) == len({type(e) for e in MISSION_EVENTS}) == 27
+    assert len(FOLLOWUP_EVENTS) == len({type(e) for e in FOLLOWUP_EVENTS}) == 8
     assert len(REVIEW_EVENTS) == len({type(e) for e in REVIEW_EVENTS}) == 6
     assert {type(e) for e in MISSION_EVENTS} == set(
         get_args(get_args(ev.MissionEvent.__value__)[0])
@@ -563,11 +600,11 @@ def test_handwritten_tables_cover_every_state_and_event_once() -> None:
         get_args(get_args(ev.FollowUpEvent.__value__)[0])
     )
     assert {type(e) for e in REVIEW_EVENTS} == set(get_args(get_args(ev.ReviewEvent.__value__)[0]))
-    assert all(len(row) == 26 for row in MISSION_TABLE.values())
-    assert all(len(row) == 7 for row in FOLLOWUP_TABLE.values())
+    assert all(len(row) == 27 for row in MISSION_TABLE.values())
+    assert all(len(row) == 8 for row in FOLLOWUP_TABLE.values())
     assert all(len(row) == 6 for row in REVIEW_TABLE.values())
-    assert sum(map(len, MISSION_TABLE.values())) == 286
-    assert sum(map(len, FOLLOWUP_TABLE.values())) == 49
+    assert sum(map(len, MISSION_TABLE.values())) == 297
+    assert sum(map(len, FOLLOWUP_TABLE.values())) == 56
     assert sum(map(len, REVIEW_TABLE.values())) == 18
 
 

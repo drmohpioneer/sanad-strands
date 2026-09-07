@@ -36,9 +36,15 @@ def test_photo_table(world: ScribeWorld, example: PhotoExample) -> None:
     )
     work = world.store.list_records(intake_scope, "media_work")[0][0]
     if example.unreadable:
-        assert work.body["state"] == "needs_attention"
-        intents = world.store.list_records(intake_scope, "outbound_intent")[0]
-        assert example.expected in str(intents[0].body["payload"])
+        assert work.body["state"] == "completed" and work.body["transcript_ref"]
+        assert world.scribe.repo.pending(world.doctor.scope) is None
+        assert any(example.expected in str((i.payload or {}).get("text")) for i in world.cards())
+        draft = from_record(
+            world.store.list_records(world.doctor.scope, "intake_draft")[0][0], IntakeDraft
+        )
+        patient = world.claims.patient(world.doctor.id, draft.selected_patient_id or "")
+        assert patient and world.store.list_records(patient.scope, "patient_media")[0]
+        assert not world.store.list_records(patient.scope, "care_order_head")[0]
         return
     proposal = world.proposal
     assert (
@@ -49,7 +55,7 @@ def test_photo_table(world: ScribeWorld, example: PhotoExample) -> None:
     assert proposal.photo.reads.first.provenance.source_region is not None
     card = "\n".join(render_card(proposal))
     assert example.expected in card
-    assert "الاسم المطبوع (غير مؤكد): اسم غير موثوق" in card
+    assert "الاسم المطبوع (غير مؤكد): Untrusted printed name" in card
     assert any(i.blocked for i in proposal.issues) == example.blocked
     assert work.body["state"] == "completed"
     patient = world.claims.patient(world.doctor.id, proposal.selected_patient_id or "")
@@ -60,15 +66,21 @@ def test_photo_table(world: ScribeWorld, example: PhotoExample) -> None:
 
 
 def test_reading_tap_unblocks_only_chosen_field_and_replay_is_inert(world: ScribeWorld) -> None:
-    providers(world, prescription(), prescription("50 مج", "أتورفاستاتين"))
+    import json
+
+    first, second = json.loads(prescription()), json.loads(prescription("50 mg", "Atorvastatin"))
+    shared = {"name": "Concor", "dose": "5 mg", "frequency": "1x1"}
+    first["items"].append(shared)
+    second["items"].append(shared)
+    providers(world, json.dumps(first), json.dumps(second))
     world.post(photo())
     assert world.proposal.blocked("order:0")
-    raw = world.button("قراءة 2: أتورفاستاتين")
+    raw = world.button("قراءة 2: Atorvastatin")
     world.tap(raw=raw)
     assert world.proposal.blocked("order:0")
-    world.tap("قراءة 2: 50 مج", id=21)
+    world.tap("قراءة 2: 50 mg", id=21)
     assert not world.proposal.blocked("order:0")
-    assert world.proposal.candidate.orders[0].dose == "50 مج"
+    assert world.proposal.candidate.orders[0].dose == "50 mg"
     version = world.proposal.version
     world.tap(raw=raw, id=22)
     assert world.proposal.version == version
@@ -79,24 +91,19 @@ def test_reading_tap_unblocks_only_chosen_field_and_replay_is_inert(world: Scrib
     assert saved.status == "confirmed"
 
 
-def test_shift_requires_each_row_edit_and_retains_original_reads(world: ScribeWorld) -> None:
+def test_shift_stays_editable_blocked_and_retains_both_reads(world: ScribeWorld) -> None:
+    from sanad.scribe.crosscheck import SHIFT_WARNING
+
     providers(world, SHIFT, SHIFT)
     world.post(photo())
-    original = world.proposal.photo
-    assert original is not None
-    assert all(world.proposal.blocked(f"fact:{i}") for i in range(3))
-    world.tap("✏️ تعديل")
-    world.post(update(APPLICANT, "صف 1: الاسم=Bilirubin Total؛ القيمة=3.1؛ الوحدة=mg/dL", 11))
-    assert not world.proposal.blocked("fact:0")
-    assert world.proposal.blocked("fact:1") and world.proposal.blocked("fact:2")
-    assert world.proposal.photo and world.proposal.photo.reads == original.reads
-    world.tap("✏️ تعديل", id=21)
-    world.post(update(APPLICANT, "صف 2: الاسم=Direct؛ القيمة=0.8؛ الوحدة=mg/dL", 12))
-    world.tap("✏️ تعديل", id=22)
-    world.post(update(APPLICANT, "صف 3: الاسم=Indirect؛ القيمة=2.3؛ الوحدة=mg/dL", 13))
-    assert not any(i.code == "shifted_rows" for i in world.proposal.issues)
-    world.tap(id=23)
-    assert world.receipt(23).state == "completed"
+    proposal = world.proposal
+    assert proposal.photo and proposal.photo.shift_detected
+    assert proposal.photo.reads.first.items == proposal.photo.reads.second.items
+    assert SHIFT_WARNING in "\n".join(render_card(proposal))
+    assert all(proposal.blocked(f"fact:{i}") for i in range(3))
+    assert not [i for i in world.cards() if i.template_id == "doctor_photo_unreadable"]
+    patient = world.claims.patient(world.doctor.id, proposal.selected_patient_id or "")
+    assert patient and not world.store.list_records(patient.scope, "clinical_fact")[0]
 
 
 def test_intake_private_then_patient_association(world: ScribeWorld) -> None:
@@ -303,7 +310,7 @@ def test_policy_change_requires_two_fresh_reads_on_association(world: ScribeWorl
     from sanad.store.records import record_item
 
     vision, files, _ = providers(
-        world, prescription(), prescription(), prescription("10 مج"), prescription("10 مج")
+        world, prescription(), prescription(), prescription("10 mg"), prescription("10 mg")
     )
     world.post(photo(""))
     raw = intake_button(world, "أحمد رضا")
@@ -312,7 +319,7 @@ def test_policy_change_requires_two_fresh_reads_on_association(world: ScribeWorl
     assert world.store._atomic([Write(record_item(stale), draft.version)], [])
     world.post(callback(raw, APPLICANT, 20))
     assert len(vision.calls) == 4 and len(files.calls) == 1
-    assert world.proposal.candidate.orders[0].dose == "10 مج"
+    assert world.proposal.candidate.orders[0].dose == "10 mg"
 
 
 def test_injected_instruction_stays_note(world: ScribeWorld) -> None:
@@ -482,3 +489,78 @@ def test_media_other_doctor_and_epoch_change_during_fetch(
     monkeypatch.setattr(s3, "get", suspend)
     response = own.get(path)
     assert response.status_code == 401 and response.headers["cache-control"] == "no-store"
+
+
+@pytest.mark.parametrize("glare", [False, True])
+def test_11b_clean_lab_and_glare_files(world: ScribeWorld, glare: bool) -> None:
+    from pathlib import Path
+
+    path = Path(
+        "tests/data/09b/lab_synthetic_rotated_glare.png"
+        if glare
+        else "tests/data/09b/lab_synthetic.png"
+    )
+    reply = document(
+        unreadable=glare, items=[{"name": "Potassium", "value": "4.1", "unit": "mmol/L"}]
+    )
+    vision, _, _ = providers(world, reply, reply, data=path.read_bytes())
+    world.post(photo())
+    assert len(vision.calls) == 2
+    assert world.proposal.photo and "Potassium 4.1 mmol/L" in "\n".join(render_card(world.proposal))
+    assert not world.proposal.blocked("fact:0")
+
+
+def test_11b_fabricated_item_pair_has_one_reply_no_proposal_or_incident(world: ScribeWorld) -> None:
+    import json
+
+    from sanad.scribe.crosscheck import AGREEMENT_WARNING, HANDWRITING_REPLY
+
+    names = [
+        ("Fosamax", "Calcium", "Vitamin D"),
+        ("Ibuprofen 400mg", "Cefadroxil 500mg", "Ranitidine 150mg"),
+    ]
+    replies = [
+        document(document_type="prescription", items=[{"name": name} for name in group])
+        for group in names
+    ]
+    providers(world, *replies)
+    world.post(photo())
+    assert world.scribe.repo.pending(world.doctor.scope) is None
+    draft = from_record(
+        world.store.list_records(world.doctor.scope, "intake_draft")[0][0], IntakeDraft
+    )
+    assert [
+        [r.item.name for r in read.items] for read in (draft.reads.first, draft.reads.second)
+    ] == [list(n) for n in names]
+    patient = world.claims.patient(world.doctor.id, draft.selected_patient_id or "")
+    assert patient and not world.store.list_records(patient.scope, "incident")[0]
+    assert len(world.store.list_records(patient.scope, "patient_media")[0]) == 1
+    assert [i.payload for i in world.cards() if i.template_id == "doctor_photo_unreadable"] == [
+        {"text": HANDWRITING_REPLY + "\n" + AGREEMENT_WARNING}
+    ]
+    assert "Fosamax" not in json.dumps([i.payload for i in world.cards()])
+
+
+def test_11b_image_document_below_8mb_is_not_reduced(world: ScribeWorld) -> None:
+    from pathlib import Path
+
+    data = Path("tests/data/09b/lab_synthetic.png").read_bytes()
+    import zlib
+
+    payload = b"synthetic\0" + b"x" * (8 * 1024 * 1024 - 1 - len(data) - 12 - 10)
+    chunk = len(payload).to_bytes(4, "big") + b"tEXt" + payload
+    chunk += zlib.crc32(b"tEXt" + payload).to_bytes(4, "big")
+    data = data[:-12] + chunk + data[-12:]
+    reply = document(items=[{"name": "Potassium", "value": "4.1", "unit": "mmol/L"}])
+    vision, _, s3 = providers(world, reply, reply, data=data)
+    world.post(photo(as_document=True))
+    assert world.proposal.photo
+    from sanad.media.images import normalize_document
+    from sanad.media.limits import image_info
+
+    normalized = normalize_document(data)
+    assert all(call[1][0]["image"]["source"]["bytes"] == normalized for call in vision.calls)
+    original_size, normalized_size = image_info(data), image_info(normalized)
+    assert normalized_size.width >= original_size.width
+    assert normalized_size.height >= original_size.height
+    assert data in s3.fake.objects.values()

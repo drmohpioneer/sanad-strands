@@ -214,6 +214,30 @@ def guards(store: "StoreBase", request: CommitRequest, now: datetime) -> list["C
                     return None
                 checks.append(Check(previous.key, previous.version))
         if row.entity_type == "mission":
+            if row.version > 1:
+                from sanad.contact.scheduler import prime
+                from sanad.domain import (
+                    DRAFT_POLICY_2026_09,
+                    Mission,
+                    PatientReplied,
+                    TransitionResult,
+                    transition_mission,
+                )
+
+                original = next((m for m in snap.missions if m.id == row.id), None)
+                if original:
+                    reply = transition_mission(
+                        original,
+                        PatientReplied(event_id=command.command_id + ":reply:" + row.id),
+                        now,
+                        DRAFT_POLICY_2026_09,
+                    )
+                    if (
+                        isinstance(reply, TransitionResult)
+                        and isinstance(reply.aggregate, Mission)
+                        and prime(reply.aggregate, now).model_dump(mode="json") == row.body
+                    ):
+                        continue
             if row.version == 1 and (
                 row.body.get("kind") != "QUESTION"
                 or command.payload.get("type") != "CreateSupportTicket"

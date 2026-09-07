@@ -64,7 +64,7 @@ def explicit(at: datetime) -> ExplicitTiming:
 def test_every_default_and_zero_grace(kind: MissionKind, offset: timedelta) -> None:
     result = resolve_timing(kind, NOW, POLICY, schedule_end=NOW + timedelta(days=10))
     assert isinstance(result, ResolvedTiming)
-    assert result.due_at == NOW + offset
+    assert result.due_at == NOW + offset - timedelta(hours=5)
     assert result.due_source == DueSource.default
     assert result.grace_seconds == 0
     assert result.escalation_at == result.review_at == result.due_at
@@ -152,7 +152,7 @@ def test_inferred_boundary_instants_are_accepted(days: int) -> None:
 def test_rejected_proposal_falls_back_with_visible_reason(offset: timedelta) -> None:
     result = resolve_timing(MissionKind.TEST, NOW, POLICY, proposal=proposal(offset))
     assert isinstance(result, ResolvedTiming)
-    assert result.due_at == NOW + timedelta(days=14)
+    assert result.due_at == datetime(2026, 9, 20, 7, tzinfo=UTC)
     assert result.due_source == DueSource.default
     assert "Rejected proposal" in result.due_reason and "1–180" in result.due_reason
     assert POLICY.policy_version in result.due_reason
@@ -208,7 +208,7 @@ def test_custom_policy_drives_defaults_horizon_inference_grace_and_followup_cloc
         MissionKind.TEST, NOW, policy, proposal=proposal(), state_hint="proposed"
     )
     assert isinstance(result, ResolvedTiming)
-    assert result.due_at == NOW + timedelta(hours=39)
+    assert result.due_at == datetime(2026, 9, 8, 7, tzinfo=UTC)
     assert result.escalation_at == result.due_at + timedelta(seconds=23)
     assert result.review_at == NOW + timedelta(hours=3)
     overridden = resolve_timing(

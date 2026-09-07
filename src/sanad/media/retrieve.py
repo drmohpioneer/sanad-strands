@@ -21,7 +21,8 @@ from sanad.domain import (
 from sanad.domain.boundaries import _BoundaryValue
 from sanad.domain.operations import transition_operational_clock
 from sanad.media.audio import AudioConverter, ConversionFailure
-from sanad.media.limits import MAX_AUDIO_BYTES, MediaInvalid, image_info, sniff
+from sanad.media.images import normalize_document, source_image_mime
+from sanad.media.limits import MAX_AUDIO_BYTES, MediaInvalid, sniff
 from sanad.media.storage import MediaScope, MediaStore
 from sanad.media.telegram import MediaFailure, TelegramFiles
 from sanad.steward.apply import make_intent
@@ -407,9 +408,12 @@ class MediaRetriever:
                     if isinstance(download, MediaFailure):
                         return self._failure(work, claim, download.reason)
                     self.checkpoint("downloaded")
-                    actual = sniff(download.data)
-                    if actual in {"png", "jpeg"}:
-                        mime = image_info(download.data).mime
+                    try:
+                        actual = sniff(download.data)
+                    except MediaInvalid:
+                        actual = "image"
+                    if actual in {"png", "jpeg", "heif", "avif", "image"}:
+                        mime = source_image_mime(download.data)
                     elif len(download.data) <= MAX_AUDIO_BYTES:
                         mime = {
                             "ogg": "audio/ogg",
@@ -431,12 +435,12 @@ class MediaRetriever:
                 else:
                     assert work.source_blob_ref is not None
                     data = self._get_blob(work.source_blob_ref)
-                    actual = sniff(data)
                     self.checkpoint("normalization_loaded")
-                    if actual in {"png", "jpeg"}:
-                        image_info(data)
-                        normalized, duration = work.source_blob_ref, None
+                    if work.mime and work.mime.startswith("image/"):
+                        normalized = self._put_blob(normalize_document(data), "image/jpeg")
+                        duration = None
                     else:
+                        actual = sniff(data)
                         converted = self.converter.convert(data, actual)
                         if isinstance(converted, ConversionFailure):
                             return self._failure(work, claim, converted.reason)

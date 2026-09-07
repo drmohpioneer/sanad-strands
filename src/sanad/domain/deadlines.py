@@ -1,6 +1,6 @@
 """Pure UTC clock calculations, with explicit instants preserved without rounding."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, time, timedelta
 from typing import Literal, Self
 from zoneinfo import ZoneInfo
 
@@ -124,6 +124,16 @@ def resolve_timing(
                 )
             anchor = TimingAnchor(kind="schedule_end", instant=schedule_end)
         due = anchor.instant + default.offset
+        local = datetime.combine(
+            due.astimezone(ZoneInfo(policy.timezone)).date(),
+            time.fromisoformat(policy.default_deadline_local_time),
+        )
+        try:
+            due = local_to_utc(local, policy.timezone)
+        except AmbiguousLocalTime:
+            # Computed times choose the later instant, as in the contact ladder.
+            zone_info = ZoneInfo(policy.timezone)
+            due = max(local.replace(tzinfo=zone_info, fold=f).astimezone(UTC) for f in (0, 1))
         if due <= anchor_at:
             return NeedsClarification(
                 reason_code="default_not_future",

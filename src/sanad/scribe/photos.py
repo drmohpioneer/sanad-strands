@@ -12,21 +12,41 @@ from sanad.auth.service import read_of, revise
 from sanad.auth.tokens import issue_token
 from sanad.channels.telegram import wording
 from sanad.channels.telegram.router import RouteResult
-from sanad.domain import DRAFT_POLICY_2026_09, PatientScope, Principal, Provenance, TenantScope
+from sanad.domain import (
+    DRAFT_POLICY_2026_09,
+    ImageRegion,
+    PatientScope,
+    Principal,
+    Provenance,
+    TenantScope,
+)
+from sanad.media.images import instruction_column
 from sanad.media.limits import MediaInvalid, image_info
-from sanad.media.retrieve import fetch_telegram_file
+from sanad.media.retrieve import MediaRetriever, fetch_telegram_file
 from sanad.media.telegram import MediaFailure
-from sanad.media.vision import VISION_PROMPT_VERSION, DocumentFailure, DocumentRead, read_document
+from sanad.media.vision import (
+    VISION_PROMPT_VERSION,
+    DocumentCrop,
+    DocumentFailure,
+    DocumentRead,
+    read_document,
+)
 from sanad.scribe import amend
-from sanad.scribe.card import plain, render_card
+from sanad.scribe.card import plain
 from sanad.scribe.crosscheck import (
+    COLUMN_CAPTION,
+    HANDWRITING_REPLY,
     PhotoReview,
     candidate_from,
     grade_row,
     lab_text,
+    render_card,
     review_issues,
     shift_guard,
     source_text,
+    two_readers,
+    unreadable_read,
+    unreadable_reply,
 )
 from sanad.scribe.extract import (
     DictationCandidate,
@@ -51,6 +71,8 @@ from sanad.store.records import (
     IntakeConcern,
     IntakeDraft,
     MediaWork,
+    OutboundIntent,
+    PatientMedia,
     PhotoAssociationWork,
     from_record,
 )
@@ -67,10 +89,22 @@ _REASONS = {
     "unreadable": "الكتابة مش واضحة",
     "file_expired": "الملف مبقاش متاح",
     "two_documents": "الصورة فيها أكتر من مستند",
+    "conversion_failed": "مش قادر أفتح صيغة الصورة دي",
+    "expired_handle": "الملف مبقاش متاح",
 }
 
 
 def unreadable(reason: str) -> str:
+    if reason in {
+        "unreadable",
+        "invalid_document_json",
+        "template_echo",
+        "readers_failed",
+        "timeout",
+        "unavailable",
+        "budget_exhausted",
+    }:
+        return HANDWRITING_REPLY
     return wording.render(
         "doctor_photo_unreadable", reason=_REASONS.get(reason, "الصورة ماوصلتش أو القراءة ماكملتش")
     )
@@ -168,6 +202,13 @@ class PhotoTurn:
             actor_id=actor.subject,
             source_kind="document_observation",
             received_at=receipt.received_at,
+            source_region=ImageRegion(
+                asset_ref=media.normalized_blob_ref,
+                x=0,
+                y=0,
+                width=1,
+                height=1,
+            ),
         )
         caption = str((receipt.payload or {}).get("text", ""))
         if cached and all(
@@ -194,10 +235,6 @@ class PhotoTurn:
                         adapter=self.turn.vision_factory(source),
                     )
                 )
-        if isinstance(result, DocumentRead) and (
-            result.first.unreadable or result.second.unreadable
-        ):
-            result = DocumentFailure(reason="unreadable")
         if isinstance(result, DocumentFailure):
             failure = retriever.extraction_result(receipt.id, failure=result.reason)
             if isinstance(failure, MediaFailure) and failure.durable:
@@ -207,14 +244,14 @@ class PhotoTurn:
                 )
             return RouteResult(route="busy", status="stale_work")
         if cached is not result:
+            result = self.with_column(result, retriever, media.normalized_blob_ref)
             reference = retriever.media_store.put(
                 retriever.scope, result.model_dump_json().encode(), "application/json"
             )
             if not retriever.extraction_result(receipt.id, transcript_ref=reference):
                 return RouteResult(route="busy", status="stale_work")
         self.turn.checkpoint("photo_reads_persisted")
-        hint = kind_hint(caption)
-        kind = hint if hint != "unknown" else result.first.document_type
+        kind = result.first.document_type
         draft = self.intake.create(actor, receipt.id, result, kind)
         patient = caption_patient(caption)
         previous = self.repo.pending(doctor.scope)
@@ -236,15 +273,70 @@ class PhotoTurn:
             self.raise_patient(result, selected, actor)
         elif danger:
             draft = self.intake.concern(draft, actor, danger)
-        if not patient.name_as_spoken and not selected:
-            return self.pending(receipt, actor, claim, doctor, draft)
-        return self.propose(receipt, actor, claim, doctor, draft, patient, selected)
+        if unreadable_read(result):
+            routed = self.unreadable_card(receipt, actor, claim, doctor, draft, selected)
+        elif not patient.name_as_spoken and not selected:
+            routed = self.pending(receipt, actor, claim, doctor, draft)
+        else:
+            routed = self.propose(receipt, actor, claim, doctor, draft, patient, selected)
+        return routed.model_copy(
+            update={
+                "delivery_patient": PatientScope(doctor_id=doctor.id, patient_id=selected)
+                if selected
+                else None
+            }
+        )
+
+    @staticmethod
+    def with_column(
+        reads: DocumentRead, retriever: MediaRetriever, normalized_blob_ref: str
+    ) -> DocumentRead:
+        if (
+            not two_readers(reads)
+            or not any(r.document_type == "prescription" for r in reads.readers)
+            or not any(p.startswith("items.") for r in reads.readers for p in r.dropped_fields)
+        ):
+            return reads
+        data = retriever.media_store.get(
+            retriever.scope, normalized_blob_ref, DRAFT_SCRIBE_POLICY.max_photo_bytes
+        )
+        crop = instruction_column(data)
+        crop_ref = retriever.media_store.put(retriever.scope, crop.data, "image/jpeg")
+        return reads.model_copy(
+            update={
+                "instruction_crop": DocumentCrop(
+                    blob_ref=crop_ref,
+                    box=crop.box,
+                    layout=crop.layout,
+                    normalized_blob_ref=normalized_blob_ref,
+                )
+            }
+        )
 
     def danger_facts(self, reads: DocumentRead) -> dict[str, JsonValue]:
+        if not two_readers(reads):
+            return {}
         rows: list[JsonValue] = []
-        # Either reader can add danger; disagreement never suppresses it.
-        for reader in (reads.first, reads.second):
+        unreliable = unreadable_read(reads)
+        # For H fallback, only a jointly readable critical row can raise danger.
+        # On an editable document either reader still adds danger as in 09b.
+        for reader in reads.readers:
             for row in reader.items:
+                if unreliable and not all(
+                    any(
+                        (other.item.name or "").strip().casefold()
+                        == (row.item.name or "").strip().casefold()
+                        and other.item.value == row.item.value
+                        and other.item.unit == row.item.unit
+                        and row.item.value is not None
+                        and row.item.unit
+                        and row.item.name
+                        and "[unreadable]" not in row.item.name
+                        for other in reading.items
+                    )
+                    for reading in reads.readers
+                ):
+                    continue
                 if row.lab_verdict and row.lab_verdict.level == "critical":
                     rows.append(
                         {
@@ -258,6 +350,74 @@ class PhotoTurn:
             if rows
             else {}
         )
+
+    def unreadable_card(
+        self,
+        receipt: InboundReceipt,
+        actor: Principal,
+        claim: Claim,
+        doctor: Doctor,
+        draft: IntakeDraft,
+        selected: str | None,
+    ) -> RouteResult:
+        now = self.repo.clock()
+        lease = None
+        models: tuple[BaseModel, ...] = (revise(draft, now),)
+        if selected:
+            from datetime import timedelta
+
+            scope = PatientScope(doctor_id=doctor.id, patient_id=selected)
+            lease = self.repo.store.acquire_patient(
+                scope, "photo-unreadable", now, timedelta(minutes=5)
+            )
+            if lease is None:
+                return RouteResult(route="busy", status="patient_busy")
+            models = (
+                revise(
+                    draft, now, selected_patient_id=selected, state="associated", work_clock=None
+                ),
+            )
+            for media_id in draft.media_work_ids:
+                media_scope = keys.IntakeScope(doctor_id=doctor.id, intake_id=draft.id)
+                work = self.repo.load(media_scope, "media_work", media_id, MediaWork)
+                assert work is not None and work.mime
+                models += (
+                    PatientMedia(
+                        id=media_id,
+                        media_work_id=media_id,
+                        media_scope=media_scope,
+                        source_receipt_id=work.receipt_id,
+                        kind=draft.kind,
+                        mime=work.mime,
+                        scope=scope,
+                        created_at=now,
+                        updated_at=now,
+                    ),
+                )
+        try:
+            result = self.repo.commit(
+                actor,
+                "PhotoUnreadable",
+                "photo-unreadable:" + receipt.id,
+                models,
+                (
+                    self.repo.intent(
+                        doctor,
+                        "doctor_photo_unreadable",
+                        {"text": unreadable_reply(draft.reads)},
+                        receipt.id,
+                    ),
+                ),
+                claim=claim,
+                fence=lease,
+                reads=(read_of(draft),),
+            )
+            return RouteResult(
+                route="doctor", status=result.status, template_id="doctor_photo_unreadable"
+            )
+        finally:
+            if lease:
+                self.repo.store.release_patient(lease)
 
     def raise_patient(self, reads: DocumentRead, patient_id: str, actor: Principal) -> bool:
         facts = self.danger_facts(reads)
@@ -411,6 +571,8 @@ class PhotoTurn:
         doctor: Doctor,
         draft: IntakeDraft,
     ) -> RouteResult:
+        if unreadable_read(draft.reads):
+            return self.unreadable_card(receipt, actor, claim, doctor, draft, None)
         now = self.repo.clock()
         changed = revise(draft, now)
         tokens, markup = self.intake.buttons(changed, doctor, actor)
@@ -456,6 +618,8 @@ class PhotoTurn:
         new: bool = False,
         intake_fence: Claim | None = None,
     ) -> RouteResult:
+        if unreadable_read(draft.reads):
+            return self.unreadable_card(receipt, actor, claim, doctor, draft, selected)
         candidate = candidate_from(
             draft.reads, draft.kind, self.turn.runtime.safety_policy
         ).model_copy(update={"patient": patient})
@@ -598,11 +762,7 @@ class PhotoTurn:
                     adapter=self.turn.vision_factory(draft.reads.first.provenance),
                 )
             )
-            if (
-                isinstance(fresh, DocumentFailure)
-                or fresh.first.unreadable
-                or fresh.second.unreadable
-            ):
+            if isinstance(fresh, DocumentFailure):
                 return self.turn._reply(
                     receipt,
                     actor,
@@ -611,12 +771,34 @@ class PhotoTurn:
                     "reread_required",
                     text=unreadable("unreadable"),
                 )
-            draft = draft.model_copy(
-                update={
-                    "reads": fresh,
-                    "reader_policy_version": self.turn.runtime.safety_policy.policy_version,
-                }
-            )
+            if unreadable_read(fresh):
+                # Keep the surviving reread in the doctor-private draft before
+                # rendering fallback; a callback retry must not resurrect old reads.
+                revised = revise(
+                    draft,
+                    self.repo.clock(),
+                    reads=fresh,
+                    kind=fresh.first.document_type,
+                    reader_policy_version=self.turn.runtime.safety_policy.policy_version,
+                    processing_claim=None,
+                )
+                saved = self.repo.commit(
+                    actor,
+                    "IntakeAction",
+                    "photo-reread:" + receipt.id,
+                    (revised,),
+                    reads=(read_of(draft),),
+                )
+                if saved.status not in {"accepted", "duplicate"}:
+                    return RouteResult(route="busy", status="stale_work")
+                draft = revised
+            else:
+                draft = draft.model_copy(
+                    update={
+                        "reads": self.with_column(fresh, retriever, work.normalized_blob_ref),
+                        "reader_policy_version": self.turn.runtime.safety_policy.policy_version,
+                    }
+                )
         selected = (
             self.turn.claims.patient(doctor.id, token.patient_id or "")
             if token.action == "select"
@@ -755,7 +937,7 @@ class PhotoTurn:
     def buttons(
         self, proposal: Proposal, actor: Principal
     ) -> tuple[tuple[ScribeCallback, ...], list[JsonValue]]:
-        if not proposal.photo:
+        if not proposal.photo or unreadable_read(proposal.photo.reads):
             return (), []
         tokens: list[ScribeCallback] = []
         buttons: list[JsonValue] = []
@@ -810,9 +992,12 @@ class PhotoTurn:
         candidate = proposal.candidate
         if token.field.startswith("items."):
             _, index, field = token.field.split(".")
-            candidate = self.set_field(
-                candidate, photo, int(index), field, d.first if token.reading == 0 else d.second
-            )
+            selected_value = d.first if token.reading == 0 else d.second
+            # An empty reading is not a doctor's replacement for a missing name.
+            # Keep its row blocked until a real name is chosen or explicitly edited.
+            if field == "name" and not selected_value:
+                return self.refresh(receipt, actor, claim, proposal, token, candidate, photo)
+            candidate = self.set_field(candidate, photo, int(index), field, selected_value)
         elif token.field == "document_type":
             chosen = photo.reads.first if token.reading == 0 else photo.reads.second
             kind = chosen.document_type
@@ -853,7 +1038,7 @@ class PhotoTurn:
                     value = " ".join(v for v in (dose, value) if v) or None
                 orders[index] = type(orders[index]).model_validate(
                     orders[index].model_dump()
-                    | {mapping[field]: value or ("غير مقروء" if field == "name" else None)}
+                    | {mapping[field]: value or ("" if field == "name" else None)}
                 )
             return candidate.model_copy(update={"orders": tuple(orders)})
         facts = list(candidate.facts)
@@ -864,7 +1049,7 @@ class PhotoTurn:
             if field in mapping:
                 row = grade_row(
                     row.model_copy(
-                        update={mapping[field]: value or ("غير مقروء" if field == "name" else None)}
+                        update={mapping[field]: value or ("" if field == "name" else None)}
                     ),
                     self.turn.runtime.safety_policy,
                 )
@@ -894,7 +1079,7 @@ class PhotoTurn:
         support = "\n".join(amend.instruction_line(a.old) for a in amendments if a.old)
         issues = (
             *candidate_issues(candidate, proposal.source_text + "\n" + support),
-            *review_issues(photo),
+            *review_issues(photo, candidate),
             *amendment_issues,
         )
         if not proposal.selected_patient_id and not (
@@ -918,18 +1103,7 @@ class PhotoTurn:
             confirmation_nonce_hash=nonce.hash,
         )
         tokens, markup = self.turn.buttons(changed, actor, nonce.secret.get_secret_value())
-        cards = render_card(changed)
-        intents = tuple(
-            self.repo.intent(
-                doctor,
-                "scribe_card",
-                {"text": card, **({"reply_markup": markup} if i == len(cards) - 1 else {})},
-                f"{changed.id}:{changed.version}",
-                proposal=changed,
-                sequence=i,
-            )
-            for i, card in enumerate(cards)
-        )
+        intents = self.card_intents(changed, doctor, markup)
         result = self.repo.commit(
             actor,
             "ScribeAction",
@@ -943,3 +1117,42 @@ class PhotoTurn:
             str((receipt.payload or {}).get("callback_query_id", "")), ""
         )
         return RouteResult(route="callback", status=result.status, template_id="scribe_card")
+
+    def card_intents(
+        self, proposal: Proposal, doctor: Doctor, markup: JsonValue
+    ) -> tuple[OutboundIntent, ...]:
+        if proposal.photo and unreadable_read(proposal.photo.reads):
+            return (
+                self.repo.intent(
+                    doctor,
+                    "doctor_photo_unreadable",
+                    {"text": unreadable_reply(proposal.photo.reads)},
+                    f"{proposal.id}:{proposal.version}",
+                    proposal=proposal,
+                ),
+            )
+        cards = render_card(proposal)
+        intents = tuple(
+            self.repo.intent(
+                doctor,
+                "scribe_card",
+                {"text": card, **({"reply_markup": markup} if i == len(cards) - 1 else {})},
+                f"{proposal.id}:{proposal.version}",
+                proposal=proposal,
+                sequence=i,
+            )
+            for i, card in enumerate(cards)
+        )
+        crop = proposal.photo.reads.instruction_crop if proposal.photo else None
+        if crop:
+            intents += (
+                self.repo.intent(
+                    doctor,
+                    "scribe_photo_column",
+                    {"text": COLUMN_CAPTION, "photo_blob_ref": crop.blob_ref},
+                    f"{proposal.id}:{proposal.version}",
+                    proposal=proposal,
+                    sequence=len(cards),
+                ),
+            )
+        return intents

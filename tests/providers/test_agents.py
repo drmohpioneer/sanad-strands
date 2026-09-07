@@ -269,9 +269,6 @@ def test_proposal_plain_json_never_uses_tool_forced_output(monkeypatch: pytest.M
         '{"value":{"text":"a"}}{"value":{"text":"b"}}',
         '{"value":{"text":"a","text":"b"}}',
         '{"value":{}}',
-        '{"value":{"text":"ok"},"spans":{"start":0,"end":2}}',
-        '{"value":{"text":"ok"},"spans":[{"field":"text","start":2,"end":1}]}',
-        '{"value":{"text":"ok"},"spans":[{"field":"text","start":-1,"end":1}]}',
     ],
 )
 def test_invalid_plain_json_fails_once_without_validation_retries(reply: str) -> None:
@@ -280,6 +277,58 @@ def test_invalid_plain_json_fails_once_without_validation_retries(reply: str) ->
     assert isinstance(result, ProposalFailure) and result.reason == "schema_validation"
     assert len(model.script.calls) == len(result.metadata) == 1
     assert not hasattr(result, "value")
+
+
+@pytest.mark.parametrize(
+    "spans",
+    [
+        {"start": 0, "end": 2},
+        [{"field": "text", "start": 2, "end": 1}],
+        [{"field": "text", "start": -1, "end": 1}],
+        [None, "bad", {}, {"field": "text", "start": "bad", "end": 1}],
+        [{"field": "value.text", "start": 0, "end": 2}],
+        [{"field": "text[]", "start": 0, "end": 2}],
+    ],
+)
+def test_malformed_spans_leave_candidate_usable_without_retry(spans: object) -> None:
+    model = ScriptedModel(response(json.dumps({"value": {"text": "ok"}, "spans": spans})))
+    result = asyncio.run(agent(model).propose(Answer, "ok"))
+    assert isinstance(result, Proposal) and result.value.text == "ok"
+    assert result.unsupported_spans == ("text",)
+    assert result.provenance[0].source_span is None
+    assert len(model.script.calls) == len(result.metadata) == 1
+
+
+def test_malformed_span_does_not_discard_valid_sibling_claim() -> None:
+    model = ScriptedModel(
+        response(
+            json.dumps(
+                {
+                    "value": {"text": "ok"},
+                    "spans": [
+                        {"field": "text", "start": 0, "end": 2},
+                        {"field": "unknown", "start": "bad", "end": 1},
+                    ],
+                }
+            )
+        )
+    )
+    result = asyncio.run(agent(model).propose(Answer, "ok"))
+    assert isinstance(result, Proposal) and result.unsupported_spans == ()
+    assert result.provenance[0].source_span is not None
+
+
+def test_opt_out_omits_span_request_and_ignores_unsolicited_claims() -> None:
+    from sanad.agents.factory import propose
+
+    model = ScriptedModel(candidate({"text": "ok"}, [{"field": "text", "start": 0, "end": 2}]))
+    instance = agent(model)
+    result = asyncio.run(propose("scribe", Answer, "ok", agent=instance, want_spans=False))
+    assert isinstance(result, Proposal) and result.unsupported_spans == ("text",)
+    assert result.provenance[0].source_span is None
+    prompt = model.script.calls[0]["messages"][-1]["content"][0]["text"]
+    assert "spans" not in prompt and "value.text: string" in prompt
+    assert len(model.script.calls) == 1
 
 
 def test_plain_json_hygiene_preserves_list_spans_and_filters_unsupported_claims() -> None:

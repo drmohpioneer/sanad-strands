@@ -69,6 +69,9 @@ class TelegramRuntime:
         self.identity_route: (
             Callable[[InboundReceipt, Authorization], RouteResult | None] | None
         ) = None
+        self.scribe_route: Callable[[InboundReceipt, Authorization], RouteResult | None] | None = (
+            None
+        )
 
     def count(self, reason: str) -> None:
         self.counters[reason] = self.counters.get(reason, 0) + 1
@@ -87,19 +90,22 @@ class TelegramRuntime:
             if len(sources) == 1:
                 row = self.store.get(intent.scope, "incident", sources[0].id)
                 if row:
-                    facts = IncidentFacts.model_validate(from_record(row, Incident).facts)
+                    incident = from_record(row, Incident)
+                    facts = IncidentFacts.model_validate(incident.facts)
                     return {
-                        "text": "\n".join(
+                        "text": (
+                            "الصورة اللي اتنبهت لها قبل كده اتربطت بالمريض.\n"
+                            if incident.prior_delivery_refs
+                            else ""
+                        )
+                        + "\n".join(
                             render_urgent(
                                 "doctor_danger",
                                 language=language,
                                 gender="u",
                                 policy=self.safety_policy,
                                 patient=intent.scope.patient_id,
-                                concept=ScreenVerdict.model_validate(
-                                    facts.verdict.model_dump()
-                                ).concept
-                                or facts.rule_id,
+                                concept=(getattr(facts.verdict, "concept", None) or facts.rule_id),
                                 source=facts.source.observation_id,
                                 uncertainty="unverified / غير متحقق",
                             )
@@ -131,6 +137,10 @@ def route_receipt(
         identity_result = runtime.identity_route(receipt, auth)
         if identity_result is not None:
             return identity_result
+    if verdict.level != "danger" and runtime.scribe_route is not None:
+        scribe_result = runtime.scribe_route(receipt, auth)
+        if scribe_result is not None:
+            return scribe_result
     active_patient = (
         auth.binding is not None
         and auth.binding.status == "active"

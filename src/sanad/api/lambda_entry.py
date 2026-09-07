@@ -90,6 +90,49 @@ def configure(revision: str) -> FastAPI:
     app.state.media_store = S3MediaStore(
         os.environ["SANAD_BUCKET"], boto3.client("s3", config=config)
     )
+    from sanad.channels.telegram.transport import TelegramTransport
+    from sanad.domain import DRAFT_POLICY_2026_09, Provenance
+    from sanad.media.audio import FFmpegConverter
+    from sanad.media.retrieve import MediaRetriever
+    from sanad.media.speech import SpeechAdapter
+    from sanad.media.telegram import TelegramFileClient
+    from sanad.media.vision import VisionAdapter
+    from sanad.models.io import BedrockCaller
+    from sanad.scribe.turn import ScribeTurn
+    from sanad.steward.types import StewardPolicy
+    from sanad.store.keys import IntakeScope, digest
+
+    runtime = app.state.telegram
+    scribe: ScribeTurn = app.state.scribe
+
+    def speech(source: Provenance) -> SpeechAdapter:
+        caller = BedrockCaller(
+            boto3.client(
+                "bedrock-runtime",
+                region_name=app.state.model_registry.region,
+                config=Config(
+                    connect_timeout=2, read_timeout=22, retries={"total_max_attempts": 1}
+                ),
+            ),
+            runtime.safety_policy.policy_version,
+        )
+        return SpeechAdapter(caller, FFmpegConverter(), source, app.state.model_registry)
+
+    scribe.vision_factory = lambda source: VisionAdapter(
+        speech(source).caller, source, runtime.safety_policy, app.state.model_registry
+    )
+    scribe.speech_factory = speech
+    if isinstance(runtime.transport, TelegramTransport):
+        scribe.media_factory = lambda receipt, principal: MediaRetriever(
+            runtime.steward,
+            app.state.media_store,
+            TelegramFileClient(runtime.transport),
+            FFmpegConverter(),
+            IntakeScope(doctor_id=principal.doctor_id or "", intake_id=digest(receipt.id)),
+            principal,
+            lambda: app.state.claims.doctor(principal) is not None,
+            StewardPolicy(DRAFT_POLICY_2026_09),
+        )
     return app
 
 

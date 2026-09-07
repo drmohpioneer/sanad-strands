@@ -1,6 +1,7 @@
 """Consent plus intended-person confirmation, with atomic exclusive activation."""
 
 from collections.abc import Callable
+from datetime import datetime
 from typing import Literal
 from uuid import uuid4
 
@@ -31,6 +32,7 @@ from sanad.store.records import (
     IdentityRead,
     Invitation,
     OperationalClock,
+    OutboundIntent,
     Patient,
     PatientBinding,
     PatientClaim,
@@ -62,10 +64,20 @@ class ClaimService(IdentityService):
         prior = self.store.lookup_command(self.envelope(command))
         if prior is not None:
             return prior
-        id, now = uuid4().hex, self.clock()
-        scope = PatientScope(doctor_id=doctor.id, patient_id=id)
+        patient, profile = self.prepare_stub(command, doctor.id, uuid4().hex, self.clock())
+        return self.commit(command, (patient, profile))
+
+    @staticmethod
+    def prepare_stub(
+        command: CreatePatientStub,
+        doctor_id: str,
+        patient_id: str,
+        now: datetime,
+    ) -> tuple[Patient, PatientProfile]:
+        """The existing stub factory, usable inside a larger atomic doctor confirmation."""
+        scope = PatientScope(doctor_id=doctor_id, patient_id=patient_id)
         patient = Patient(
-            id=id,
+            id=patient_id,
             scope=scope,
             display_name=command.display_name,
             language=command.language,
@@ -74,14 +86,14 @@ class ClaimService(IdentityService):
             updated_at=now,
         )
         profile = PatientProfile(
-            id=id,
-            doctor_id=doctor.id,
-            patient_id=id,
+            id=patient_id,
+            doctor_id=doctor_id,
+            patient_id=patient_id,
             normalized_name=command.display_name.casefold(),
             created_at=now,
             updated_at=now,
         )
-        return self.commit(command, (patient, profile))
+        return patient, profile
 
     def issue_invitation(self, command: IssueInvitation) -> IssuedInvitation | CommitResult:
         doctor = self.doctor(command.actor)
@@ -125,7 +137,29 @@ class ClaimService(IdentityService):
                 pending = self.patient_claim(old.pending_claim_id) if old.pending_claim_id else None
                 if pending and pending.state == "pending":
                     models.append(revise(pending, now, state="rejected", work_clock=None))
-        result = self.commit(command, tuple(models), reads=(condition,))
+        intents: tuple[OutboundIntent, ...] = ()
+        if command.include_qr:
+            link = f"{self.public_base_url}/p/{token.secret.get_secret_value()}"
+            outgoing = self.account_intent(
+                inv,
+                "scribe_invitation",
+                doctor.telegram_user_id,
+                "doctor",
+                fields={"link": link},
+                expires_at=inv.expires_at,
+                auth_epoch=doctor.auth_epoch,
+            )
+            payload = {**(outgoing.payload or {}), "qr_payload": link}
+            intents = (
+                OutboundIntent.model_validate(
+                    outgoing.model_dump()
+                    | {
+                        "payload": payload,
+                        "payload_digest": keys.digest(canonical_json(payload).decode()),
+                    }
+                ),
+            )
+        result = self.commit(command, tuple(models), intents, reads=(condition,))
         if result.status != "accepted":
             return result
         return IssuedInvitation(

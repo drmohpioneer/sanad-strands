@@ -75,14 +75,28 @@ class TelegramTransport:
         request.extensions["redacted_url"] = self._redactor.clean(str(request.url))
 
     def _call(
-        self, method: str, data: dict[str, JsonValue], *, result_id: str | None = None
+        self,
+        method: str,
+        data: dict[str, JsonValue],
+        *,
+        result_id: str | None = None,
+        photo: bytes | None = None,
     ) -> SendOutcome:
         url = (
             f"{self.settings.api_base.rstrip('/')}/bot"
             f"{self.settings.bot_token.get_secret_value()}/{method}"
         )
         try:
-            response = self.http.post(url, json=data, follow_redirects=False)
+            response = (
+                self.http.post(url, json=data, follow_redirects=False)
+                if photo is None
+                else self.http.post(
+                    url,
+                    data={k: str(v) for k, v in data.items()},
+                    files={"photo": ("invitation.png", photo, "image/png")},
+                    follow_redirects=False,
+                )
+            )
         except httpx.ConnectError:
             raise ProvablyUnsent("telegram_connect_before_write") from None
         except (httpx.TimeoutException, httpx.NetworkError, httpx.ProtocolError):
@@ -133,6 +147,19 @@ class TelegramTransport:
         return SendOutcome(status="failed", code=code)
 
     def send(self, recipient_ref: str, payload: dict[str, JsonValue]) -> SendOutcome:
+        if isinstance(payload.get("qr_payload"), str):
+            from sanad.scribe.qr import render_png
+
+            link, caption = str(payload["qr_payload"]), payload.get("text")
+            if not isinstance(caption, str) or len(caption) > 1024:
+                raise ProvablyUnsent("telegram_photo_caption_required")
+            try:
+                photo = render_png(link)
+            except Exception:
+                raise ProvablyUnsent("qr_render_failed") from None
+            return self._call(
+                "sendPhoto", {"chat_id": recipient_ref, "caption": caption}, photo=photo
+            )
         text = payload.get("text")
         if not isinstance(text, str) or not text or len(text) > 4096:
             raise ProvablyUnsent("telegram_plain_text_required")

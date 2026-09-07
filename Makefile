@@ -1,7 +1,7 @@
 export UV_CACHE_DIR ?= $(CURDIR)/.uv-cache
 export UV_PYTHON_INSTALL_DIR ?= $(CURDIR)/.uv-python
 
-.PHONY: install test test-ddb lint typecheck run build live-check
+.PHONY: install test test-ddb lint typecheck run build live-check live-check-09a live-check-09b
 
 install:
 	uv sync --locked
@@ -27,4 +27,12 @@ build:
 
 live-check:
 	@test "$$SANAD_LIVE" = "1" || (echo 'SANAD_LIVE=1 is required'; exit 1)
-	uv run --offline --no-sync pytest -o addopts='-q -s' tests/live --live
+	uv run --offline --no-sync pytest -o addopts='-q -s' tests/live --live -k contract08_live
+
+live-check-09a:
+	@test "$$SANAD_LIVE" = "1" || (echo 'SANAD_LIVE=1 is required'; exit 1)
+	uv run --offline --no-sync pytest -o addopts='-q -s' tests/live --live -k contract09a_live
+
+live-check-09b:
+	@test "$$SANAD_LIVE" = "1" || (echo 'SANAD_LIVE=1 is required'; exit 1)
+	uv run --offline --no-sync pytest -o addopts='-q -s' tests/live --live -k contract09b_live

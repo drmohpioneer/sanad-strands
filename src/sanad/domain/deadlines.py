@@ -105,7 +105,7 @@ def resolve_timing(
         <= timedelta(days=policy.inferred_max_days)
     ):
         due = proposal.proposed_due_at
-        source = DueSource.scribe
+        source = DueSource(proposal.source)
         reason = proposal.reason
         zone = proposal.timezone
         anchor = TimingAnchor(kind=proposal.anchor_kind, instant=proposal.anchor_time)

@@ -20,7 +20,7 @@ from sanad.domain import (
 from sanad.domain.operations import transition_operational_clock
 from sanad.steward.service import Steward
 from sanad.steward.types import StewardPolicy
-from sanad.store.keys import AccountScope, ScopedKey
+from sanad.store.keys import AccountScope, IntakeScope, ScopedKey
 from sanad.store.protocol import Store
 from sanad.store.records import (
     DeliveryOutcome,
@@ -43,6 +43,34 @@ def freshness(
     scope = intent.scope
     if intent.scope_kind == "account":
         return account_freshness(store, intent, now, settings)
+    if intent.scope_kind == "intake" and isinstance(scope, IntakeScope):
+        doctor_row = store.get(scope, "doctor", scope.doctor_id)
+        intake_doctor = from_record(doctor_row, Doctor) if doctor_row else None
+        if (
+            intake_doctor is None
+            or intake_doctor.status != "approved"
+            or settings is None
+            or intake_doctor.telegram_bot_id != settings.bot_id
+            or intake_doctor.private_chat_id != intent.recipient_ref
+            or intake_doctor.auth_epoch != intent.recipient_auth_epoch_seen
+            or store.authorize(settings.bot_id, intake_doctor.telegram_user_id).principal.actor_kind
+            != "doctor"
+        ):
+            return "recipient_authority"
+        if (
+            intent.notification_purpose not in {"solicited_reply", "DANGER"}
+            or intent.expires_at <= now
+        ):
+            return "expired_or_unsupported"
+        for ref in intent.source_versions:
+            row = store.get(scope, ref.entity_type, ref.id)
+            if row is None or row.version != ref.version:
+                return "source_version"
+            if intent.template_id == "scribe_card" and (
+                row.body.get("status") != "pending" or row.body.get("editing")
+            ):
+                return "proposal_not_pending"
+        return None
     if not isinstance(scope, PatientScope) or intent.scope_kind != "patient":
         return "unsupported_variant"
     profile = store.get_patient_profile(scope)
@@ -258,6 +286,22 @@ def transition_delivery(
         )
         changes.update(review_obligation_id=issue.id, work_clock=None)
         reviews = (to_record(issue, intent.scope),)
+    if review_needed and isinstance(intent.scope, IntakeScope):
+        result = create_review(
+            CreateReview(
+                event_id="delivery:" + (intent.active_attempt_id or intent.id),
+                source_type="intake",
+                source_id=intent.scope.intake_id,
+                source_version=intent.version + 1,
+                review_kind=ReviewKind.delivery_failure,
+                owner_doctor_id=intent.scope.doctor_id,
+                review_at=now + policy.timing.result_review_interval,
+            ),
+            now,
+            policy.timing,
+        )
+        changes.update(review_obligation_id=result.aggregate.id, work_clock=None)
+        reviews = (to_record(result.aggregate, intent.scope),)
     return OutboundIntent.model_validate(intent.model_dump() | changes), reviews
 
 
@@ -283,11 +327,23 @@ class Dispatcher:
         if row is None or row.key != intent_key.key:
             return None
         intent = from_record(row, OutboundIntent)
-        if not isinstance(scope, (PatientScope, AccountScope)):
+        if not isinstance(scope, (PatientScope, AccountScope, IntakeScope)):
             # Such records are accepted by the passive store; no authority adapter is released here.
             return None
         if intent.work_clock is None or intent.work_clock.next_action_at > now:
             return intent
+        if intent.template_id == "scribe_card" and intent.conversation_sequence:
+            from sanad.steward.types import records
+
+            earlier = [
+                from_record(r, OutboundIntent)
+                for r in records(self.store, scope, "outbound_intent")
+                if r.body.get("source_event_ids") == list(intent.source_event_ids)
+                and r.body.get("template_id") == intent.template_id
+                and int(str(r.body.get("conversation_sequence", 0))) < intent.conversation_sequence
+            ]
+            if any(i.status != "provider_accepted" for i in earlier):
+                return intent
         policy = self._policy(intent)
         if intent.status == "uncertain":
             return self._finish(intent, SendOutcome(status="uncertain"), now)
@@ -303,7 +359,7 @@ class Dispatcher:
             )
         doctor_row = (
             self.store.get(scope, "doctor_authority", scope.doctor_id)
-            if isinstance(scope, PatientScope)
+            if isinstance(scope, (PatientScope, IntakeScope))
             else None
         )
         profile_row = (

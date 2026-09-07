@@ -138,7 +138,32 @@ ENROLLMENT_TEMPLATES = {
     ),
 }
 # Preserve the accepted account catalog; enrollment has its own public catalog.
-ALL_TEMPLATES = TEMPLATES | ENROLLMENT_TEMPLATES
+SCRIBE_TEMPLATES = {
+    "doctor_photo_unreadable": (
+        "مش قادر أقرا الصورة: {reason}. صوّر من فوق في نور كويس وابعتها تاني."
+    ),
+    "scribe_intake_pending": "الصورة محفوظة عندك. اختار المريض، أو مريض جديد، أو مش دلوقتي.",
+    "scribe_amendment_line": "{drug}: {old} ← {new}",
+    "scribe_card": "{body}",
+    "scribe_confirmed": "اتسجل:\n{body}",
+    "scribe_stale": "الكارت اتغير أو مبقاش صالح. ابعت التعليمات من جديد.",
+    "scribe_discarded": "تمام، لغيت الكارت ومفيش تعليمات اتسجلت.",
+    "scribe_expired": "صلاحية الكارت انتهت. ابعت التعليمات من جديد.",
+    "scribe_edit": "ابعت التعديل كتابة أو بصوتك؛ الكارت القديم مش هيتأكد.",
+    "scribe_invitation": (
+        "افتح اللينك أو امسح الكود، وبعدها وافق على الربط واستنى تأكيد الدكتور.\n"
+        "صالح 24 ساعة\n{link}"
+    ),
+    "doctor_voice_unreadable": "مش قادر أسمع التسجيل. ابعته تاني أو اكتب الكلام.",
+    "doctor_model_unavailable": "مش قادر أقرأ دلوقتي، ابعت تاني بعد شوية",
+    "doctor_patient_not_found": "ملقيتش المريض ده عندك. اكتب /new وبعدها الاسم لو مريض جديد.",
+    "doctor_help": (
+        "أوامر سند:\n/start — ترحيب\n/help — المساعدة\n/new الاسم — مريض جديد\n"
+        "/find الاسم — بحث\n/qr الاسم — دعوة ربط\n/cancel — إلغاء الكارت\n"
+        "ابعت التعليمات كتابة أو بصوتك، وراجع الكارت قبل ✅ تمام."
+    ),
+}
+ALL_TEMPLATES = TEMPLATES | ENROLLMENT_TEMPLATES | SCRIBE_TEMPLATES
 
 FIELDS = {
     key: frozenset({"name", "specialty", "city"}) if key == "admin_new_application" else frozenset()
@@ -159,6 +184,23 @@ FIELDS.update(
         "claim_rejected": frozenset(),
         "binding_confirmed": frozenset(),
         "invitation_expired_doctor": frozenset(),
+    }
+)
+FIELDS.update(
+    {
+        key: frozenset({"body"})
+        if key in {"scribe_card", "scribe_confirmed"}
+        else frozenset({"link"})
+        if key == "scribe_invitation"
+        else frozenset()
+        for key in SCRIBE_TEMPLATES
+    }
+)
+
+FIELDS.update(
+    {
+        "doctor_photo_unreadable": frozenset({"reason"}),
+        "scribe_amendment_line": frozenset({"drug", "old", "new"}),
     }
 )
 
@@ -187,7 +229,12 @@ def render(template_id: str, **fields: str) -> str:
     if template_id not in ALL_TEMPLATES or set(fields) != FIELDS[template_id]:
         raise ValueError("account template requires exactly its declared fields")
     return ALL_TEMPLATES[template_id].format(
-        **{k: v if k == "link" else untrusted(v) for k, v in fields.items()}
+        **{
+            k: v
+            if k == "link" or (k == "body" and template_id in {"scribe_card", "scribe_confirmed"})
+            else untrusted(v)
+            for k, v in fields.items()
+        }
     )
 
 

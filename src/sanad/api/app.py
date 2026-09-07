@@ -87,6 +87,13 @@ def create_app(
             login, intent, now
         )
         app.state.login, app.state.claims, app.state.web_settings = login, claims, web_settings
+        from sanad.scribe.turn import ScribeTurn
+
+        app.state.scribe = ScribeTurn(runtime, claims)
+        runtime.scribe_route = app.state.scribe
+        from sanad.scribe.web import scribe_router
+
+        app.include_router(scribe_router(claims))
         app.state.claim_lane = lambda row: claim_lane(claims, row)
         app.include_router(web_router(login, claims, web_settings))
         install_redaction()

@@ -86,6 +86,7 @@ class Store(Protocol):
         ttl: timedelta,
         *,
         count_attempt: bool = True,
+        start_extraction: bool = False,
     ) -> Claim | None: ...
     def acquire_patient(
         self, scope: PatientScope, owner: str, now: datetime, ttl: timedelta
@@ -153,11 +154,21 @@ class Store(Protocol):
     def commit_account(self, request: CommitRequest) -> CommitResult: ...
 
     # Later slices own the remaining named operations.
-    def acquire_intake(self) -> None:
-        """Deferred to slice 09: intake processing fence."""
+    def acquire_intake(
+        self,
+        scope: TenantScope,
+        intake_id: str,
+        expected_version: int,
+        owner: str,
+        now: datetime,
+        ttl: timedelta,
+    ) -> Claim | None:
+        """Conditionally claim a pending doctor-private draft, fencing stale associations."""
+        ...
 
-    def raise_intake_concern(self) -> None:
-        """Deferred to slice 09: independently deduplicated intake danger."""
+    def raise_intake_concern(self, request: CommitRequest) -> CommitResult:
+        """Atomically persist intake danger through the guarded doctor gateway."""
+        ...
 
     def raise_incident(self) -> None:
         """Deferred to slices 03/04: urgent transaction and safety epoch."""

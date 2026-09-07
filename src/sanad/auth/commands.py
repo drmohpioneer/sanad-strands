@@ -56,6 +56,7 @@ class CreatePatientStub(AccountCommand):
 class IssueInvitation(AccountCommand):
     type: Literal["IssueInvitation"] = "IssueInvitation"
     patient_id: NonblankStr
+    include_qr: bool = False
 
 
 class ClaimInvitation(AccountCommand):

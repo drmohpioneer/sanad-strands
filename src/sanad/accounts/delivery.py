@@ -89,9 +89,15 @@ def account_freshness(
                 return "claim_state"
         elif row.entity_type == "invitation":
             invitation = from_record(row, Invitation)
+            allowed_invitation = (
+                intent.template_id == "invitation_expired_doctor" and invitation.state == "expired"
+            ) or (
+                intent.template_id == "scribe_invitation"
+                and invitation.state == "issued"
+                and invitation.expires_at > now
+            )
             if (
-                intent.template_id != "invitation_expired_doctor"
-                or invitation.state != "expired"
+                not allowed_invitation
                 or auth.principal.doctor_id != invitation.doctor_id
                 or intent.audience != "doctor"
             ):

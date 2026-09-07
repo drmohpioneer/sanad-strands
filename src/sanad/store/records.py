@@ -28,6 +28,9 @@ from sanad.domain import (
 from sanad.domain.boundaries import IanaZone, _BoundaryValue
 from sanad.domain.events import RecordEvidenceAssociation, RetainObservation, SupersedeEvidence
 from sanad.domain.operations import OperationalClock as OperationalClock
+from sanad.media.vision import DocumentRead
+from sanad.scribe.proposal import InvitationWork, Proposal, ScribeCallback, ScribeState
+from sanad.scribe.records import CareOrderHead, CareOrderVersion, CarePlan, ClinicalFact
 from sanad.store import keys
 from sanad.store.keys import AccountScope, IntakeScope, Key, Scope, ScopedKey
 
@@ -232,6 +235,10 @@ class Patient(_Metadata):
     timezone: IanaZone
     contact_status: Literal["awaiting_link", "active", "frozen"] = "awaiting_link"
     record_version: PositiveVersion = 1
+    identifiers: tuple[str, ...] = ()
+    age: str | None = None
+    sex: Literal["male", "female"] | None = None
+    current_plan_id: str | None = None
     delivery_epoch: NonnegativeInt = 0
     binding_epoch: NonnegativeInt = 0
     active_binding_id: NonblankStr | None = None
@@ -526,6 +533,7 @@ class Incident(_Metadata):
     state: Literal["open", "resolved"] = "open"
     raised_at: UtcInstant
     review_obligation_id: NonblankStr
+    prior_delivery_refs: tuple[NonblankStr, ...] = ()
     alert_intent_ids: tuple[NonblankStr, ...]
     template_id: NonblankStr
 
@@ -590,6 +598,112 @@ class InboundReceipt(_Metadata):
         return self
 
 
+class PhotoAssociationWork(_Metadata):
+    entity_type: Literal["photo_association_work"] = "photo_association_work"
+    scope: TenantScope
+    patient_id: NonblankStr
+    intake_id: NonblankStr
+    proposal_id: NonblankStr
+    state: Literal["pending", "completed"] = "pending"
+    work_clock: OperationalClock | None
+
+    @model_validator(mode="after")
+    def lifecycle(self) -> Self:
+        if (self.state == "pending") != (self.work_clock is not None):
+            raise ValueError("photo association requires recoverable work")
+        return self
+
+
+class IntakeDraft(_Metadata):
+    entity_type: Literal["intake_draft"] = "intake_draft"
+    scope: TenantScope
+    owner_doctor_id: NonblankStr
+    source_receipt_ids: tuple[NonblankStr, ...]
+    media_work_ids: tuple[NonblankStr, ...]
+    reads: DocumentRead = Field(repr=False)
+    reader_policy_version: NonblankStr
+    kind: Literal["prescription", "lab", "other"]
+    proposal_id: str | None = None
+    selected_patient_id: str | None = None
+    state: Literal["pending", "associated", "rejected"] = "pending"
+    safety_epoch: NonnegativeInt = 0
+    processing_claim: ProcessingClaim | None = None
+    review_at: UtcInstant
+    work_clock: OperationalClock | None
+    review_obligation_id: str | None = None
+
+    @model_validator(mode="after")
+    def lifecycle(self) -> Self:
+        if type(self.scope) is not TenantScope or self.scope.doctor_id != self.owner_doctor_id:
+            raise ValueError("intake requires its owning doctor")
+        if self.state == "pending" and not (self.work_clock or self.review_obligation_id):
+            raise ValueError("pending intake requires timed ownership")
+        if self.state != "pending" and self.work_clock:
+            raise ValueError("associated intake hands work to its proposal")
+        return self
+
+
+class IntakeCallback(_Metadata):
+    entity_type: Literal["intake_callback"] = "intake_callback"
+    scope: TenantScope
+    intake_id: NonblankStr
+    intake_version: PositiveVersion
+    actor_subject: NonblankStr
+    action: Literal["select", "new", "later"]
+    patient_id: str | None = None
+    expires_at: UtcInstant
+    consumed_at: UtcInstant | None = None
+
+    @model_validator(mode="after")
+    def binding(self) -> Self:
+        keys.token("intake", self.id)
+        if (self.action == "select") != (self.patient_id is not None):
+            raise ValueError("selection requires an explicit scoped patient")
+        return self
+
+
+class IntakeConcern(_Metadata):
+    entity_type: Literal["intake_concern"] = "intake_concern"
+    scope: IntakeScope
+    intake_id: NonblankStr
+    unique_source_key: NonblankStr
+    source_receipt_ids: tuple[NonblankStr, ...]
+    rule_family: NonblankStr = "lab"
+    rule_version: NonblankStr
+    severity: NonblankStr
+    facts: dict[str, JsonValue] = Field(repr=False)
+    state: Literal["open", "associated", "resolved"] = "open"
+    owner_doctor_id: NonblankStr
+    review_obligation_id: NonblankStr
+    associated_patient_id: str | None = None
+    associated_event_id: str | None = None
+    prior_delivery_refs: tuple[NonblankStr, ...] = ()
+
+    @model_validator(mode="after")
+    def ownership(self) -> Self:
+        if self.scope.doctor_id != self.owner_doctor_id or self.scope.intake_id != self.intake_id:
+            raise ValueError("intake concern ownership mismatch")
+        return self
+
+
+class PatientMedia(_Metadata):
+    entity_type: Literal["patient_media"] = "patient_media"
+    scope: PatientScope
+    media_scope: IntakeScope | PatientScope
+    media_work_id: NonblankStr
+    source_receipt_id: NonblankStr
+    kind: Literal["prescription", "lab", "other"]
+    mime: NonblankStr
+
+    @model_validator(mode="after")
+    def ownership(self) -> Self:
+        if self.media_scope.doctor_id != self.scope.doctor_id:
+            raise ValueError("media must belong to the same doctor")
+        if isinstance(self.media_scope, PatientScope) and self.media_scope != self.scope:
+            raise ValueError("media belongs to another patient")
+        return self
+
+
 class MediaWork(_Metadata):
     """Recoverable extraction work; association never follows merely from a read."""
 
@@ -610,6 +724,8 @@ class MediaWork(_Metadata):
     last_error: NonblankStr | None = None
     resend_intent_id: NonblankStr | None = None
     review_obligation_id: NonblankStr | None = None
+    transcript_ref: NonblankStr | None = None
+    association_ref: NonblankStr | None = None
 
     @model_validator(mode="after")
     def recoverable(self) -> Self:
@@ -822,6 +938,19 @@ type InboundReceiptRecord = StoredRecord
 
 
 MODELS: dict[str, type[BaseModel]] = {
+    "photo_association_work": PhotoAssociationWork,
+    "intake_draft": IntakeDraft,
+    "intake_callback": IntakeCallback,
+    "intake_concern": IntakeConcern,
+    "patient_media": PatientMedia,
+    "scribe_invitation_work": InvitationWork,
+    "scribe_proposal": Proposal,
+    "scribe_callback": ScribeCallback,
+    "scribe_state": ScribeState,
+    "clinical_fact": ClinicalFact,
+    "care_order_head": CareOrderHead,
+    "care_order_version": CareOrderVersion,
+    "care_plan": CarePlan,
     "patient": Patient,
     "consent": Consent,
     "patient_binding": PatientBinding,
@@ -857,6 +986,26 @@ MODELS: dict[str, type[BaseModel]] = {
 
 
 def model_scope(model: BaseModel) -> Scope:
+    if isinstance(model, InvitationWork):
+        return model.scope
+    if isinstance(
+        model,
+        (
+            PhotoAssociationWork,
+            IntakeDraft,
+            IntakeCallback,
+            IntakeConcern,
+            PatientMedia,
+            Proposal,
+            ScribeCallback,
+            ScribeState,
+            ClinicalFact,
+            CareOrderHead,
+            CareOrderVersion,
+            CarePlan,
+        ),
+    ):
+        return model.scope
     if isinstance(
         model,
         (
@@ -911,6 +1060,30 @@ def scope_owns(scope: Scope, other: Scope) -> bool:
 
 
 def model_key(model: BaseModel, scope: Scope) -> Key:
+    if isinstance(model, InvitationWork):
+        return Key(
+            keys.partition(model.scope), f"SCRIBE_INVITATION_WORK#{keys.component(model.id)}"
+        )
+    if isinstance(
+        model,
+        (
+            PhotoAssociationWork,
+            IntakeDraft,
+            IntakeCallback,
+            IntakeConcern,
+            PatientMedia,
+            Proposal,
+            ScribeCallback,
+            ScribeState,
+            ClinicalFact,
+            CareOrderHead,
+            CareOrderVersion,
+            CarePlan,
+        ),
+    ):
+        return Key(
+            keys.partition(model.scope), f"{model.entity_type.upper()}#{keys.component(model.id)}"
+        )
     if isinstance(model, (Patient, Consent, PatientBinding, TokenHead, PatientClaim)):
         return Key(keys.partition(model.scope), f"{model.entity_type.upper()}#{model.id}")
     if isinstance(model, (LoginExchange, Invitation, ClaimCallback, PreSession)):

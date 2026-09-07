@@ -1,0 +1,122 @@
+"""Versioned medication diffs computed from the doctor's current scoped record."""
+
+from typing import TYPE_CHECKING
+
+from sanad.domain import PatientScope
+from sanad.domain.boundaries import _BoundaryValue
+from sanad.scribe.extract import DictationCandidate, OrderCandidate, ProposalIssue
+from sanad.store import keys
+
+if TYPE_CHECKING:
+    from sanad.scribe.repository import ScribeRepository
+
+FIELDS = ("dose", "frequency", "route", "timing", "duration")
+
+
+def order_key(name: str) -> str:
+    from sanad.scribe.card import plain
+
+    return keys.digest("medication:" + plain(name).casefold())
+
+
+class OrderChange(_BoundaryValue):
+    item: str
+    old: OrderCandidate | None = None
+    new: OrderCandidate
+    head_version: int | None = None
+    noop: bool = False
+    note: str | None = None
+
+
+def prepare(
+    repo: "ScribeRepository",
+    scope: PatientScope | None,
+    candidate: DictationCandidate,
+    *,
+    creating: bool = False,
+) -> tuple[DictationCandidate, tuple[OrderChange, ...], tuple[ProposalIssue, ...]]:
+    from sanad.scribe.records import CareOrderHead, CareOrderVersion
+
+    if scope is None and not creating:
+        return candidate, (), ()
+
+    orders, changes, issues = [], [], []
+    for i, supplied in enumerate(candidate.orders):
+        head = (
+            repo.load(scope, "care_order_head", order_key(supplied.drug), CareOrderHead)
+            if scope
+            else None
+        )
+        version = (
+            repo.load(scope, "care_order_version", head.current_version_id, CareOrderVersion)
+            if scope and head
+            else None
+        )
+        old = (
+            version.structured_instruction
+            if version and isinstance(version.structured_instruction, OrderCandidate)
+            else None
+        )
+        order, note, noop = supplied, None, False
+        if old and head:
+            if supplied.action in {"change", "continue"}:
+                values = {
+                    field: getattr(supplied, field) or getattr(old, field) for field in FIELDS
+                }
+                noop = (
+                    supplied.action == "continue"
+                    and head.status == "active"
+                    and all(values[field] == getattr(old, field) for field in FIELDS)
+                    and not supplied.effective_expression
+                    and not supplied.checkin_expression
+                )
+                order = supplied.model_copy(
+                    update={**values, "action": "continue" if noop else "change"}
+                )
+            elif supplied.action == "start" and head.status == "active":
+                order = supplied.model_copy(update={"action": "change"})
+        elif supplied.action == "change":
+            order = supplied.model_copy(update={"action": "start"})
+            note = "مفيش أمر سابق؛ هيتسجل كبداية."
+        elif supplied.action in {"stop", "continue"}:
+            issues.append(ProposalIssue(item=f"order:{i}", code="order_missing"))
+        orders.append(order)
+        if head or note or supplied.action in {"stop", "continue"}:
+            changes.append(
+                OrderChange(
+                    item=f"order:{i}",
+                    old=old,
+                    new=order,
+                    head_version=head.version if head else None,
+                    noop=noop,
+                    note=note,
+                )
+            )
+    return candidate.model_copy(update={"orders": tuple(orders)}), tuple(changes), tuple(issues)
+
+
+def instruction_line(order: OrderCandidate) -> str:
+    from sanad.scribe.card import plain
+
+    return " ".join(plain(v) for name in FIELDS if (v := getattr(order, name)))
+
+
+def diff_lines(changes: tuple[OrderChange, ...]) -> tuple[str, ...]:
+    from sanad.channels.telegram import wording
+    from sanad.scribe.card import plain
+
+    result = []
+    for change in changes:
+        name = plain(change.new.drug)
+        if change.noop:
+            result.append(name + ": زي ما هو")
+        elif change.old:
+            new = "إيقاف" if change.new.action == "stop" else instruction_line(change.new)
+            result.append(
+                wording.render(
+                    "scribe_amendment_line", drug=name, old=instruction_line(change.old), new=new
+                )
+            )
+        if change.note:
+            result.append(name + ": " + change.note)
+    return tuple(result)

@@ -94,6 +94,67 @@ class Steward:
     def __init__(self, store: Store, clock: Clock, policy_provider: PolicyProvider):
         self.store, self.clock, self.policy_provider = store, clock, policy_provider
 
+    def prepare_confirmation(
+        self,
+        command: CommandEnvelope,
+        proposed: ev.ProposalCreated,
+        profile: PatientProfile,
+    ) -> tuple[Mission, tuple[FollowUpTask, ...]]:
+        """Prepare ConfirmProposal effects for an atomic Scribe batch, without writes.
+
+        The proposed version exists only on the doctor's card. Its first stored
+        version is confirmed; the store checks authority for the whole batch.
+        """
+        from sanad.domain import create_followup, create_proposed_mission
+        from sanad.domain.boundaries import ObservationRef, TimingProposal
+        from sanad.domain.deadlines import ExplicitTiming
+
+        scope = PatientScope(doctor_id=profile.doctor_id, patient_id=profile.patient_id)
+        if command.payload.get("type") != "ConfirmProposal" or command.scope != scope:
+            raise EffectsRejected("confirmation_scope")
+        draft = create_proposed_mission(proposed)
+        if not isinstance(draft, ev.TransitionResult) or not isinstance(draft.aggregate, Mission):
+            raise EffectsRejected("mission_draft_invalid")
+        timing = proposed.timing
+        payload: dict[str, JsonValue] = {"type": "ConfirmProposal"}
+        if timing.due_source == "doctor":
+            payload["explicit"] = ExplicitTiming(
+                instant=timing.due_at,
+                original_expression=timing.original_time_expression or "",
+                timezone=timing.timezone,
+            ).model_dump(mode="json")
+        else:
+            payload["proposal"] = TimingProposal(
+                proposed_due_at=timing.due_at,
+                source="default" if timing.due_source == "default" else "scribe",
+                reason=timing.due_reason,
+                timezone=timing.timezone,
+                anchor_time=timing.timing_anchor.instant,
+                anchor_kind="observation_received",
+                policy_version=timing.policy_version,
+                source_observation_ref=ObservationRef(
+                    observation_id=str(command.payload["source_receipt_id"])
+                ),
+            ).model_dump(mode="json")
+        translated = CommandEnvelope.model_validate(command.model_dump() | {"payload": payload})
+        event = self._event(translated, draft.aggregate, profile)
+        assert isinstance(event, ev.ConfirmMission)
+        policy = self.policy_provider(scope).timing
+        result = transition_mission(draft.aggregate, event, self.clock(), policy)
+        if not isinstance(result, ev.TransitionResult):
+            raise EffectsRejected("mission_confirmation_invalid")
+        mission = Mission.model_validate(result.aggregate.model_dump() | {"version": 1})
+        followups: list[FollowUpTask] = []
+        for effect in result.effects:
+            if isinstance(effect, ev.CreateFollowUp):
+                child = create_followup(effect, self.clock(), policy)
+                if not isinstance(child, ev.TransitionResult) or not isinstance(
+                    child.aggregate, FollowUpTask
+                ):
+                    raise EffectsRejected("followup_confirmation_invalid")
+                followups.append(child.aggregate)
+        return mission, tuple(followups)
+
     def handle(self, command: CommandEnvelope) -> CommandResult:
         if not isinstance(command.scope, PatientScope):
             return CommandResult(status="unsupported", reason_code="patient_scope_required")

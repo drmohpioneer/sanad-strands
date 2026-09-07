@@ -29,6 +29,8 @@ class UrgentService:
         facts: dict[str, JsonValue],
         severity: str,
         now: datetime,
+        *,
+        prior_delivery_refs: tuple[str, ...] = (),
     ) -> Incident:
         id = "incident:" + keys.digest(unique_source_key)
         existing = self.store.get(scope, "incident", id)
@@ -90,6 +92,7 @@ class UrgentService:
                     ("patient", "patient_safety_response"),
                     ("doctor", "DANGER"),
                 )
+                if audience == "doctor" or profile.recipient_ref is not None
             ]
             incident = Incident(
                 id=id,
@@ -103,6 +106,7 @@ class UrgentService:
                 review_obligation_id=review_result.aggregate.id,
                 alert_intent_ids=tuple(i.id for i in outgoing),
                 template_id=self.patient_template_id,
+                prior_delivery_refs=prior_delivery_refs,
             )
             builder.put(to_record(bumped, scope))
             builder.put(to_record(incident, scope))

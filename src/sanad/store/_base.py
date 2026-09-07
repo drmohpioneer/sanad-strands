@@ -50,6 +50,7 @@ from sanad.store.records import (
     InboundAccept,
     InboundReceipt,
     Incident,
+    IntakeDraft,
     Lease,
     MarkerRecord,
     MediaWork,
@@ -172,6 +173,14 @@ class StoreBase(ABC):
         return record if scope_owns(scope, model_scope(model)) else None
 
     def get(self, scope: Scope, entity_type: str, id: str) -> StoredRecord | None:
+        if isinstance(scope, keys.IntakeScope) and entity_type in {
+            "intake_draft",
+            "intake_callback",
+            "scribe_proposal",
+            "scribe_state",
+            "scribe_callback",
+        }:
+            return self.get(TenantScope(doctor_id=scope.doctor_id), entity_type, id)
         if entity_type == "doctor" and not isinstance(scope, AccountScope):
             if id != scope.doctor_id:
                 return None
@@ -184,6 +193,19 @@ class StoreBase(ABC):
             tenant = TenantScope(doctor_id=scope.doctor_id)
             return self._owned(tenant, keys.doctor(tenant))
         prefixes = {
+            "photo_association_work": "PHOTO_ASSOCIATION_WORK",
+            "intake_draft": "INTAKE_DRAFT",
+            "intake_callback": "INTAKE_CALLBACK",
+            "intake_concern": "INTAKE_CONCERN",
+            "patient_media": "PATIENT_MEDIA",
+            "scribe_invitation_work": "SCRIBE_INVITATION_WORK",
+            "scribe_proposal": "SCRIBE_PROPOSAL",
+            "scribe_callback": "SCRIBE_CALLBACK",
+            "scribe_state": "SCRIBE_STATE",
+            "clinical_fact": "CLINICAL_FACT",
+            "care_order_head": "CARE_ORDER_HEAD",
+            "care_order_version": "CARE_ORDER_VERSION",
+            "care_plan": "CARE_PLAN",
             "patient": "PATIENT",
             "consent": "CONSENT",
             "patient_binding": "PATIENT_BINDING",
@@ -345,6 +367,19 @@ class StoreBase(ABC):
         self, scope: Scope, entity_type: str, cursor: Cursor | None = None, limit: int = 100
     ) -> RecordPage:
         prefixes = {
+            "photo_association_work": "PHOTO_ASSOCIATION_WORK#",
+            "intake_draft": "INTAKE_DRAFT#",
+            "intake_callback": "INTAKE_CALLBACK#",
+            "intake_concern": "INTAKE_CONCERN#",
+            "patient_media": "PATIENT_MEDIA#",
+            "scribe_invitation_work": "SCRIBE_INVITATION_WORK#",
+            "scribe_proposal": "SCRIBE_PROPOSAL#",
+            "scribe_callback": "SCRIBE_CALLBACK#",
+            "scribe_state": "SCRIBE_STATE#",
+            "clinical_fact": "CLINICAL_FACT#",
+            "care_order_head": "CARE_ORDER_HEAD#",
+            "care_order_version": "CARE_ORDER_VERSION#",
+            "care_plan": "CARE_PLAN#",
             "patient": "PATIENT#",
             "consent": "CONSENT#",
             "patient_binding": "PATIENT_BINDING#",
@@ -441,16 +476,21 @@ class StoreBase(ABC):
             from_record(r, ReviewObligation) for r in request.puts if r.entity_type == "review"
         ]
         intents = [from_record(r, OutboundIntent) for r in request.intents]
+        required_purposes = (
+            {"DANGER", "patient_safety_response"}
+            if current.recipient_ref is not None
+            else {"DANGER"}
+        )
         if (
             incident.version != 1
             or len(reviews) != 1
-            or len(intents) != 2
+            or len(intents) != len(required_purposes)
             or reviews[0].id != incident.review_obligation_id
             or reviews[0].review_kind != "incident_response"
             or reviews[0].source_type != "incident"
             or reviews[0].source_id != incident.id
             or set(incident.alert_intent_ids) != {i.id for i in intents}
-            or {i.notification_purpose for i in intents} != {"DANGER", "patient_safety_response"}
+            or {i.notification_purpose for i in intents} != required_purposes
             or any(i.source_event_ids != (incident.id,) for i in intents)
         ):
             return Forbidden()
@@ -467,7 +507,10 @@ class StoreBase(ABC):
         return Duplicate(original=Accepted.model_validate(existing["accepted_result"]))
 
     def commit(self, request: CommitRequest) -> CommitResult:
-        return self._commit(request)
+        from sanad.store.scribe import COMMANDS
+
+        kind = request.command.payload.get("type")
+        return self._commit(request, scribe=isinstance(kind, str) and kind in COMMANDS)
 
     def _commit(
         self,
@@ -476,6 +519,7 @@ class StoreBase(ABC):
         urgent: bool = False,
         account: bool = False,
         identity: bool = False,
+        scribe: bool = False,
     ) -> CommitResult:
         command = request.command
         scope = command.scope
@@ -493,7 +537,7 @@ class StoreBase(ABC):
             and worker.auth_expiry > utc_instant(self._clock())
             and bool(
                 worker.permitted_lanes
-                & {"mission", "followup", "review", "ingress", "media", "urgent"}
+                & {"mission", "followup", "review", "ingress", "media", "urgent", "scribe"}
             )
         )
         if (
@@ -522,8 +566,15 @@ class StoreBase(ABC):
         )
         authority_checks: list[Check] = []
         identity_expiry = None
-        if request.identity_reads and not identity:
+        if request.identity_reads and not (identity or scribe):
             return Forbidden()
+        if scribe:
+            from sanad.store.scribe import scribe_guards
+
+            scribe_guarded = scribe_guards(self, request, utc_instant(self._clock()))
+            if scribe_guarded is None:
+                return Forbidden()
+            authority_checks, identity_expiry = scribe_guarded
         if identity:
             from sanad.store.identity import identity_guards
 
@@ -581,6 +632,22 @@ class StoreBase(ABC):
             )
         )
         for record in records:
+            if not scribe and record.entity_type in {
+                "photo_association_work",
+                "intake_draft",
+                "intake_callback",
+                "intake_concern",
+                "patient_media",
+                "scribe_proposal",
+                "scribe_state",
+                "scribe_callback",
+                "scribe_invitation_work",
+                "clinical_fact",
+                "care_order_head",
+                "care_order_version",
+                "care_plan",
+            }:
+                return Forbidden()
             unique = (
                 record.body.get("logical_key")
                 if record.entity_type == "outbound_intent"
@@ -657,7 +724,7 @@ class StoreBase(ABC):
                     return StaleVersion(conflicts=("patient_fence",))
             checks.append(Check(keys.patient(scope), patient.version if patient else None))
         if command.fence is not None:
-            if command.fence.scope != scope:
+            if command.fence.scope != scope and not scribe:
                 return Forbidden()
             fenced = self._lease_record(command.fence, now)
             if fenced is None:
@@ -665,7 +732,7 @@ class StoreBase(ABC):
             checks.append(Check(fenced.key, fenced.version))
         if command.work_claim is not None:
             work_claim = command.work_claim
-            if work_claim.record_key.scope != scope and not account:
+            if work_claim.record_key.scope != scope and not (account or scribe):
                 return Forbidden()
             claimed = self._owned(work_claim.record_key.scope, work_claim.record_key.key)
             token = ProcessingClaim.model_validate(
@@ -699,7 +766,7 @@ class StoreBase(ABC):
             ):
                 return StaleVersion(conflicts=("work_claim",))
         for record in records:
-            if not identity and record.entity_type in {
+            if not (identity or scribe) and record.entity_type in {
                 "patient",
                 "consent",
                 "patient_binding",
@@ -728,9 +795,11 @@ class StoreBase(ABC):
                 return Forbidden()
             actual_scope = model_scope(model)
             if scope != actual_scope:
-                if not account or not isinstance(scope, AccountScope):
+                if scribe:
+                    pass  # The scribe guard checked every target, owner and patient fence.
+                elif not account or not isinstance(scope, AccountScope):
                     return Forbidden()
-                if identity:
+                elif identity:
                     pass  # Narrow identity guards checked every cross-partition row.
                 elif isinstance(model, Doctor):
                     if model.telegram_bot_id != scope.bot_id:
@@ -756,7 +825,7 @@ class StoreBase(ABC):
             if isinstance(model, AuditEvent) and (
                 model.command_id != command.command_id
                 or model.actor != actor
-                or model.scope != scope
+                or (model.scope != scope and not scribe)
             ):
                 return Forbidden()
             if record.entity_type in {"delivery_attempt", "session_snapshot"}:
@@ -765,6 +834,17 @@ class StoreBase(ABC):
             if isinstance(model, MediaWork):
                 if current is None:
                     source = self.get(actual_scope, "inbound_receipt", model.receipt_id)
+                    if source is None and isinstance(actual_scope, keys.IntakeScope):
+                        candidate_source = self.get(
+                            TenantScope(doctor_id=actual_scope.doctor_id),
+                            "inbound_receipt",
+                            model.receipt_id,
+                        )
+                        if (
+                            candidate_source
+                            and candidate_source.body.get("source_subject") == actor.subject
+                        ):
+                            source = candidate_source
                     if source is None or (
                         from_record(source, InboundReceipt).provider_media_handle
                         != model.provider_handle_ref
@@ -887,7 +967,7 @@ class StoreBase(ABC):
         if request.receipt_completion is not None:
             completion = request.receipt_completion
             claim = completion.claim
-            if (claim.record_key.scope != scope and not account) or (
+            if (claim.record_key.scope != scope and not (account or scribe)) or (
                 account and not identity and isinstance(claim.record_key.scope, PatientScope)
             ):
                 return Forbidden()
@@ -1081,6 +1161,7 @@ class StoreBase(ABC):
         ttl: timedelta,
         *,
         count_attempt: bool = True,
+        start_extraction: bool = False,
     ) -> Claim | None:
         now = utc_instant(now)
         record = self._owned(record_key.scope, record_key.key)
@@ -1109,10 +1190,15 @@ class StoreBase(ABC):
             expires_at=now + ttl,
         )
         if isinstance(model, (InboundReceipt, MediaWork)):
+            extractor_ready = (
+                start_extraction
+                and isinstance(model, MediaWork)
+                and model.stage in {"extract", "associate"}
+            )
             if (
                 (model.state == "needs_attention" and count_attempt)
                 or model.work_clock is None
-                or model.work_clock.next_action_at > now
+                or (model.work_clock.next_action_at > now and not extractor_ready)
             ):
                 return None
             updated = self._revision(
@@ -1872,13 +1958,45 @@ class StoreBase(ABC):
                     return Forbidden()
         return self._commit(request, account=True)
 
-    def acquire_intake(self) -> None:
-        """Deferred to slice 09."""
-        raise NotImplementedError("acquire_intake belongs to slice 09")
+    def acquire_intake(
+        self,
+        scope: TenantScope,
+        intake_id: str,
+        expected_version: int,
+        owner: str,
+        now: datetime,
+        ttl: timedelta,
+    ) -> Claim | None:
+        record = self.get(scope, "intake_draft", intake_id)
+        if (
+            record is None
+            or record.version != expected_version
+            or ttl <= timedelta()
+            or not owner.strip()
+        ):
+            return None
+        draft = from_record(record, IntakeDraft)
+        if draft.state != "pending" or (
+            draft.processing_claim and draft.processing_claim.expires_at > now
+        ):
+            return None
+        token = ProcessingClaim(
+            owner=owner,
+            generation=(draft.processing_claim.generation if draft.processing_claim else 0) + 1,
+            claimed_at=now,
+            expires_at=now + ttl,
+        )
+        changed = self._revision(record, now, processing_claim=token)
+        if not self._update(record_item(changed), record.version):
+            return None
+        return Claim(
+            **token.model_dump(), record_key=record.scoped_key(scope), version=changed.version
+        )
 
-    def raise_intake_concern(self) -> None:
-        """Deferred to slice 09."""
-        raise NotImplementedError("raise_intake_concern belongs to slice 09")
+    def raise_intake_concern(self, request: CommitRequest) -> CommitResult:
+        if request.command.payload.get("type") != "IntakeDanger":
+            return Forbidden()
+        return self.commit(request)
 
     def raise_incident(self) -> None:
         """Deferred to slices 03/04."""

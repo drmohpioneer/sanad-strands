@@ -10,7 +10,14 @@ from hashlib import sha256
 from typing import Literal
 from uuid import uuid4
 
-from sanad.domain import CreateReview, PatientScope, Principal, ReviewKind, create_review
+from sanad.domain import (
+    CreateReview,
+    PatientScope,
+    Principal,
+    ReviewKind,
+    TenantScope,
+    create_review,
+)
 from sanad.domain.boundaries import _BoundaryValue
 from sanad.domain.operations import transition_operational_clock
 from sanad.media.audio import AudioConverter, ConversionFailure
@@ -65,6 +72,9 @@ class MediaRetriever:
     authority_check: Callable[[], bool] = field(repr=False)
     policy: StewardPolicy
     checkpoint: Callable[[str], None] = lambda name: None
+    failure_template: str = "media:resend-v1"
+    failure_text: str = RESEND_TEXT
+    failure_renderer: Callable[[str], str] | None = None
 
     def _put_blob(self, data: bytes, mime: str) -> str:
         try:
@@ -130,6 +140,8 @@ class MediaRetriever:
             extras = []
             intents = []
             if failure:
+                if self.failure_renderer:
+                    self.failure_text = self.failure_renderer(failure)
                 review = create_review(
                     CreateReview(
                         event_id=id,
@@ -165,16 +177,16 @@ class MediaRetriever:
                         id,
                         (),
                         "solicited_reply",
-                        "media:resend-v1",
+                        self.failure_template,
                         now,
                         policy,
                         doctor,
                         profile,
                         audience="patient" if self.principal.actor_kind == "patient" else "doctor",
-                        template_id="media:resend-v1",
+                        template_id=self.failure_template,
                     )
                     intent = OutboundIntent.model_validate(
-                        intent.model_dump() | {"payload": {"text": RESEND_TEXT}}
+                        intent.model_dump() | {"payload": {"text": self.failure_text}}
                     )
                 else:
                     logical = keys.digest(id + ":resend")
@@ -189,9 +201,9 @@ class MediaRetriever:
                         recipient_ref=doctor.recipient_ref,
                         notification_purpose="solicited_reply",
                         eligibility_class="routine",
-                        payload_ref="media:resend-v1",
-                        payload_digest=keys.digest(RESEND_TEXT),
-                        payload={"text": RESEND_TEXT},
+                        payload_ref=self.failure_template,
+                        payload_digest=keys.digest(self.failure_text),
+                        payload={"text": self.failure_text},
                         conversation_sequence=0,
                         expires_at=now + policy.timing.overdue_review_interval,
                         status="queued",
@@ -201,7 +213,7 @@ class MediaRetriever:
                         updated_at=now,
                         doctor_auth_epoch_seen=doctor.auth_epoch,
                         recipient_auth_epoch_seen=doctor.auth_epoch,
-                        template_id="media:resend-v1",
+                        template_id=self.failure_template,
                     )
                 work = MediaWork.model_validate(
                     work.model_dump()
@@ -271,18 +283,77 @@ class MediaRetriever:
             resend_intent_id=saved.resend_intent_id,
         )
 
+    def extraction_result(
+        self,
+        receipt_id: str,
+        *,
+        transcript_ref: str | None = None,
+        association_ref: str | None = None,
+        failure: str | None = None,
+    ) -> bool | MediaFailure:
+        """Checkpoint the extractor's private transcript and explicit operational association."""
+        work = self._get(keys.digest(receipt_id))
+        if work is None or work.stage not in {"extract", "associate"}:
+            return False
+        if work.state == "completed":
+            return True
+        if association_ref and not (transcript_ref or work.transcript_ref):
+            return False
+        if work.state == "needs_attention":
+            return MediaFailure(
+                reason=work.last_error or "needs_attention",
+                durable=True,
+                review_obligation_id=work.review_obligation_id,
+                resend_intent_id=work.resend_intent_id,
+            )
+        now = self.steward.clock()
+        claim = self.steward.store.claim_work(
+            to_record(work, self.scope).scoped_key(self.scope),
+            work.version,
+            "scribe-media",
+            now,
+            self.policy.operations.claim_ttl,
+            start_extraction=True,
+        )
+        if claim is None:
+            return False
+        work = self._get(work.id)
+        assert work is not None
+        if failure:
+            return self._failure(work, claim, failure)
+        changed = MediaWork.model_validate(
+            work.model_dump()
+            | {
+                "version": work.version + 1,
+                "updated_at": now,
+                "processing_claim": None,
+                "transcript_ref": transcript_ref or work.transcript_ref,
+                "association_ref": association_ref,
+                "state": "completed" if association_ref else "pending",
+                "stage": "associate" if association_ref else "extract",
+                "work_clock": None
+                if association_ref
+                else OperationalClock(
+                    next_action_at=now + self.policy.timing.result_review_interval,
+                    work_lane="media",
+                ),
+            }
+        )
+        return self._commit(changed, claim)
+
     def fetch_telegram_file(self, handle: str, *, receipt_id: str) -> StoredMedia | MediaFailure:
         if not self._valid():
             return MediaFailure(reason="scope_unavailable", request_resend=False)
         store, now = self.steward.store, self.steward.clock()
         receipt_row = store.get(self.scope, "inbound_receipt", receipt_id)
+        if receipt_row is None and self.principal.actor_kind == "doctor":
+            receipt_row = store.get(
+                TenantScope(doctor_id=self.scope.doctor_id), "inbound_receipt", receipt_id
+            )
         if receipt_row is None:
             return MediaFailure(reason="receipt_missing", request_resend=False)
         receipt = from_record(receipt_row, InboundReceipt)
-        if (
-            self.principal.actor_kind == "patient"
-            and receipt.source_subject != self.principal.subject
-        ):
+        if receipt.source_subject != self.principal.subject:
             return MediaFailure(reason="scope_unavailable", request_resend=False)
         if receipt.provider_media_handle != handle:
             return MediaFailure(reason="handle_mismatch", request_resend=False)

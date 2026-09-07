@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import Literal
 
-from pydantic import Field, ValidationError
+from pydantic import ConfigDict, Field, ValidationError
 
 from sanad.agents.hygiene import clean_values, json_object, template_echo
 from sanad.domain import ImageRegion, Provenance
@@ -54,6 +54,7 @@ class PrintedIdentityHint(_BoundaryValue):
 
 
 class DocumentItem(_BoundaryValue):
+    model_config = ConfigDict(frozen=True, extra="ignore")
     name: str
     value: str | None = None
     unit: str | None = None
@@ -66,6 +67,7 @@ class DocumentItem(_BoundaryValue):
 
 
 class RawDocument(_BoundaryValue):
+    model_config = ConfigDict(frozen=True, extra="ignore")
     document_type: Literal["lab", "prescription", "other"]
     printed_name: str | None
     printed_date: str | None

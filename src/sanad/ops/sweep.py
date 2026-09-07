@@ -26,7 +26,7 @@ from sanad.store.records import (
     model_scope,
 )
 
-LANES = ("ingress", "delivery", "mission", "followup", "review", "claim")
+LANES = ("ingress", "delivery", "mission", "followup", "review", "claim", "scribe", "media")
 DEFAULT_BUDGET = SweepBudget()
 
 
@@ -106,6 +106,12 @@ def sweep_due(
                 handlers.update(ingress=ingress, delivery=delivery)
                 if claim_handler:
                     handlers["claim"] = claim_handler
+                if runtime.scribe_route is not None:
+                    from sanad.scribe.turn import ScribeTurn
+
+                    if isinstance(runtime.scribe_route, ScribeTurn):
+                        handlers["scribe"] = runtime.scribe_route.sweep
+                        handlers["media"] = runtime.scribe_route.sweep
                 sweeper = Sweeper(
                     runtime.steward,
                     runtime.inbound,

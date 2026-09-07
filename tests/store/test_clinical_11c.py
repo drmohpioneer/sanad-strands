@@ -96,7 +96,7 @@ def test_invalid_english_uses_unchanged_spoken_form_and_question(
         },
     )
     assert p.candidate.facts[0].clinical_en is None
-    assert "كفاءة 45 (؟)" in render_card(p)[0]
+    assert "كفاءة 45" in render_card(p)[0]
     assert any(i.code == "clinical_unclear" for i in p.issues)
     assert "99" not in render_card(p)[0] and "aspirin" not in render_card(p)[0]
 

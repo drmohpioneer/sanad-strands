@@ -6,7 +6,6 @@ from providers.fixtures import ScriptedModel, candidate
 
 from sanad.domain import PatientScope
 from sanad.scribe.card import render_card
-from sanad.scribe.names import dictionary
 from sanad.scribe.patients import panel
 from sanad.store._base import StoreBase
 from store.scribe_fixtures import ScribeWorld
@@ -39,7 +38,7 @@ def test_voice_asr_spelling_and_compound_question_cannot_commit_an_invented_dose
     world.scribe.model_factory = lambda registry, role: model
     world.post(voice())
     proposed = world.proposal
-    assert proposed.prompt_version == "scribe-v7" and proposed.disputed_numbers == ()
+    assert proposed.prompt_version == "scribe-v8" and proposed.disputed_numbers == ()
     assert [o.drug for o in proposed.candidate.orders] == ["Exforge HCT", "Concor", "Forxiga"]
     assert proposed.candidate.missions[0].text == "Bano Creatine, Na, K"
     assert proposed.candidate.missions[0].clinical_en == "BUN, creatinine, Na, K"
@@ -51,7 +50,9 @@ def test_voice_asr_spelling_and_compound_question_cannot_commit_an_invented_dose
     assert proposed.blocked("order:0") and proposed.blocked("order:2")
     assert not proposed.blocked("order:1")
     system = " ".join(c.get("text", "") for c in model.script.calls[0]["system"])
-    assert "Known names" in system and all(e.latin in system for e in dictionary())
+    from sanad.scribe.resolver import hint_names
+
+    assert "Known names" in system and ", ".join(hint_names().split(", ")[:200]) in system
     world.tap()
     patient = panel(store, world.doctor.scope)[0]
     scope = PatientScope(doctor_id=world.doctor.id, patient_id=patient.id)

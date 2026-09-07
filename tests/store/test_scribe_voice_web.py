@@ -87,11 +87,11 @@ def test_voice_disputed_alert_is_blocked_then_explicit_edit_accepts(world: Scrib
         "alerts": ["السكر فوق 100"],
         "numbers_used": ["100"],
     }
-    model = ScriptedModel(candidate(value))
+    model = ScriptedModel(candidate(value), candidate(value))
     world.scribe.model_factory = lambda registry, role: model
     world.post(voice())
     assert world.receipt(10).state == "completed" and len(speech.calls) == 1
-    assert len(files.calls) == 1 and len(model.script.calls) == 1
+    assert len(files.calls) == 1 and len(model.script.calls) == 2
     proposal = world.proposal
     assert proposal.blocked("alert:0") and set(proposal.disputed_numbers) == {"100", "200"}
     assert "محتاج تأكيد" in render_card(proposal)[0]
@@ -100,7 +100,7 @@ def test_voice_disputed_alert_is_blocked_then_explicit_edit_accepts(world: Scrib
     assert proposal.source_transcript_ref == media.transcript_ref
     assert proposal.source_provenance[0].source_span is None
     assert proposal.source_provenance[0].source_observation_id == proposal.source_receipt_id
-    assert proposal.source_provenance[0].prompt_version == "scribe-v7"
+    assert proposal.source_provenance[0].prompt_version == "scribe-v8"
     assert proposal.source_provenance[0].model_id == "us.amazon.nova-lite-v1:0"
     assert media.transcript_ref and s3.get(media.scope, media.transcript_ref, 100000).startswith(
         b"{"
@@ -161,10 +161,10 @@ def test_edit_voice_uses_same_correction_and_photo_keeps_pending(world: ScribeWo
     assert world.proposal.id == proposal.id and world.proposal.editing
     providers(world, "اسمه أحمد سعيد\nNUMBERS: none")
     value = {"intent": "create_patient", "patient": {"name_as_spoken": "أحمد سعيد"}}
-    model = ScriptedModel(candidate(value))
+    model = ScriptedModel(candidate(value), candidate(value))
     world.scribe.model_factory = lambda registry, role: model
     world.post(voice(12))
-    assert world.proposal.prompt_version == "scribe-correction-v7"
+    assert world.proposal.prompt_version == "scribe-correction-v8"
     assert world.proposal.candidate.patient.name_as_spoken == "أحمد سعيد"
     assert "previous_candidate" in str(model.script.calls[0])
 

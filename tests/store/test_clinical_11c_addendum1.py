@@ -71,10 +71,10 @@ def test_unresolved_spoken_test_cannot_borrow_model_translation(world: ScribeWor
         },
     )
     assert p.candidate.missions[0].clinical_en is None
-    assert "TEST: فحص زيلورا (؟)" in render_card(p)[0]
+    assert "TEST: زيلورا" in render_card(p)[0]
     assert "CBC" not in render_card(p)[0]
     assert len(dictation_questions(p)) == 1
-    assert not p.names
+    assert len(p.names) == 1 and not p.names[0].verified
 
 
 def test_test_name_resolution_does_not_hide_an_unsupported_model_number(world: ScribeWorld) -> None:
@@ -85,10 +85,10 @@ def test_test_name_resolution_does_not_hide_an_unsupported_model_number(world: S
             "missions": [{"kind": "TEST", "text": "بانو كريات", "clinical_en": "CBC 99"}],
         },
     )
-    assert p.candidate.missions[0].clinical_en is None
-    assert "TEST: بانو كريات (؟)" in render_card(p)[0]
+    assert p.candidate.missions[0].clinical_en == "BUN, creatinine"
+    assert "TEST: BUN, creatinine" in render_card(p)[0]
     assert "99" not in render_card(p)[0]
-    assert len(dictation_questions(p)) == 1
+    assert not dictation_questions(p)
 
 
 def test_test_name_uses_learned_spelling_before_seed(world: ScribeWorld) -> None:
@@ -138,7 +138,9 @@ def test_fact_prefixes_order_and_separate_payloads_survive_confirmation(world: S
             "patient": {"name_as_spoken": "سامي اختبار"},
             "facts": [
                 {
-                    "category": "history",
+                    "category": {"Complaint": "complaint", "ECG": "finding", "Echo": "finding"}.get(
+                        kind, "history"
+                    ),
                     "clinical_kind": kind,
                     "text": raw,
                     "terms": [{"spoken": raw, "english": en}],
@@ -187,7 +189,7 @@ def test_unsupported_qualifier_or_roman_grade_falls_back_to_spoken_fact(
             "patient": {"name_as_spoken": "سامي اختبار"},
             "facts": [
                 {
-                    "category": "history",
+                    "category": "complaint",
                     "clinical_kind": "Complaint",
                     "text": "أنجينا 2 أيام",
                     "clinical_en": english,
@@ -196,7 +198,7 @@ def test_unsupported_qualifier_or_roman_grade_falls_back_to_spoken_fact(
         },
     )
     assert p.candidate.facts[0].clinical_en is None
-    assert "أنجينا 2 أيام (؟)" in render_card(p)[0]
+    assert "Complaint: angina 2, أيام" in render_card(p)[0]
     assert english not in render_card(p)[0]
     assert len(dictation_questions(p)) == 1
 
@@ -217,7 +219,7 @@ def test_explicit_grade_is_retained_without_inventing_one(world: ScribeWorld) ->
             ],
         },
     )
-    assert "Complaint: grade II angina" in render_card(p)[0]
+    assert "History: grade, II, angina" in render_card(p)[0]
     assert not dictation_questions(p)
 
 

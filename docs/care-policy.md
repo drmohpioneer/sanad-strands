@@ -26,6 +26,15 @@ Execution states are `proposed`, `awaiting_link`, `open`, `waiting_patient`, `bl
 | QUESTION | The patient question, source message and relevant active plan; this support ticket may be created by the patient lane without a doctor confirmation | Doctor supplies an answer; the answer is delivered or remains visibly pending delivery | A treatment-changing answer must also create an explicit confirmed active-order amendment before it becomes executable guidance. Patient is told the queue and escalation behavior, never promised a doctor's response. |
 | TASK | A bounded doctor request with an allowed action, verifiable completion predicate and deadline | The required patient report, evidence or doctor acceptance exists | Covers additional follow-up instructions without inventing tools or clinical instructions. An unsupported action is explicitly shown as unsupported; an unclear completion rule is clarified on the existing card. |
 
+### TASK monitoring requests before slice 13
+
+Contract 11e addendum 3: a dictated request to measure, record or chart a metric
+with a frequency and duration is one TASK, never TEST or MONITOR. Its instruction
+retains the spoken request in clinical English and uses the existing `doctor_task`
+patient-report predicate. An explicit “for five days” means due at the receipt
+anchor plus five days; absent duration uses the TASK default. No measurement slots,
+units or coverage are inferred. Slice 13 upgrades this shape to MONITOR.
+
 For medication lists and old documents, collection does not mean medication reconciliation or clinical interpretation. For a multi-part request, receiving one readable file is insufficient unless that file meets all confirmed requirements. TEST date requirements do not apply wholesale to SEND_RECORDS.
 
 ## Deadline inference and the three clocks

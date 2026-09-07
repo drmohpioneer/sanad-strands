@@ -34,7 +34,14 @@ class ClinicalFact(ScribeRecord):
     entity_type: Literal["clinical_fact"] = "clinical_fact"
     scope: PatientScope
     category: Literal[
-        "condition", "allergy", "history", "medication_history", "demographic", "patient_report"
+        "condition",
+        "allergy",
+        "history",
+        "medication_history",
+        "demographic",
+        "patient_report",
+        "finding",
+        "complaint",
     ]
     payload: FactPayload | LabFactPayload | ReportFactPayload
     provenance: Provenance

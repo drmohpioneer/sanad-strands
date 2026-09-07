@@ -46,7 +46,7 @@ VALUE: dict[str, Any] = {
     ],
     "facts": [
         {
-            "category": "history",
+            "category": "finding",
             "clinical_kind": "Echo",
             "text": "الأكو فانكشن 45 %",
             "clinical_en": "EF 45% %",
@@ -312,7 +312,7 @@ def test_rxnorm_outage_keeps_unknown_name_confirmable_and_private(
             ],
         },
     )
-    assert "Remibrutinib (؟)" in render_card(p)[0]
+    assert "Remibrutinib 5" in render_card(p)[0]
     assert not p.blocked("order:0")
     assert not any(
         word in caplog.text for word in ("سامي", "private provider body", "Remibrutinib")
@@ -366,7 +366,7 @@ def test_tool_runs_inside_scribe_extraction(world: ScribeWorld) -> None:
     )
     world.scribe.model_factory = lambda registry, role: model
     world.post(update(APPLICANT, "سامي اختبار بيزوبرولول 5", 10))
-    assert len(model.script.calls) == 2 and len(fixture.calls) == 3
+    assert len(model.script.calls) == 4 and len(fixture.calls) == 3
     assert world.proposal.candidate.orders[0].drug == "Bisoprolol"
 
 

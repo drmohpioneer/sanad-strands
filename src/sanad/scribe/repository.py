@@ -110,6 +110,7 @@ class ScribeRepository:
             "ScribeConfirm",
             "ScribeExpire",
             "ScribeReply",
+            "ScribeLanguage",
             "ScribeInvalidate",
             "ScribeWork",
         ],

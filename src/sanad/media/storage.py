@@ -5,6 +5,8 @@ from hashlib import sha256
 from typing import Any, Protocol
 from urllib.parse import quote
 
+from botocore.exceptions import ClientError  # type: ignore[import-untyped]
+
 from sanad.domain import PatientScope
 from sanad.store.keys import IntakeScope
 
@@ -24,6 +26,10 @@ def prefix(scope: MediaScope) -> str:
 class MediaStore(Protocol):
     def put(self, scope: MediaScope, data: bytes, mime: str) -> str: ...
     def get(self, scope: MediaScope, reference: str, limit: int) -> bytes: ...
+    def put_read_checkpoint(self, scope: MediaScope, receipt_id: str, data: bytes) -> bytes: ...
+    def get_read_checkpoint(
+        self, scope: MediaScope, receipt_id: str, limit: int
+    ) -> bytes | None: ...
 
 
 class S3Client(Protocol):
@@ -35,6 +41,47 @@ class S3Client(Protocol):
 class S3MediaStore:
     bucket: str
     client: S3Client = field(repr=False)
+
+    def _read_key(self, scope: MediaScope, receipt_id: str) -> str:
+        return prefix(scope) + "evidence-reads/" + sha256(receipt_id.encode()).hexdigest()
+
+    def get_read_checkpoint(self, scope: MediaScope, receipt_id: str, limit: int) -> bytes | None:
+        try:
+            response = self.client.get_object(
+                Bucket=self.bucket, Key=self._read_key(scope, receipt_id)
+            )
+        except ClientError as error:
+            if error.response.get("Error", {}).get("Code") in {"NoSuchKey", "404"}:
+                return None
+            raise
+        body = response["Body"]
+        try:
+            if response.get("ContentLength", 0) > limit:
+                raise ValueError("too_large")
+            data: bytes = body.read(limit + 1)
+            if len(data) > limit:
+                raise ValueError("too_large")
+            return data
+        finally:
+            body.close()
+
+    def put_read_checkpoint(self, scope: MediaScope, receipt_id: str, data: bytes) -> bytes:
+        try:
+            self.client.put_object(
+                Bucket=self.bucket,
+                Key=self._read_key(scope, receipt_id),
+                Body=data,
+                ContentType="application/json",
+                ServerSideEncryption="AES256",
+                IfNoneMatch="*",
+            )
+        except ClientError as error:
+            if error.response.get("Error", {}).get("Code") not in {"PreconditionFailed", "412"}:
+                raise
+        saved = self.get_read_checkpoint(scope, receipt_id, len(data) + 1024 * 1024)
+        if saved is None:
+            raise ValueError("read_checkpoint_missing")
+        return saved
 
     def put(self, scope: MediaScope, data: bytes, mime: str) -> str:
         key = prefix(scope) + sha256(data).hexdigest()

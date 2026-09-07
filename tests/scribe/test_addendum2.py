@@ -36,8 +36,8 @@ def test_schema_ignores_model_bookkeeping_and_unknown_keys_at_every_level() -> N
     assert all(name not in description for name in ("intent", "numbers_used", "_dropped_numbers"))
     assert "foreign" not in value.model_dump_json() and "999" not in value.model_dump_json()
     assert not candidate_issues(value, "أحمد أملوديبين 5 مج وبنسلين وتحليل سكر بعد أسبوعين")
-    assert "scribe-correction-v7" in CORRECTION_PROMPT
-    assert "apply this correction" in CORRECTION_PROMPT.lower()
+    assert "scribe-correction-v8" in CORRECTION_PROMPT
+    assert "correct the previous card" in CORRECTION_PROMPT.lower()
 
 
 @pytest.mark.parametrize("has_match", [False, True])
@@ -66,7 +66,7 @@ def test_intent_uses_clinical_content_and_server_lookup(
         ("orders", {"action": "start", "drug": "أملوديبين", "dose": {"value": "5"}}),
         ("orders", [{"action": "start", "drug": "أملوديبين", "dose": "5 مج"}]),
         ("missions", {"kind": "MONITOR", "text": "الضغط بعد 5 أيام"}),
-        ("facts", {"category": "unknown", "text": "من 5 أيام"}),
+        ("facts", {"category": "history", "text": {"invalid": "من 5 أيام"}}),
         ("alerts", {"text": "البوتاسيوم فوق 5"}),
     ],
 )
@@ -94,9 +94,12 @@ def test_malformed_numeric_item_is_dropped_without_losing_valid_siblings(
 
 
 @pytest.mark.parametrize("malformed", [None, "وقف الدوا", {}, {"action": "wrong", "drug": "دواء"}])
-def test_malformed_nonnumeric_item_leaves_persistable_ambiguity(malformed: object) -> None:
+def test_malformed_nonnumeric_item_stays_empty_without_placeholder_question(
+    malformed: object,
+) -> None:
     value = DictationCandidate.model_validate({"orders": [malformed]})
-    assert value.orders == () and value.ambiguities == ("فيه بند مش واضح؛ وضّحه في التعديل.",)
+    assert value.orders == () and value.ambiguities == ()
+    assert any(q.code == "clarification" for q in candidate_issues(value, "وقف الدوا"))
     assert (
         DictationCandidate.model_validate_json(value.model_dump_json()).ambiguities
         == value.ambiguities

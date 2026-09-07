@@ -143,7 +143,7 @@ def test_resume_requires_single_use_tap(world: PatientWorld) -> None:
 def test_model_quotes_only_current_plan(world: PatientWorld) -> None:
     snapshot = plan.load(world.store, world.patient_scope, world.clock())
     assert snapshot
-    line = plan.order_line(snapshot.orders[0])
+    line = plan.order_line(snapshot.orders[0], snapshot.patient.language)
     model, reply = world.send(
         "هو الدكتور قال 40 ولا 20؟",
         {
@@ -270,7 +270,7 @@ def test_generated_reply_gates(world: PatientWorld, mutation: str, reason: str) 
 def test_thinking_tags_are_stripped(world: PatientWorld) -> None:
     snap = plan.load(world.store, world.patient_scope, world.clock())
     assert snap
-    line = plan.order_line(snap.orders[0])
+    line = plan.order_line(snap.orders[0], snap.patient.language)
     _, reply = world.send(
         "هو الدكتور قال 40 ولا 20؟",
         {

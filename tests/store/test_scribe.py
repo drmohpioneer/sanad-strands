@@ -3,7 +3,13 @@ from datetime import timedelta
 import pytest
 from harness import FakeClock
 from providers.fixtures import ScriptedModel, candidate
-from scribe.dictations import OWNER_SYNTHETIC, SYNTHETIC_TABLE, TABLE, DictationExample
+from scribe.dictations import (
+    OWNER_SYNTHETIC,
+    OWNER_TRANSCRIPT,
+    SYNTHETIC_TABLE,
+    TABLE,
+    DictationExample,
+)
 
 from sanad.domain import PatientScope
 from sanad.scribe.card import render_card
@@ -27,11 +33,13 @@ def world(store: StoreBase, clock: FakeClock) -> ScribeWorld:
 def test_handwritten_cards_through_real_receipt(
     world: ScribeWorld, example: DictationExample
 ) -> None:
-    if example is OWNER_SYNTHETIC:
+    if example is OWNER_SYNTHETIC or example is OWNER_TRANSCRIPT:
         from store.test_scribe_voice_web import providers, voice
 
         providers(world, example.input + " NUMBERS: 53 560 12.5 5")
-        model = ScriptedModel(candidate(example.candidate.model_dump()))
+        model = ScriptedModel(
+            candidate(example.candidate.model_dump()), candidate(example.candidate.model_dump())
+        )
         world.scribe.model_factory = lambda registry, role: model
         world.post(voice())
         proposal = world.proposal

@@ -7,11 +7,20 @@ from fastapi.responses import Response
 
 from sanad.auth.claim import ClaimService
 from sanad.domain import PatientScope, TenantScope
+from sanad.evidence.doctor import owned
+from sanad.evidence.templates import render as render_evidence
 from sanad.scribe.crosscheck import render_card
 from sanad.scribe.policy import DRAFT_SCRIBE_POLICY
 from sanad.scribe.proposal import Proposal
 from sanad.steward.types import records
-from sanad.store.records import IntakeDraft, MediaWork, PatientMedia, WebSession, from_record
+from sanad.store.records import (
+    Doctor,
+    IntakeDraft,
+    MediaWork,
+    PatientMedia,
+    WebSession,
+    from_record,
+)
 from sanad.web.routes import SESSION_COOKIE, require_session
 
 
@@ -26,6 +35,9 @@ def record_router(claims: ClaimService) -> APIRouter:
         if patient is None:
             raise HTTPException(404)
         scope, tenant = patient.scope, TenantScope(doctor_id=session.doctor_id)
+        doctor_row = claims.store.get(scope, "doctor", session.doctor_id)
+        assert doctor_row
+        language = from_record(doctor_row, Doctor).language
         reviews = [r.body for r in records(claims.store, scope, "review")]
         missions = []
         for row in records(claims.store, scope, "mission"):
@@ -88,6 +100,17 @@ def record_router(claims: ClaimService) -> APIRouter:
             "display_name": patient.display_name,
             "contact_status": patient.contact_status,
             "record_version": patient.record_version,
+            "medication_list_seen": [
+                {
+                    "evidence_id": e.evidence_id,
+                    "printed_date": e.printed_date,
+                    "items": [v.model_dump(mode="json") for v in e.extracted_values],
+                    "label": render_evidence("history_label", language),
+                    "active_order": False,
+                }
+                for e in owned(claims.store, session.doctor_id)
+                if e.scope == scope and e.category in {"prescription", "medication_list"}
+            ],
             "facts": [r.body for r in records(claims.store, scope, "clinical_fact")],
             "orders": orders,
             "order_heads": orders,

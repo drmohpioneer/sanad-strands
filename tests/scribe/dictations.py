@@ -11,7 +11,7 @@ class DictationExample:
     input: str
     candidate: DictationCandidate
     card: str
-    extraction_calls: int = 1
+    extraction_calls: int = 2
 
 
 SYNTHETIC_TABLE = (
@@ -51,11 +51,11 @@ TEST: creatinine — الموعد: الأحد 20 سبتمبر، 10 الصبح (�
 تأكيد بداية Bisoprolol: الأربعاء 9 سبتمبر، 10 الصبح؛ لو متأكدش هبلّغك في نفس الموعد.
 متابعة اليوم الثالث من تاريخ البداية اللي المريض يبلّغنا بيه؛ التأكيد هنا مش دليل إنه بدأ.
 التاريخ المرضي:
-Dx: ضغط مزمن (؟)
+Dx: hypertension, مزمن
 بلّغني لو:
 البوتاسيوم فوق 5.5
 محتاج تأكيد:
-المصطلحات اللي عليها (؟) اتكتبت من كلامك؛ لو حاجة غلط عدّلها، وإلا اضغط ✅
+الأسماء اللي بالعربي اتكتبت زي ما سمعتها؛ لو عايز تكتبها بالإنجليزي عدّلها
 ✅ تمام | ✏️ تعديل | ❌ إلغاء
 صالح 30 دقيقة""",
     ),
@@ -74,9 +74,9 @@ Dx: ضغط مزمن (؟)
 المطلوب:
 TEST: glucose — الموعد: الأحد 6 سبتمبر، 7 بالليل (صريح: بعد 4 ساعات)؛ لو متعملش هبلّغك: الأحد 6 سبتمبر، 7 بالليل
 التاريخ المرضي:
-History: بنسلين (؟)
+History: بنسلين
 محتاج تأكيد:
-المصطلحات اللي عليها (؟) اتكتبت من كلامك؛ لو حاجة غلط عدّلها، وإلا اضغط ✅
+الأسماء اللي بالعربي اتكتبت زي ما سمعتها؛ لو عايز تكتبها بالإنجليزي عدّلها
 ✅ تمام | ✏️ تعديل | ❌ إلغاء
 صالح 30 دقيقة""",
     ),
@@ -147,9 +147,9 @@ Amlodipine خمسة mg (بداية)
         ),
         """مريض جديد: وليد
 الأدوية:
-أب (؟) 5 mg (بداية)
+أب 5 mg (بداية)
 محتاج تأكيد:
-سمعت "أب"، اسم الدوا بالإنجليزي إيه؟
+الأسماء اللي بالعربي اتكتبت زي ما سمعتها؛ لو عايز تكتبها بالإنجليزي عدّلها
 ✅ تمام | ✏️ تعديل | ❌ إلغاء
 صالح 30 دقيقة""",
     ),
@@ -165,9 +165,9 @@ Amlodipine خمسة mg (بداية)
         ),
         """مريض جديد: ياسر
 التاريخ المرضي:
-History: عملية زائدة (؟)
+History: عملية زائدة
 محتاج تأكيد:
-المصطلحات اللي عليها (؟) اتكتبت من كلامك؛ لو حاجة غلط عدّلها، وإلا اضغط ✅
+الأسماء اللي بالعربي اتكتبت زي ما سمعتها؛ لو عايز تكتبها بالإنجليزي عدّلها
 ✅ تمام | ✏️ تعديل | ❌ إلغاء
 صالح 30 دقيقة""",
     ),
@@ -187,9 +187,9 @@ History: عملية زائدة (؟)
         ),
         """مريض جديد: هاني
 التاريخ المرضي:
-History: أسبرين زمان (؟)
+History: أسبرين زمان
 محتاج تأكيد:
-المصطلحات اللي عليها (؟) اتكتبت من كلامك؛ لو حاجة غلط عدّلها، وإلا اضغط ✅
+الأسماء اللي بالعربي اتكتبت زي ما سمعتها؛ لو عايز تكتبها بالإنجليزي عدّلها
 ✅ تمام | ✏️ تعديل | ❌ إلغاء
 صالح 30 دقيقة""",
     ),
@@ -389,7 +389,7 @@ OWNER_SYNTHETIC = DictationExample(
                     "terms": [{"spoken": "ضغط وسكر", "english": "hypertension, diabetes"}],
                 },
                 {
-                    "category": "history",
+                    "category": "finding",
                     "clinical_kind": "ECG",
                     "text": "T wave inversion lateral",
                     "terms": [
@@ -401,7 +401,7 @@ OWNER_SYNTHETIC = DictationExample(
                     "clinical_en": "T wave inversion lateral",
                 },
                 {
-                    "category": "history",
+                    "category": "finding",
                     "clinical_kind": "Echo",
                     "text": "EF 45%, segmental hypokinesia inferoposterolateral",
                     "terms": [
@@ -424,7 +424,7 @@ Forxiga (بداية)
 TEST: BUN, creatinine, Na, K — الموعد: الأحد 20 سبتمبر، 10 الصبح (افتراضي 14 يوم)؛ لو متعملش هبلّغك: الأحد 20 سبتمبر، 10 الصبح
 التاريخ المرضي:
 Dx: hypertension, diabetes
-ECG: T wave inversion lateral
+ECG: T wave inversion, lateral
 Echo: EF 45%, segmental hypokinesia inferoposterolateral
 محتاج تأكيد:
 سمعت 45، ده الـ EF؟
@@ -434,3 +434,48 @@ Echo: EF 45%, segmental hypokinesia inferoposterolateral
 صالح 30 دقيقة""",
 )
 TABLE = (*TABLE, OWNER_SYNTHETIC)
+
+# The owner identified this note as synthetic and explicitly released this
+# exact seventeenth card. The text below is handwritten from contract 11e.
+OWNER_TRANSCRIPT = DictationExample(
+    "مريض جديد أحمد سعد عنده 53 سنة ضغطه سكر ECG في تي أوف انفرجين في اللاترال "
+    "الأكو فانكشن 45% سيجمنتال انفروبوسترو لاترال جايب أنجينا ماشي على "
+    "إكس فورش إتش سي تي 560 12.5 وكونكور 5 زودته فورسيجا هنتابع موضوع الفورسيجا "
+    "وطلبت منه بانو كريات وسوديوم وبوتاسيوم يعملوه",
+    DictationCandidate.model_validate(
+        {
+            "patient": {"name_as_spoken": "أحمد سعد", "age": "53"},
+            "orders": [
+                {"action": "continue", "drug": "إكس فورش إتش سي تي", "dose": "560 12.5"},
+                {"action": "continue", "drug": "كونكور", "dose": "5"},
+                {"action": "start", "drug": "فورسيجا"},
+            ],
+            "missions": [{"kind": "TEST", "text": "بانو كريات وسوديوم وبوتاسيوم"}],
+            "facts": [
+                {"category": "condition", "text": "ضغطه سكر"},
+                {"category": "finding", "text": "ECG في تي أوف انفرجين في اللاترال"},
+                {"category": "finding", "text": "الأكو فانكشن 45% سيجمنتال انفروبوسترو لاترال"},
+                {"category": "complaint", "text": "أنجينا"},
+            ],
+        }
+    ),
+    """مريض جديد: أحمد سعد، 53 سنة
+الأدوية:
+Exforge HCT 560 12.5
+Concor 5
+Forxiga (بداية)
+المطلوب:
+TEST: BUN, creatinine, Na, K — الموعد: الأحد 20 سبتمبر، 10 الصبح (افتراضي 14 يوم)؛ لو متعملش هبلّغك: الأحد 20 سبتمبر، 10 الصبح
+التاريخ المرضي:
+Dx: hypertension, diabetes
+ECG: T wave inversion, lateral
+Echo: EF 45%, segmental hypokinesia inferoposterolateral
+Complaint: angina
+محتاج تأكيد:
+سمعت 45، ده الـ EF؟
+سمعت "560 12.5" لـ Exforge HCT، قصدك 5/160/12.5؟
+جرعة "Forxiga" إيه؟
+✅ تمام | ✏️ تعديل | ❌ إلغاء
+صالح 30 دقيقة""",
+)
+TABLE = (*TABLE, OWNER_TRANSCRIPT)

@@ -4,6 +4,7 @@ from datetime import timedelta
 from typing import Literal
 
 from sanad.domain.boundaries import _BoundaryValue
+from sanad.domain.language import Language, default_language
 from sanad.media.limits import MAX_IMAGE_BYTES
 
 
@@ -23,7 +24,8 @@ class ScribePolicy(_BoundaryValue):
     max_candidates: int
     card_max_chars: int
     min_drug_chars: int
-    default_language: Literal["ar"]
+    default_language: Language = default_language
+    history_lines_max: int = 6
     qr_scale: int
 
 
@@ -32,6 +34,5 @@ DRAFT_SCRIBE_POLICY = ScribePolicy(
     max_candidates=5,
     card_max_chars=3500,
     min_drug_chars=3,
-    default_language="ar",
     qr_scale=6,
 )

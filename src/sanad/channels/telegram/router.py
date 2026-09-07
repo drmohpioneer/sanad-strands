@@ -28,6 +28,7 @@ from sanad.store.records import (
     InboundReceipt,
     Incident,
     OutboundIntent,
+    Patient,
     SubjectBinding,
     from_record,
 )
@@ -95,6 +96,17 @@ class TelegramRuntime:
 
     def patient_payload(self, intent: OutboundIntent) -> dict[str, JsonValue]:
         if intent.template_id == "patient_emergency":
+            if isinstance(intent.scope, PatientScope):
+                row = self.store.get(intent.scope, "patient", intent.scope.patient_id)
+                if row:
+                    return {
+                        "text": render_urgent(
+                            "patient_emergency",
+                            language=from_record(row, Patient).language,
+                            gender="u",
+                            policy=self.safety_policy,
+                        )
+                    }
             return {"text": self.general("patient_emergency")}
         if intent.template_id == "liaison:DANGER" and isinstance(intent.scope, PatientScope):
             sources = [r for r in intent.source_versions if r.entity_type == "incident"]
@@ -103,24 +115,31 @@ class TelegramRuntime:
                 if row:
                     incident = from_record(row, Incident)
                     facts = IncidentFacts.model_validate(incident.facts)
+                    from sanad.evidence.delivery import incident_context
+                    from sanad.evidence.templates import render as render_evidence
+                    from sanad.store.records import Doctor
+
+                    doctor_row = self.store.get(intent.scope, "doctor", intent.scope.doctor_id)
+                    language = from_record(doctor_row, Doctor).language if doctor_row else "ar"
+
                     return {
                         "text": (
-                            "الصورة اللي اتنبهت لها قبل كده اتربطت بالمريض.\n"
+                            render_evidence("danger_associated", language)
                             if incident.prior_delivery_refs
                             else ""
                         )
-                        + "\n".join(
-                            render_urgent(
-                                "doctor_danger",
-                                language=language,
-                                gender="u",
-                                policy=self.safety_policy,
-                                patient=intent.scope.patient_id,
-                                concept=(getattr(facts.verdict, "concept", None) or facts.rule_id),
-                                source=facts.source.observation_id,
-                                uncertainty="unverified / غير متحقق",
-                            )
-                            for language in LANGUAGES
+                        + render_urgent(
+                            "doctor_danger",
+                            language=language,
+                            gender="u",
+                            policy=self.safety_policy,
+                            patient=intent.scope.patient_id,
+                            concept=(getattr(facts.verdict, "concept", None) or facts.rule_id),
+                            source=facts.source.observation_id,
+                            uncertainty=render_evidence("unverified", language),
+                            context=incident_context(
+                                self.store, intent.scope, incident.id, facts, language
+                            ),
                         )
                     }
         # This slice has no renderer for ordinary clinical guidance.
@@ -164,7 +183,7 @@ def route_receipt(
     )
     if active_patient:
         assert isinstance(receipt.scope, PatientScope)
-        if verdict.level != "danger" and runtime.concierge_route is not None:
+        if runtime.concierge_route is not None:
             assert auth.binding is not None
             concierge_result = runtime.concierge_route(receipt, auth.principal, auth.binding)
             if concierge_result is not None:

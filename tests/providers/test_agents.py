@@ -196,7 +196,7 @@ def test_hygiene_table(raw: str, expected: str) -> None:
     ],
 )
 def test_patient_gate_before_proposal(text: str, reason: str | None) -> None:
-    context = binding(output_context=OutputContext(mode="plan_explanation"))
+    context = binding(output_context=OutputContext(mode="plan_explanation", language="ar"))
     model = ScriptedModel(candidate({"text": text}))
     instance = make_agent(
         "concierge",

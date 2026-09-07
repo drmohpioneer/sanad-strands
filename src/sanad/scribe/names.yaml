@@ -1584,6 +1584,9 @@
         "إي إف",
         "إيه إف",
         "كفاءة القلب"
+      ],
+      "latin_spellings": [
+        "ejection fraction"
       ]
     },
     {
@@ -1612,6 +1615,9 @@
         "تي ويف انفرتد",
         "تي أوف إنفرجين",
         "تي ويف انفريجن"
+      ],
+      "latin_spellings": [
+        "T-wave inversion"
       ]
     },
     {
@@ -1988,10 +1994,13 @@
     },
     {
       "kind": "term",
-      "latin": "BP",
+      "latin": "blood pressure",
       "generic": "bp",
       "arabic_spellings": [
         "ضغط الدم"
+      ],
+      "latin_spellings": [
+        "BP"
       ]
     },
     {
@@ -2165,6 +2174,9 @@
       "generic": "hypertension",
       "arabic_spellings": [
         "ضغط"
+      ],
+      "latin_spellings": [
+        "hypertensive"
       ]
     },
     {
@@ -2173,6 +2185,9 @@
       "generic": "diabetes",
       "arabic_spellings": [
         "سكر"
+      ],
+      "latin_spellings": [
+        "diabetic"
       ]
     }
   ]

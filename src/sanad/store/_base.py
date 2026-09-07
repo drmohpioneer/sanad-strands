@@ -174,6 +174,13 @@ class StoreBase(ABC):
         return record if scope_owns(scope, model_scope(model)) else None
 
     def get(self, scope: Scope, entity_type: str, id: str) -> StoredRecord | None:
+        if entity_type == "evidence":
+            if not isinstance(scope, PatientScope):
+                return None
+            logical, separator, version = id.rpartition(":")
+            if not separator or not version.isdecimal():
+                return None
+            return self._owned(scope, keys.evidence(scope, logical, int(version)))
         if isinstance(scope, keys.IntakeScope) and entity_type in {
             "intake_draft",
             "intake_callback",
@@ -198,6 +205,9 @@ class StoreBase(ABC):
             tenant = TenantScope(doctor_id=scope.doctor_id)
             return self._owned(tenant, keys.doctor(tenant))
         prefixes = {
+            "evidence_head": "EVIDENCE_HEAD",
+            "evidence_hash": "EVIDENCE_HASH",
+            "evidence_action": "EVIDENCE_ACTION",
             "name_memory": "NAME",
             "name_cache": "NAME_CACHE",
             "photo_association_work": "PHOTO_ASSOCIATION_WORK",
@@ -375,6 +385,10 @@ class StoreBase(ABC):
         self, scope: Scope, entity_type: str, cursor: Cursor | None = None, limit: int = 100
     ) -> RecordPage:
         prefixes = {
+            "evidence": "EVIDENCE#",
+            "evidence_head": "EVIDENCE_HEAD#",
+            "evidence_hash": "EVIDENCE_HASH#",
+            "evidence_action": "EVIDENCE_ACTION#",
             "name_memory": "NAME#",
             "name_cache": "NAME_CACHE#",
             "photo_association_work": "PHOTO_ASSOCIATION_WORK#",
@@ -534,6 +548,7 @@ class StoreBase(ABC):
     ) -> CommitResult:
         command = request.command
         concierge = command.payload.get("executor") == "concierge-v1"
+        evidence = command.payload.get("executor") == "evidence-v1"
         scope = command.scope
         actor = command.principal
         if isinstance(scope, AccountScope) and not account:
@@ -639,6 +654,13 @@ class StoreBase(ABC):
             if guarded_patient is None:
                 return Forbidden()
             authority_checks.extend(guarded_patient)
+        if evidence:
+            from sanad.store.evidence import guards as evidence_guards
+
+            guarded_evidence = evidence_guards(self, request, utc_instant(self._clock()))
+            if guarded_evidence is None:
+                return Forbidden()
+            authority_checks.extend(guarded_evidence)
         command_key = keys.uniqueness(scope, "CMD", command.command_id)
         # Replay identity is the immutable command payload, independent of retry time.
         digest = keys.digest(canonical_json(command.payload).decode())
@@ -662,8 +684,15 @@ class StoreBase(ABC):
         )
         for record in records:
             if (
+                record.entity_type
+                in {"evidence", "evidence_head", "evidence_hash", "evidence_action"}
+                and not evidence
+            ):
+                return Forbidden()
+            if (
                 not scribe
                 and not (concierge and record.entity_type == "clinical_fact")
+                and not (evidence and record.entity_type in {"clinical_fact", "patient_media"})
                 and record.entity_type
                 in {
                     "name_memory",
@@ -814,7 +843,7 @@ class StoreBase(ABC):
                 if not valid_patient_projection(self, record):
                     return Forbidden()
             if not (
-                identity or scribe or concierge or contact_projection
+                identity or scribe or concierge or evidence or contact_projection
             ) and record.entity_type in {
                 "patient_action",
                 "patient",
@@ -830,7 +859,12 @@ class StoreBase(ABC):
                 "web_session",
             }:
                 return Forbidden()
-            if not account and record.entity_type in {
+            language_only = (
+                scribe
+                and command.payload.get("type") == "ScribeLanguage"
+                and record.entity_type == "doctor"
+            )  # scribe_guards already compared every other Doctor field.
+            if not (account or language_only) and record.entity_type in {
                 "application",
                 "doctor",
                 "subject_binding",
@@ -978,7 +1012,14 @@ class StoreBase(ABC):
                     "claim_generation": current.claim_generation if current else 0,
                 }
             )
-            writes.append(Write(record_item(canonical), record.version - 1 or None))
+            if record.entity_type in {"evidence", "evidence_hash"} and current is not None:
+                return Forbidden()
+            writes.append(
+                Write(
+                    record_item(canonical),
+                    None if record.entity_type == "evidence" else record.version - 1 or None,
+                )
+            )
             if record.version == 1 and isinstance(model, (OutboundIntent, ReviewObligation)):
                 kind: Literal["OUTKEY", "REVIEWKEY"] = (
                     "OUTKEY" if isinstance(model, OutboundIntent) else "REVIEWKEY"

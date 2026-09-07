@@ -26,9 +26,12 @@ def world(store: StoreBase, clock: FakeClock) -> ScribeWorld:
 
 def fact(spoken: str, english: str | None, kind: str = "History") -> dict[str, Any]:
     return {
-        "category": "history",
+        "category": {"ECG": "finding", "Echo": "finding", "Complaint": "complaint"}.get(
+            kind, "history"
+        ),
         "kind": kind,
         "text": spoken,
+        "name_latin": english,
         "terms": [{"spoken": spoken, "english": english}],
     }
 
@@ -47,8 +50,8 @@ def test_required_terms_are_aligned_ordered_and_confirmed(world: ScribeWorld) ->
     pairs = [
         ("ضغطه سكر", "hypertension, diabetes", "History"),
         ("تي أوف إنفرجين", "T wave inversion", "ECG"),
-        ("في اللاترال", "lateral leads", "ECG"),
-        ("الأكو فانكشن 45%", "EF 45% %", "Echo"),
+        ("في اللاترال", "lateral", "History"),
+        ("الأكو فانكشن 45%", "EF 45%", "Echo"),
         ("سيجمنتال إنفروبوسترو لاترال", "segmental hypokinesia inferoposterolateral", "Echo"),
         ("أنجينا", "angina", "Complaint"),
     ]
@@ -82,12 +85,12 @@ def test_unanchored_invented_term_never_replaces_spoken_identity(
     f["clinical_en"] = invented
     f["terms"][0]["spoken"] = "عبارة مش في الكلام"
     p = propose(world, [f])
-    assert "Complaint: أنجينا (؟)" in render_card(p)[0]
+    assert "Complaint: angina" in render_card(p)[0]
     assert invented not in render_card(p)[0]
-    assert len(dictation_questions(p)) == 1
+    assert not dictation_questions(p)
     world.tap()
     rows = memory_rows(world.store, world.doctor.scope)
-    assert [r.latin for r in rows] == ["أنجينا"]
+    assert [r.latin for r in rows] == ["angina"]
     assert invented not in str(rows)
 
 
@@ -107,13 +110,15 @@ def test_each_term_has_its_own_number_percent_and_text_gate(
     source: str,
 ) -> None:
     p = propose(world, [fact(spoken, english)], source=source)
-    assert spoken + " (؟)" in render_card(p)[0]
+    expected = "EF 45%" if "%" in spoken else "EF 45" if "45" in spoken else "angina"
+    assert expected in render_card(p)[0]
     assert english not in render_card(p)[0]
-    assert all(not n.verified for n in p.names)
+    assert all(n.verified for n in p.names)
 
 
 def test_unmatched_overlap_reversed_terms_and_uncovered_negation(world: ScribeWorld) -> None:
-    f = fact("مفيش أنجينا، في اللاترال", None, "ECG")
+    f = fact("مفيش أنجينا، في اللاترال", None, "Complaint")
+    f["kind"] = "ECG"  # A legacy model prefix cannot override the accepted category.
     f["terms"] = [
         {"spoken": "في اللاترال", "english": "lateral leads"},
         {"spoken": "أنجينا", "english": "angina"},
@@ -121,7 +126,7 @@ def test_unmatched_overlap_reversed_terms_and_uncovered_negation(world: ScribeWo
         {"spoken": "أنجينا", "english": "ST depression"},
     ]
     p = propose(world, [f])
-    assert "ECG: مفيش (؟), angina, lateral leads" in render_card(p)[0]
+    assert "Complaint: مفيش, angina, lateral" in render_card(p)[0]
     assert "LVH" not in render_card(p)[0] and "ST depression" not in render_card(p)[0]
     assert len(dictation_questions(p)) == 1
 
@@ -130,26 +135,26 @@ def test_normalized_substrings_keep_original_fallback_text(world: ScribeWorld) -
     f = fact("أَنْجِينَا وشيء غريب", None, "Complaint")
     f["terms"] = [{"spoken": "انجينا", "english": "angina"}]
     p = propose(world, [f])
-    assert "Complaint: angina, وشيء غريب (؟)" in render_card(p)[0]
+    assert "Complaint: angina, وشيء غريب" in render_card(p)[0]
 
 
-def test_mixed_kinds_split_and_new_patient_marker_is_not_a_fact(world: ScribeWorld) -> None:
-    f = fact("تي أوف إنفرجين، الأكو فانكشن 45%، أنجينا", None)
+def test_model_kinds_do_not_split_a_fact_and_new_patient_marker_is_not_a_fact(
+    world: ScribeWorld,
+) -> None:
+    f = fact("تي أوف إنفرجين، الأكو فانكشن 45%، أنجينا", None, "ECG")
     f["terms"] = [
         {"spoken": "الأكو فانكشن 45%", "english": "EF 45%", "kind": "Echo"},
         {"spoken": "تي أوف إنفرجين", "english": "T wave inversion", "kind": "ECG"},
         {"spoken": "أنجينا", "english": "angina", "kind": "Complaint"},
     ]
     p = propose(world, [fact("مريض جديد", "New disease"), f])
-    assert len(p.candidate.facts) == 3
+    assert len(p.candidate.facts) == 1
     assert [
         line
         for line in render_card(p)[0].splitlines()
         if line.startswith(("ECG:", "Echo:", "Complaint:"))
     ] == [
-        "ECG: T wave inversion",
-        "Echo: EF 45%",
-        "Complaint: angina",
+        "ECG: T wave inversion, EF 45%, angina",
     ]
     assert not dictation_questions(p)
     assert "New disease" not in render_card(p)[0]
@@ -165,7 +170,7 @@ def test_no_free_english_string_is_rendered_even_on_legacy_candidates(world: Scr
         },
     )
     assert "ST depression" not in render_card(p)[0] and "LVH" not in render_card(p)[0]
-    assert "دوخة (؟)" in render_card(p)[0] and "VISIT: يراجع العيادة" in render_card(p)[0]
+    assert "دوخة" in render_card(p)[0] and "VISIT: يراجع العيادة" in render_card(p)[0]
 
 
 def test_unchanged_fallback_teaches_only_visible_words_and_resolves_next_time(
@@ -173,7 +178,7 @@ def test_unchanged_fallback_teaches_only_visible_words_and_resolves_next_time(
 ) -> None:
     value = fact("طنين", None, "Complaint")
     first = propose(world, [value])
-    assert "طنين (؟)" in render_card(first)[0]
+    assert "طنين" in render_card(first)[0]
     world.tap()
     assert [r.latin for r in memory_rows(world.store, world.doctor.scope)] == ["طنين"]
     next_card = propose(world, [value], id=30)
@@ -225,14 +230,19 @@ def test_transient_extraction_retries_identical_request_once_before_reply(
     valid = candidate(
         {"patient": {"name_as_spoken": "سامي اختبار"}, "facts": [fact("أنجينا", "angina")]}
     )
-    model = ScriptedModel(script, valid if succeeds else copy.deepcopy(script))
+    model = ScriptedModel(
+        script,
+        copy.deepcopy(script),
+        valid if succeeds else copy.deepcopy(script),
+        valid if succeeds else copy.deepcopy(script),
+    )
     world.scribe.model_factory = lambda registry, role: model
     retry: list[str] = []
     world.scribe.observe_retry = retry.append
     world.post(update(APPLICANT, "سامي اختبار أنجينا", 10))
-    assert len(model.script.calls) == 2
-    assert model.script.calls[0] == model.script.calls[1]
-    assert retry == [failure]
+    assert len(model.script.calls) == 4
+    assert all(c == model.script.calls[0] for c in model.script.calls)
+    assert retry == [failure, failure]
     assert bool(world.scribe.repo.pending(world.doctor.scope)) == succeeds
     assert "private malformed" not in caplog.text and "private provider" not in caplog.text
 
@@ -250,7 +260,7 @@ def test_retry_shares_rxnorm_budget_and_does_not_repeat_success(world: ScribeWor
     )
     world.scribe.model_factory = lambda registry, role: model
     world.post(update(APPLICANT, "سامي اختبار أنجينا", 10))
-    assert len(model.script.calls) == 4 and len(fixture.calls) == 6
+    assert len(model.script.calls) == 5 and len(fixture.calls) == 6
     assert world.proposal.rxnorm_calls == 6
 
 
@@ -272,7 +282,7 @@ def test_non_seed_phonetic_verifier_keeps_the_two_edit_bound(
 ) -> None:
     p = propose(world, [fact(spoken, english)])
     assert p.names[0].verified == accepted
-    assert (" (؟)" in render_card(p)[0]) != accepted
+    assert (len(dictation_questions(p)) == 0) == accepted
 
 
 def test_provider_cannot_forge_verification_or_teach_a_patient_identity(world: ScribeWorld) -> None:
@@ -288,10 +298,10 @@ def test_provider_cannot_forge_verification_or_teach_a_patient_identity(world: S
 
 
 def test_repeated_fragments_preserve_spoken_order(world: ScribeWorld) -> None:
-    f = fact("أنجينا، أنجينا", None)
+    f = fact("أنجينا، أنجينا", None, "Complaint")
     f["terms"] = [{"spoken": "أنجينا", "english": "angina"}] * 2
     p = propose(world, [f])
-    assert "History: angina, angina" in render_card(p)[0]
+    assert "Complaint: angina, angina" in render_card(p)[0]
 
 
 def test_empty_model_terms_cannot_erase_source_or_produce_new_disease(world: ScribeWorld) -> None:
@@ -332,13 +342,13 @@ def test_ef_answer_uses_aligned_terms_when_model_reorders_facts(world: ScribeWor
     assert not dictation_questions(second)
 
 
-def test_english_limit_applies_to_whole_fact_not_each_pair(world: ScribeWorld) -> None:
+def test_long_fact_keeps_each_source_resolved_term(world: ScribeWorld) -> None:
     one, two = "a" * 61, "b" * 61
     f = fact(one + ", " + two, None)
     f["terms"] = [{"spoken": one, "english": one}, {"spoken": two, "english": two}]
     p = propose(world, [f])
-    assert all(not n.verified for n in p.names)
-    assert len(dictation_questions(p)) == 1
+    assert all(n.verified for n in p.names)
+    assert not dictation_questions(p)
 
 
 def test_arabic_digits_and_percent_preserve_fragment_number_support(world: ScribeWorld) -> None:

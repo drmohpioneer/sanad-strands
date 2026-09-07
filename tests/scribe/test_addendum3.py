@@ -38,18 +38,19 @@ def test_speech_v4_is_exactly_v3_plus_every_canonical_dictionary_name() -> None:
     assert "5/160/12.5" not in VERBATIM_PROMPT
 
 
-def test_scribe_v6_has_known_names_and_separate_current_orders_without_examples() -> None:
-    for prompt in (SYSTEM_PROMPT, CORRECTION_PROMPT):
+def test_scribe_v8_has_capped_known_names_and_current_order_rules() -> None:
+    from sanad.scribe.extract import scribe_prompt
+    from sanad.scribe.resolver import hint_names
+
+    for correction in (False, True):
+        prompt = scribe_prompt(hint_names(), correction=correction, language="ar")
         assert "Known names" in prompt
-        assert all(e.latin in prompt for e in dictionary())
-        assert (
-            "one order per drug even when several drugs are joined by و in one sentence" in prompt
-        )
-        assert "A sentence beginning ماشي على lists current medications" in prompt
-        assert "No medication_history fact may repeat a drug that appears in an order" in prompt
+        assert len(prompt.split("Known names (spelling hints): ")[1].split(", ")) <= 200
+        assert "One order per drug" in prompt
+        assert "means continue" in prompt and "never repeat an ordered drug as history" in prompt
         assert "{" not in prompt and "5/160/12.5" not in prompt
-    assert SYSTEM_PROMPT.startswith("scribe-v7.")
-    assert CORRECTION_PROMPT.startswith("scribe-correction-v7.")
+    assert SYSTEM_PROMPT.startswith("scribe-v8.")
+    assert CORRECTION_PROMPT.startswith("scribe-correction-v8.")
 
 
 @pytest.mark.parametrize(
@@ -136,18 +137,18 @@ def test_unrecorded_latin_edits_bounds_and_term_token_boundaries(
     assert resolve("Forxigzz", "Forxigzz").latin == "Forxiga"
     assert entry_for("Forxzzzz") is None
     assert latin_terms("Bano Creatine, Na, K") == "BUN, creatinine, Na, K"
-    assert latin_terms("Creatininne in Bano") == "creatinine in BUN"
+    assert latin_terms("Creatininne in Bano") == "creatinine, BUN"
     assert latin_terms("creatinine 5") == "creatinine 5"
     assert latin_terms("Na 5, K 4") == "Na 5, K 4"
     assert latin_terms("5") == "5"
     assert latin_terms("Echo: EF 45%, segmental hypokinesia inferoposterolateral") == (
-        "Echo: EF 45%, segmental hypokinesia inferoposterolateral"
+        "Echo, EF 45%, segmental hypokinesia inferoposterolateral"
     )
     entries = (
         NameEntry("drug", "abcd", "generic-a", ("اسم أ",)),
         NameEntry("drug", "abef", "generic-b", ("اسم ب",)),
     )
-    monkeypatch.setattr("sanad.scribe.names.dictionary", lambda: entries)
+    monkeypatch.setattr("sanad.scribe.resolver.dictionary", lambda: entries)
     assert entry_for("abcf") is None  # Equal-distance identities cannot select a drug.
 
 

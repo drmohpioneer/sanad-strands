@@ -69,7 +69,7 @@ def test_empty_dose_inherits_literal_fragment(dose: str | None) -> None:
 
 
 def test_model_name_is_verified_and_conflicting_or_unverified_names_still_ask() -> None:
-    assert resolve("اسم غير مدرج تماما", "اسم غير مدرج تماما", "Concor").latin == "Concor"
+    assert resolve("اسم غير مدرج تماما", "اسم غير مدرج تماما", "Concor").latin is None
     assert resolve("اسم غير مدرج تماما", "اسم غير مدرج تماما", "Inventedbrand").latin is None
     assert resolve("اسم غير مدرج تماما", "Inventedbrand", "Inventedbrand").latin == "Inventedbrand"
     assert resolve("كونكور", "كونكور", "Forxiga").conflict
@@ -78,8 +78,8 @@ def test_model_name_is_verified_and_conflicting_or_unverified_names_still_ask() 
         {"orders": [{"action": "continue", "drug": "كونكور 5", "name_latin": "Inventedbrand"}]}
     )
     prepared, issues = prepare_names(value, "كونكور 5")
-    assert prepared.orders[0].drug == "كونكور" and prepared.orders[0].dose == "5"
-    assert any(i.code == "drug_unclear" and i.question for i in issues)
+    assert prepared.orders[0].drug == "Concor" and prepared.orders[0].dose == "5"
+    assert not any(i.code == "drug_unclear" for i in issues)
 
 
 def test_duplicate_history_uses_cleaned_spoken_name_and_logs_one_redacted_line(
@@ -107,12 +107,12 @@ def test_duplicate_history_uses_cleaned_spoken_name_and_logs_one_redacted_line(
 
 
 def test_v6_requests_model_knowledge_separately_from_the_spoken_drug() -> None:
-    assert PROMPT_VERSION == "scribe-v7"
+    assert PROMPT_VERSION == "scribe-v8"
     for prompt in (SYSTEM_PROMPT, CORRECTION_PROMPT):
-        assert "drug keeps the spoken form" in prompt
-        assert "also fill name_latin" in prompt
-        assert "from your own knowledge" in prompt
-        assert "code verifies name_latin" in prompt
+        assert "Keep drug as spoken" in prompt
+        assert "name_latin is an optional recognized" in prompt
+        assert "Latin name, verified by code" in prompt
+        assert "Never invent identity, drugs, doses" in prompt
         assert "Preserve Egyptian Arabic and English drug names as spoken" not in prompt
         assert "{" not in prompt and "5/160/12.5" not in prompt
 

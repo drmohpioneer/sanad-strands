@@ -632,13 +632,18 @@ def render_urgent(
     text = templates.URGENT_TEMPLATES[template_id][language][gender]
     wanted = templates.fields_of(text)
     supplied = dict(fields)
+    if template_id == "doctor_danger":
+        supplied.setdefault("context", "")
     if "emergency_number" in wanted:
         if "emergency_number" in supplied:
             raise ValueError("the emergency number comes only from the explicit policy")
         supplied["emergency_number"] = policy.emergency_number
     if set(supplied) != wanted:
         raise ValueError(f"{template_id} requires exactly {sorted(wanted)}")
-    if any(not value.strip() or "{" in value or "}" in value for value in supplied.values()):
+    if any(
+        (not value.strip() and key != "context") or "{" in value or "}" in value
+        for key, value in supplied.items()
+    ):
         raise ValueError("template fields must be nonblank and cannot carry placeholders")
     rendered = text.format(**supplied)
     if "{" in rendered or "}" in rendered:

@@ -9,6 +9,7 @@ from sanad.auth.service import revise
 from sanad.contact.policy import DRAFT_CONTACT_POLICY as POLICY
 from sanad.contact.templates import render
 from sanad.domain import DRAFT_POLICY_2026_09, Principal, ReviewObligation, TenantScope, VersionRef
+from sanad.domain.language import default_language
 from sanad.steward.types import StewardPolicy
 from sanad.store import keys
 from sanad.store.protocol import Store
@@ -179,6 +180,20 @@ KINDS = {
     "evidence_association": "ربط مستند",
     "intake_clarification": "توضيح بيانات",
 }
+ENGLISH_KINDS = {
+    "result_review": "Result review",
+    "correction_disposition": "Correction review",
+    "incident_response": "Danger alert follow-up",
+    "unmet_objective": "Unfinished request",
+    "question_answer": "Question awaiting an answer",
+    "media_failure": "File needs review",
+    "delivery_failure": "Message delivery problem",
+    "binding_review": "Contact review",
+    "coverage_review": "Coverage review",
+    "followup_disposition": "Unanswered follow-up",
+    "evidence_association": "Document association",
+    "intake_clarification": "Intake clarification",
+}
 
 
 def payload(store: Store, intent: OutboundIntent, now: datetime) -> dict[str, JsonValue]:
@@ -189,6 +204,8 @@ def payload_snapshot(
     store: Store, intent: OutboundIntent, now: datetime
 ) -> tuple[dict[str, JsonValue], tuple[VersionRef, ...]]:
     assert type(intent.scope) is TenantScope
+    doctor_row = store.get(intent.scope, "doctor", intent.scope.doctor_id)
+    language = from_record(doctor_row, Doctor).language if doctor_row else default_language
     reviews = eligible(store, intent.scope, now)
     lines = []
     for review in reviews[: POLICY.bundle_max_lines]:
@@ -197,13 +214,22 @@ def payload_snapshot(
             if review.patient_id
             else None
         )
-        name = from_record(patient_row, Patient).display_name if patient_row else "غير مرتبط بمريض"
+        name = (
+            from_record(patient_row, Patient).display_name
+            if patient_row
+            else ("No patient linked" if language == "en" else "غير مرتبط بمريض")
+        )
         days = (now - (review.first_notice_at or now)).days
-        lines.append(f"{name} — {KINDS[review.review_kind]} — {days} يوم من أول تنبيه")
+        lines.append(
+            f"{name} — {ENGLISH_KINDS[review.review_kind]} — {days} days since first notice"
+            if language == "en"
+            else f"{name} — {KINDS[review.review_kind]} — {days} يوم من أول تنبيه"
+        )
     if len(reviews) > POLICY.bundle_max_lines:
-        lines.append(f"و {len(reviews) - POLICY.bundle_max_lines} بنود تانية")
+        count = len(reviews) - POLICY.bundle_max_lines
+        lines.append(f"and {count} more items" if language == "en" else f"و {count} بنود تانية")
     return (
-        {"text": render("doctor_weekly_bundle", lines="\n".join(lines))},
+        {"text": render("doctor_weekly_bundle", language, lines="\n".join(lines))},
         tuple(to_record(r, model_scope(r)).ref for r in reviews),
     )
 

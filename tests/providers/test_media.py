@@ -66,7 +66,11 @@ def test_unsupported_numbers_block_invented_dose_without_range_inference() -> No
 def test_speech_one_user_message_dialect_and_numbers() -> None:
     caller = ScriptedSpeech("٢٠٠ جرام وفيه ٦٠، ١٢-١٥\nNUMBERS: ٢٠٠ جرام، ٦٠ مرة، ١٢-١٥ دقيقة")
     converter = ScriptedConverter()
-    result = asyncio.run(SpeechAdapter(caller, converter, SOURCE).transcribe(b"OggSfake", "opus"))
+    result = asyncio.run(
+        SpeechAdapter(caller, converter, SOURCE).transcribe(
+            b"OggSfake", "opus", expected_language="ar"
+        )
+    )
     assert isinstance(result, Transcript) and result.numbers == ("200", "60", "12-15")
     assert result.heard_numbers == ("200", "60", "12-15")
     assert result.disputed_numbers == () and result.prompt_version == PROMPT_VERSION

@@ -166,7 +166,9 @@ def test_photo_document_durable_pending_then_scoped_media_recovery(
     world.post(media_message(kind))
     assert world.receipt(1100).state == "completed"
     assert work(world).state == "pending" and work(world).work_clock
-    assert any(i.template_id == "patient_photo_pending" for i in world.patient_intents())
+    assert any(
+        i.template_id == "patient_evidence_received_pending" for i in world.patient_intents()
+    )
     assert not any(r.body["category"] == "patient_report" for r in world.rows("clinical_fact"))
     sweep_due(world.runtime, world.store)
     saved = work(world)

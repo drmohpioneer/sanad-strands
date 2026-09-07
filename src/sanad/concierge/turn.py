@@ -19,6 +19,7 @@ from sanad.domain import FollowUpTask, ObservationRef, PatientScope, Principal, 
 from sanad.media.retrieve import MediaRetriever, fetch_telegram_file
 from sanad.media.speech import SpeechAdapter, Transcript, transcribe
 from sanad.media.telegram import MediaFailure
+from sanad.media.vision import VisionAdapter
 from sanad.models.io import CallMetadata
 from sanad.models.registry import ModelRegistry, ModelRole
 from sanad.safety import screen_text, to_incident_facts, wants_treatment_change
@@ -51,6 +52,7 @@ class ConciergeTurn:
         model_factory: Callable[[ModelRegistry, ModelRole], Model] = bedrock_model,
         speech_factory: Callable[[Provenance], SpeechAdapter] | None = None,
         media_factory: Callable[[InboundReceipt, Principal], MediaRetriever] | None = None,
+        vision_factory: Callable[[Provenance], VisionAdapter] | None = None,
         observe: Callable[[CallMetadata], None] = lambda metadata: None,
         checkpoint: Callable[[str], None] = lambda stage: None,
     ):
@@ -58,6 +60,10 @@ class ConciergeTurn:
         self.synthetic, self.model_factory = synthetic, model_factory
         self.speech_factory, self.media_factory = speech_factory, media_factory
         self.observe, self.checkpoint = observe, checkpoint
+        self.vision_factory = vision_factory
+        from sanad.evidence.turn import EvidenceTurn
+
+        self.evidence = EvidenceTurn(self)
 
     def __call__(
         self, receipt: InboundReceipt, principal: Principal, binding: SubjectBinding
@@ -70,6 +76,16 @@ class ConciergeTurn:
             return None
         if receipt.kind not in {"text", "voice", "photo", "document", "callback"}:
             return None
+        if receipt.kind == "callback":
+            row = self.store.get(
+                receipt.scope,
+                "patient_action",
+                str((receipt.payload or {}).get("callback_token_hash", "")),
+            )
+            if row and row.body.get("evidence_id"):
+                return self.evidence.patient_action(
+                    receipt, principal, from_record(row, PatientAction)
+                )
         return self.run(receipt, principal, binding)
 
     def valid(self, principal: Principal, binding: SubjectBinding) -> bool:
@@ -114,7 +130,23 @@ class ConciergeTurn:
             )
         except Exception:
             return None
-        result = asyncio.run(transcribe(audio, "mp3", adapter=self.speech_factory(source)))
+        patient_row = (
+            self.store.get(receipt.scope, "patient", receipt.scope.patient_id)
+            if isinstance(receipt.scope, PatientScope)
+            else None
+        )
+        from sanad.domain.language import default_language
+
+        language = (
+            str(patient_row.body.get("language", default_language))
+            if patient_row
+            else default_language
+        )
+        result = asyncio.run(
+            transcribe(
+                audio, "mp3", adapter=self.speech_factory(source), expected_language=language
+            )
+        )
         if not isinstance(result, Transcript):
             retriever.extraction_result(receipt.id, failure=result.reason)
             return None
@@ -157,6 +189,11 @@ class ConciergeTurn:
         now = self.runtime.clock()
         snapshot = plan.authorized(self.store, principal, binding, now)
         if snapshot is None:
+            urgent_verdict = screen_text(
+                str((receipt.payload or {}).get("text", "")), policy=self.runtime.safety_policy
+            )
+            if urgent_verdict.level == "danger":
+                self._incident(receipt, urgent_verdict)
             result = self.runtime.inbound.process_inbound(
                 to_record(receipt, scope).scoped_key(scope), "concierge-neutral", now
             )
@@ -186,13 +223,30 @@ class ConciergeTurn:
                 source = transcript.provenance[0]
         verdict = screen_text(text, policy=self.runtime.safety_policy)
         reading = reports.reading(text, self.runtime.safety_policy)
+        from sanad.evidence.screen import screen_values
+
+        value_incidents, _ = screen_values(
+            self.runtime.urgent,
+            scope,
+            reading.values,
+            receipt.id,
+            receipt.received_at,
+            self.runtime.safety_policy,
+        )
         # Includes newly readable voice and spoken BP separators; no ordinary lease yet.
         danger = verdict if verdict.level == "danger" else reading.danger
-        if danger:
+        if danger and (
+            not value_incidents or verdict.level == "danger" and verdict.rule_family == "phrase"
+        ):
             self._incident(receipt, danger)
-        elif verdict.level != "none" and any(
-            f.kind == "MEDICATION_DAY3" and f.state == "waiting_response"
-            for f in snapshot.followups
+        elif (
+            not danger
+            and not value_incidents
+            and verdict.level != "none"
+            and any(
+                f.kind == "MEDICATION_DAY3" and f.state == "waiting_response"
+                for f in snapshot.followups
+            )
         ):
             self._incident(receipt, verdict)
         lease = self.store.acquire_patient(
@@ -225,7 +279,11 @@ class ConciergeTurn:
                 source_order_versions=snapshot.order_refs,
                 window=POLICY.window,
             )
-            if danger:
+            if danger or value_incidents:
+                if reading.values:
+                    reports.record_reading(tx, text, reading, source=source)
+                if receipt.kind in {"photo", "document"}:
+                    self._decide(tx, text, verdict, reading, transcript, source, session)
                 result = tx.finish("patient_emergency", "", emit=False)
                 return RouteResult(
                     route="patient", status=result.status, template_id="patient_emergency"
@@ -283,6 +341,11 @@ class ConciergeTurn:
                         scope=tx.snapshot.scope,
                         receipt_id=tx.receipt.id,
                         provider_handle_ref=tx.receipt.provider_media_handle or "unavailable",
+                        pending_mission_ids=tuple(
+                            m.id
+                            for m in tx.snapshot.missions
+                            if m.objective_predicate.kind == "evidence"
+                        ),
                         created_at=tx.now,
                         updated_at=tx.now,
                         work_clock=OperationalClock(next_action_at=tx.now, work_lane="media"),
@@ -296,7 +359,7 @@ class ConciergeTurn:
             return reply(
                 "patient_voice_unreadable"
                 if tx.receipt.kind == "voice"
-                else "patient_photo_pending"
+                else "patient_evidence_received_pending"
             )
         if tx.receipt.kind == "callback":
             row = self.store.get(
@@ -407,7 +470,12 @@ class ConciergeTurn:
         history: tuple[str, ...] = ()
         if asks_history(text):
             history = tuple(
-                plan.order_line(from_record(r, CareOrderVersion), language, history=True)
+                plan.order_line(
+                    from_record(r, CareOrderVersion),
+                    language,
+                    history=True,
+                    names=tx.snapshot.names,
+                )
                 for r in records(self.store, tx.snapshot.scope, "care_order_version")
                 if r.id not in {o.id for o in tx.snapshot.orders}
                 and r.body.get("type") == "medication"
@@ -482,7 +550,7 @@ class ConciergeTurn:
         return key, text, "start"
 
     def sweep(self, row: StoredRecord) -> None:
-        """Recover private media without interpreting or fulfilling photo evidence."""
+        """Recover persisted media and screen evidence before association."""
         if row.entity_type != "media_work" or not self.media_factory:
             return
         work = from_record(row, MediaWork)
@@ -493,11 +561,25 @@ class ConciergeTurn:
         auth = self.store.authorize(self.runtime.settings.bot_id, receipt.source_subject)
         if not auth.binding or not self.valid(auth.principal, auth.binding):
             return
+        if (
+            receipt.kind in {"photo", "document"}
+            and self.vision_factory
+            and work.state != "needs_attention"
+        ):
+            self.evidence.run(receipt, auth.principal)
+            return
         retriever = self.media_factory(receipt, auth.principal)
         retriever.failure_template = (
-            "patient_voice_unreadable" if receipt.kind == "voice" else "patient_photo_pending"
+            "patient_voice_unreadable" if receipt.kind == "voice" else "patient_evidence_unreadable"
         )
-        retriever.failure_text = templates.render(retriever.failure_template)
+        patient_row = self.store.get(work.scope, "patient", auth.principal.patient_id or "")
+        if not patient_row:
+            return
+        from sanad.store.records import Patient
+
+        retriever.failure_text = templates.render(
+            retriever.failure_template, from_record(patient_row, Patient).language
+        )
         if receipt.kind == "voice" and receipt.state == "completed" and work.transcript_ref:
             retriever.extraction_result(receipt.id, association_ref="patient-receipt:" + receipt.id)
         else:

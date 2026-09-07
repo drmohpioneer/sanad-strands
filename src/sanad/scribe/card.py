@@ -7,12 +7,18 @@ from zoneinfo import ZoneInfo
 
 from sanad.channels.telegram import wording
 from sanad.media.numbers import numbers_in
-from sanad.scribe.extract import REQUEST_MISSING_QUESTION, OrderCandidate
+from sanad.scribe.extract import (
+    REQUEST_MISSING_QUESTION,
+    OrderCandidate,
+    PatientCandidate,
+    placeholder_ambiguity,
+)
 from sanad.scribe.policy import DRAFT_SCRIBE_POLICY
 from sanad.scribe.proposal import Proposal
 
 REASONS = {
     "request_missing": REQUEST_MISSING_QUESTION,
+    "extraction_conflict": "قراءتين مختلفتين؛ وضّح البند.",
     "clinical_unclear": "الصياغة الإنجليزية محتاجة مراجعة.",
     "fact_medication": "دوا حالي محتاج تأكيد كأمر استمرار.",
     "correction_unclear": "التعديل محتاج توضيح للبند المقصود.",
@@ -43,6 +49,8 @@ _FACTS = {
     "allergy": "حساسية",
     "history": "التاريخ المرضي",
     "medication_history": "أدوية قديمة",
+    "finding": "Finding",
+    "complaint": "Complaint",
 }
 _WEEKDAYS = ("الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد")
 _MONTHS = (
@@ -101,12 +109,19 @@ def supported_text(text: str, proposal: Proposal) -> str:
     present = set(
         numbers_in(
             proposal.source_text
+            + " "
             + " ".join(instruction_line(a.old) for a in proposal.amendments if a.old)
         )
     )
     return re.sub(
         r"\d+(?:\.\d+)?(?:\s*-\s*\d+(?:\.\d+)?)?",
-        lambda m: m[0] if set(numbers_in(m[0])) <= present else "[رقم غير مسموع]",
+        lambda m: (
+            m[0]
+            if set(numbers_in(m[0])) <= present
+            else "[number not heard]"
+            if proposal.language == "en"
+            else "[رقم غير مسموع]"
+        ),
         text,
     )
 
@@ -340,11 +355,13 @@ def display_order(proposal: Proposal, order: OrderCandidate) -> OrderCandidate:
 def medication_line(proposal: Proposal, index: int) -> str:
     order = display_order(proposal, proposal.candidate.orders[index])
     name = supported_text(order.drug, proposal)
-    if any(i.item == f"order:{index}" and i.code == "drug_unclear" for i in proposal.issues):
-        name += " (؟)" if proposal.names else " (الاسم؟)"
     dose = supported_text(order.dose or "", proposal)
     dose = re.sub(r"\b(?:مجم|مج|مليجرام)\b", "mg", dose)
+    from sanad.scribe.names import normalize
+
     frequency = supported_text(order.frequency or "", proposal)
+    if normalize(frequency) not in normalize(proposal.source_text):
+        frequency = ""
     fields = [frequency] if frequency else []
     fields.extend(
         clean
@@ -354,15 +371,49 @@ def medication_line(proposal: Proposal, index: int) -> str:
     line = name + (" " + dose if dose else "")
     if fields:
         line += ", " + ", ".join(plain(v) for v in fields)
-    if order.action != "continue":
+    if proposal.language == "en" and not proposal.photo:
+        change = next(
+            (a for a in proposal.amendments if a.item == f"order:{index}" and a.old and not a.noop),
+            None,
+        )
+        if change and change.old:
+            previous = " ".join(v for v in (change.old.drug, change.old.dose) if v)
+            line = supported_text(previous, proposal) + " → " + line
+        if order.action != "continue":
+            line += " (" + order.action + ")"
+    elif order.action != "continue":
         line += " (" + _ACTIONS[order.action] + ")"
     return line
 
 
 def dictation_questions(proposal: Proposal) -> tuple[str, ...]:
+    if proposal.language == "en" and not proposal.photo:
+        from sanad.scribe.english import questions as english_questions
+
+        return english_questions(proposal)
     questions: list[str] = []
-    numbers_asked: set[str] = set()
+    numbers_asked = {
+        n for i in proposal.issues if i.code == "extraction_conflict" for n in i.numbers
+    }
     for issue in proposal.issues:
+        before = len(questions)
+        if (
+            issue.code == "unsupported_number"
+            and issue.numbers
+            and set(issue.numbers) <= numbers_asked
+        ):
+            # The merge question quotes both readings; numeric blocking remains.
+            continue
+        if issue.code in {"drug_unclear", "clinical_unclear"}:
+            from sanad.scribe.clinical import TERM_QUESTION
+
+            questions.append(TERM_QUESTION)
+            continue
+        if any(
+            q.item == issue.item and q.code == "extraction_conflict" and q.field == "dose"
+            for q in proposal.issues
+        ) and issue.code in {"dose_missing", "dose_unclear"}:
+            continue
         if issue.code == "unsupported_number" and issue.item.startswith("order:"):
             order = proposal.candidate.orders[int(issue.item.split(":")[1])]
             fields = unsupported_order_fields(proposal, order)
@@ -396,11 +447,13 @@ def dictation_questions(proposal: Proposal) -> tuple[str, ...]:
                     numbers_asked.add(n)
                     questions.append(f'سمعت "{n}"، ده يخص إيه؟')
         elif issue.question:
-            questions.append(plain(issue.question))
+            question = plain(issue.question)
+            questions.append(question)
         elif issue.code == "dose_missing" and issue.item.startswith("order:"):
             order = proposal.candidate.orders[int(issue.item.split(":")[1])]
             if not any(i.item == issue.item and i.code == "dose_unclear" for i in proposal.issues):
-                questions.append(f'جرعة "{plain(order.drug)}" إيه؟')
+                question = f'جرعة "{plain(order.drug)}" إيه؟'
+                questions.append(question)
         elif issue.code == "drug_unclear" and any(
             i.item == issue.item and i.question for i in proposal.issues
         ):
@@ -416,40 +469,51 @@ def dictation_questions(proposal: Proposal) -> tuple[str, ...]:
             continue
         else:
             questions.append(REASONS[issue.code])
+        if issue.item in proposal.single_source:
+            questions[before:] = [q + " سمعتها مرة واحدة" for q in questions[before:]]
     for number in proposal.disputed_numbers:
         if number not in numbers_asked:
             questions.append(f'سمعت "{number}"، الرقم ده صح؟')
     questions.extend(
         f'سمعت "{supported_text(a, proposal)}"، توضح المقصود؟'
         for i, a in enumerate(proposal.candidate.ambiguities)
-        if not any(x.item == f"ambiguity:{i}" and x.code == "unsafe_text" for x in proposal.issues)
+        if not placeholder_ambiguity(a)
+        and not any(x.item == f"ambiguity:{i}" and x.code == "unsafe_text" for x in proposal.issues)
     )
     return tuple(dict.fromkeys(questions))
 
 
 def clinical_line(proposal: Proposal, item: str, spoken: str) -> str:
+    if item.startswith("mission:"):
+        mission = proposal.candidate.missions[int(item.split(":")[1])]
+        if mission.kind == "TASK" and mission.clinical_en:
+            return supported_text(mission.clinical_en, proposal)
     # NameReadings are built by code, outside the provider schema. Legacy free
     # clinical_en fields never participate in a rendered line or question.
     kind = "finding" if item.startswith("fact:") else "test"
     fragments = [n for n in proposal.names if n.item == item and n.kind == kind]
     if fragments:
-        values = [
-            supported_text(n.latin, proposal)
-            + (" (؟)" if not n.verified and kind == "finding" else "")
-            for n in fragments
-        ]
+        values = [supported_text(n.latin, proposal) for n in fragments]
         value = ", ".join(dict.fromkeys(values) if kind == "test" else values)
     else:
         value = supported_text(spoken, proposal)
-        if any(i.item == item and i.code == "clinical_unclear" for i in proposal.issues):
-            value += " (؟)"
-    if item.startswith("fact:") and fragments:
+    if item.startswith("fact:"):
         fact = proposal.candidate.facts[int(item.split(":")[1])]
-        value = fact.clinical_kind + ": " + value
+        from sanad.scribe.terms import fact_kind
+
+        prefix = fact_kind(fact.category, next((n.latin for n in fragments if n.verified), ""))
+        # A standalone ECG/Echo label is carried by the fixed prefix.
+        if len(fragments) > 1 and fragments[0].latin.casefold() == prefix.casefold():
+            value = ", ".join(supported_text(n.latin, proposal) for n in fragments[1:])
+        value = prefix + ": " + value
     return value
 
 
 def render_dictation(proposal: Proposal) -> tuple[str, ...]:
+    if proposal.language == "en":
+        from sanad.scribe.english import render
+
+        return render(proposal)
     from sanad.domain import DRAFT_POLICY_2026_09, MissionKind
     from sanad.scribe.amend import diff_lines
 
@@ -457,7 +521,8 @@ def render_dictation(proposal: Proposal) -> tuple[str, ...]:
     name = proposal.selected_display_name or candidate.patient.name_as_spoken or "مين المريض؟"
     identity = [plain(name) if proposal.selected_display_name else supported_text(name, proposal)]
     if candidate.patient.age:
-        identity.append(supported_text(candidate.patient.age, proposal) + " سنة")
+        age = PatientCandidate.age_without_repeated_year_unit(candidate.patient.age) or ""
+        identity.append(supported_text(age, proposal) + " سنة")
     if candidate.patient.sex:
         identity.append("ذكر" if candidate.patient.sex == "male" else "أنثى")
     identity.extend(supported_text(v, proposal) for v in candidate.patient.identifiers)
@@ -479,7 +544,7 @@ def render_dictation(proposal: Proposal) -> tuple[str, ...]:
             )
             lines.append("• " + "، ".join(details))
     oversized = any(i.code == "batch_too_large" for i in proposal.issues)
-    if candidate.orders and not oversized:
+    if candidate.orders:
         lines.append("الأدوية:")
         lines.extend(medication_line(proposal, i) for i in range(len(candidate.orders)))
         lines.extend(
@@ -511,51 +576,44 @@ def render_dictation(proposal: Proposal) -> tuple[str, ...]:
                     )
                 )
     required = []
-    if not oversized:
-        for i, mission in enumerate(candidate.missions):
-            line = mission.kind + ": " + clinical_line(proposal, f"mission:{i}", mission.text)
-            timing = next((t.resolved for t in proposal.timings if t.item == f"mission:{i}"), None)
-            if timing and not any(
-                x.item == f"mission:{i}" and x.code in {"unsupported_number", "disputed_number"}
-                for x in proposal.issues
-            ):
-                due = arabic_datetime(timing.due_at, timing.timezone, reference=proposal.created_at)
-                escalation = arabic_datetime(
-                    timing.escalation_at, timing.timezone, reference=proposal.created_at
-                )
-                expression = plain(timing.original_time_expression or "")
-                if timing.due_source == "doctor":
-                    reason = (
-                        "صريح"
-                        if re.search(r"\d{4}-\d{2}-\d{2}", expression)
-                        else "صريح: " + expression
-                    )
-                elif timing.due_source == "default":
-                    days = DRAFT_POLICY_2026_09.default_deadlines[
-                        MissionKind(mission.kind)
-                    ].offset.days
-                    reason = f"افتراضي {days} يوم"
-                else:
-                    reason = "مقترح: " + plain(timing.due_reason)
-                line += f" — الموعد: {due} ({reason})"
-                line += (
-                    "؛ " if timing.due_at == timing.escalation_at else "\n  "
-                ) + f"لو متعملش هبلّغك: {escalation}"
-            required.append(line)
-        started = []
-        for i, order in enumerate(candidate.orders):
-            timing = next((t.resolved for t in proposal.timings if t.item == f"order:{i}"), None)
-            if order.action == "start" and timing and not proposal.blocked(f"order:{i}"):
-                at = arabic_datetime(timing.due_at, timing.timezone, reference=proposal.created_at)
-                started.append(
-                    f"تأكيد بداية {plain(order.drug)}: {at}؛ لو متأكدش هبلّغك في نفس الموعد."
-                )
-        required.extend(started)
-        if started:
-            required.append(
-                "متابعة اليوم الثالث من تاريخ البداية اللي المريض يبلّغنا بيه؛ "
-                "التأكيد هنا مش دليل إنه بدأ."
+    for i, mission in enumerate(candidate.missions):
+        line = mission.kind + ": " + clinical_line(proposal, f"mission:{i}", mission.text)
+        timing = next((t.resolved for t in proposal.timings if t.item == f"mission:{i}"), None)
+        if timing and not any(
+            x.item == f"mission:{i}" and x.code in {"unsupported_number", "disputed_number"}
+            for x in proposal.issues
+        ):
+            due = arabic_datetime(timing.due_at, timing.timezone, reference=proposal.created_at)
+            escalation = arabic_datetime(
+                timing.escalation_at, timing.timezone, reference=proposal.created_at
             )
+            expression = plain(timing.original_time_expression or "")
+            if timing.due_source == "doctor":
+                reason = (
+                    "صريح" if re.search(r"\d{4}-\d{2}-\d{2}", expression) else "صريح: " + expression
+                )
+            elif timing.due_source == "default":
+                days = DRAFT_POLICY_2026_09.default_deadlines[MissionKind(mission.kind)].offset.days
+                reason = f"افتراضي {days} يوم"
+            else:
+                reason = "مقترح: " + plain(timing.due_reason)
+            line += f" — الموعد: {due} ({reason})"
+            line += (
+                "؛ " if timing.due_at == timing.escalation_at else "\n  "
+            ) + f"لو متعملش هبلّغك: {escalation}"
+        required.append(line)
+    started = []
+    for i, order in enumerate(candidate.orders):
+        timing = next((t.resolved for t in proposal.timings if t.item == f"order:{i}"), None)
+        if order.action == "start" and timing and not proposal.blocked(f"order:{i}"):
+            at = arabic_datetime(timing.due_at, timing.timezone, reference=proposal.created_at)
+            started.append(f"تأكيد بداية {plain(order.drug)}: {at}؛ لو متأكدش هبلّغك في نفس الموعد.")
+    required.extend(started)
+    if started:
+        required.append(
+            "متابعة اليوم الثالث من تاريخ البداية اللي المريض يبلّغنا بيه؛ "
+            "التأكيد هنا مش دليل إنه بدأ."
+        )
     if required:
         lines.extend(("المطلوب:", *required))
     facts = [
@@ -572,16 +630,21 @@ def render_dictation(proposal: Proposal) -> tuple[str, ...]:
             + clinical_line(proposal, f"fact:{i}", f.text)
         )
         for i, f in enumerate(candidate.facts)
-        if not oversized
-        and not any(x.item == f"fact:{i}" and x.code == "unsafe_text" for x in proposal.issues)
+        if not any(x.item == f"fact:{i}" and x.code == "unsafe_text" for x in proposal.issues)
     ]
     if facts:
-        lines.extend(("التاريخ المرضي:", *facts))
+        limit = (
+            DRAFT_SCRIBE_POLICY.history_lines_max
+            if oversized and not proposal.editing
+            else len(facts)
+        )
+        lines.extend(("التاريخ المرضي:", *facts[:limit]))
+        if len(facts) > limit:
+            lines.append(f"… ({len(facts) - limit} بنود إضافية، اضغط تعديل لعرضها)")
     alerts = [
         supported_text(a, proposal)
         for i, a in enumerate(candidate.alerts)
-        if not oversized
-        and not any(x.item == f"alert:{i}" and x.code == "unsafe_text" for x in proposal.issues)
+        if not any(x.item == f"alert:{i}" and x.code == "unsafe_text" for x in proposal.issues)
     ]
     if alerts:
         lines.extend(("بلّغني لو:", *alerts))
@@ -593,25 +656,35 @@ def render_dictation(proposal: Proposal) -> tuple[str, ...]:
     elif proposal.supersedes_id:
         lines.append("الكارت ده بدّل الكارت اللي قبله؛ الأزرار القديمة مش شغالة.")
     lines.extend((_BUTTONS, "صالح 30 دقيقة"))
-    text, cap = "\n".join(lines), DRAFT_SCRIBE_POLICY.card_max_chars
-    if len(text) <= cap:
-        return (text,)
-    if len(text) > 2 * cap:
-        return (
-            (
-                "\n".join(
-                    (
-                        lines[0],
-                        "محتاج تأكيد:",
-                        REASONS["batch_too_large"],
-                        _BUTTONS,
-                        "صالح 30 دقيقة",
+    text = "\n".join(lines)
+    if (
+        not oversized
+        and not proposal.editing
+        and len(text) > DRAFT_SCRIBE_POLICY.card_max_chars
+        and len(facts) > DRAFT_SCRIBE_POLICY.history_lines_max
+    ):
+        from sanad.scribe.extract import ProposalIssue
+
+        return render_dictation(
+            proposal.model_copy(
+                update={
+                    "issues": (
+                        *proposal.issues,
+                        ProposalIssue(item="all", code="batch_too_large", blocked=False),
                     )
-                ),
+                }
             )
-            if oversized
-            else (text,)
         )
-    cut = text.rfind("\n", len(text) - cap, cap + 1)
-    cut = cut if cut >= 0 else cap
-    return text[:cut], text[cut:].lstrip("\n")
+    return split_card(text)
+
+
+def split_card(text: str) -> tuple[str, ...]:
+    """Keep every visible instruction, including an oversized confirmation batch."""
+    cap = DRAFT_SCRIBE_POLICY.card_max_chars
+    parts = []
+    while len(text) > cap:
+        cut = text.rfind("\n", 0, cap + 1)
+        cut = cut if cut > 0 else cap
+        parts.append(text[:cut])
+        text = text[cut:].lstrip("\n")
+    return (*parts, text) if text else tuple(parts)

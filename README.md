@@ -47,7 +47,7 @@ Resolved versions are pinned in `pyproject.toml` and `uv.lock`: FastAPI 0.141.1,
 | Vision, first and second reader | Nova Lite and Nova Pro above |
 | Speech | `mistral.voxtral-small-24b-2507` |
 
-The registry records Nova 2 Lite's dropped instruction and Voxtral Mini's misheard number as reasons for rejection. `make_agent` constructs a fresh Strands agent with server-bound scope, explicit tool allow-lists, a six-call/20-second guard and a 25-second model ceiling. Tools recheck scope in their bodies. `propose` requests plain JSON using a field description, validates it with Pydantic and returns a complete candidate or a typed failure without a validation retry loop. Valid span claims become source provenance; malformed entries are dropped, and absent, repeated or out-of-bounds claims stay unsupported. Callers can disable span requests with `want_spans=False`; Scribe does so and retains receipt, transcript, model and prompt provenance without field spans. Patient fields must be declared by the caller; their sentences pass the existing safety validator and Arabic-language gate after reasoning text is removed. Conversation memory uses bounded `SessionSnapshot` data and the caller's patient lease; an outdated fence discards the output.
+The registry records Nova 2 Lite's dropped instruction and Voxtral Mini's misheard number as reasons for rejection. `make_agent` constructs a fresh Strands agent with server-bound scope, explicit tool allow-lists, a six-call/20-second guard and a 25-second model ceiling. Tools recheck scope in their bodies. `propose` requests plain JSON using a field description, validates it with Pydantic and returns a complete candidate or a typed failure without a validation retry loop. Valid span claims become source provenance; malformed entries are dropped, and absent, repeated or out-of-bounds claims stay unsupported. Callers can disable span requests with `want_spans=False`; Scribe does so and retains receipt, transcript, model and prompt provenance without field spans. Patient fields must be declared by the caller; their sentences pass the existing safety validator and selected-language gate after reasoning text is removed. Conversation memory uses bounded `SessionSnapshot` data and the caller's patient lease; an outdated fence discards the output.
 
 Speech uses one user message containing mp3 audio and the versioned Egyptian-verbatim instruction, followed by a requested `NUMBERS:` line. The speech vocabulary includes the dictionary's English drug, test and finding names. The adapter splits at the last marker even when inline, and retains `numbers`, ordered numeric `heard_numbers` tokens, and `disputed_numbers` found in only one reading. Words, punctuation and newlines in the metadata are permitted; a marker with no following digit is malformed. Missing or malformed metadata disputes every transcript number; empty transcription is a typed failure. The adapter never substitutes a disputed value into the transcript. The container warms ffmpeg/ffprobe during initialization and converts ogg/opus, wav and m4a into 48 kbps mono mp3, with separate 20-second probe and 60-second conversion caps, a five-minute duration limit and a 20 MiB input cap. Number helpers retain Arabic-Indic digits and ranges. Disputed numbers remain questions on the doctor's editable card; agreement within one model reply cannot establish audio accuracy.
 
@@ -135,11 +135,26 @@ Locally everything runs against the in-memory store, the FastAPI test client and
 
 Voice processing uses separate caps: 10 seconds to probe audio, 40 to convert it, 30 to transcribe and 15 to extract the plan. With the 15-second inline delivery pass, these named budgets total 110 seconds within the 120-second worker limit. Speech uses a 28-second provider read timeout and extraction uses 13 seconds, each with a 2-second connection timeout and no automatic provider retries. RxNorm lookups share the extraction deadline, with a three-second cap and at most six HTTP requests per card.
 
-An approved doctor can send Egyptian Arabic or mixed Arabic/English text and voice. The worker reads the dictation into a proposal, searches only that doctor's patients, and sends an Arabic card. The card shows the patient (including spoken age and sex), medications in English/Latin, required work with deadlines and escalation times, compact history, alerts and short clarification questions. Dates omit seconds; default dates use 10:00 in the doctor's timezone (draft policy). Exact instants remain in the saved proposal. Code derives lookup or record-update intent from the extracted fields and the doctor's own patient matches. If the patient is unclear, it offers up to five matching or recently active patients; a new record is created only on confirmation.
+The contest build targets English across doctor dictation, cards, notices, patient
+conversation and reminders (Decision 023). New doctor and patient records default
+to English; `/lang en` or `/lang ar` selects the doctor's language, which a patient
+inherits at binding. Arabic speech, phonetics and labels remain available behind
+that setting as a declared upgrade. The contest photo target is printed or typed
+Latin-script documents; handwriting and Arabic images are declared upgrades, with
+photo acceptance governed by the separate photo contracts.
 
-The Scribe proposes drug names and clinical English from its own knowledge. Drug verification checks the doctor's learned names, shared clinic vocabulary, cached or live RxNorm results, then the seed dictionary. A verified name preserves the spoken generic identity. An unverified Latin reading appears with **(؟)** and one question; the doctor's confirmation or edit settles it and teaches both vocabulary tiers. Names confirmed most often appear first in the speech and Scribe hints, capped at 400. Public lookup results expire after 30 days. These limits and the wording remain **OWNER_REVIEW_PENDING**.
+An approved doctor sends English text or voice. The worker searches only that
+doctor's patients and returns an English confirmation card showing identity,
+medications, requested work, deadlines and escalation times, history and questions.
+Dates omit seconds; inferred default dates use local 10:00 (draft policy).
+Explicit instants remain exact in storage. Unclear patient identity offers up to
+five scoped matches; a new record is created only on confirmation.
 
-Current medicines become separate continue orders with their spoken doses. An existing dose wins over a strength embedded in a name. Compressed doses stay as heard behind a quoted question until clarified; code never supplies missing digits. Each clinical fact stays on its own line in spoken order, labeled ECG, Echo, Complaint, History or Dx. Each English term is tied to a spoken source fragment and checked for supported values. Confirmed vocabulary, the seed or bounded phonetic spelling removes its question mark. Other anchored English terms are shown with (؟); one shared line asks the doctor to edit any wrong term or confirm the card. Invalid or unanchored pairs, and untranslated gaps, retain their spoken wording. A mixed ECG/echo fact is split into separate lines. Confirming the card teaches the displayed wording; unshown English guesses are never learned. Test analytes resolve from the spoken names through vocabulary and spelling checks; a model's English suggestion cannot substitute a different test. Unresolved tests retain the spoken form with a question. Doubled units are removed and absent medication fields are omitted. Unsupported dose, frequency or timing fields are omitted from order lines, quoted once for clarification, and remain blocked. Spoken frequency words stay as spoken; they never become invented digits. After a receipt commits, the scoped outbox delivers due messages immediately within the existing ten-intent, fifteen-second pass; the minute tick recovers unfinished delivery.
+Names have one resolver: the doctor's vocabulary, clinic vocabulary, seed names, already-fetched drug lookups, then an English proposal supported by the spoken spelling or literal source. A name never substitutes a different generic. The speech hint uses the same tables, capped at 400 names; the Scribe hint is capped at 200. Public lookup results expire after 30 days. These limits remain draft policy. Confirmation teaches only the vocabulary displayed on the card, atomically with the accepted care plan.
+
+Each dictation has two independent extractions in parallel within the same fifteen-second budget. History and missions come from the primary reading. The second checks medication, patient and TEST fields; it never adds history, missions or free questions. Code asks about conflicting fields and retains the numeric guards. A failed extraction can retry once inside the deadline; a surviving reading can still produce the card. Single-source status adds “Heard once” only to an existing question. Two failures use the unavailable response.
+
+The card keeps the patient, medications, required work, history, alerts and short questions in that order. Medication lines use the resolved name and heard dose, with frequency only when spoken; starting, stopping or changing adds its action. Compressed compound doses stay as heard behind their dose question. TEST lines list individual analytes, such as `BUN, creatinine, Na, K`. Each fact gets a line in spoken order, with a code-selected `ECG:`, `Echo:`, `Complaint:`, `Dx:`, `History:` or `Finding:` prefix. Findings and complaints survive extraction; unknown categories remain history. Separator-only dose differences and age units do not create questions, and generic ambiguity placeholders are omitted. Unresolved fragments appear plainly. At most one shared line explains that Arabic names were kept as heard. Unsupported numeric instructions remain blocked and omitted from the instruction line. Due messages use the existing bounded inline delivery pass, with the minute tick for recovery.
 
 | Command | Behavior |
 | --- | --- |
@@ -149,19 +164,30 @@ Current medicines become separate continue orders with their spoken doses. An ex
 | `/qr <name>` | Issue an invitation for an unambiguous patient, or ask which patient |
 | `/cancel` | Discard the pending card |
 | `/intake` | Reopen a private photo awaiting patient selection |
+| `/lang en`, `/lang ar` | Set the doctor's language for subsequent turns |
 
-If your dictation mentions a requested test or examination but extraction finds no
-test, visit, task or records request, Sanad checks once more. If the request is
-still missing, the card asks «سمعت إنك طلبت تحليل/فحص بس مش لاقيه في الكارت؛ قول لي إيه هو»
+If your dictation mentions a requested test or examination and the primary reading
+omits it, the card asks which items were requested
 and cannot be confirmed until you supply the missing request. Unrelated corrections
 keep that question open. A bare label already included in another fact's terms,
 such as an extra `History: ECG`, is removed from the card.
 
-Tap **✅ تمام** to save the valid items together, or **❌ إلغاء** to discard. While a card is open, answer its questions or send a correction by text or voice; **✏️ تعديل** is an optional hint. The same card keeps its patient, unanswered fields and original 30-minute expiry, with new buttons and «عدّلت الكارت حسب كلامك». An undisputed verified drug name keeps its verification; answering a compound-dose question also clears its associated compressed-number question. Use `/new`, name a different existing patient, or begin with «مريض جديد» to start another card. A new-patient phrase mid-message asks «ده تعديل للكارت ولا مريض جديد؟» before proceeding. Old, expired and used buttons cannot confirm a revision. Long cards place buttons on the last message.
+Tap **✅ Confirm** to save the valid items together, or **❌ Cancel** to discard. While a card is open, answer its questions or send a correction by text or voice; **✏️ Edit** is an optional hint. The same card keeps its patient, unanswered fields and original 30-minute expiry, with new buttons and “Card updated from your reply”. Arabic mode retains the Arabic labels. An undisputed verified drug name keeps its verification; answering a compound-dose question also clears its associated compressed-number question. Use `/new`, name a different existing patient, or begin with “New patient” to start another card. A new-patient phrase mid-message asks whether this is a correction or a new patient before proceeding. Old, expired and used buttons cannot confirm a revision. Long cards place buttons on the last message.
 
-Patient creation, accepted facts, orders, care plan, missions and learned names commit atomically. A current medication without a recorded order can create its head on confirmation, without a day-three task. Unknown stop/change orders ask for clarification. Starting a medication creates the separate day-three follow-up; confirmation does not mean the patient has taken it.
+Spoken changes retain both values on one line, for example
+`Exforge 5/160 → Exforge HCT 10/160/25 (change)`. Code requires the stated previous
+values and a matching ingredient family; it does not choose a medication substitute.
+`Forxiga (start)` without a spoken dose asks for the dose.
 
-A missing numeric dose, unclear short drug name, unsupported or disputed number, unresolved timing, or conflicting instructions remains blocked and is explained on the card. Say the dose as a number. Age and every spoken order dose count as placed numbers. A heard number missing from the extracted fields gets one short question such as «سمعت "90"، ده يخص إيه؟»; valid independent items remain confirmable. This check includes the original dictation and every correction, so a replaced number can still need clarification. Spoken word numbers are not converted into digits. Malformed items are dropped with a number clarification or an ambiguity line; unknown model keys are ignored. Existing orders can be changed, stopped or continued as described below.
+“Blood pressure chart, 3 times a day for 5 days” becomes one TASK with that
+instruction and a deadline five days after receipt. Completion requires the existing
+patient report. It is separate from TEST; scheduled monitoring slots arrive in
+slice 13. Duplicate history folds before size checks. An oversized card retains
+every order and mission, shows six history lines and offers the rest through Edit.
+
+Patient creation, accepted facts, orders, care plan, missions and learned names commit atomically. A current medication without a recorded order can create its head on confirmation, without a day-three task. A new patient's explicitly stated previous brand/dose can support a change; an unknown existing order still requires clarification. Starting a medication creates the separate day-three follow-up; confirmation does not mean the patient has taken it.
+
+A missing numeric dose, unclear short drug name, unsupported or disputed number, unresolved timing, or conflicting instructions remains blocked and is explained on the card. Say the dose as a number. Age and every spoken order dose count as placed numbers. A heard number missing from the extracted fields gets one short question asking which item it belongs to; valid independent items remain confirmable. This check includes the original dictation and every correction, so a replaced number can still need clarification. Spoken word numbers are not converted into digits. Malformed items are dropped with a number clarification or an ambiguity line; unknown model keys are ignored. Existing orders can be changed, stopped or continued as described below.
 
 New-patient confirmation automatically queues a QR invitation. A dictation containing «عايز أبعت له اللينك» can request one too. The QR opens the existing single-use exchange and consent/identity-confirmation flow; it is valid for 24 hours. QR pixels are generated when sending and are not stored. Issuance and delivery are recoverable, and suspension invalidates unsent access.
 
@@ -251,3 +277,39 @@ Stack deletion retains the versioned bucket and the seven SSM parameters. After 
 ## Prior work
 
 The original Sanad was developed in August 2026 for Google's All Things Agentic hackathon. Slice 04 copies five safety modules and four test files from the frozen Google source at `b65f569`, splitting its normalizer into a sixth module. The [typed reuse inventory](src/sanad/safety/_provenance.py) and [slice report](docs/contracts/04-safety-kernel.md#report) distinguish copied tables and tests from the new policy boundary. The source project remains frozen. Publication and clinical approval are separate gates; see [sources and contest requirements](docs/research/hackathon-and-sources.md).
+
+## Patient evidence
+
+Contract 12 is implemented for architect review; wording and operational limits are
+`OWNER_REVIEW_PENDING`. The contest scope is English across doctor dictation,
+cards, notices, patient conversation and reminders (Decision 023). Supported photo
+input is printed or typed documents in Latin script. Handwriting in any script,
+Arabic in images, Arabic dictation and Arabic patient conversation are declared
+upgrades; existing Arabic templates remain behind the recipient's language setting.
+Patients can send one lab slip, report, old prescription,
+medication list or device screen per photo (PNG/JPEG image attachments). The image
+is acknowledged immediately and read twice. Readable values are screened by the
+safety kernel and active doctor-specific alerts before any association decision.
+
+A matching document is checked against the doctor's requested analytes, units,
+dates, categories and document count. Partial reports can accumulate on the same
+mission. Patients are asked which request a document belongs to when the match is
+ambiguous. An unreadable, Arabic or conflicting printed name is unverifiable;
+it does not prevent reading or evaluation. The doctor receives the paper's review
+card with **This patient's paper ✅** and **Not this patient ❌**. Fulfilment waits
+for confirmation of every required paper's identity. Rejection retains the paper,
+detaches it from the open mission and asks the patient whose paper it is. A name is
+a mismatch only when both readers corroborate a different Latin name. Unclear images,
+multiple papers in one photo, duplicates and incomplete evidence receive explicit
+responses. A device reading is retained for later slot assignment.
+
+The doctor can use `/evidence` cards or the authenticated evidence API to associate,
+accept task evidence, confirm identity or reject a document. The record API exposes old medication
+lists as `medication_list_seen`, labelled "History, not a current order" for an English doctor;
+current orders stay
+under the doctor's separate confirmation flow. Fulfilment records the original
+receipt time and creates its independent result review. A deadline notice identifies
+an on-time file whose reading or identity confirmation is still pending. Confirming
+later preserves the original receipt time and deadline. Critical rows raise danger
+immediately, before the identity decision; confirming whose paper it is never
+approves a disputed clinical value. Post-fulfilment corrections remain in slice 19.

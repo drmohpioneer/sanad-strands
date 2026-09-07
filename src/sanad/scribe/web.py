@@ -39,4 +39,7 @@ def scribe_router(claims: ClaimService) -> APIRouter:
     from sanad.web.api_record import record_router
 
     router.include_router(record_router(claims))
+    from sanad.web.api_evidence import evidence_router
+
+    router.include_router(evidence_router(claims))
     return router

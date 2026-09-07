@@ -33,7 +33,17 @@ class PatientAction(_BoundaryValue):
     updated_at: UtcInstant
     expires_at: UtcInstant
     actor_subject: NonblankStr = Field(repr=False)
-    action: Literal["resume", "start", "quiet_slot"]
+    action: Literal[
+        "resume",
+        "start",
+        "quiet_slot",
+        "evidence_choose",
+        "evidence_yes",
+        "evidence_no",
+        "evidence_other",
+    ]
+    evidence_id: str | None = None
+    evidence_version: PositiveVersion | None = None
     target_ref: VersionRef | None = None
     slot_id: str | None = None
     source_receipt_id: NonblankStr

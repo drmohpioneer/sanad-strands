@@ -34,6 +34,31 @@ _WORDS = {
     "بعد ساعة": timedelta(hours=1),
     "بعد ساعتين": timedelta(hours=2),
 }
+_DURATION_NUMBERS = {
+    "one": 1,
+    "two": 2,
+    "three": 3,
+    "four": 4,
+    "five": 5,
+    "six": 6,
+    "seven": 7,
+    "eight": 8,
+    "nine": 9,
+    "ten": 10,
+    "واحد": 1,
+    "اثنين": 2,
+    "اتنين": 2,
+    "ثلاث": 3,
+    "ثلاثه": 3,
+    "اربع": 4,
+    "اربعه": 4,
+    "خمس": 5,
+    "خمسه": 5,
+    "ست": 6,
+    "سته": 6,
+    "سبع": 7,
+    "سبعه": 7,
+}
 
 
 def resolve_expression(
@@ -46,6 +71,28 @@ def resolve_expression(
     if expression:
         text = expression.translate(_DIGITS).strip().lower()
         delta = _WORDS.get(text)
+        if kind == MissionKind.TASK:
+            from sanad.scribe.names import normalize
+
+            duration = re.fullmatch(
+                r"(?:for|لمده|مده)\s+(\w+)\s*(days?|hours?|weeks?|ايام|يوم|ساعات|ساعه|اسابيع|اسبوع)",
+                normalize(text),
+            )
+            if duration:
+                count = (
+                    int(duration[1])
+                    if duration[1].isdigit()
+                    else _DURATION_NUMBERS.get(duration[1])
+                )
+                if count is not None and count > 0:
+                    unit = duration[2]
+                    delta = (
+                        timedelta(hours=count)
+                        if unit.startswith(("hour", "ساع"))
+                        else timedelta(weeks=count)
+                        if unit.startswith(("week", "اسب"))
+                        else timedelta(days=count)
+                    )
         match = _RELATIVE.fullmatch(text)
         if match:
             n, unit = int(match[1]), match[2]
@@ -80,8 +127,15 @@ def candidate_timings(
     policy: DoctorTimingPolicy,
 ) -> tuple[tuple[ItemTiming, ...], tuple[ProposalIssue, ...]]:
     timings, issues = [], []
+    from sanad.scribe.monitoring import duration_expression, task_request
+
     values = [
-        (f"mission:{i}", MissionKind(m.kind), m.timing_expression)
+        (
+            f"mission:{i}",
+            MissionKind(m.kind),
+            m.timing_expression
+            or (duration_expression(m.text) if m.kind == "TASK" and task_request(m.text) else None),
+        )
         for i, m in enumerate(candidate.missions)
     ]
     # Medication timing is the prescribed dosing schedule, not an acknowledgment deadline.

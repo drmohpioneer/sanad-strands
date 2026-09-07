@@ -14,7 +14,7 @@ from sanad.domain import Principal
 from sanad.domain.boundaries import _BoundaryValue
 from sanad.models.timeouts import EXTRACTION_TIMEOUT
 from sanad.scribe.memory import NameVocabulary
-from sanad.scribe.names import NameEntry, Resolution, entry_for, normalize, split_drug_dose
+from sanad.scribe.names import Resolution, entry_for, normalize, split_drug_dose
 from sanad.scribe.policy import DRAFT_SCRIBE_POLICY
 from sanad.scribe.repository import ScribeRepository
 from sanad.store import keys
@@ -26,9 +26,9 @@ _NAME = re.compile(r"[A-Za-z][A-Za-z0-9 /+().,-]{0,119}")
 
 
 def generic_key(value: str) -> tuple[str, ...]:
-    return tuple(
-        sorted(normalize(s) for s in re.split(r"/|\s+and\s+|\s*\+\s*", value) if s.strip())
-    )
+    from sanad.scribe.resolver import generic_key as key
+
+    return key(value)
 
 
 class DrugLookup(_BoundaryValue):
@@ -287,33 +287,6 @@ class DrugLookupService:
     def resolve(
         self, spoken: str, source: str, proposed: str | None, generic: str | None
     ) -> Resolution:
-        if self.contains_identity(spoken) or (proposed and self.contains_identity(proposed)):
-            return Resolution(None, conflict=True)
-        remembered = self.vocabulary.find(spoken) or (
-            self.vocabulary.find(proposed) if proposed else None
-        )
-        anchor = entry_for(spoken)
-        suggestion = entry_for(proposed) if proposed else None
-        expected = remembered.generic if remembered else anchor.generic if anchor else generic
-        if (expected and generic and generic_key(expected) != generic_key(generic)) or (
-            anchor and suggestion and generic_key(anchor.generic) != generic_key(suggestion.generic)
-        ):
-            return Resolution(None, anchor, True)
-        name = remembered.latin if remembered else proposed or (anchor.latin if anchor else spoken)
-        result = self.lookup_drug(name)
-        if not result.found:
-            return Resolution(None, anchor, bool(anchor and proposed and not suggestion))
-        if expected and generic_key(result.generic) != generic_key(expected):
-            return Resolution(None, anchor, True, result.source)
-        if not expected and normalize(result.canonical) != normalize(name):
-            return Resolution(None)
-        # An RxNorm brand variant verifies identity, not a request to substitute brands.
-        latin = remembered.latin if remembered else anchor.latin if anchor else name
-        entry = NameEntry(
-            "drug",
-            latin,
-            result.generic,
-            (spoken,),
-            result.strengths if not anchor else anchor.fixed_combination_strengths,
-        )
-        return Resolution(latin, entry, False, result.source)
+        from sanad.scribe.resolver import context, resolve_name
+
+        return resolve_name(spoken, "drug", source, proposed, context(self, generic)).legacy()

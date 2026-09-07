@@ -485,6 +485,7 @@ class ClaimService(IdentityService):
         active = revise(
             patient,
             now,
+            language=doctor.language,
             contact_status="active",
             active_binding_id=binding.id,
             consent_id=consent.id,

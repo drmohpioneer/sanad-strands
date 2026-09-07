@@ -304,7 +304,7 @@ def test_session_continuity_through_real_agent_and_bounded_snapshot(
     manager = session(world)
     first = make_agent(
         "concierge",
-        scope=binding(output_context=OutputContext(mode="plan_explanation")),
+        scope=binding(output_context=OutputContext(mode="plan_explanation", language="ar")),
         tools=[],
         system_prompt="test",
         session_key=manager.key,
@@ -317,7 +317,7 @@ def test_session_continuity_through_real_agent_and_bounded_snapshot(
     second_manager = session(world)
     second = make_agent(
         "concierge",
-        scope=binding(output_context=OutputContext(mode="plan_explanation")),
+        scope=binding(output_context=OutputContext(mode="plan_explanation", language="ar")),
         tools=[],
         system_prompt="test",
         session_key=manager.key,
@@ -340,7 +340,7 @@ def test_session_fence_stolen_mid_model_discards_turn(store: StoreBase, clock: C
 
     instance = make_agent(
         "concierge",
-        scope=binding(output_context=OutputContext(mode="plan_explanation")),
+        scope=binding(output_context=OutputContext(mode="plan_explanation", language="ar")),
         tools=[],
         system_prompt="test",
         session_key=manager.key,

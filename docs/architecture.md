@@ -105,57 +105,77 @@ Approved deterministic patient safety guidance is delivered independently of the
 
 ## Doctor dictation and patient support
 
-Contract 11c extends doctor dictation with correction while a confirmation card is
-open. Ordinary replies address that card's numbered questions, preserving its
-patient, unanswered fields and original expiry. Each revision fences the old
-buttons. Explicit new-patient commands and a different patient found by the
-existing scoped lookup supersede it; a new-patient phrase mid-message asks which
-operation the doctor intends before extraction.
+Decision 023 and contract 11e addenda 2–3 select English for new records through
+one draft language policy. `/lang en` and `/lang ar` change only the authenticated
+doctor's language in a guarded, replay-safe transaction. Speech, extraction and
+the saved confirmation card use that language; patient binding takes the doctor's
+current default. Arabic prompts, vocabulary and rendering remain available.
 
-The Scribe proposes Latin names and clinical English while retaining the spoken
-text. Code checks source numbers and generic identity. Its bound `lookup_drug`
-tool reads doctor memory, clinic memory, cached/live RxNorm, then the seed list.
-Unknown names remain marked for the doctor's confirmation. Learned names are
-written with that confirmation in the same transaction. In the accepted account
-model a clinic is the configured bot's `AccountScope`; this shares terminology,
-never patient records or doctor-private memory. Public RxNorm cache records use
-a separate fixed account partition and contain drug vocabulary only. All remote
-requests are fixed-host, timed and bounded; model/tool text is untrusted data.
-Speech and Scribe vocabulary are built per request from cached scoped reads.
-RxNorm has at most six HTTP calls per card, with a three-second lookup cap
-inside the existing fifteen-second extraction deadline. Novel tool queries are
-deferred until the extracted patient identity can be excluded; known vocabulary
-can be verified during extraction. Corrections quote the words authorizing each
-changed item; deterministic dose slots reject numbers belonging to other items.
-Binding addenda 2 and 3 replace free clinical-English rewriting with source-aligned
-term pairs. Each pair must quote a normalized substring of its fact and source;
-values and percent signs must be supported by that fragment. Memory, seed or
-bounded phonetic identity verifies the term; otherwise its English reading is
-shown with (؟) for the doctor's tap. Invalid or unanchored pairs keep the spoken
-fallback. One shared, nonblocking term question covers all uncertain fragments.
-Mixed term kinds split into separate ECG, Echo, Complaint,
-History or Dx lines. The new-patient marker never becomes a fact. Free
-`clinical_en` fields are retained only for compatibility and never rendered.
-TEST lines use spoken-form resolver readings; other mission prose stays spoken.
-Confirmation teaches the displayed terms atomically, including unchanged Arabic
-fallback fragments; unseen model translations cannot enter memory. Numerical
-results are removed from vocabulary. Corrections keep a previous verified drug
-resolution unless its name is disputed, and a compound-dose answer retires its
-associated compressed-number question. Unsupported order fields are omitted
-from medication lines and quoted once for clarification; their existing numeric
-block remains in force. Spoken frequency words do not manufacture digits.
-Extraction retries schema-validation or
-model-unavailable failures once with an identical request and fresh agent,
-inside the existing extraction deadline; metadata records the retry. Tool
-budgets remain shared across the retry. The same single retry also covers a
-transcript containing a request cue but no TEST/VISIT/TASK/SEND_RECORDS mission.
-If the request remains absent, one persisted whole-card issue blocks confirmation
-until a correction supplies the mission. Corrections check the merged candidate
-against the retained source, so an unrelated answer cannot clear the block.
-Bare single-token facts already represented by another fact's displayed terms
-are removed with a metadata-only count; quantities and substantive facts remain.
-Empty medication fields omit literal
-null/None values. Patient-facing plan wording and clinical authority are unchanged.
+The first successful extraction owns history and requested missions. Its peer
+checks medication fields, patient identity and TEST analytes without contributing
+extra history, missions or free questions. Code folds overlapping primary facts;
+oversized cards retain orders and missions and show at most six history lines,
+with retained additional history available through Edit. Atomic transaction limits
+continue to apply to confirmation.
+
+A spoken medication change retains the explicitly stated previous brand and dose
+beside the proposed new instruction. Both identities use the common resolver;
+only a source-anchored change within the same seed-defined ingredient family is
+combined. Stated previous values are provenance, not an invented prior prescription
+date or evidence of adherence. Existing record amendments retain version guards.
+
+Dictated monitoring requests currently become TASK instructions with the existing
+`doctor_task` patient-report predicate. An explicit duration sets the deadline at
+the receipt anchor plus that duration. No reading slots or coverage are inferred;
+slice 13 owns the later MONITOR upgrade.
+
+Contract 11e consolidates doctor dictation around one deterministic name resolver.
+Doctor memory, clinic memory, seed vocabulary, already fetched drug lookup results,
+and source-anchored model proposals are considered in that order. Unresolved names
+remain in their spoken form. Speech and Scribe hints use these same tables; the
+patient plan uses the same resolver. Confirmation learns only displayed vocabulary
+through the existing atomic care-plan transaction.
+
+Two fresh Scribe extractions run concurrently against the identical request at
+temperature zero, inside the existing fifteen-second extraction budget. Each run
+retains its bounded transient retry within that deadline. Code merges their typed
+candidates by resolved identity and quantities. Medication, patient and TEST
+disagreements retain field-specific code questions. Primary history and missions
+are authoritative; secondary-only history, missions and free questions are never
+added. A failed primary promotes the surviving reading. Two failures preserve the
+existing model-unavailable response. The existing missing-request guard applies
+to the resulting primary mission list; a secondary-only request cannot silently
+authorize work. Original source numbers and confirmation guards remain authoritative.
+
+The dictation card retains the 11b layout: patient, medications, requested work and
+its deadlines, individual history facts, alerts, then short questions. Code chooses
+history prefixes and resolves each test analyte separately. Frequency must occur in
+the source; unresolved names render plainly with at most one shared explanation.
+Single-source provenance adds wording only to an item's existing question.
+
+Dictation admits `finding` and `complaint` facts through extraction
+and confirmed storage. Code chooses ECG/Echo prefixes from resolved finding cues,
+uses Complaint/Dx for those categories, and retains unknown categories as History.
+Merge comparisons normalize numeric formatting and patient name tokens; a missing
+reading cannot erase the other reading's patient name. Literal source doses remain
+the display authority, while unsupported model digits retain their existing blocks.
+Placeholder ambiguities and absent timing sentinels are omitted from questions.
+The five-run English measurement uses the released under-2,800-token bound and
+the primary-history, same-family change, TASK and TEST requirements of addenda 2–3.
+
+Replies while a card is open retain the same patient, unanswered fields, original
+thirty-minute expiry and correction guards. Revisions rotate buttons and say
+“Card updated from your reply” in English or «عدّلت الكارت حسب كلامك» in Arabic.
+Explicit new-patient commands and scoped different-patient
+lookup retain their existing escape behavior. Photo extraction and review are
+unchanged. The bot AccountScope continues to define clinic vocabulary; lookup
+identity exclusion, fixed-host HTTP restrictions, six-request cap, three-second
+lookup limit and thirty-day cache remain in force.
+
+After extraction and identity screening, the existing bounded lookup stage fetches
+drug-only queries; the pure resolver consumes its results. Undisputed verified
+correction readings bypass this fetch. Name-memory writes go through `resolver.learn`.
+Merge issues retain their field identity across corrections.
 
 The Scribe accepts text, voice transcription and prescription/history/medication photos. For prescription photos the Evidence Reader independently extracts the same fields; the Steward compares the two candidates and marks disagreements uncertain on the card, where every field stays editable (Decision 018). Code handles explicit commands, then typed proposals for search/create/update/missions. Reads are doctor-scoped; ambiguous patient matches ask. A confirmation shows patient identity, old/new fields, active order changes, objectives, predicates and exact deadlines with reasons. It references base versions, expiry and a one-use nonce.
 
@@ -204,6 +224,45 @@ That private crop is linked to the read and queued atomically after the card,
 with the same proposal/doctor freshness checks and ordered delivery. Telegram
 sends its bytes as a photo; Arabic instructions are never prefilled. These
 are engineering controls, not Arabic OCR or clinical validation.
+
+Contract 12 routes bound patient photos through the existing durable media work
+and two independent document readers. The saved read is reused after a crash.
+A private, receipt-scoped first-write-wins read checkpoint is written before the
+content-addressed read is linked to MediaWork, so a crash in that gap reuses the
+completed reader pair. No clinical acceptance follows from that checkpoint.
+Code classifies one document per photo and screens both readers' rows, including
+active doctor-defined value alerts, before duplicate or association decisions.
+Printed names are association hints only. A deterministic evaluator checks the
+confirmed mission's category, units, dates, completeness and document count;
+ambiguous choices and task evidence require the specified patient or doctor
+action. The Steward alone appends immutable evidence versions and advances
+their heads, atomically with any objective transition, review and outgoing
+intent. Before fulfillment, code removes noncontributing or redundant accepted
+receipts in latest-first order while the pure predicate remains satisfied, so
+only the required completing set supplies receipt timing and evidence references. Historical prescriptions never enter the order compiler. A pending
+on-time receipt changes the deadline wording without moving its clock; later
+verification retains the original deadline and records its updated disposition.
+Alerts add to the unchanged safety floor and use code-rendered current orders,
+conditions and previous dated measurements as doctor-only context. The existing
+doctor photo controller is extended at its caller through an evidence safety
+adapter; the shared reader and grading helpers remain imported, unchanged.
+
+Contract 12 binding addenda 2–3 apply Decision 023: contest photo support is
+printed or typed Latin-script documents, one paper per photo. Handwriting and
+Arabic images are declared upgrades. Identity is match, mismatch or unverifiable;
+only agreeing readable Latin names can establish a mismatch. Empty, conflicting,
+non-Latin or clinic/lab header hints remain unverifiable, without guessed
+transliteration. Empty and absent units compare as the same missing observation.
+An associated unverifiable paper is retained as `accepted_pending_identity`.
+The pure predicate still runs, but every required paper needs its own doctor's
+identity confirmation before the existing atomic fulfillment transaction runs.
+The evidence review card and session API offer confirm/reject; rejection detaches
+the pre-fulfillment evidence and asks the patient the existing name question.
+Danger is screened first and its independent review survives either choice.
+The unchanged deadline uses pending-verification wording while identity waits;
+confirmation retains receipt-based timeliness and the deadline-disposition audit.
+All evidence wording and buttons select the recipient's English or Arabic pair.
+Post-fulfillment rejection remains guarded for slice 19.
 
 Mission execution and clinical review are separate. `fulfilled` means the explicit objective predicate is met; `DONE` is a message class, not clinical clearance or a state name. Old `pending_review` becomes a derived review status of fulfilled work. Unsuccessful disposal is `closed_unfulfilled`, never fulfillment. See the exact [state/event contract](domain-model.md#mission-state-and-event-contract).
 

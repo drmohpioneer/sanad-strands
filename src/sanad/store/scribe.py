@@ -36,6 +36,7 @@ COMMANDS = frozenset(
         "ScribeConfirm",
         "ScribeExpire",
         "ScribeReply",
+        "ScribeLanguage",
         "ScribeInvalidate",
         "ScribeWork",
     }
@@ -116,6 +117,18 @@ def scribe_guards(
             return None
         checks.append(Check(bound.key, bound.version))
     allowed = PROPOSAL_TYPES | (CLINICAL_TYPES if kind == "ScribeConfirm" else set())
+    if kind == "ScribeLanguage":
+        allowed = {"doctor"}
+        if len(request.puts) != 1 or command.work_claim is None:
+            return None
+        updated = from_record(request.puts[0], Doctor)
+        if (
+            updated.version != doctor.version + 1
+            or updated.updated_at != now
+            or updated.model_dump(exclude={"language", "version", "updated_at"})
+            != doctor.model_dump(exclude={"language", "version", "updated_at"})
+        ):
+            return None
     if kind == "ScribeConfirm":
         allowed |= {"name_memory"}
     if kind == "ScribeNameCache":
@@ -505,10 +518,10 @@ def scribe_guards(
             or not consumed.body.get("consumed_at")
         ):
             return None
-        from sanad.scribe.memory import confirmation_names
+        from sanad.scribe.resolver import learn
 
         confirmed_at = from_record(changed_row, Proposal).updated_at
-        expected_names = confirmation_names(store, doctor, proposal, lambda: confirmed_at)
+        expected_names = learn(store, doctor, proposal, lambda: confirmed_at)
         supplied_names = tuple(
             from_record(r, NameMemory) for r in request.puts if r.entity_type == "name_memory"
         )

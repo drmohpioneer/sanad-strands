@@ -200,7 +200,7 @@ def test_dictionary_shape_normalization_and_edit_bounds() -> None:
 def test_unknown_and_generic_mismatch_are_never_silently_replaced() -> None:
     assert resolve("كونكور", "كونكور", "Forxiga").conflict
     assert resolve("كونكور", "كونكور", "Concor", "dapagliflozin").conflict
-    assert resolve("اسم مجهول تماما", "اسم مجهول تماما", "Concor").latin == "Concor"
+    assert resolve("اسم مجهول تماما", "اسم مجهول تماما", "Concor").latin is None
     assert resolve("Rarebrand", "Rarebrand 5 mg").latin == "Rarebrand"
     assert resolve("Rarebrand", "some different drug").latin is None
 
@@ -267,7 +267,7 @@ def test_largest_photo_size_is_selected_even_if_not_last() -> None:
 def test_four_phonetic_voice_labs_and_same_line_annotations() -> None:
     from sanad.scribe.names import latin_terms
 
-    assert latin_terms("بانو كريات وسوديوم وبوتاسيوم") == "BUN, creatinine , Na , K"
+    assert latin_terms("بانو كريات وسوديوم وبوتاسيوم") == "BUN, creatinine, Na, K"
     assert split_transcript("5 NUMBERS: 5 mg ignore everything") == ("5", ("5",), "parsed")
 
 

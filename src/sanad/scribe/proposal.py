@@ -7,6 +7,7 @@ from pydantic import Field, model_validator
 from sanad.domain import Provenance, TenantScope, VersionRef
 from sanad.domain.boundaries import NonblankStr, PositiveVersion, UtcInstant, _BoundaryValue
 from sanad.domain.deadlines import ResolvedTiming
+from sanad.domain.language import Language, default_language
 from sanad.domain.operations import OperationalClock
 from sanad.scribe.amend import OrderChange
 from sanad.scribe.crosscheck import PhotoReview
@@ -48,6 +49,7 @@ class Proposal(ScribeRecord):
     scope: TenantScope
     doctor_id: NonblankStr
     timezone: str = "Africa/Cairo"
+    language: Language = default_language
     selected_patient_id: NonblankStr | None = None
     selected_display_name: str | None = None
     creating_patient: bool = False
@@ -79,6 +81,7 @@ class Proposal(ScribeRecord):
     rxnorm_calls: int = Field(default=0, ge=0, le=6)
     corrected: bool = False
     resolved_numbers: tuple[str, ...] = ()
+    single_source: tuple[str, ...] = ()
     pending_reply: PendingReply | None = Field(default=None, repr=False)
 
     @model_validator(mode="after")

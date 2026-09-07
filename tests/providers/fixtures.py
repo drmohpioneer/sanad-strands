@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Any
 
+from botocore.exceptions import ClientError  # type: ignore[import-untyped]
 from domain_fixtures import NOW
 from strands.models import BedrockModel
 
@@ -149,11 +150,15 @@ class FakeS3Client:
     def put_object(self, **kwargs: Any) -> dict[str, Any]:
         assert kwargs["ServerSideEncryption"] == "AES256"
         assert "ACL" not in kwargs
+        if kwargs.get("IfNoneMatch") == "*" and kwargs["Key"] in self.objects:
+            raise ClientError({"Error": {"Code": "PreconditionFailed"}}, "PutObject")
         self.objects[kwargs["Key"]] = kwargs["Body"]
         self.writes.append(kwargs)
         return {"VersionId": "synthetic-version"}
 
     def get_object(self, **kwargs: Any) -> dict[str, Any]:
+        if kwargs["Key"] not in self.objects:
+            raise ClientError({"Error": {"Code": "NoSuchKey"}}, "GetObject")
         data = self.objects[kwargs["Key"]]
         return {"Body": io.BytesIO(data), "ContentLength": len(data)}
 

@@ -4,11 +4,8 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sanad.auth.service import revise
 from sanad.domain import TenantScope
-from sanad.scribe.names import NameEntry, normalize
-from sanad.scribe.policy import DRAFT_SCRIBE_POLICY
-from sanad.store import keys
+from sanad.scribe.names import NameEntry
 from sanad.store.keys import AccountScope
 from sanad.store.protocol import Store
 from sanad.store.records import Doctor, NameMemory, from_record
@@ -65,81 +62,19 @@ class NameVocabulary:
         )
 
     def find(self, name: str, kind: str = "drug") -> NameMemory | None:
-        for tier in self.rows:
-            matches = [
-                r
-                for r in tier
-                if r.kind == kind
-                and normalize(name) in {normalize(s) for s in (r.latin, *r.spoken_forms)}
-            ]
-            if matches:
-                identities = {normalize(r.generic if kind == "drug" else r.latin) for r in matches}
-                return matches[0] if len(identities) == 1 else None
-        return None
+        from sanad.scribe.resolver import find_memory
+
+        return find_memory(self, name, kind)
 
     def hint(self) -> str:
-        from sanad.scribe.names import known_names
+        from sanad.scribe.resolver import hint_names
 
-        return known_names(tuple(r.latin for tier in self.rows for r in tier))
+        return hint_names(self)
 
 
 def confirmation_names(
-    store: Store,
-    doctor: Doctor,
-    proposal: "Proposal",
-    clock: Callable[[], datetime],
+    store: Store, doctor: Doctor, proposal: "Proposal", clock: Callable[[], datetime]
 ) -> tuple[NameMemory, ...]:
-    """Compile both tiers together; the caller puts every row in ScribeConfirm."""
-    now = clock()
-    result: dict[tuple[str, str], NameMemory] = {}
-    for name in proposal.names:
-        if name.kind == "finding":
-            from sanad.scribe.card import plain
-            from sanad.scribe.terms import vocabulary_term
+    from sanad.scribe.resolver import learn
 
-            name = name.model_copy(
-                update={
-                    "spoken": vocabulary_term(plain(name.spoken)),
-                    "latin": vocabulary_term(plain(name.latin)),
-                }
-            )
-        if proposal.blocked(name.item) or not name.latin or not name.learnable:
-            continue
-        for scope in (doctor.scope, AccountScope(bot_id=doctor.telegram_bot_id)):
-            id = keys.digest(keys.partition(scope) + ":" + name.kind + ":" + normalize(name.latin))
-            key = (keys.partition(scope), id)
-            current = result.get(key)
-            if current is None:
-                row = store.get(scope, "name_memory", id)
-                current = from_record(row, NameMemory) if row else None
-            spoken = tuple(dict.fromkeys((*(current.spoken_forms if current else ()), name.spoken)))
-            strengths = tuple(
-                dict.fromkeys((*(current.strengths_seen if current else ()), *name.strengths))
-            )
-            values = {
-                "latin": name.latin,
-                "generic": name.generic,
-                "spoken_forms": spoken[-DRAFT_SCRIBE_POLICY.spoken_forms_max :],
-                "strengths_seen": strengths,
-                "last_confirmed_at": now,
-                "source": "doctor_confirmation",
-            }
-            # A name appearing twice on one card is one confirmation, not two votes.
-            if key in result:
-                result[key] = NameMemory.model_validate(current.model_dump() | values)  # type: ignore[union-attr]
-            elif current:
-                result[key] = revise(
-                    current, now, confirmations=current.confirmations + 1, **values
-                )
-            else:
-                result[key] = NameMemory.model_validate(
-                    {
-                        "id": id,
-                        "scope": scope,
-                        "kind": name.kind,
-                        "created_at": now,
-                        "updated_at": now,
-                        **values,
-                    }
-                )
-    return tuple(result.values())
+    return learn(store, doctor, proposal, clock)

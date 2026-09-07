@@ -5,6 +5,7 @@ from typing import Literal
 
 from sanad.domain import FollowUpTask, Mission, PatientScope
 from sanad.domain.deadlines import format_local
+from sanad.domain.language import default_language
 from sanad.safety import validate_patient_output
 from sanad.safety.models import OrderSummary, OutputContext
 from sanad.safety.policy import SAFETY_POLICY_V1_CARDIOLOGY_DRAFT
@@ -60,7 +61,7 @@ TEMPLATES = {
 }
 
 
-def render(key: str, language: str = "ar", **fields: str) -> str:
+def render(key: str, language: str = default_language, **fields: str) -> str:
     template = TEMPLATES[key][language == "en"]
     expected = {field for _, field, _, _ in Formatter().parse(template) if field}
     if expected != set(fields):

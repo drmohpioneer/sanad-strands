@@ -49,10 +49,19 @@ SUPPORTED = frozenset(
         "RecordObjectiveFulfilled",
         "CorrectEvidence",
         "SetContactPreference",
+        "AssociateEvidence",
+        "RejectEvidence",
     }
 )
 INTERNAL = frozenset(
-    {"_Deadline", "_FollowupDeadline", "_Wake", "_ScheduleContact", "_ContactFeedback"}
+    {
+        "_Deadline",
+        "_FollowupDeadline",
+        "_Wake",
+        "_ScheduleContact",
+        "_ContactFeedback",
+        "_EvidenceTurn",
+    }
 )
 DOCTOR_COMMANDS = SUPPORTED - {
     "RecordPatientReply",
@@ -187,7 +196,7 @@ class Steward:
             ):
                 return CommandResult(status="forbidden")
         elif (
-            kind in INTERNAL
+            (kind in INTERNAL and kind != "_EvidenceTurn")
             or actor.doctor_id != scope.doctor_id
             or actor.actor_kind not in actor.verified_roles
         ):
@@ -201,13 +210,19 @@ class Steward:
                 return CommandResult(status="forbidden")
         elif actor.actor_kind == "patient":
             if (
-                kind in DOCTOR_COMMANDS
+                (kind in DOCTOR_COMMANDS and kind != "_EvidenceTurn")
                 or actor.patient_id != scope.patient_id
                 or not profile.binding_active
                 or actor.subject != profile.recipient_subject
-                or actor.auth_epoch != profile.recipient_auth_epoch
+                or (kind != "_EvidenceTurn" and actor.auth_epoch != profile.recipient_auth_epoch)
             ):
                 return CommandResult(status="forbidden")
+            if kind == "_EvidenceTurn":
+                from sanad.concierge.plan import authorized
+
+                auth = self.store.authorize(actor.bot_id or "", actor.subject)
+                if not auth.binding or authorized(self.store, actor, auth.binding, now) is None:
+                    return CommandResult(status="forbidden")
             if not doctor.approved and kind != "SetContactPreference":
                 return CommandResult(status="forbidden")
         else:
@@ -237,7 +252,7 @@ class Steward:
             if actor.actor_kind == "patient" and (
                 not profile.binding_active
                 or actor.subject != profile.recipient_subject
-                or actor.auth_epoch != profile.recipient_auth_epoch
+                or (kind != "_EvidenceTurn" and actor.auth_epoch != profile.recipient_auth_epoch)
                 or (not doctor.approved and kind != "SetContactPreference")
             ):
                 return CommandResult(status="forbidden")
@@ -277,6 +292,12 @@ class Steward:
 
                 builder = CommitBuilder(scope, command, now, policy, self.store)
                 prepare(builder, profile)
+                return command_result(self.store.commit(builder.finish()))
+            if command.payload.get("executor") == "evidence-v1":
+                from sanad.evidence.commit import prepare as prepare_evidence
+
+                builder = CommitBuilder(scope, command, now, policy, self.store)
+                prepare_evidence(builder)
                 return command_result(self.store.commit(builder.finish()))
             return self._transition(command, profile)
         except (InvalidCommandPayload, EffectsRejected) as error:

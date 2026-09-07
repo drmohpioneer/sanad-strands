@@ -100,10 +100,15 @@ def test_bundle_two_doctors_reread_and_twenty_line_cap(store: StoreBase, clock: 
     assert text.count("مطلوب لم يكتمل") == 20 and "و 1 بنود تانية" in text
     assert "مشكلة توصيل رسالة" not in text
     tick(w)
-    messages = [c for c in w.transport.calls if "بنود لسه" in str(c.payload)]
+    messages = [
+        c
+        for c in w.transport.calls
+        if "بنود لسه" in str(c.payload) or "Items still needing follow-up" in str(c.payload)
+    ]
     assert len(messages) == 2
     foreign_message = next(c for c in messages if c.recipient_ref == other.private_chat_id)
-    assert "مشكلة توصيل رسالة" in str(foreign_message.payload)
+    assert "Message delivery problem" in str(foreign_message.payload)
+    assert "days since first notice" in str(foreign_message.payload)
     assert "Synthetic Patient" not in str(foreign_message.payload)
 
 

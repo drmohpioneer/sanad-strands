@@ -59,7 +59,7 @@ def test_real_transcript_missing_missions_retries_and_blocks_confirmation(
     model = missing(world, source, by_voice=by_voice)
     p = world.proposal
     assert len(model.script.calls) == 2 and model.script.calls[0] == model.script.calls[1]
-    assert retries == ["request_missing"]
+    assert retries == []
     assert render_card(p)[0].count(QUESTION) == 1
     assert dictation_questions(p).count(QUESTION) == 1 and p.blocked("all")
     with pytest.raises(AssertionError, match="card button missing"):
@@ -81,7 +81,7 @@ def test_real_transcript_missing_missions_retries_and_blocks_confirmation(
     assert not panel(world.store, world.doctor.scope)
     assert not memory_rows(world.store, world.doctor.scope)
     assert world.proposal == p
-    assert "reason=request_missing" in caplog.text and source not in caplog.text
+    assert "reason=request_missing" not in caplog.text and source not in caplog.text
 
 
 @pytest.mark.parametrize("cue", ["طلبت", "اعمل", "يعملوه", "تحليل", "أشعة", "إيكو", "TEST", "lab"])
@@ -93,10 +93,10 @@ def test_each_binding_request_cue_retries_and_keeps_one_block(world: ScribeWorld
 
 
 @pytest.mark.parametrize("kind", ["TEST", "VISIT", "TASK", "SEND_RECORDS"])
-def test_retry_restores_each_supported_mission_kind(world: ScribeWorld, kind: str) -> None:
+def test_primary_retains_each_supported_mission_kind(world: ScribeWorld, kind: str) -> None:
     complete = copy.deepcopy(VALUE)
     complete["missions"] = [{"kind": kind, "text": "BUN" if kind == "TEST" else "يراجع العيادة"}]
-    model = ScriptedModel(candidate(VALUE), candidate(complete))
+    model = ScriptedModel(candidate(complete), candidate(VALUE))
     world.scribe.model_factory = lambda registry, role: model
     world.post(update(APPLICANT, "سامي اختبار أنجينا طلبت BUN ويراجع العيادة", 10))
     assert len(model.script.calls) == 2 and model.script.calls[0] == model.script.calls[1]
@@ -150,7 +150,7 @@ def test_schema_retry_and_missing_request_share_one_allowance(world: ScribeWorld
     retries: list[str] = []
     world.scribe.observe_retry = retries.append
     world.post(update(APPLICANT, "سامي اختبار أنجينا طلبت تحليل", 10))
-    assert len(model.script.calls) == 2 and retries == ["schema_validation"]
+    assert len(model.script.calls) == 3 and retries == ["schema_validation"]
     assert world.proposal.blocked("all") and QUESTION in render_card(world.proposal)[0]
 
 
@@ -158,7 +158,7 @@ def test_missing_request_retry_failure_keeps_the_valid_blocked_card(world: Scrib
     model = ScriptedModel(candidate(VALUE), RuntimeError("private provider failure"))
     world.scribe.model_factory = lambda registry, role: model
     world.post(update(APPLICANT, "سامي اختبار أنجينا طلبت تحليل", 10))
-    assert len(model.script.calls) == 2
+    assert len(model.script.calls) == 3
     assert world.proposal.blocked("all") and QUESTION in render_card(world.proposal)[0]
 
 
@@ -223,13 +223,13 @@ def test_duplicate_bare_fact_is_removed_and_indices_stay_aligned(
     ]
     value = copy.deepcopy(VALUE)
     value["facts"] = [bare, detail] if bare_first else [detail, bare]
-    caplog.set_level(logging.INFO, logger="sanad.scribe.clinical")
+    caplog.set_level(logging.INFO, logger="sanad.scribe.merge")
     p = world.dictate("سامي اختبار ECG تي أوف إنفرجين", value)
     assert len(p.candidate.facts) == 1 and p.candidate.facts[0].text == detail["text"]
     assert "History: ECG" not in render_card(p)[0]
-    assert "ECG: ECG, T wave inversion" in render_card(p)[0]
+    assert "ECG: T wave inversion" in render_card(p)[0]
     assert {n.item for n in p.names} == {"fact:0"}
-    assert sum("scribe_bare_fact_dropped count=1" in r.message for r in caplog.records) == 1
+    assert sum("scribe_overlapping_facts_dropped count=1" in r.message for r in caplog.records) == 1
     world.tap()
     patient = panel(world.store, world.doctor.scope)[0]
     saved = world.store.list_records(patient.scope, "clinical_fact")[0]

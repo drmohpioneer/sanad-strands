@@ -1,5 +1,7 @@
 """Deterministic patient wording; operational dates never promise a doctor answer."""
 
+from sanad.domain.language import default_language
+
 TEMPLATES = {
     "patient_photo_pending": (
         "الصورة محفوظة ومستنية مراجعة المحتوى، لسه مفيش نتيجة اتأكدت منها.",
@@ -104,5 +106,9 @@ TEMPLATES = {
 }
 
 
-def render(key: str, language: str = "ar", **fields: str) -> str:
+def render(key: str, language: str = default_language, **fields: str) -> str:
+    if key.startswith("patient_evidence_"):
+        from sanad.evidence.templates import render as evidence_render
+
+        return evidence_render(key, language, **fields)
     return TEMPLATES[key][1 if language == "en" else 0].format(**fields)

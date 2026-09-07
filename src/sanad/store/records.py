@@ -8,6 +8,7 @@ defined here to support persistence, without adding clinical authority.
 from __future__ import annotations
 
 import json
+from datetime import date
 from typing import Annotated, Any, Literal, Self
 
 from pydantic import BaseModel, Field, JsonValue, StrictBool, model_validator
@@ -21,6 +22,7 @@ from sanad.domain import (
     PatientScope,
     PositiveVersion,
     Principal,
+    Provenance,
     ReviewObligation,
     TenantScope,
     UtcInstant,
@@ -28,8 +30,11 @@ from sanad.domain import (
 )
 from sanad.domain.boundaries import IanaZone, _BoundaryValue
 from sanad.domain.events import RecordEvidenceAssociation, RetainObservation, SupersedeEvidence
+from sanad.domain.language import default_language
 from sanad.domain.operations import OperationalClock as OperationalClock
-from sanad.media.vision import DocumentRead
+from sanad.domain.predicates import PredicateResult
+from sanad.media.vision import Disagreement, DocumentItem, DocumentRead, ReaderResult
+from sanad.scribe.extract import LabRowCandidate
 from sanad.scribe.proposal import InvitationWork, Proposal, ScribeCallback, ScribeState
 from sanad.scribe.records import CareOrderHead, CareOrderVersion, CarePlan, ClinicalFact
 from sanad.store import keys
@@ -159,7 +164,7 @@ class Doctor(_Metadata):
     name: Annotated[str, Field(strict=True, max_length=160)] = ""
     specialty: Annotated[str, Field(strict=True, max_length=160)] = ""
     city: Annotated[str, Field(strict=True, max_length=160)] = ""
-    language: Literal["ar", "en"] = "ar"
+    language: Literal["ar", "en"] = default_language
     timezone: IanaZone = "Africa/Cairo"
     status: Literal["pending", "approved", "rejected", "suspended", "revoked"]
     approved_by: NonblankStr | None = None
@@ -292,7 +297,7 @@ class Patient(_Metadata):
     entity_type: Literal["patient"] = "patient"
     scope: PatientScope
     display_name: Annotated[str, Field(strict=True, min_length=1, max_length=160)]
-    language: Literal["ar", "en"]
+    language: Literal["ar", "en"] = default_language
     timezone: IanaZone
     contact_status: Literal[
         "awaiting_link", "active", "paused", "opted_out", "unreachable", "frozen"
@@ -576,6 +581,103 @@ class OrderAuthority(_Metadata):
     status: Literal["active", "stopped", "superseded"]
 
 
+class Evidence(_Metadata):
+    """Append-only document version; id includes its evidence version like orders."""
+
+    entity_type: Literal["evidence"] = "evidence"
+    scope: PatientScope
+    evidence_id: NonblankStr
+    observation_id: NonblankStr
+    media_id: NonblankStr
+    content_hash: Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")]
+    category: Literal[
+        "lab_result",
+        "imaging_report",
+        "discharge_summary",
+        "prescription",
+        "medication_list",
+        "monitor_screen",
+        "other",
+    ]
+    printed_identity: str | None = Field(default=None, repr=False)
+    printed_date: date | None = None
+    association_state: Literal[
+        "unmatched", "candidate", "accepted_pending_identity", "accepted", "rejected"
+    ]
+    patient_match_provenance: (
+        Literal["caption", "single_open_mission", "patient_choice", "doctor_choice"] | None
+    ) = None
+    extracted_values: tuple[LabRowCandidate | DocumentItem, ...] = Field(default=(), repr=False)
+    readers: tuple[ReaderResult, ReaderResult] = Field(repr=False)
+    disagreements: tuple[Disagreement, ...] = ()
+    shift_guard_fired: bool = False
+    required_predicate_results: tuple[PredicateResult, ...] = ()
+    accepted_by: str | None = None
+    accepted_at: UtcInstant | None = None
+    mission_id: str | None = None
+    supersedes_evidence_id: str | None = None
+    supersedes_evidence_version: PositiveVersion | None = None
+    provenance: Provenance
+    flags: tuple[str, ...] = ()
+    incident_ids: tuple[str, ...] = ()
+    candidate_mission_ids: tuple[str, ...] = ()
+    rejection_reason: str | None = None
+
+    @model_validator(mode="after")
+    def evidence_identity(self) -> Self:
+        if self.id != f"{self.evidence_id}:{self.version}":
+            raise ValueError("immutable evidence identity must name its version")
+        if self.observation_id != self.provenance.source_observation_id:
+            raise ValueError("evidence receipt and provenance must agree")
+        retained = self.association_state in {"accepted", "accepted_pending_identity"}
+        if retained != bool(self.accepted_by and self.accepted_at):
+            raise ValueError("accepted evidence requires attributable acceptance")
+        if retained and not self.mission_id:
+            raise ValueError("acceptance requires a scoped mission")
+        if self.association_state == "accepted_pending_identity" and not self.identity_pending:
+            raise ValueError("pending identity requires an unconfirmed identity hint")
+        return self
+
+    @property
+    def identity_pending(self) -> bool:
+        return "identity_unverifiable" in self.flags and "identity_confirmed" not in self.flags
+
+
+class EvidenceHead(_Metadata):
+    entity_type: Literal["evidence_head"] = "evidence_head"
+    scope: PatientScope
+    evidence_id: NonblankStr
+    current_version: PositiveVersion
+    status: Literal["candidate", "accepted_pending_identity", "accepted", "rejected", "superseded"]
+    mission_id: str | None = None
+
+    @model_validator(mode="after")
+    def evidence_identity(self) -> Self:
+        if self.id != self.evidence_id:
+            raise ValueError("head must name its evidence")
+        return self
+
+
+class EvidenceHash(_Metadata):
+    entity_type: Literal["evidence_hash"] = "evidence_hash"
+    scope: PatientScope
+    evidence_id: NonblankStr
+    id: Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")]
+
+
+class EvidenceAction(_Metadata):
+    entity_type: Literal["evidence_action"] = "evidence_action"
+    scope: PatientScope
+    evidence_id: NonblankStr
+    evidence_version: PositiveVersion
+    actor_subject: NonblankStr = Field(repr=False)
+    action: Literal["associate", "accept", "reject", "confirm_identity"]
+    mission_id: str | None = None
+    expires_at: UtcInstant
+    consumed_at: UtcInstant | None = None
+    auth_epoch: NonnegativeInt
+
+
 class EvidenceAnnotation(_Metadata):
     entity_type: Literal["evidence_annotation"] = "evidence_annotation"
     scope: PatientScope
@@ -790,6 +892,7 @@ class MediaWork(_Metadata):
     review_obligation_id: NonblankStr | None = None
     transcript_ref: NonblankStr | None = None
     association_ref: NonblankStr | None = None
+    pending_mission_ids: tuple[str, ...] = ()
 
     @model_validator(mode="after")
     def recoverable(self) -> Self:
@@ -1061,6 +1164,10 @@ type InboundReceiptRecord = StoredRecord
 
 
 MODELS: dict[str, type[BaseModel]] = {
+    "evidence": Evidence,
+    "evidence_head": EvidenceHead,
+    "evidence_hash": EvidenceHash,
+    "evidence_action": EvidenceAction,
     "name_memory": NameMemory,
     "name_cache": NameCache,
     "bundle_schedule": BundleSchedule,
@@ -1113,6 +1220,8 @@ MODELS: dict[str, type[BaseModel]] = {
 
 
 def model_scope(model: BaseModel) -> Scope:
+    if isinstance(model, (Evidence, EvidenceHead, EvidenceHash, EvidenceAction)):
+        return model.scope
     if isinstance(model, (NameMemory, NameCache)):
         return model.scope
     if isinstance(model, BundleSchedule):
@@ -1194,6 +1303,14 @@ def scope_owns(scope: Scope, other: Scope) -> bool:
 
 
 def model_key(model: BaseModel, scope: Scope) -> Key:
+    if isinstance(model, Evidence):
+        return keys.evidence(model.scope, model.evidence_id, model.version)
+    if isinstance(model, EvidenceHead):
+        return keys.evidence_head(model.scope, model.evidence_id)
+    if isinstance(model, (EvidenceHash, EvidenceAction)):
+        return Key(
+            keys.partition(model.scope), f"{model.entity_type.upper()}#{keys.component(model.id)}"
+        )
     if isinstance(model, NameMemory):
         if type(model.scope) is TenantScope:
             return keys.doctor(model.scope, "NAME", model.id)

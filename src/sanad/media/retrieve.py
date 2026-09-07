@@ -291,6 +291,8 @@ class MediaRetriever:
         transcript_ref: str | None = None,
         association_ref: str | None = None,
         failure: str | None = None,
+        claim: Claim | None = None,
+        resume_immediately: bool = False,
     ) -> bool | MediaFailure:
         """Checkpoint the extractor's private transcript and explicit operational association."""
         work = self._get(keys.digest(receipt_id))
@@ -308,7 +310,7 @@ class MediaRetriever:
                 resend_intent_id=work.resend_intent_id,
             )
         now = self.steward.clock()
-        claim = self.steward.store.claim_work(
+        claim = claim or self.steward.store.claim_work(
             to_record(work, self.scope).scoped_key(self.scope),
             work.version,
             "scribe-media",
@@ -335,7 +337,9 @@ class MediaRetriever:
                 "work_clock": None
                 if association_ref
                 else OperationalClock(
-                    next_action_at=now + self.policy.timing.result_review_interval,
+                    next_action_at=now
+                    if resume_immediately
+                    else now + self.policy.timing.result_review_interval,
                     work_lane="media",
                 ),
             }

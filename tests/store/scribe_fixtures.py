@@ -6,16 +6,26 @@ from harness import FakeClock
 from providers.fixtures import ScriptedModel, candidate
 
 from sanad.auth.commands import CreatePatientStub
+from sanad.auth.service import revise
+from sanad.domain.language import Language
 from sanad.scribe.proposal import Proposal
 from sanad.scribe.turn import ScribeTurn
 from sanad.store._base import StoreBase
 from sanad.store.keys import IntakeScope
-from sanad.store.records import OutboundIntent, Patient, from_record
+from sanad.store.records import Doctor, OutboundIntent, Patient, from_record
 from store.account_fixtures import APPLICANT, callback, update
-from store.login_fixtures import LoginWorld
+from store.login_fixtures import LoginWorld, replace_model
 
 
 class ScribeWorld(LoginWorld):
+    def approve(self, subject: str = APPLICANT, *, language: Language = "ar") -> Doctor:
+        """The existing Arabic regression corpus chooses Arabic explicitly."""
+        doctor = super().approve(subject)
+        if doctor.language != language:
+            doctor = revise(doctor, self.clock(), language=language)
+            replace_model(self, doctor)
+        return doctor
+
     @classmethod
     def create(cls, store: StoreBase, clock: FakeClock, *, process: bool = True) -> "ScribeWorld":
         world = super().create(store, clock, process=process)
@@ -32,11 +42,13 @@ class ScribeWorld(LoginWorld):
         return value
 
     def dictate(self, text: str, value: dict[str, object], *, id: int = 10) -> Proposal:
-        model = ScriptedModel(candidate(value))
+        previous = self.scribe.repo.pending(self.doctor.scope)
+        calls = 1 if previous and previous.photo else 2
+        model = ScriptedModel(*(candidate(value) for _ in range(calls)))
         self.scribe.model_factory = lambda registry, role: model
         assert self.post(update(APPLICANT, text, id)).status_code == 200
         assert self.receipt(id).state == "completed"
-        assert len(model.script.calls) == 1
+        assert len(model.script.calls) == calls
         return self.proposal
 
     def cards(self) -> list[OutboundIntent]:

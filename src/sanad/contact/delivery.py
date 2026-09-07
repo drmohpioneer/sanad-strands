@@ -8,6 +8,7 @@ from pydantic import JsonValue
 from sanad.contact.policy import DRAFT_CONTACT_POLICY as POLICY
 from sanad.contact.templates import patient_text
 from sanad.domain import FollowUpTask, Mission, PatientScope
+from sanad.domain.language import default_language
 from sanad.steward.types import records
 from sanad.store.protocol import Store
 from sanad.store.records import OutboundIntent, Patient, from_record
@@ -88,7 +89,7 @@ def doctor_payload(store: Store, intent: OutboundIntent) -> dict[str, JsonValue]
     doctor_row = store.get(intent.scope, "doctor", intent.scope.doctor_id)
     assert row
     doctor = from_record(doctor_row, Doctor) if doctor_row else None
-    language = doctor.language if doctor else "ar"
+    language = doctor.language if doctor else default_language
     zone = doctor.timezone if doctor else "Africa/Cairo"
     source = (
         from_record(row, Mission)
@@ -98,13 +99,24 @@ def doctor_payload(store: Store, intent: OutboundIntent) -> dict[str, JsonValue]
     title = (
         source.title
         if isinstance(source, Mission)
-        else ("متابعة اليوم الثالث" if source.kind == "MEDICATION_DAY3" else "متابعة الدكتور")
+        else (
+            ("Day-three follow-up" if source.kind == "MEDICATION_DAY3" else "Doctor follow-up")
+            if language == "en"
+            else ("متابعة اليوم الثالث" if source.kind == "MEDICATION_DAY3" else "متابعة الدكتور")
+        )
     )
     if intent.notification_purpose == "DONE:FULFILLMENT":
         text = render("doctor_objective_done", language, title=title)
     else:
-        text = render(
-            "doctor_objective_deadline",
+        from sanad.evidence.delivery import pending_verification
+        from sanad.evidence.templates import render as render_evidence
+
+        pending = isinstance(source, Mission) and pending_verification(store, intent.scope, source)
+        renderer = render_evidence if pending else render
+        text = renderer(
+            "doctor_objective_deadline_pending_verification"
+            if pending
+            else "doctor_objective_deadline",
             language,
             title=title,
             due_local=format_local(source.due_at or source.review_at, zone),

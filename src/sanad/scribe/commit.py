@@ -11,7 +11,6 @@ from pydantic import BaseModel
 from sanad.auth.claim import ClaimService
 from sanad.auth.commands import CreatePatientStub
 from sanad.auth.service import read_of, revise
-from sanad.channels.telegram import wording
 from sanad.domain import MissionKind, PatientScope, Principal, Provenance, VersionRef
 from sanad.domain.entities import (
     MedicationDetails,
@@ -110,7 +109,18 @@ def value_alert(text: str) -> ValueAlert | None:
         if comparison in {">=", "reaches", "يوصل", "وصل", "at least"}
         else "gt"
     )
-    return ValueAlert(text=text, metric=metric, comparator=comparator, threshold=threshold[2])
+    units = re.search(
+        r"\s*(mmol/L|mEq/L|mg/dL|umol/L|µmol/L|mmHg|g/dL|x10\^3/uL)\b",
+        text[threshold.end() :],
+        re.I,
+    )
+    return ValueAlert(
+        text=text,
+        metric=metric,
+        comparator=comparator,
+        threshold=threshold[2],
+        unit=units[1] if units else None,
+    )
 
 
 @dataclass(frozen=True)
@@ -122,6 +132,12 @@ class ConfirmationResult:
 
 
 class ScribeCommit:
+    @staticmethod
+    def _wording(template: str, proposal: Proposal) -> str:
+        from sanad.scribe.english import render_wording
+
+        return render_wording(template, proposal.language if not proposal.photo else "ar")
+
     def __init__(self, repository: ScribeRepository, steward: Steward, claims: ClaimService):
         self.repo, self.steward, self.claims = repository, steward, claims
 
@@ -163,6 +179,7 @@ class ScribeCommit:
                     actor=actor,
                     display_name=candidate.patient.name_as_spoken or "",
                     timezone=doctor.timezone,
+                    language=doctor.language,
                 ),
                 doctor.id,
                 uuid4().hex,
@@ -219,7 +236,14 @@ class ScribeCommit:
         models.append(patient)
         if proposal.creating_patient:
             models.append(profile)
-            accepted.append("مريض جديد: " + patient.display_name)
+            accepted.append(
+                (
+                    "New patient: "
+                    if proposal.language == "en" and not proposal.photo
+                    else "مريض جديد: "
+                )
+                + patient.display_name
+            )
         for i, fact in enumerate(candidate.facts):
             if proposal.blocked(f"fact:{i}"):
                 continue
@@ -300,7 +324,13 @@ class ScribeCommit:
             amendment = next((a for a in proposal.amendments if a.item == item), None)
             if amendment and amendment.noop:
                 continue
-            old = find_head(self.repo, scope, order.drug)
+            old = find_head(
+                self.repo,
+                scope,
+                amendment.old.drug
+                if amendment and amendment.old and amendment.head_version
+                else order.drug,
+            )
             id = old.id if old else order_key(order.drug)
             version = old.current_order_version + 1 if old else 1
             status: Literal["stopped", "active"] = "stopped" if order.action == "stop" else "active"
@@ -393,7 +423,8 @@ class ScribeCommit:
                 models.append(followup)
                 followup_ids.append(followup.id)
         amended = any(
-            a.old and not a.noop and not proposal.blocked(a.item) for a in proposal.amendments
+            a.head_version and a.old and not a.noop and not proposal.blocked(a.item)
+            for a in proposal.amendments
         )
         if amended:
             epoch = max(patient.delivery_epoch, profile.delivery_epoch) + 1
@@ -470,6 +501,11 @@ class ScribeCommit:
                 continue
             alert = value_alert(text)
             if alert:
+                from sanad.safety.alerts import refused_at_write
+                from sanad.safety.policy import SAFETY_POLICY_V1_CARDIOLOGY_DRAFT
+
+                if refused_at_write(alert, SAFETY_POLICY_V1_CARDIOLOGY_DRAFT):
+                    raise ValueError("alert_would_lower_kernel_floor")
                 id = uuid4().hex
                 version_id = id + ":1"
                 models.extend(
@@ -512,7 +548,14 @@ class ScribeCommit:
                         **metadata,
                     )
                 )
-            accepted.append("بلّغني لو: " + plain(text))
+            accepted.append(
+                (
+                    "Notify me if: "
+                    if proposal.language == "en" and not proposal.photo
+                    else "بلّغني لو: "
+                )
+                + plain(text)
+            )
         if (
             not accepted
             and not proposal.creating_patient
@@ -603,9 +646,9 @@ class ScribeCommit:
                             proposal, actor, command_id, reason="stale_version", claim=claim
                         )
             models, patient, accepted = self._compile(proposal, actor, doctor)
-            from sanad.scribe.memory import confirmation_names
+            from sanad.scribe.resolver import learn
 
-            learned = confirmation_names(self.repo.store, doctor, proposal, lambda: now)
+            learned = learn(self.repo.store, doctor, proposal, lambda: now)
             models += learned
             if proposal.creating_patient or proposal.invitation_requested:
                 models += (
@@ -624,22 +667,27 @@ class ScribeCommit:
             if state is None or state.pending_proposal_id != proposal.id:
                 return ConfirmationResult("stale", "scribe_stale")
             item_limit = min(160, 2600 // max(1, len(accepted)))
-            body = (
-                "\n".join(
-                    "• " + (line if len(line) <= item_limit else line[:item_limit] + "…")
-                    for line in accepted
-                )
-                or "مفيش بنود صالحة للتسجيل."
+            body = "\n".join(
+                "• " + (line if len(line) <= item_limit else line[:item_limit] + "…")
+                for line in accepted
+            ) or (
+                "No items could be recorded."
+                if proposal.language == "en" and not proposal.photo
+                else "مفيش بنود صالحة للتسجيل."
             )
+            from sanad.scribe.english import REASONS as ENGLISH_REASONS
+            from sanad.scribe.english import render_wording
+
+            english = proposal.language == "en" and not proposal.photo
             if any(i.blocked for i in proposal.issues):
-                body += "\nمش هيتسجل:\n" + "\n".join(
-                    "• " + REASONS[code]
+                body += ("\nNot recorded:\n" if english else "\nمش هيتسجل:\n") + "\n".join(
+                    "• " + (ENGLISH_REASONS if english else REASONS)[code]
                     for code in dict.fromkeys(i.code for i in proposal.issues if i.blocked)
                 )
             intent = self.repo.intent(
                 doctor,
                 "scribe_confirmed",
-                {"text": wording.render("scribe_confirmed", body=body)},
+                {"text": render_wording("scribe_confirmed", "en" if english else "ar", body=body)},
                 command_id,
                 proposal=changed,
             )
@@ -705,7 +753,11 @@ class ScribeCommit:
             models += (revise(token, now, consumed_at=now),)
         template = "scribe_discarded" if reason == "doctor" else "scribe_stale"
         intent = self.repo.intent(
-            doctor, template, {"text": wording.render(template)}, command_id, proposal=changed
+            doctor,
+            template,
+            {"text": self._wording(template, proposal)},
+            command_id,
+            proposal=changed,
         )
         result = self.repo.commit(
             actor,
@@ -747,19 +799,37 @@ class ScribeCommit:
         ):
             return ConfirmationResult("stale", "scribe_stale")
         changed = revise(proposal, now, editing=True)
-        intent = self.repo.intent(
-            doctor,
-            "scribe_edit",
-            {"text": wording.render("scribe_edit")},
-            command_id,
-            proposal=changed,
+        from sanad.scribe.card import clinical_line, split_card
+        from sanad.scribe.english import render_wording
+        from sanad.scribe.policy import DRAFT_SCRIBE_POLICY
+
+        text = render_wording("scribe_edit", proposal.language if not proposal.photo else "ar")
+        if (
+            not proposal.photo
+            and len(proposal.candidate.facts) > DRAFT_SCRIBE_POLICY.history_lines_max
+        ):
+            text += "\n" + (
+                "Full history:\n" if proposal.language == "en" else "التاريخ المرضي كامل:\n"
+            )
+            text += "\n".join(
+                clinical_line(proposal, f"fact:{i}", f.text)
+                for i, f in enumerate(proposal.candidate.facts)
+                if not any(
+                    x.item == f"fact:{i}" and x.code == "unsafe_text" for x in proposal.issues
+                )
+            )
+        intents = tuple(
+            self.repo.intent(
+                doctor, "scribe_edit", {"text": part}, command_id, proposal=changed, sequence=i
+            )
+            for i, part in enumerate(split_card(text))
         )
         result = self.repo.commit(
             actor,
             "ScribeAction",
             command_id,
             (changed, revise(token, now, consumed_at=now)),
-            (intent,),
+            intents,
             claim=claim,
             payload={"proposal_id": proposal.id, "nonce_hash": token.id},
         )

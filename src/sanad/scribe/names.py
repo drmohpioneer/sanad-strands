@@ -36,6 +36,35 @@ def split_drug_dose(drug: str) -> tuple[str, str]:
     return drug, ""
 
 
+def heard_dose(drug: str, source: str) -> str:
+    """Read only a literal numeric suffix after this spoken drug, without inference."""
+    spoken = normalize(split_drug_dose(drug)[0])
+    match = re.search(
+        r"(?<!\w)"
+        + re.escape(spoken)
+        + r"(?!\w)\s+"
+        + rf"(\d+(?:[.٫]\d+)?(?:[\s/,،]+\d+(?:[.٫]\d+)?)*(?:\s*{_DOSE_UNIT})?)",
+        normalize(source),
+        re.I,
+    )
+    return match[1].strip() if match else ""
+
+
+def compound_question(dose: str, entry: "NameEntry") -> str:
+    suggestion = (
+        "5/160/12.5"
+        if (
+            numbers_in(dose) in {("560", "12.5"), ("516", "12.5")}
+            or normalize(dose) == normalize("خمسة مية وستين اتناشر ونص")
+        )
+        and "5/160/12.5" in entry.fixed_combination_strengths
+        else None
+    )
+    return f'سمعت "{dose}" لـ {entry.latin}، ' + (
+        f"قصدك {suggestion}؟" if suggestion else "الجرعة كاملة إيه؟"
+    )
+
+
 def normalize(text: str) -> str:
     text = "".join(c for c in text if not unicodedata.combining(c) and c != "ـ")
     text = text.translate(str.maketrans("أإآٱىئؤة", "ااااييوه"))
@@ -70,62 +99,27 @@ def dictionary() -> tuple[NameEntry, ...]:
 
 
 def known_names(learned: tuple[str, ...] = ()) -> str:
-    """Vocabulary hints contain canonical names only, never strengths or instructions."""
-    from sanad.scribe.policy import DRAFT_SCRIBE_POLICY
+    from sanad.scribe.resolver import hint_names
 
-    names = dict.fromkeys((*learned, *(e.latin for e in dictionary())))
-    return ", ".join(tuple(names)[: DRAFT_SCRIBE_POLICY.hint_max_names])
+    return hint_names(learned=learned)
 
 
 def edit_distance(a: str, b: str) -> int:
-    previous = list(range(len(b) + 1))
-    for i, left in enumerate(a, 1):
-        row = [i]
-        for j, right in enumerate(b, 1):
-            row.append(min(row[-1] + 1, previous[j] + 1, previous[j - 1] + (left != right)))
-        previous = row
-    return previous[-1]
+    from sanad.scribe.resolver import edit_distance as distance
+
+    return distance(a, b)
 
 
 def entry_for(text: str, kind: Literal["drug", "term"] = "drug") -> NameEntry | None:
-    key = normalize(text)
-    entries = [e for e in dictionary() if e.kind == kind]
-    exact = [
-        e
-        for e in entries
-        if key in {normalize(s) for s in (e.latin, *e.arabic_spellings, *e.latin_spellings)}
-    ]
-    if len(exact) == 1:
-        return exact[0]
-    if exact or not key:
-        return None
-    arabic = bool(_ARABIC.search(key))
-    if not arabic and not re.search(r"[a-z]", key):
-        return None
-    quantities = numbers_in(key)
-    distances = []
-    for entry in entries:
-        spellings = entry.arabic_spellings if arabic else (entry.latin, *entry.latin_spellings)
-        distance = min(
-            (
-                edit_distance(key, spelling)
-                for s in spellings
-                if abs(len(key) - len(spelling := normalize(s))) <= 2
-                and numbers_in(spelling) == quantities
-            ),
-            default=3,
-        )
-        distances.append((distance, entry))
-    minimum = min(d for d, _ in distances)
-    closest = [e for d, e in distances if d == minimum]
-    return closest[0] if minimum <= 2 and len(closest) == 1 else None
+    from sanad.scribe.resolver import entry_for as find_entry
+
+    return find_entry(text, kind)
 
 
 def latin_in_source(name: str, source: str) -> bool:
-    return bool(
-        re.fullmatch(r"[A-Za-z][A-Za-z0-9 /+-]*", name)
-        and re.search(r"(?<![\w])" + re.escape(name) + r"(?![\w])", source, re.I)
-    )
+    from sanad.scribe.resolver import latin_in_source as anchored
+
+    return anchored(name, source)
 
 
 @dataclass(frozen=True)
@@ -149,75 +143,17 @@ class NameReading(_BoundaryValue):
 
 
 def resolve(
-    spoken: str,
-    source: str,
-    proposed: str | None = None,
-    generic: str | None = None,
+    spoken: str, source: str, proposed: str | None = None, generic: str | None = None
 ) -> Resolution:
-    resolved = entry_for(spoken)
-    suggested = entry_for(proposed) if proposed else None
-    if resolved:
-        conflict = bool(
-            (suggested and normalize(suggested.generic) != normalize(resolved.generic))
-            or (generic and normalize(generic) != normalize(resolved.generic))
-            or (proposed and suggested is None and not latin_in_source(proposed, source))
-        )
-        return Resolution(None if conflict else resolved.latin, resolved, conflict)
-    if latin_in_source(spoken, source):
-        if proposed and normalize(proposed) != normalize(spoken):
-            return Resolution(None, conflict=True)
-        return Resolution(spoken)
-    if suggested:
-        conflict = bool(generic and normalize(generic) != normalize(suggested.generic))
-        return Resolution(None if conflict else suggested.latin, suggested, conflict)
-    if proposed and latin_in_source(proposed, source):
-        if suggested and generic and normalize(suggested.generic) != normalize(generic):
-            return Resolution(None, suggested, conflict=True)
-        return Resolution(proposed, suggested)
-    return Resolution(None)
+    from sanad.scribe.resolver import Context, resolve_name
+
+    return resolve_name(spoken, "drug", source, proposed, Context(generic=generic)).legacy()
 
 
 def latin_terms(text: str) -> str:
-    """Replace only recognizable terms; retain surrounding words and all quantities."""
-    complete = entry_for(text, "term")
-    if complete is not None:
-        return complete.latin
-    normalized = normalize(text)
-    spellings = sorted(
-        (
-            (normalize(s), e.latin)
-            for e in dictionary()
-            if e.kind == "term"
-            for s in (e.latin, *e.arabic_spellings, *e.latin_spellings)
-        ),
-        key=lambda p: -len(p[0]),
-    )
-    # Token scanning avoids replacing a component inside a longer already-resolved name.
-    pattern = re.compile(
-        r"(?<!\w)(و?)(" + "|".join(re.escape(s) for s, _ in spellings) + r")(?!\w)"
-    )
-    mapping = dict(spellings)
+    from sanad.scribe.resolver import latin_terms as render_terms
 
-    def fuzzy_latin(fragment: str) -> str:
-        # Short acronyms resolve exactly above; do not turn prose such as "in"
-        # into an unrelated acronym such as INR through a one-letter edit.
-        return re.sub(
-            r"(?<!\w)[a-z][a-z0-9-]{3,}(?!\w)",
-            lambda m: entry.latin if (entry := entry_for(m[0], "term")) else m[0],
-            fragment,
-        )
-
-    parts: list[str] = []
-    cursor = 0
-    for match in pattern.finditer(normalized):
-        parts.extend(
-            (
-                fuzzy_latin(normalized[cursor : match.start()]),
-                (", " if match[1] else "") + mapping[match[2]],
-            )
-        )
-        cursor = match.end()
-    return "".join((*parts, fuzzy_latin(normalized[cursor:])))
+    return render_terms(text)
 
 
 def prepare_names(
@@ -269,29 +205,23 @@ def prepare_names(
                 order.drug, source, order.name_latin, order.generic
             )
         if resolution.latin is None:
+            from sanad.scribe.clinical import TERM_QUESTION
+
             issues.append(
                 ProposalIssue(
                     item=f"order:{i}",
                     code="drug_unclear",
-                    blocked=resolution.conflict
-                    or not (
-                        resolve_name
-                        and order.name_latin
-                        and re.fullmatch(r"[A-Za-z][A-Za-z0-9 /+.-]{0,119}", order.name_latin)
-                    ),
-                    question=f'سمعت "{order.drug}"، اسم الدوا بالإنجليزي إيه؟',
+                    blocked=resolution.conflict,
+                    question=TERM_QUESTION,
                 )
             )
         else:
             order = order.model_copy(update={"drug": resolution.latin})
-        if (
-            resolve_name
-            and resolution.latin is None
-            and not resolution.conflict
-            and order.name_latin
-            and re.fullmatch(r"[A-Za-z][A-Za-z0-9 /+.-]{0,119}", order.name_latin)
-        ):
-            order = order.model_copy(update={"drug": order.name_latin})
+        if order.frequency and normalize(order.frequency) not in normalize(source):
+            # Retain unsupported digits for the unchanged numeric guard. A word
+            # or a source-supported but unspoken shorthand is never an instruction.
+            if set(numbers_in(order.frequency)) <= set(numbers_in(source)):
+                order = order.model_copy(update={"frequency": None})
         entry, dose = resolution.entry, order.dose or ""
         if entry and entry.fixed_combination_strengths:
             quantities = numbers_in(dose)
@@ -299,24 +229,21 @@ def prepare_names(
                 (s for s in entry.fixed_combination_strengths if quantities == tuple(s.split("/"))),
                 None,
             )
-            if match and set(quantities) <= set(numbers_in(source)):
+            explicit_components = (
+                re.fullmatch(r"\d+(?:\.\d+)?(?:/\d+(?:\.\d+)?)+(?:\s*mg)?", dose, re.I)
+                and len(dose.split("/")) == len(entry.generic.split("/"))
+                and dose.casefold() in source.casefold()
+            )
+            if (match or explicit_components) and set(quantities) <= set(numbers_in(source)):
                 unit = " mg" if re.search(r"\bmg\b|مج|مجم|مليجرام", dose) else ""
-                order = order.model_copy(update={"dose": match + unit})
+                order = order.model_copy(update={"dose": match + unit if match else dose})
             elif dose:
-                suggestion = (
-                    "5/160/12.5"
-                    if (
-                        # Both compressed prefixes are digit subsequences of 5160.
-                        quantities in {("560", "12.5"), ("516", "12.5")}
-                        or normalize(dose) == normalize("خمسة مية وستين اتناشر ونص")
-                    )
-                    and "5/160/12.5" in entry.fixed_combination_strengths
-                    else None
-                )
-                question = f'سمعت "{dose}" لـ {entry.latin}، '
-                question += f"قصدك {suggestion}؟" if suggestion else "الجرعة كاملة إيه؟"
                 issues.append(
-                    ProposalIssue(item=f"order:{i}", code="dose_unclear", question=question)
+                    ProposalIssue(
+                        item=f"order:{i}",
+                        code="dose_unclear",
+                        question=compound_question(dose, entry),
+                    )
                 )
         elif re.search(r"\d\s*(?:على|/)\s*\d", dose):
             issues.append(
@@ -337,6 +264,7 @@ def prepare_names(
                     generic=resolution.entry.generic if resolution.entry else order.generic or "",
                     strengths=(order.dose,) if order.dose else (),
                     verified=resolution.latin is not None,
+                    learnable=resolution.latin is not None,
                     source=resolution.source,
                 )
             )
@@ -368,6 +296,21 @@ def prepare_names(
     prepared = candidate.model_copy(
         update={"orders": tuple(orders), "missions": missions, "facts": facts}
     )
+    if dropped:
+        from sanad.scribe.merge import remap_metadata
+
+        targets = {
+            f"fact:{i}": (f"fact:{kept_facts.index(fact)}",) if fact in kept_facts else ("all",)
+            for i, fact in enumerate(candidate.facts)
+        }
+        remap_metadata(prepared, targets)
+        issues = [q.model_copy(update={"item": targets.get(q.item, (q.item,))[0]}) for q in issues]
+        if readings is not None:
+            readings[:] = [
+                n.model_copy(update={"item": targets.get(n.item, (n.item,))[0]})
+                for n in readings
+                if targets.get(n.item) != ("all",)
+            ]
     # Removed material cannot conceal a source number or an unsupported model digit.
     # Numbers already placed in surviving fields must not become duplicate questions.
     represented = set(extracted_numbers(prepared))

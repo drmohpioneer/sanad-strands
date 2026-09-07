@@ -14,7 +14,7 @@ from sanad.scribe.patients import panel
 from sanad.store._base import StoreBase
 from store.scribe_fixtures import ScribeWorld
 
-TERM_QUESTION = "المصطلحات اللي عليها (؟) اتكتبت من كلامك؛ لو حاجة غلط عدّلها، وإلا اضغط ✅"
+TERM_QUESTION = "الأسماء اللي بالعربي اتكتبت زي ما سمعتها؛ لو عايز تكتبها بالإنجليزي عدّلها"
 
 
 @pytest.fixture
@@ -29,6 +29,7 @@ def fact(spoken: str, english: str, kind: str = "Complaint") -> dict[str, Any]:
         "category": "history",
         "kind": kind,
         "text": spoken,
+        "name_latin": english,
         "terms": [{"spoken": spoken, "english": english}],
     }
 
@@ -42,17 +43,17 @@ def test_anchored_unverified_english_has_one_question_and_tap_teaches_it(
     }
     first = world.dictate("سامي اختبار طنين ودوخة", value)
     card = render_card(first)[0]
-    assert "Complaint: tinnitus (؟)" in card and "Complaint: dizziness (؟)" in card
+    assert "History: طنين" in card and "History: دوخة" in card
     assert dictation_questions(first) == (TERM_QUESTION,)
     assert not any(i.blocked for i in first.issues)
     assert all(not n.verified for n in first.names)
     assert not memory_rows(world.store, world.doctor.scope)
     world.tap()
     learned = memory_rows(world.store, world.doctor.scope)
-    assert {r.latin for r in learned} == {"tinnitus", "dizziness"}
+    assert {r.latin for r in learned} == {"طنين", "دوخة"}
     assert all(r.source == "doctor_confirmation" for r in learned)
     second = world.dictate("سامي اختبار طنين ودوخة", value, id=30)
-    assert "Complaint: tinnitus\nComplaint: dizziness" in render_card(second)[0]
+    assert "History: طنين\nHistory: دوخة" in render_card(second)[0]
     assert not dictation_questions(second)
     assert all(n.verified for n in second.names)
 
@@ -69,7 +70,7 @@ def test_edit_replaces_the_displayed_pair_before_learning(world: ScribeWorld) ->
         {"item": "fact:0", "proposal_index": 0, "source_quote": "طنين يعني ringing in ears"}
     ]
     second = world.dictate("طنين يعني ringing in ears", changed, id=21)
-    assert "Complaint: ringing in ears (؟)" in render_card(second)[0]
+    assert "History: ringing in ears" in render_card(second)[0]
     assert "tinnitus" not in render_card(second)[0]
     world.tap(id=22)
     assert [r.latin for r in memory_rows(world.store, world.doctor.scope)] == ["ringing in ears"]
@@ -107,7 +108,7 @@ def test_verified_name_survives_dose_reply_without_another_resolution(
         },
     )
     before = next(n for n in first.names if n.kind == "drug")
-    assert before.verified and before.source == "rxnorm"
+    assert before.verified and before.source == "seed"
     calls: list[str] = []
 
     def unavailable(self: DrugLookupService, *args: Any) -> Resolution:

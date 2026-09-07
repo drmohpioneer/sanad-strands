@@ -18,7 +18,7 @@ from sanad.scribe.patients import lookup
 from sanad.scribe.proposal import Proposal
 from sanad.store.protocol import Store
 
-NEW_PATIENT = re.compile(r"مريض\s+(?:جديد|تاني|تانى)")
+NEW_PATIENT = re.compile(r"مريض\s+(?:جديد|تاني|تانى)|\bnew patient\b", re.I)
 
 
 def reply_mode(text: str, previous: Proposal, store: Store) -> str:
@@ -203,6 +203,40 @@ def _additions[T: (OrderCandidate, FactCandidate, MissionCandidate, str)](
             target.append(value)
 
 
+def _settles_merge(
+    issue: ProposalIssue, candidate: DictationCandidate, slots: dict[str, str]
+) -> bool:
+    """An answer to another field of the item cannot settle this conflict."""
+    answer = slots.get(issue.item, "")
+    if not answer or not issue.field or ":" not in issue.item:
+        return False
+    family, index = issue.item.split(":")
+    values = getattr(
+        candidate,
+        {"order": "orders", "fact": "facts", "mission": "missions", "alert": "alerts"}[family],
+    )
+    if int(index) >= len(values):
+        return False
+    item = values[int(index)]
+    value = item if isinstance(item, str) else getattr(item, issue.field, None)
+    if not value:
+        return False
+    answer = normalize(answer)
+    if issue.field == "action":
+        patterns = {
+            "continue": r"كمل|استمر|ماشي|بياخد|continue",
+            "start": r"ابدأ|ابدا|ضفت|زودته|start",
+            "stop": r"وقف|بطل|stop",
+            "change": r"غير|زودت جرعه|قللت|change",
+        }
+        return bool(re.search(patterns.get(str(value), r"(?!)"), answer))
+    if issue.field in {"dose", "text"} and (amounts := numbers_in(str(value))):
+        other_field = re.search(r"مرات|مرتين|يومي|بالليل|الصبح|ساعه|ساعات", answer)
+        explicit_dose = re.search(r"جرعه|dose", answer)
+        return set(amounts) <= set(numbers_in(answer)) and (not other_field or bool(explicit_dose))
+    return normalize(str(value)) in answer
+
+
 def merge_correction(
     previous: Proposal, proposed: DictationCandidate, text: str
 ) -> MergedCorrection:
@@ -359,8 +393,39 @@ def merge_correction(
     merged._dropped_numbers = tuple(
         dict.fromkeys((*old._dropped_numbers, *proposed._dropped_numbers))
     )
+    # Stored proposals retain single-source metadata separately from model fields.
+    # Unanswered items retain it; answered items use the new pair's evidence.
+    proposed_targets = {f"{item.split(':')[0]}:{index}": item for item, index in indices.items()}
+    merged._single_source = tuple(
+        dict.fromkeys(
+            (
+                *(item for item in previous.single_source if item not in slots),
+                *(proposed_targets.get(item, item) for item in proposed._single_source),
+            )
+        )
+    )
+    remaining_conflicts = []
+    from sanad.scribe.extract import extracted_numbers
+
+    for issue in previous.issues:
+        if issue.code != "extraction_conflict":
+            continue
+        if _settles_merge(issue, merged, slots):
+            consumed.update(n for n in issue.numbers if n not in extracted_numbers(merged))
+        else:
+            remaining_conflicts.append(issue)
+    merged._merge_issues = ()
     return MergedCorrection(
         same_patient(previous, merged.model_copy(update={"patient": proposed.patient}), text),
-        tuple(issues),
+        tuple(
+            (
+                *issues,
+                *remaining_conflicts,
+                *(
+                    issue.model_copy(update={"item": proposed_targets.get(issue.item, issue.item)})
+                    for issue in proposed._merge_issues
+                ),
+            )
+        ),
         tuple(sorted(consumed)),
     )

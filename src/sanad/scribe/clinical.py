@@ -2,8 +2,8 @@
 
 import logging
 import re
-from functools import partial
 
+from sanad.domain.language import default_language
 from sanad.media.numbers import numbers_in
 from sanad.scribe.extract import (
     DictationCandidate,
@@ -16,15 +16,13 @@ from sanad.scribe.extract import (
 from sanad.scribe.lookup import DrugLookupService, generic_key
 from sanad.scribe.names import (
     NameReading,
-    dictionary,
     entry_for,
-    latin_in_source,
     normalize,
     split_drug_dose,
 )
 from sanad.scribe.policy import DRAFT_SCRIBE_POLICY
 
-TERM_QUESTION = "المصطلحات اللي عليها (؟) اتكتبت من كلامك؛ لو حاجة غلط عدّلها، وإلا اضغط ✅"
+TERM_QUESTION = "الأسماء اللي بالعربي اتكتبت زي ما سمعتها؛ لو عايز تكتبها بالإنجليزي عدّلها"
 logger = logging.getLogger(__name__)
 
 
@@ -111,115 +109,23 @@ def _contains(text: str, name: str) -> bool:
 
 
 def _drug_mentions(text: str, service: DrugLookupService) -> tuple[DrugMention, ...]:
-    entries = (*service.vocabulary.entries(), *(e for e in dictionary() if e.kind == "drug"))
-    result: dict[str, DrugMention] = {}
-    for entry in entries:
-        for spelling in (entry.latin, *entry.arabic_spellings, *entry.latin_spellings):
-            if _contains(text, spelling):
-                result.setdefault(
-                    entry.generic,
-                    DrugMention(spoken=spelling, name_latin=entry.latin, generic=entry.generic),
-                )
-    return tuple(result.values())
+    from sanad.scribe.resolver import drug_mentions
 
-
-def _drug_gate(
-    english: str,
-    spoken: str,
-    source: str,
-    supplied: tuple[DrugMention, ...],
-    service: DrugLookupService,
-) -> bool:
-    # Independently recognize known drug vocabulary; declarations cannot hide it.
-    mentions = (*_drug_mentions(english, service), *supplied)
-    for mention in mentions:
-        canonical = mention.name_latin or mention.spoken
-        if not _contains(english, canonical):
-            continue
-        spoken_mentions = (*_drug_mentions(spoken, service), *supplied)
-        supported = next(
-            (
-                m
-                for m in spoken_mentions
-                if _contains(spoken, m.spoken)
-                and _contains(source, m.spoken)
-                and (
-                    (
-                        mention.generic
-                        and m.generic
-                        and generic_key(mention.generic) == generic_key(m.generic)
-                    )
-                    or normalize(m.name_latin or m.spoken) == normalize(canonical)
-                )
-            ),
-            None,
-        )
-        if supported is None:
-            return False
-        resolved = service.resolve(supported.spoken, source, canonical, mention.generic)
-        if resolved.latin is None or resolved.conflict:
-            return False
-    return True
+    return drug_mentions(text, service)
 
 
 def test_names(
-    spoken: str,
-    source: str,
-    service: DrugLookupService,
+    spoken: str, source: str, service: DrugLookupService
 ) -> tuple[str, tuple[tuple[str, str], ...]]:
-    """Resolve only spoken terms. Model English is never an analyte authority."""
-    entries = (*service.vocabulary.entries("term"), *(e for e in dictionary() if e.kind == "term"))
-    aliases: dict[str, str] = {}
-    for entry in entries:
-        for name in (entry.latin, *entry.arabic_spellings, *entry.latin_spellings):
-            aliases.setdefault(normalize(name), entry.latin)
-    pattern = re.compile(
-        r"(?<!\w)(?:و|وال|ال)?("
-        + "|".join(re.escape(s) for s in sorted(aliases, key=len, reverse=True))
-        + r")(?!\w)",
-        re.I,
+    from sanad.scribe.resolver import context, resolve_fragments
+
+    names = resolve_fragments(spoken, "test", source, context(service))
+    pairs = tuple(
+        (r.spoken, component.strip())
+        for r in names
+        for component in (r.latin or r.spoken).split(",")
     )
-    parts = re.split(r"[,،;؛]|\s+and\s+|\s+و\s*|\s*&\s*", spoken, flags=re.I)
-    names: list[tuple[str, str]] = []
-
-    def add(raw: str, latin: str) -> bool:
-        if not _contains(source, raw) or service.contains_identity(raw):
-            return False
-        names.extend((raw, component.strip()) for component in latin.split(","))
-        return True
-
-    def fragment(raw: str) -> bool:
-        raw = raw.strip(" ,،:؛;")
-        raw = re.sub(
-            r"^(?:(?:تحليل|تحاليل|فحص|اعمل|عايز|محتاج|tests?|labs?)(?:\s+|$))+", "", raw, flags=re.I
-        )
-        if not raw:
-            return True
-        learned = service.vocabulary.find(raw, "test")
-        term = entry_for(raw, "term") if len(normalize(raw)) >= 4 else None
-        latin = learned.latin if learned else term.latin if term else raw
-        return bool((learned or term or latin_in_source(raw, source)) and add(raw, latin))
-
-    for part in parts:
-        part = part.strip()
-        if not part:
-            continue
-        normalized = normalize(part)
-        matches = list(pattern.finditer(normalized))
-        if not matches:
-            if not fragment(part):
-                return "", ()
-            continue
-        cursor = 0
-        for match in matches:
-            if not fragment(normalized[cursor : match.start()]) or not add(
-                match[0], aliases[match[1]]
-            ):
-                return "", ()
-            cursor = match.end()
-        if not fragment(normalized[cursor:]):
-            return "", ()
-    return ", ".join(dict.fromkeys(latin for _, latin in names)), tuple(names)
+    return ", ".join(dict.fromkeys(latin for _, latin in pairs)), pairs
 
 
 def prepare_clinical(
@@ -227,14 +133,21 @@ def prepare_clinical(
     source: str,
     service: DrugLookupService,
     readings: list[NameReading],
+    *,
+    language: str = default_language,
 ) -> tuple[DictationCandidate, tuple[ProposalIssue, ...]]:
     facts: list[FactCandidate] = []
     missions: list[MissionCandidate] = []
     orders, issues = list(candidate.orders), []
-    for fact in candidate.facts:
+    origins: dict[str, list[FactCandidate]] = {}
+    converted: dict[str, tuple[str, ...]] = {}
+    for original_index, fact in enumerate(candidate.facts):
+        original_item = f"fact:{original_index}"
+        origins[original_item] = []
         mentions = (*fact.drug_mentions, *_drug_mentions(fact.text, service))
         current = bool(re.search(r"واخد|بياخد|ماشي على|ماشى على|taking\b|on\s+", fact.text, re.I))
         if current and mentions:
+            first_order = len(orders)
             for mention in dict.fromkeys(mentions):
                 if not _contains(fact.text, mention.spoken) or not _contains(
                     source, mention.spoken
@@ -271,6 +184,9 @@ def prepare_clinical(
             if any(
                 _contains(fact.text, m.spoken) and _contains(source, m.spoken) for m in mentions
             ):
+                converted[original_item] = tuple(
+                    f"order:{i}" for i in range(first_order, len(orders))
+                ) or ("all",)
                 continue
         from sanad.scribe.terms import aligned_facts
 
@@ -278,11 +194,19 @@ def prepare_clinical(
             fact,
             candidate.patient.name_as_spoken,
             service,
-            partial(_drug_gate, source=source, supplied=fact.drug_mentions, service=service),
             source,
         ):
             item = f"fact:{len(facts)}"
+            if (
+                language == "en"
+                and fragments
+                and all(n.verified and n.latin.isascii() for n in fragments)
+            ):
+                prepared = prepared.model_copy(
+                    update={"clinical_en": ", ".join(n.latin for n in fragments)}
+                )
             facts.append(prepared)
+            origins[original_item].append(prepared)
             readings.extend(n.model_copy(update={"item": item}) for n in fragments)
             if any(not fragment.verified for fragment in fragments):
                 issues.append(
@@ -293,70 +217,85 @@ def prepare_clinical(
                         question=TERM_QUESTION,
                     )
                 )
+    from sanad.scribe.resolver import context, resolve_fragments
+
     for i, mission in enumerate(candidate.missions):
-        english = normalize_units(mission.clinical_en or "")
+        missions.append(mission.model_copy(update={"clinical_en": None}))
+        if mission.kind == "TASK":
+            from sanad.scribe.monitoring import task_instruction, task_request
+
+            if task_request(mission.text):
+                missions[-1] = missions[-1].model_copy(
+                    update={"clinical_en": task_instruction(mission.text)}
+                )
         if mission.kind != "TEST":
-            missions.append(mission.model_copy(update={"clinical_en": None}))
             continue
-        proposed_numbers_supported = set(numbers_in(english)) <= set(numbers_in(source))
-        pairs: tuple[tuple[str, str], ...] = ()
-        if mission.kind == "TEST":
-            spoken = mission.text
-            if mission.timing_expression:
-                spoken = spoken.replace(mission.timing_expression, "").strip()
-            english, pairs = test_names(spoken, source, service)
-        valid = (
-            proposed_numbers_supported
-            and valid_english(english, source)
-            and _drug_gate(english, mission.text, source, (), service)
-        )
-        if not valid:
-            issues.append(
-                ProposalIssue(
-                    item=f"mission:{i}",
-                    code="clinical_unclear",
-                    blocked=False,
-                    question=f'الصياغة الإنجليزية لـ "{mission.text}" محتاجة مراجعة؛ المقصود إيه؟',
-                )
+        spoken = mission.text
+        if mission.timing_expression:
+            spoken = spoken.replace(mission.timing_expression, "").strip()
+        resolved_tests = resolve_fragments(spoken, "test", source, context(service))
+        if resolved_tests and all(r.latin for r in resolved_tests):
+            missions[-1] = missions[-1].model_copy(
+                update={
+                    "clinical_en": ", ".join(
+                        dict.fromkeys(
+                            part.strip()
+                            for r in resolved_tests
+                            for part in (r.latin or "").split(",")
+                        )
+                    )
+                }
             )
-        missions.append(mission.model_copy(update={"clinical_en": english if valid else None}))
-        if valid and mission.kind == "TEST":
-            for spoken, latin in pairs:
-                entry = entry_for(latin, "term")
-                spellings = (
-                    (entry.latin, *entry.arabic_spellings, *entry.latin_spellings) if entry else ()
-                )
-                source_spelling = next(
-                    (s for s in spellings if _contains(mission.text, s)),
-                    None,
-                )
-                if source_spelling is None:
-                    # A compound's components must not learn the same whole alias:
-                    # the next memory read would collapse it to one analyte. Retain
-                    # each component's literal bounded-fuzzy spelling when present.
-                    source_spelling = next(
+        for resolved in resolved_tests:
+            for latin in (resolved.latin or resolved.spoken).split(","):
+                latin = latin.strip()
+                entry = entry_for(latin, "term") if resolved.latin else None
+                alias = resolved.spoken
+                if entry and "," in (resolved.latin or ""):
+                    alias = next(
                         (
-                            part
-                            for part in spoken.split()
-                            if entry
-                            and len(normalize(part)) >= 4
-                            and entry_for(part, "term") == entry
+                            s
+                            for s in (*entry.arabic_spellings, *entry.latin_spellings, entry.latin)
+                            if _contains(spoken, s)
                         ),
-                        spoken,
+                        alias,
                     )
                 readings.append(
                     NameReading(
                         item=f"mission:{i}",
                         kind="test",
-                        spoken=source_spelling[:120],
+                        spoken=alias[:120],
                         latin=latin,
                         generic=entry.generic if entry else "",
-                        verified=entry is not None,
+                        verified=resolved.latin is not None,
+                        learnable=resolved.latin is not None
+                        and not service.contains_identity(alias),
+                        source=resolved.legacy().source,
                     )
                 )
+                if resolved.latin is None:
+                    issues.append(
+                        ProposalIssue(
+                            item=f"mission:{i}",
+                            code="clinical_unclear",
+                            blocked=False,
+                            question=TERM_QUESTION,
+                        )
+                    )
     facts = _drop_bare_facts(facts, readings, issues)
     result = candidate.model_copy(
         update={"facts": tuple(facts), "missions": tuple(missions), "orders": tuple(orders)}
+    )
+    from sanad.scribe.merge import remap_metadata
+
+    remap_metadata(
+        result,
+        {
+            item: converted.get(item)
+            or tuple(f"fact:{i}" for i, fact in enumerate(facts) if fact in prepared)
+            or ("all",)
+            for item, prepared in origins.items()
+        },
     )
     # Preserve numbers from a converted medication fact for the existing coverage guard.
     from sanad.scribe.extract import extracted_numbers

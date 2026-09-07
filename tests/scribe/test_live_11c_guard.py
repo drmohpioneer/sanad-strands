@@ -30,7 +30,7 @@ def test_11c_two_part_oracle_and_durable_once_guard(
     value = copy.deepcopy(VALUE)
     value["facts"].append(
         {
-            "category": "history",
+            "category": "finding",
             "clinical_kind": "ECG",
             "text": "تي ويف انفريجن",
             "clinical_en": "T wave inversion",
@@ -41,7 +41,13 @@ def test_11c_two_part_oracle_and_durable_once_guard(
     corrected["orders"][0]["dose"] = "5/160/12.5"
     corrected["orders"][2]["dose"] = "10, 45" if bad_correction else "10"
     corrected["facts"][0]["clinical_en"] = "EF 45%"
-    model = ScriptedModel(candidate(value), candidate(corrected))
+    model = ScriptedModel(
+        response(calls=[("lookup_drug", {"name": "Bisoprolol"})]),
+        candidate(value),
+        candidate(value),
+        candidate(corrected),
+        candidate(corrected),
+    )
     speech = ScriptedSpeech(SOURCE + " وتي ويف انفريجن NUMBERS: 53 516 12.5 5 45")
     fixture = RxNormFixture()
     options: dict[str, Any] = {
@@ -75,13 +81,13 @@ def test_11c_two_part_oracle_and_durable_once_guard(
     assert report["parts"]["1"]["state"] == "passed"
     assert report["parts"]["2"]["state"] == ("failed" if bad_correction else "passed")
     assert report["state"] == ("failed" if bad_correction else "passed")
-    assert len(speech.calls) == 1 and len(model.script.calls) == 2
+    assert len(speech.calls) == 1 and len(model.script.calls) == 5
     assert len(fixture.calls) <= 6
     assert "سامي" not in destination.read_text() and SOURCE not in destination.read_text()
     assert report["memory_rows_written"] > 0
     with pytest.raises(RuntimeError, match="already recorded"):
         run_check(tmp_path / "live-11c-another-day.json", **options)
-    assert len(speech.calls) == 1 and len(model.script.calls) == 2
+    assert len(speech.calls) == 1 and len(model.script.calls) == 5
 
 
 @pytest.mark.parametrize("restore_labs", [False, True])
@@ -93,7 +99,7 @@ def test_attempt5_live_oracle_preserves_labs_or_block_and_does_not_confirm_block
     value["missions"] = []
     value["facts"].append(
         {
-            "category": "history",
+            "category": "finding",
             "kind": "ECG",
             "text": "تي ويف انفريجن",
             "terms": [{"spoken": "تي ويف انفريجن", "english": "T wave inversion"}],
@@ -106,7 +112,11 @@ def test_attempt5_live_oracle_preserves_labs_or_block_and_does_not_confirm_block
     corrected["orders"][0]["dose"] = "5/160/12.5"
     corrected["orders"][2]["dose"] = "10"
     model = ScriptedModel(
-        candidate(value), candidate(retried), candidate(corrected), candidate(corrected)
+        response(calls=[("lookup_drug", {"name": "Bisoprolol"})]),
+        candidate(value),
+        candidate(retried),
+        candidate(corrected),
+        candidate(corrected),
     )
     speech = ScriptedSpeech(SOURCE + " وتي ويف انفريجن وطلبت تحليل NUMBERS: 53 516 12.5 5 45")
     fixture = RxNormFixture()
@@ -126,11 +136,9 @@ def test_attempt5_live_oracle_preserves_labs_or_block_and_does_not_confirm_block
         "confirmed" if restore_labs else "blocked"
     )
     assert bool(report["memory_rows_written"]) == restore_labs
-    assert len(model.script.calls) == (3 if restore_labs else 4)
+    assert len(model.script.calls) == 5
     assert len(speech.calls) == 1 and len(fixture.calls) <= 6
-    assert [r["reason"] for r in report["retries"]] == ["request_missing"] * (
-        1 if restore_labs else 2
-    )
+    assert not report["retries"]
 
 
 def test_11c_wire_request_count_order_size_and_cost() -> None:
@@ -175,7 +183,7 @@ def test_real_provider_composition_without_network(
     value = copy.deepcopy(VALUE)
     value["facts"].append(
         {
-            "category": "history",
+            "category": "finding",
             "clinical_kind": "ECG",
             "text": "تي ويف انفريجن",
             "clinical_en": "T wave inversion",
@@ -188,7 +196,10 @@ def test_real_provider_composition_without_network(
     edited["facts"][0]["clinical_en"] = "EF 45%"
     raw = ScriptedConverse(
         response(SOURCE + " وتي ويف انفريجن NUMBERS: 53 516 12.5 5 45"),
+        response(calls=[("lookup_drug", {"name": "Bisoprolol"})]),
         candidate(value),
+        candidate(value),
+        candidate(edited),
         candidate(edited),
     )
     fixture = RxNormFixture()
@@ -197,8 +208,8 @@ def test_real_provider_composition_without_network(
     monkeypatch.setattr("boto3.session.Session.client", lambda *args, **kwargs: raw)
     monkeypatch.setattr(httpx, "Client", lambda *args, **kwargs: fixture.client)
     report = run_check(tmp_path / "live-11c-synthetic.json")
-    assert report["state"] == "passed" and len(raw.calls) == 3
-    assert len(report["calls"]) == 3 and 0 < report["estimated_usd"] < 0.1
+    assert report["state"] == "passed" and len(raw.calls) == 6
+    assert len(report["calls"]) == 6 and 0 < report["estimated_usd"] < 0.1
 
 
 @pytest.mark.parametrize("failure", ["schema_validation", "timeout"])
@@ -207,7 +218,7 @@ def test_missing_card_keeps_route_and_failure_code_without_reply(
 ) -> None:
     monkeypatch.setenv("SANAD_LIVE", "1")
     private_reply = "private malformed model reply"
-    model = ScriptedModel(response(private_reply), response(private_reply))
+    model = ScriptedModel(*(response(private_reply) for _ in range(4)))
     speech = ScriptedSpeech(
         ModelUnavailable(reason="timeout")
         if failure == "timeout"
@@ -230,7 +241,7 @@ def test_missing_card_keeps_route_and_failure_code_without_reply(
     )
     assert report["parts"]["1"]["failure_code"] == failure
     assert len(speech.calls) == 1
-    assert len(model.script.calls) == (0 if failure == "timeout" else 2)
+    assert len(model.script.calls) == (0 if failure == "timeout" else 4)
     assert SOURCE not in destination.read_text() and private_reply not in destination.read_text()
 
 
@@ -241,7 +252,7 @@ def test_rxnorm_403_is_recorded_without_requiring_real_verification(
     value = copy.deepcopy(VALUE)
     value["facts"].append(
         {
-            "category": "history",
+            "category": "finding",
             "clinical_kind": "ECG",
             "text": "تي ويف انفريجن",
             "clinical_en": "T wave inversion",
@@ -252,7 +263,13 @@ def test_rxnorm_403_is_recorded_without_requiring_real_verification(
     corrected["orders"][0]["dose"] = "5/160/12.5"
     corrected["orders"][2]["dose"] = "10"
     corrected["facts"][0]["clinical_en"] = "EF 45%"
-    model = ScriptedModel(candidate(value), candidate(corrected))
+    model = ScriptedModel(
+        response(calls=[("lookup_drug", {"name": "Bisoprolol"})]),
+        candidate(value),
+        candidate(value),
+        candidate(corrected),
+        candidate(corrected),
+    )
     speech = ScriptedSpeech(SOURCE + " وتي ويف انفريجن NUMBERS: 53 516 12.5 5 45")
     with httpx.Client(
         transport=httpx.MockTransport(

@@ -11,6 +11,7 @@ from pydantic import Field, JsonValue, StrictBool, StrictStr, TypeAdapter, model
 
 from sanad.domain import NonblankStr, ObservationRef, TextSpan, VersionRef
 from sanad.domain.boundaries import _BoundaryValue
+from sanad.domain.language import default_language
 
 type RuleFamily = Literal["phrase", "concept", "vital", "lab"]
 type Severity = Literal["danger", "concern"]
@@ -109,7 +110,7 @@ class OutputContext(_BoundaryValue):
     active_orders: tuple[OrderSummary, ...] = ()
     allowed_numbers: tuple[NonblankStr, ...] = ()
     mode: Literal["plan_explanation", "general_education", "safety_response", "barrier_help"]
-    language: Literal["ar", "en"] = "ar"
+    language: Literal["ar", "en"] = default_language
     doctor_notified: StrictBool = False
 
 
@@ -153,6 +154,9 @@ class IncidentFacts(_BoundaryValue):
     rule_id: NonblankStr
     policy_version: NonblankStr
     verdict: IncidentVerdict
+    context: dict[str, JsonValue] = Field(default_factory=dict)
+    patient_alerts: tuple[dict[str, JsonValue], ...] = ()
+    observed_row: dict[str, JsonValue] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def consistent_source(self) -> Self:

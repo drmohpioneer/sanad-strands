@@ -31,13 +31,13 @@ def test_embedded_dose_history_and_name_guard_survive_confirmation(
             "facts": [{"category": "medication_history", "text": "بياخد كونكور"}],
         },
     )
-    blocked = proposed_name in {"Forxiga", "Inventedbrand"}
-    assert proposal.prompt_version == "scribe-v7"
+    blocked = proposed_name == "Forxiga"
+    assert proposal.prompt_version == "scribe-v8"
     assert proposal.candidate.facts == ()
     assert proposal.candidate.orders[0].dose == "5 مج"
     assert proposal.blocked("order:0") == blocked
     text = render_card(proposal)[0]
-    assert ("(؟)" in text) == blocked
+    assert "(؟)" not in text
     if not blocked:
         assert "Concor 5 mg, مرة" in text
         assert "محتاج تأكيد:" not in text

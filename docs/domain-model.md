@@ -68,21 +68,52 @@ Neither cache nor memory constitutes a clinical order. The Scribe's narrow
 transaction guard permits only these named cross-partition vocabulary writes.
 `GET /api/names` returns only the signed-in doctor's memory.
 
-Dictation facts retain spoken `text`, fixed `clinical_kind` (input `kind`, with
-`clinical_kind` accepted for compatibility), and `terms` containing `spoken`,
-`english` and optional fixed `kind`. Code-built `NameReading` values carry the
-rendered fragments and verification results. An anchored, valid English pair is
-stored in `NameReading.latin` even without a vocabulary match; `verified=False`
-adds (؟) and the shared nonblocking term question. The doctor's tap teaches that
-displayed English value as `source=doctor_confirmation`. Mixed-kind terms split into
-separate fact payloads in source order. Confirmation retains the aligned terms
-beside each spoken fact and its prefix. Legacy `clinical_en` is never rendered.
-TEST lines use independently resolved spoken analytes; other mission text stays
-spoken. The original observation remains provenance. Finding memory keeps only
-displayed terminology, with numerical results stripped; its existing `latin`
-field may hold unchanged Arabic for a doctor-accepted fallback, solely for
-`kind=finding`. This teaches the wording the doctor saw without promoting an
-invisible English proposal. Drug and test vocabulary keep their Latin constraint.
+Dictation facts retain spoken `text` and optional proposed `name_latin`. The v8
+fact categories include `finding` and `complaint`, also preserved on confirmed
+ClinicalFact records. Unknown extraction categories normalize to `history` rather
+than discarding the fact; all other schema and numeric validation still applies.
+The code-owned prefix set includes `Finding` for a finding without ECG/Echo cues.
+The Arabic v8 model schema omits legacy `clinical_en`, `clinical_kind` and `terms`
+fields; these remain readable in stored records and photo corrections. The English
+schema exposes `clinical_en` as a candidate, while code derives its accepted wording
+from the same source-aligned resolver. Code builds the fact's
+fixed prefix and aligned `terms` from the single resolver. `NameReading` holds only
+that resolved display or the plain spoken fallback. An unsupported English guess
+cannot be learned. Finding memory continues to strip numeric results and may
+hold a doctor-confirmed Arabic fallback; drug/test memory keeps its Latin constraint.
+TEST `clinical_en` is populated by code from resolved analytes, preserving its
+existing stored projection. A monitoring request becomes TASK with a normalized
+clinical-English instruction and the existing `doctor_task` patient-report predicate.
+The explicit duration is anchored at receipt; without one, the TASK default applies.
+Other mission text stays spoken. No MONITOR slots are created by dictation yet.
+
+`Proposal.language` snapshots the doctor's language for card rendering. Doctor,
+Patient and presentation defaults share `domain/language.py`'s owner-review-pending
+`default_language = "en"`. `/lang en|ar` accepts only an authenticated approved
+doctor's own language change, version and update time, atomically with receipt,
+audit and reply; it cannot change any authority field. Patient binding copies the
+owning doctor's language. Existing bound patients keep their saved language.
+
+An OrderCandidate may retain `previous_drug` and `previous_dose` for an explicitly
+spoken same-family brand change. Code verifies both the source and ingredient
+family before using them; unused previous numeric fields retain numeric clarification.
+A new patient's stated previous values do not create a fabricated prior prescription.
+An existing order retains its head identity and immutable previous versions.
+
+Contract 11e adds `Proposal.single_source`, a tuple of code-owned `family:index`
+references, defaulting to empty for older records. Model-supplied bookkeeping is
+ignored. Merge disagreements persist as blocking `ProposalIssue` records with
+`code=extraction_conflict`, the affected `item`, optional `field`, the quoted question
+and its numeric alternatives. Both surviving and conflicting evidence pass the
+existing numeric guards, including discarded medication and patient numbers. Primary
+history and missions are retained; secondary-only facts/missions and raw questions
+are ignored. Overlapping primary facts fold with coherent metadata remapping.
+Oversized cards retain every order and mission and reveal additional history via
+Edit after the first six lines; atomic confirmation limits remain enforced. Metadata is
+remapped when preparation removes or converts items. Unanswered conflicts survive
+reloading and corrections; an answer to a different field does not settle them.
+These fields change no clinical lifecycle or NameMemory/NameCache record.
+The original observation remains provenance.
 A correction keeps the proposal ID and increments its version, retains original
 patient/expiry, and rotates every callback. A pending reply-choice stores private
 source data until the doctor chooses correction or new patient. Superseded
@@ -115,7 +146,7 @@ are remapped together and the original source remains in provenance.
 | PatientBinding | patient_id, subject_key, status (active/frozen/revoked), binding_epoch, claim_id, consent_id/version, doctor_confirmed_by/at; doctor/patient ownership fixed at activation |
 | LoginExchange | token_hash, intended_role/subject, binding_id optional, auth_epoch, consent_version optional, issued_at, expires_at (doctor default 10 minutes), state (issued/consumed/revoked/expired), consumed_at optional; GET is non-consuming, POST atomic consumption only |
 | WebSession | session_hash, role, subject, doctor_id, patient_id/binding_id optional, auth_epoch, binding_epoch/consent_version optional, csrf_secret_ref, issued_at, last_seen_at, idle_expires_at, absolute_expires_at, revoked_at optional; no PHI in cookie |
-| ClinicalFact | category (condition/allergy/history/medication_history/demographic/patient_report), typed payload, Provenance, effective_at optional, visibility (doctor_private/patient_released), supersedes_fact_id optional; immutable accepted facts |
+| ClinicalFact | category (condition/allergy/history/medication_history/demographic/patient_report/finding/complaint), typed payload, Provenance, effective_at optional, visibility (doctor_private/patient_released), supersedes_fact_id optional; immutable accepted facts |
 | CareOrderVersion | order_id, order_version, type, structured_instruction, Provenance, confirmed_by/at, effective_from, effective_to only if prescribed, supersedes_version optional; immutable and sufficient for its supported executor |
 | CareOrderHead | order_id, current_order_version, status (active/stopped/superseded), delivery_epoch, changed_by/at; current snapshot references the active version only |
 | CarePlan | plan_id, plan_version, order_refs, mission_ids, followup_ids, status (proposed/confirmed/superseded), confirmed_by/at optional, source_proposal_id; a confirmed batch explicitly records accepted and deferred items |
@@ -221,6 +252,66 @@ Review events are CREATE_REVIEW, ACKNOWLEDGE_REVIEW, RESOLVE_REVIEW, BLOCK_COVER
 
 ### Evidence receipt and verification timing
 
+Contract 12 implements immutable `Evidence` versions and a separately versioned
+`EvidenceHead` in the patient's partition. Each evidence version retains its
+receipt and PatientMedia reference, patient-scoped byte hash, classified category,
+printed name/date hints, both reader results, disagreements, graded rows, shift
+and identity flags, association provenance and predicate results. A unique hash
+record identifies the original evidence for byte-identical resends without
+expiring. The head names the selected immutable version and its
+candidate/accepted/rejected/superseded state. Only `_EvidenceTurn`,
+`RecordObjectiveFulfilled`, `AssociateEvidence` and `RejectEvidence` may commit
+these records through the Steward. Corrections/supersession remain slice 19.
+
+Binding addenda 2–3 add `accepted_pending_identity` to the evidence association
+and head states. It is attributable retention on a selected mission, not fulfilled
+work or identity proof. The `identity_unverifiable` observation flag remains in
+history; only the owning doctor's explicit `confirm_identity` action adds
+`identity_confirmed`. Partial papers also retain this pending state so another
+receipt cannot silently use their unconfirmed identity. The pure evaluator can
+check their joint content; fulfillment requires every paper in the completing
+set to have matching or doctor-confirmed identity. Confirmation of a partial
+paper alone cannot satisfy missing content. Each paper's review has the existing
+24-hour clock, single-use version/epoch-bound confirm and reject buttons, and
+equivalent session API actions. Rejection clears association, retains observation
+and danger, resolves the evidence-owned review, and asks the existing patient name
+question; a patient yes only returns it for doctor review. Mission result review
+is created by fulfillment, separately from this evidence identity review.
+An on-time pending identity continues T17 wording until decided. No post-fulfillment
+detachment is introduced. The accepted Patient schema has no separate Latin-name
+field: matching uses the stored display name, including any stored Latin tokens,
+and never invents a transliteration or treats arbitrary identifiers as names.
+
+| Evidence evaluator | Required result in contract 12 |
+|---|---|
+| `test` | `lab_result`; canonical analytes with readable values and recognized explicit units (a missing clinical baseline remains `cannot_judge` without invalidating the observed value); confirmed all/any coverage accumulated only within this mission; printed date inside any collection window |
+| `send_records` | Requested category coverage, historical period when present, and distinct-document count; pre-order dates are permitted |
+| `visit` | Only `report_received`, with a report/discharge/imaging category; other objectives retain their patient-report predicates |
+| `task_evidence` | Readable evidence stays pending until explicit doctor acceptance |
+| `monitor` | Screen readings and retain patient-report facts; `slot_assignment` remains incomplete without a review obligation |
+
+Binding addendum 1 limits a photo to one document: multiple-document cues retain
+one candidate with `one_document_per_photo`, with no inferred grouping. The
+coarse reader type, caption, expected categories and printed item cues feed the
+handwritten classification table; ambiguity is `other` with association review.
+Missing/unknown units, disputed fields and shifted rows cannot establish
+fulfilment. The completing set removes noncontributing/redundant accepted
+documents in descending receipt-time order whenever the unchanged evaluator
+still succeeds; the original observations remain retained. This preserves
+the earliest complete receipt set when extraction occurs out of order. Single-use hashed choices carry evidence/mission versions and current
+binding/consent epochs; clarification lasts 24 hours. The released draft limits
+remain three candidates per receipt, five pages per turn, one shared normalized
+name token after honorific removal, and an unbounded duplicate window. The
+single-photo interface yields at most one candidate in this slice.
+
+Active `value_alert` versions are additional patient-specific thresholds, never
+replacements for kernel rules. Comparison uses the kernel's quantity conversion;
+an unknown or incomparable unit records `alert_unit_mismatch`. An invalid looser
+alert is refused at write time and ignored at grading time. Kernel-critical and
+alert facts for one row share one incident. Deterministic doctor-only context
+contains active medication fields, condition facts and the previous accepted
+value/date; it changes neither the observed value nor its clinical verdict.
+
 For an accepted predicate-completing evidence set, store `objective_received_at = max(received_at of the source receipts actually required by that predicate)`, alongside `fulfilled_at` (the later verification/acceptance transaction time). Collection/sample-date requirements are separate predicate checks. `timeliness` is `undetermined` until the set is verified, then `on_time` if objective_received_at <= due_at, otherwise `late`. Grace affects notification time, not whether the target date was met.
 
 At escalation_at, an unverified on-time candidate cannot prove fulfillment. The deadline report states “evidence received; verification pending” with the actual missing/failed processing step, never that the patient failed to submit. It creates/retains timed processing review. Once verification succeeds, update the original deadline disposition with on-time/late facts, preserve the original message/audit, and create independent clinical result review. A correction retains historical timing and recomputes the current version explicitly; it never rewrites a previous event.
@@ -257,8 +348,8 @@ Index delays or a missed tick do not lose deadlines: due records stay due until 
 | InboundReceipt | transport_key (bot+update_id, or session+client_command_id), source_subject/chat, channel, kind, immutable payload or protected payload_ref, provider_media_handle optional, received_at, safety_screen_state/policy_version, state (pending/processing/completed/needs_attention), ProcessingClaim, WorkClock until completed, result_event_ids; scope established by ingress, never payload claims |
 | MediaWork | receipt_id, provider_handle_ref, source_blob_ref optional, normalized_blob_ref optional, byte_hash optional, mime/size/duration, stage (fetch/normalize/extract/associate), state (pending/processing/completed/needs_attention), ProcessingClaim, WorkClock, last_error/resend_intent_id optional |
 | PhotoReceipt | authenticated_scope (patient scope or owning-doctor IntakeDraft), content_hash, processing_version, media_work_id, evidence_id optional, state (pending/processing/completed/needs_attention), source_receipt_ids; deduping cannot cross scopes or hide unfinished work |
-| Evidence | observation_id, source_blob_ref, normalized_blob_ref, content_hash, category, printed_identity/date optional, association_state (unmatched/candidate/accepted/rejected), patient_match_provenance, extracted_values with units, required_predicate_results, accepted_by/at optional, supersedes_evidence_id/version optional, Provenance; immutable accepted versions, current head separately points to chosen version |
-| EvidenceHead | evidence_id, current_version, status (candidate/accepted/rejected/superseded), association refs; explicit correction is the only supersession authority |
+| Evidence | observation_id, source_blob_ref, normalized_blob_ref, content_hash, category, printed_identity/date optional, association_state (unmatched/candidate/accepted_pending_identity/accepted/rejected), patient_match_provenance, extracted_values with units, required_predicate_results, accepted_by/at optional, supersedes_evidence_id/version optional, Provenance; immutable accepted versions, current head separately points to chosen version |
+| EvidenceHead | evidence_id, current_version, status (candidate/accepted_pending_identity/accepted/rejected/superseded), association refs; explicit correction is the only supersession authority |
 | Candidate | observation_id, candidate_kind, typed payload, Provenance, validation_results, status (proposed/accepted/rejected/needs_confirmation), source_versions; never direct current-order authority |
 | AuditEvent | event_id, command_id, scope, event_type, aggregate_refs, before/after_versions, actor, accepted_at, policy_versions, source_refs, protected payload_ref optional; immutable, no mutable card.resolved field |
 | CommandReceipt | command_id, scope, payload_digest, accepted_result, accepted_at; reused ID with different payload is rejected |

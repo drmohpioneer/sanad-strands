@@ -8,6 +8,7 @@ from pydantic import Field, SecretStr, field_validator
 from sanad.accounts.commands import AccountCommand
 from sanad.domain import NonblankStr, UtcInstant
 from sanad.domain.boundaries import IanaZone, _BoundaryValue
+from sanad.domain.language import default_language
 from sanad.domain.operations import PositiveDuration
 from sanad.store.records import Accepted
 
@@ -49,7 +50,7 @@ class IssuePatientLogin(AccountCommand):
 class CreatePatientStub(AccountCommand):
     type: Literal["CreatePatientStub"] = "CreatePatientStub"
     display_name: Annotated[str, Field(strict=True, min_length=1, max_length=160)]
-    language: Literal["ar", "en"] = "ar"
+    language: Literal["ar", "en"] = default_language
     timezone: IanaZone = "Africa/Cairo"
 
 

@@ -9,8 +9,11 @@ from pydantic import BaseModel, JsonValue
 from sanad.concierge.records import ReportFactPayload
 from sanad.domain import FollowUpTask, Mission, PatientScope, Principal, VersionRef
 from sanad.domain.entities import TERMINAL_STATES
+from sanad.domain.language import default_language
 from sanad.scribe.extract import OrderCandidate
+from sanad.scribe.memory import NameVocabulary
 from sanad.scribe.records import CareOrderHead, CareOrderVersion, ClinicalFact
+from sanad.scribe.resolver import Context, resolve_name
 from sanad.steward.types import records
 from sanad.store.protocol import Store
 from sanad.store.records import (
@@ -40,6 +43,7 @@ class Snapshot:
     missions: tuple[Mission, ...]
     followups: tuple[FollowUpTask, ...]
     facts: tuple[ClinicalFact, ...]
+    names: Context = Context()
 
     @property
     def scope(self) -> PatientScope:
@@ -141,6 +145,7 @@ def load(store: Store, scope: PatientScope, now: datetime) -> Snapshot | None:
             if r.body.get("visibility") == "patient_released"
             and r.body.get("category") == "patient_report"
         ),
+        Context(vocabulary=NameVocabulary(store, doctor)),
     )
 
 
@@ -165,11 +170,18 @@ def authorized(
     return snapshot
 
 
-def order_line(order: CareOrderVersion, language: str = "ar", *, history: bool = False) -> str:
+def order_line(
+    order: CareOrderVersion,
+    language: str = default_language,
+    *,
+    history: bool = False,
+    names: Context | None = None,
+) -> str:
     instruction = order.structured_instruction
     assert isinstance(instruction, OrderCandidate)
+    resolved = resolve_name(instruction.drug, "drug", instruction.drug, ctx=names)
     fields = [
-        instruction.drug,
+        resolved.latin or instruction.drug,
         instruction.dose,
         instruction.frequency,
         instruction.timing,
@@ -181,7 +193,7 @@ def order_line(order: CareOrderVersion, language: str = "ar", *, history: bool =
         if language == "en"
         else ("تاريخ سابق، مش الخطة الحالية: " if history else "الدكتور قالك: ")
     )
-    return prefix + "، ".join(x for x in fields if x)
+    return prefix + (", " if language == "en" else "، ").join(x for x in fields if x)
 
 
 def summary(snapshot: Snapshot) -> dict[str, JsonValue]:
@@ -194,7 +206,10 @@ def summary(snapshot: Snapshot) -> dict[str, JsonValue]:
             {
                 "order_id": order.order_id,
                 "version": order.order_version,
-                "drug": instruction.drug,
+                "drug": resolve_name(
+                    instruction.drug, "drug", instruction.drug, ctx=snapshot.names
+                ).latin
+                or instruction.drug,
                 "dose": instruction.dose,
                 "frequency": instruction.frequency,
                 "timing": instruction.timing,
@@ -203,7 +218,7 @@ def summary(snapshot: Snapshot) -> dict[str, JsonValue]:
                 "effective_from": order.effective_from.isoformat()
                 if order.effective_from
                 else None,
-                "line": order_line(order, patient.language),
+                "line": order_line(order, patient.language, names=snapshot.names),
             }
         )
     missions: list[JsonValue] = [
@@ -228,7 +243,9 @@ def summary(snapshot: Snapshot) -> dict[str, JsonValue]:
 def render_summary(snapshot: Snapshot) -> str:
     en = snapshot.patient.language == "en"
     lines = [("Your doctor: " if en else "دكتورك: ") + snapshot.doctor.name]
-    lines.extend(order_line(o, snapshot.patient.language) for o in snapshot.orders)
+    lines.extend(
+        order_line(o, snapshot.patient.language, names=snapshot.names) for o in snapshot.orders
+    )
     if not snapshot.orders:
         lines.append("No active medication is recorded." if en else "مفيش دوا حالي مسجل في الخطة.")
     data = summary(snapshot)

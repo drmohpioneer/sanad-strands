@@ -56,6 +56,7 @@ def prepare(
     candidate: DictationCandidate,
     *,
     creating: bool = False,
+    source: str = "",
 ) -> tuple[DictationCandidate, tuple[OrderChange, ...], tuple[ProposalIssue, ...]]:
     from sanad.scribe.records import CareOrderVersion
 
@@ -63,8 +64,22 @@ def prepare(
         return candidate, (), ()
 
     orders, changes, issues = [], [], []
+    dropped = list(candidate._dropped_numbers)
     for i, supplied in enumerate(candidate.orders):
-        head = find_head(repo, scope, supplied.drug) if scope else None
+        from sanad.media.numbers import numbers_in
+        from sanad.scribe.changes import previous_instruction
+
+        stated_previous = previous_instruction(supplied, source)
+        if not stated_previous and (supplied.previous_drug or supplied.previous_dose):
+            dropped.extend(
+                numbers_in((supplied.previous_drug or "") + " " + (supplied.previous_dose or ""))
+            )
+            supplied = supplied.model_copy(update={"previous_drug": None, "previous_dose": None})
+        head = (
+            find_head(repo, scope, stated_previous.drug if stated_previous else supplied.drug)
+            if scope
+            else None
+        )
         version = (
             repo.load(scope, "care_order_version", head.current_version_id, CareOrderVersion)
             if scope and head
@@ -93,21 +108,23 @@ def prepare(
                 )
             elif supplied.action == "start" and head.status == "active":
                 order = supplied.model_copy(update={"action": "change"})
-        elif supplied.action in {"stop", "change"}:
+        elif supplied.action in {"stop", "change"} and not (creating and stated_previous):
             issues.append(ProposalIssue(item=f"order:{i}", code="order_missing"))
         orders.append(order)
-        if head or note or supplied.action in {"stop", "continue"}:
+        if head or note or stated_previous or supplied.action in {"stop", "continue"}:
             changes.append(
                 OrderChange(
                     item=f"order:{i}",
-                    old=old,
+                    old=old or stated_previous,
                     new=order,
                     head_version=head.version if head else None,
                     noop=noop,
                     note=note,
                 )
             )
-    return candidate.model_copy(update={"orders": tuple(orders)}), tuple(changes), tuple(issues)
+    result = candidate.model_copy(update={"orders": tuple(orders)})
+    result._dropped_numbers = tuple(dict.fromkeys(dropped))
+    return result, tuple(changes), tuple(issues)
 
 
 def instruction_line(order: OrderCandidate) -> str:

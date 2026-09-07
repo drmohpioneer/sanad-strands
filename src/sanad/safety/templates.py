@@ -455,11 +455,11 @@ URGENT_TEMPLATES: dict[str, dict[str, dict[str, str]]] = {
     },
     "doctor_danger": {
         "ar": {
-            gender: "🚨 تنبيه خطر · {patient}\n{concept}\nالمصدر: {source}\nعدم اليقين: {uncertainty}"
+            gender: "🚨 تنبيه خطر · {patient}\n{concept}\nالمصدر: {source}\nعدم اليقين: {uncertainty}{context}"
             for gender in ("m", "f", "u")
         },
         "en": {
-            gender: "🚨 DANGER · {patient}\n{concept}\nSource: {source}\nUncertainty: {uncertainty}"
+            gender: "🚨 DANGER · {patient}\n{concept}\nSource: {source}\nUncertainty: {uncertainty}{context}"
             for gender in ("m", "f", "u")
         },
     },
@@ -489,7 +489,7 @@ URGENT_TEMPLATES: dict[str, dict[str, dict[str, str]]] = {
 
 URGENT_FIELDS: dict[str, frozenset[str]] = {
     "patient_emergency": frozenset({"emergency_number"}),
-    "doctor_danger": frozenset({"patient", "concept", "source", "uncertainty"}),
+    "doctor_danger": frozenset({"patient", "concept", "source", "uncertainty", "context"}),
     "patient_unreadable_resend": frozenset(),
     "patient_safety_ack": frozenset(),
 }

@@ -2,12 +2,10 @@
 
 import re
 import unicodedata
-from collections.abc import Callable
 
 from sanad.scribe.extract import ClinicalKind, FactCandidate, FactTerm
 from sanad.scribe.lookup import DrugLookupService
-from sanad.scribe.names import NameReading, dictionary, edit_distance, entry_for, normalize
-from sanad.scribe.policy import DRAFT_SCRIBE_POLICY
+from sanad.scribe.names import NameReading, normalize
 
 _MARKER = re.compile(r"مريض\s+(?:جديد|تاني|تانى)")
 _QUANTITY = re.compile(r"[0-9]+(?:\.[0-9]+)?\s*[%٪]?|[%٪]")
@@ -41,205 +39,95 @@ def _normalized(text: str) -> tuple[str, list[int]]:
     return "".join(chars), offsets
 
 
-def _phonetic(english: str) -> str:
-    """Bounded mechanical English-to-Arabic spelling, with no medical semantics."""
-    value = normalize(english)
-    for left, right in (
-        ("sh", "ش"),
-        ("ch", "تش"),
-        ("ph", "ف"),
-        ("th", "ث"),
-        ("kh", "خ"),
-        ("gh", "غ"),
-        ("oo", "و"),
-        ("ee", "ي"),
-    ):
-        value = value.replace(left, right)
-    letters: dict[str, str | int | None] = {
-        "a": "ا",
-        "b": "ب",
-        "c": "ك",
-        "d": "د",
-        "e": "ي",
-        "f": "ف",
-        "g": "ج",
-        "h": "ه",
-        "i": "ي",
-        "j": "ج",
-        "k": "ك",
-        "l": "ل",
-        "m": "م",
-        "n": "ن",
-        "o": "و",
-        "p": "ب",
-        "q": "ك",
-        "r": "ر",
-        "s": "س",
-        "t": "ت",
-        "u": "و",
-        "v": "ف",
-        "w": "و",
-        "x": "كس",
-        "y": "ي",
-        "z": "ز",
-    }
-    return value.translate(str.maketrans(letters))
-
-
 def verified_term(spoken: str, english: str, service: DrugLookupService) -> bool:
-    from sanad.scribe.clinical import valid_english
+    from sanad.scribe.resolver import context, resolve_name
 
-    if (
-        not valid_english(english, spoken)
-        or ("%" in english and not re.search(r"[%٪]", spoken))
-        or service.contains_identity(spoken)
-        or service.contains_identity(english)
-    ):
-        return False
-    raw, proposed = vocabulary_term(spoken), vocabulary_term(english)
-    if not raw or not proposed:
-        return False
-    remembered = service.vocabulary.find(raw, "finding")
-    if remembered:
-        return _key(remembered.latin) == _key(proposed)
-    seed = entry_for(raw, "term")
-    if seed:
-        return _key(seed.latin) == _key(proposed)
-    # A known English term still needs its spoken identity. Mere membership in
-    # the vocabulary must never verify LVH for an unrelated spoken finding.
-    target = next(
-        (e for e in dictionary() if e.kind == "term" and _key(e.latin) == _key(proposed)), None
-    )
-    if target and any(_key(alias) == _key(raw) for alias in target.arabic_spellings):
-        return True
-    left = normalize(raw)
-    right = (
-        normalize(_phonetic(proposed))
-        if re.search(r"[\u0621-\u064a]", raw)
-        else normalize(proposed)
-    )
-    return abs(len(left) - len(right)) <= 2 and edit_distance(left, right) <= 2
+    resolved = resolve_name(spoken, "finding", spoken, english, context(service))
+    return resolved.latin == english and resolved.tier != "unresolved"
 
 
-def _chunks(text: str) -> list[str]:
-    chunks: list[str] = []
-    remaining = text.strip(" ,،;؛:\n")
-    while remaining:
-        end = min(len(remaining), DRAFT_SCRIBE_POLICY.clinical_en_max_chars)
-        if end < len(remaining):
-            end = remaining.rfind(" ", 0, end + 1) or end
-            if end < 1:
-                end = DRAFT_SCRIBE_POLICY.clinical_en_max_chars
-        chunks.append(remaining[:end])
-        remaining = remaining[end:].lstrip()
-    return chunks
+def fact_kind(category: str, first: str) -> ClinicalKind:
+    """Presentation prefixes belong to code, never a model-selected field."""
+    if category == "condition":
+        return "Dx"
+    if category == "complaint":
+        return "Complaint"
+    if category != "finding":
+        return "History"
+    name = normalize(first)
+    if name.startswith(("ecg", "t wave", "st ", "lvh", "rbbb", "lbbb", "sinus", "af")):
+        return "ECG"
+    if name.startswith(("echo", "ef", "segmental", "hypokinesia")):
+        return "Echo"
+    return "Finding"
 
 
 def aligned_facts(
     fact: FactCandidate,
     patient_name: str | None,
     service: DrugLookupService,
-    verify_drugs: Callable[[str, str], bool],
     source: str,
 ) -> tuple[tuple[FactCandidate, tuple[NameReading, ...]], ...]:
-    """Produce source-ordered lines and code-owned display readings, including gaps."""
-    from sanad.scribe.clinical import normalize_units, valid_english
+    from sanad.scribe.resolver import Resolved, context, resolve_fragments, resolve_name
 
     text = fact.text
     if marker := _MARKER.search(text):
-        # The marker and its explicitly extracted demographics are not history.
         text = text[: marker.start()] + text[marker.end() :]
         if patient_name:
             text = text.replace(patient_name, "")
         text = re.sub(r"(?:عنده\s+)?\d+\s+سنة", "", text).strip(" ،,:")
-        if not text:
-            return ()
-    normalized, offsets = _normalized(text)
-    source_key, _ = _normalized(source)
-    used: list[tuple[int, int, FactTerm]] = []
-    for term in fact.terms:
-        key, _ = _normalized(term.spoken)
-        if not key or not offsets:
-            continue
-        for match in re.finditer(re.escape(key), normalized):
-            start, end = offsets[match.start()], offsets[match.end() - 1] + 1
-            if not any(start < b and a < end for a, b, _ in used):
-                used.append((start, end, term))
-                break
-    used.sort(key=lambda x: x[0])
-    # Overlapping claims cannot replace or reorder the same spoken material twice.
-    fragments: list[tuple[str, str | None, ClinicalKind, bool]] = []
-
-    def gap(raw: str, kind: ClinicalKind) -> None:
-        for chunk in _chunks(raw):
-            remembered = service.vocabulary.find(vocabulary_term(chunk), "finding")
-            # Only the Arabic fallback actually displayed at confirmation can be
-            # reused unchanged. Never borrow a rejected, invisible translation.
-            accepted = bool(remembered and _key(remembered.latin) == _key(vocabulary_term(chunk)))
-            fragments.append((chunk, None, kind, accepted))
-
-    cursor = 0
-    for start, end, term in used:
-        kind = term.kind or fact.clinical_kind
-        gap(text[cursor:start], kind if cursor == 0 else fragments[-1][2])
-        spoken = text[start:end]
-        english = normalize_units(term.english or "")
-        spoken_key, _ = _normalized(spoken)
-        displayable = (
-            spoken_key in source_key
-            and valid_english(english, spoken)
-            and ("%" not in english or bool(re.search(r"[%٪]", spoken)))
-            and not service.contains_identity(spoken)
-            and not service.contains_identity(english)
-            and verify_drugs(english, spoken)
-        )
-        if displayable:
-            # The doctor can verify an anchored translation on the displayed card.
-            # A vocabulary miss changes its marker, never hides that proposal.
-            fragments.append((spoken, english, kind, verified_term(spoken, english, service)))
-        else:
-            gap(spoken, kind)
-        cursor = end
-    gap(text[cursor:], fragments[-1][2] if fragments else fact.clinical_kind)
-    if not fragments:
+    if not text:
         return ()
-    groups: list[list[tuple[str, str | None, ClinicalKind, bool]]] = []
-    for fragment in fragments:
-        if not groups or groups[-1][-1][2] != fragment[2]:
-            groups.append([])
-        groups[-1].append(fragment)
-    result = []
-    for group in groups:
-        if (
-            len(", ".join(en for _, en, _, _ in group if en))
-            > DRAFT_SCRIBE_POLICY.clinical_en_max_chars
-        ):
-            group = [(raw, None, kind, False) for raw, _, kind, _ in group]
-        spoken_text = text if len(groups) == 1 else " ".join(p[0] for p in group)
-        kind = group[0][2]
-        pairs = tuple(FactTerm(spoken=raw, english=en, kind=kind) for raw, en, _, _ in group)
-        readings = tuple(
-            NameReading(
-                item="",
-                kind="finding",
-                spoken=raw,
-                latin=en or raw,
-                verified=accepted,
-                learnable=not service.contains_identity(raw),
-            )
-            for raw, en, _, accepted in group
+    ctx = context(service)
+    # A model-created source fragment cannot verify its own English reading.
+    source_key, _ = _normalized(source)
+    text_key, _ = _normalized(text)
+    anchored = text_key in source_key
+    if text.isascii():
+        # English punctuation, including T-wave, does not change the spoken words.
+        def tokens(value: str) -> str:
+            return " ".join(re.findall(r"[a-z0-9%]+", value.casefold()))
+
+        anchored = bool(tokens(text)) and tokens(text) in tokens(source)
+    fragments = (
+        list(resolve_fragments(text, "finding", source, ctx))
+        if anchored
+        else [Resolved(None, None, "unresolved", text)]
+    )
+    if (
+        fact.name_latin
+        and anchored
+        and not any(r.tier in {"memory", "clinic", "seed", "lookup"} for r in fragments)
+    ):
+        proposed = resolve_name(text, "finding", source, fact.name_latin, ctx)
+        if proposed.latin or len(fragments) == 1:
+            fragments = [proposed]
+    first = next((r.latin for r in fragments if r.latin), "")
+    kind = fact_kind(fact.category, first)
+    # The old seed contains one presentation prefix. It is a code prefix, not
+    # part of the term, and must not be duplicated beside the new fixed prefix.
+    readings = tuple(
+        NameReading(
+            item="",
+            kind="finding",
+            spoken=r.spoken,
+            latin=re.sub(r"^(?:ECG|Echo|Complaint|History|Dx):\s*", "", r.latin or r.spoken),
+            generic=r.generic or "",
+            verified=r.latin is not None,
+            learnable=anchored and not service.contains_identity(r.spoken),
+            source=r.legacy().source,
         )
-        result.append(
-            (
-                fact.model_copy(
-                    update={
-                        "text": spoken_text,
-                        "clinical_en": None,
-                        "clinical_kind": kind,
-                        "terms": pairs,
-                    }
-                ),
-                readings,
-            )
-        )
-    return tuple(result)
+        for r in fragments
+    )
+    pairs = tuple(
+        FactTerm(spoken=r.spoken, english=r.latin if r.verified else None, kind=kind)
+        for r in readings
+    )
+    return (
+        (
+            fact.model_copy(
+                update={"text": text, "terms": pairs, "clinical_en": None, "clinical_kind": kind}
+            ),
+            readings,
+        ),
+    )

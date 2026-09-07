@@ -26,7 +26,7 @@ The owner authorized this development deployment and rollback on 2026-09-06. Acc
 | Table | `sanad-dev-data` |
 | Bucket | `sanad-dev-<owner-account>-us-east-1` (account component redacted) |
 | ECR repository / CodeBuild project | `sanad-dev-app` / `sanad-dev-build` |
-| Image digest | `sha256:0f7f2b17f9139cd4e795fc8fccc5b0ad7e87d515b0ac215415fdce18436c10c9` (fix slice 11b checkpoint `3b38278`, deployed 2026-09-07 14:35 with all six smoke groups passing; first cold request 26.6 s because the audio converter now warms at container start, the minute tick keeps the container warm; the slice 11 image was `sha256:8481046034fe48d294811dd405a55040f1d9d9ed29f316aed3bcdb1744f26e31`, deployed 09:32; the contract 07 image was `sha256:e5c14db0b496c622af829dcb11ef7af25c31ebe59b7be13fb7bcd07c3dee81f3`) |
+| Image digest | `sha256:41b5b1dd7d20bcc48be6472c502a5d0633392d15bae7544dba6f91968203ba8f` (slices 11e and 11d merged, checkpoint `ed20858`, deployed 2026-09-08 02:30 with all six smoke groups passing, first cold request 19.3 s; the previous image was `sha256:6feaf63a4350e6c05cac5ee6f1f6d0831f70a7f0b414c94099af4f15a464c428`, the 11c checkpoint) |
 | Source archive SHA-256 | `357e56d60a5098790c99e3c10fdedb02d6622b0d82c9ee6b66ae02d8ed5ef725` |
 | Stack revision | `1e84abb9b2b8cd422f36d27035c47dbd2dce82c878bb1eaf91cb242fcb0279ad` |
 | Code / stored schema version | `1` / `1` |

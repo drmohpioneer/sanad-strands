@@ -308,9 +308,11 @@ def run_check(
 
         class ObservedSpeech(SpeechAdapter):
             async def transcribe_converted(
-                self, converted: ConvertedAudio
+                self, converted: ConvertedAudio, *, expected_language: str = "ar"
             ) -> Transcript | TranscriptFailure:
-                result = await super().transcribe_converted(converted)
+                result = await super().transcribe_converted(
+                    converted, expected_language=expected_language
+                )
                 transcripts.append(result)
                 if isinstance(result, TranscriptFailure) and result.reason in {
                     "schema_validation",
@@ -327,7 +329,9 @@ def run_check(
                     )
                     if client:
                         client.speech_retry_allowed = True
-                    result = await super().transcribe_converted(converted)
+                    result = await super().transcribe_converted(
+                        converted, expected_language=expected_language
+                    )
                     transcripts.append(result)
                 return result
 
@@ -346,7 +350,7 @@ def run_check(
         checks["card_created"] = first is not None
         if first:
             first_card = "\n\n".join(render_card(first))
-            checks["scribe_v7"] = first.prompt_version == "scribe-v7"
+            checks["scribe_prompt_current"] = first.prompt_version == PROMPT_VERSION
             checks["three_names"] = {o.drug for o in first.candidate.orders} == {
                 "Exforge HCT",
                 "Concor",

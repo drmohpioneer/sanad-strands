@@ -195,3 +195,11 @@ def contact(scope: PatientScope, slot_id: str, *, local_day: str | None = None) 
 
 def operational(service: str, kind: Literal["NONCE", "ISSUE"], id: str) -> Key:
     return Key(f"OPS#{component(service)}", _suffix(kind, id))
+
+
+def evidence(scope: PatientScope, id: str, version: int) -> Key:
+    return Key(partition(scope), f"EVIDENCE#{component(id)}#V#{version:08d}")
+
+
+def evidence_head(scope: PatientScope, id: str) -> Key:
+    return Key(partition(scope), f"EVIDENCE_HEAD#{component(id)}")

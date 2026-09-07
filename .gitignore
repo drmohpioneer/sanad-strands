@@ -13,8 +13,8 @@ venv/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
-.uv-cache/
-.uv-python/
+.uv-cache
+.uv-python
 dist/
 *.egg-info/
 
@@ -23,4 +23,4 @@ dist/
 *.wav
 *.aiff
 *.mp4
-.tools/
+.tools

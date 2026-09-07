@@ -37,6 +37,7 @@ from sanad.scribe.extract import (
     CORRECTION_PROMPT_VERSION,
     PROMPT_VERSION,
     DictationCandidate,
+    EnglishDictationCandidate,
     PatientCandidate,
     ProposalIssue,
     candidate_issues,
@@ -87,7 +88,16 @@ def dictation_model(registry: ModelRegistry, role: ModelRole) -> Model:
 
 def parse_command(text: str) -> tuple[str | None, str]:
     parts = text.strip().split(maxsplit=1)
-    if parts and parts[0] in {"/start", "/help", "/new", "/find", "/qr", "/cancel", "/intake"}:
+    if parts and parts[0] in {
+        "/start",
+        "/help",
+        "/new",
+        "/find",
+        "/qr",
+        "/cancel",
+        "/intake",
+        "/lang",
+    }:
         return parts[0], parts[1].strip() if len(parts) > 1 else ""
     return None, text
 
@@ -120,9 +130,9 @@ class ScribeTurn:
         self.vision_factory = vision_factory
         self.rxnorm_client = rxnorm_client
         self.observe_retry = observe_retry
-        from sanad.scribe.photos import PhotoTurn
+        from sanad.evidence.photos import AlertPhotoTurn
 
-        self.photos = PhotoTurn(self)
+        self.photos = AlertPhotoTurn(self)
 
     def __call__(self, receipt: InboundReceipt, auth: Authorization) -> RouteResult | None:
         callback_hash = str((receipt.payload or {}).get("callback_token_hash", ""))
@@ -134,6 +144,11 @@ class ScribeTurn:
             if doctor_id and callback_hash
             else None
         )
+        from sanad.evidence.doctor import route as evidence_route
+
+        evidence_result = evidence_route(self, receipt, auth)
+        if evidence_result is not None:
+            return evidence_result
         photo_result = self.photos.route(receipt, auth)
         if photo_result is not None:
             return photo_result
@@ -174,7 +189,7 @@ class ScribeTurn:
         intent = self.repo.intent(
             doctor,
             template,
-            {"text": text if text is not None else wording.render(template)},
+            {"text": text if text is not None else self.wording(template, doctor)},
             "reply:" + receipt.id,
         )
         result = self.repo.commit(
@@ -190,6 +205,12 @@ class ScribeTurn:
             status=status if result.status in {"accepted", "duplicate"} else result.status,
             template_id=template,
         )
+
+    @staticmethod
+    def wording(template: str, doctor: Doctor) -> str:
+        from sanad.scribe.english import render_wording
+
+        return render_wording(template, doctor.language)
 
     def run(self, receipt: InboundReceipt, principal: Principal) -> RouteResult:
         try:
@@ -266,7 +287,8 @@ class ScribeTurn:
             speech.vocabulary_hint = vocabulary.hint()
             speech_result = asyncio.run(
                 speech.transcribe_converted(
-                    ConvertedAudio(data=audio, duration=media.duration or 0)
+                    ConvertedAudio(data=audio, duration=media.duration or 0),
+                    expected_language=doctor.language,
                 )
             )
             if not isinstance(speech_result, Transcript):
@@ -306,6 +328,34 @@ class ScribeTurn:
                     text=self.runtime.general("patient_emergency"),
                 )
         command, argument = parse_command(text)
+        if command == "/lang":
+            if argument not in {"en", "ar"}:
+                return self._reply(
+                    receipt,
+                    principal,
+                    claim,
+                    "scribe_help",
+                    "invalid_language",
+                    text="Use /lang en or /lang ar.",
+                )
+            changed = revise(doctor, self.repo.clock(), language=argument)
+            intent = self.repo.intent(
+                changed,
+                "scribe_language",
+                {"text": "Language set to English." if argument == "en" else "تم اختيار العربية."},
+                "language:" + receipt.id,
+            )
+            language_result = self.repo.commit(
+                principal,
+                "ScribeLanguage",
+                "language:" + receipt.id,
+                (changed,),
+                (intent,),
+                claim=claim,
+            )
+            return RouteResult(
+                route="doctor", status=language_result.status, template_id="scribe_language"
+            )
         if command is None and text.lstrip().startswith("/"):
             return self._reply(receipt, principal, claim, "scribe_help", "unknown_command")
         if command == "/intake":
@@ -503,62 +553,78 @@ class ScribeTurn:
         )
         service.patient_identity_pending = True
         request = correction_request(correction, text) if correction else text
-        prompt = scribe_prompt(service.vocabulary.hint(), correction=correction is not None)
-        deadline = monotonic() + EXTRACTION_TIMEOUT
-        omitted: ModelProposal[DictationCandidate] | None = None
-        for attempt in range(2):
-            remaining = deadline - monotonic()
-            if remaining <= 0:
-                return omitted or ModelUnavailable(reason="timeout")
-            agent = make_agent(
-                "scribe",
-                scope=scope,
-                tools=(drug_lookup_tool(scope, service.lookup_drug),),
-                system_prompt=prompt,
-                session_key="scribe:" + receipt_id,
-                registry=self.registry,
-                model_factory=self.model_factory,
-                observe=self.observe,
+        prompt = scribe_prompt(
+            service.vocabulary.hint(), correction=correction is not None, language=doctor.language
+        )
+        from sanad.scribe.merge import merge_candidates
+        from sanad.scribe.resolver import context
+
+        async def extract_twice() -> object:
+            deadline = monotonic() + EXTRACTION_TIMEOUT
+
+            async def reading() -> object:
+                reason = ""
+                for attempt in range(2):
+                    remaining = deadline - monotonic()
+                    if remaining <= 0:
+                        return ModelUnavailable(reason="timeout")
+                    if attempt:
+                        logger.info("scribe_extraction_retry attempt=2 reason=%s", reason)
+                        self.observe_retry(reason)
+                    agent = make_agent(
+                        "scribe",
+                        scope=scope,
+                        tools=(drug_lookup_tool(scope, service.lookup_drug),),
+                        system_prompt=prompt,
+                        session_key="scribe:" + receipt_id,
+                        registry=self.registry,
+                        model_factory=self.model_factory,
+                        observe=self.observe,
+                    )
+                    result = await agent.propose(
+                        EnglishDictationCandidate
+                        if doctor.language == "en" and not (correction and correction.photo)
+                        else DictationCandidate,
+                        request,
+                        want_spans=False,
+                        timeout=remaining,
+                    )
+                    transient = (
+                        isinstance(result, ProposalFailure) and result.reason == "schema_validation"
+                    ) or (isinstance(result, ModelUnavailable) and result.reason == "unavailable")
+                    if not transient or attempt:
+                        return result
+                    reason = (
+                        "schema_validation"
+                        if isinstance(result, ProposalFailure)
+                        else "model_unavailable"
+                    )
+                raise AssertionError("bounded extraction must return")
+
+            # Two fresh agents, identical request and independent timeouts inside
+            # one unchanged worker deadline. A peer failure never cancels a survivor.
+            if correction and correction.photo:
+                # Photo correction keeps its accepted single-extraction path.
+                return await reading()
+            results = await asyncio.gather(reading(), reading(), return_exceptions=True)
+            good = [r for r in results if isinstance(r, ModelProposal)]
+            if not good:
+                return next(
+                    (r for r in results if isinstance(r, (ProposalFailure, ModelUnavailable))),
+                    ModelUnavailable(reason="unavailable"),
+                )
+            values = [r.value if isinstance(r, ModelProposal) else None for r in results]
+            merged = merge_candidates(values[0], values[1], text, context(service))
+            assert merged is not None
+            return good[0].model_copy(
+                update={
+                    "value": merged.candidate,
+                    "provenance": tuple(p for r in good for p in r.provenance),
+                    "metadata": tuple(m for r in good for m in r.metadata),
+                }
             )
-            result = asyncio.run(
-                agent.propose(
-                    DictationCandidate,
-                    request,
-                    want_spans=False,
-                    timeout=remaining,
-                )
-            )
-            transient = (
-                isinstance(result, ProposalFailure) and result.reason == "schema_validation"
-            ) or (isinstance(result, ModelUnavailable) and result.reason == "unavailable")
-            request_missing = False
-            if isinstance(result, ModelProposal):
-                merged = (
-                    merge_correction(correction, result.value, text).candidate
-                    if correction and not correction.photo
-                    else result.value
-                )
-                request_missing = not (correction and correction.photo) and missing_request(
-                    merged, correction.source_text + "\n" + text if correction else text
-                )
-                if request_missing:
-                    omitted = result
-            if attempt or not (transient or request_missing) or monotonic() >= deadline:
-                return (
-                    omitted
-                    if omitted is not None and not isinstance(result, ModelProposal)
-                    else result
-                )
-            reason = (
-                "request_missing"
-                if request_missing
-                else "schema_validation"
-                if isinstance(result, ProposalFailure)
-                else "model_unavailable"
-            )
-            logger.info("scribe_extraction_retry attempt=2 reason=%s", reason)
-            self.observe_retry(reason)
-        raise AssertionError("bounded extraction must return")
+
+        return asyncio.run(extract_twice())
 
     def _choose_reply(
         self,
@@ -626,6 +692,17 @@ class ScribeTurn:
         clinical_issues: tuple[ProposalIssue, ...] = ()
         names: list[NameReading] = []
         if not photo:
+            candidate._merge_issues = tuple(
+                dict.fromkeys(
+                    (
+                        *candidate._merge_issues,
+                        *(i for i in correction_issues if i.code == "extraction_conflict"),
+                    )
+                )
+            )
+            correction_issues = tuple(
+                i for i in correction_issues if i.code != "extraction_conflict"
+            )
             from sanad.scribe.clinical import prepare_clinical
 
             service = names_service or self.name_lookup(
@@ -636,7 +713,9 @@ class ScribeTurn:
 
                 service.forbidden_names += (normalize(candidate.patient.name_as_spoken),)
             service.patient_identity_pending = False
-            candidate, clinical_issues = prepare_clinical(candidate, source_text, service, names)
+            candidate, clinical_issues = prepare_clinical(
+                candidate, source_text, service, names, language=doctor.language
+            )
             verified_names = {}
             if correction and previous:
                 for i, (before, after) in enumerate(
@@ -657,6 +736,23 @@ class ScribeTurn:
                     )
                     if reading:
                         verified_names[f"order:{i}"] = reading
+            from sanad.scribe.names import split_drug_dose
+            from sanad.scribe.resolver import context, resolve_name
+
+            # Fetch after identity screening; the pure resolver only consumes
+            # these already-fetched results. Both readings share the same cap.
+            for i, order in enumerate(candidate.orders):
+                if f"order:{i}" in verified_names:
+                    continue
+                resolved = resolve_name(
+                    split_drug_dose(order.drug)[0],
+                    "drug",
+                    source_text,
+                    order.name_latin,
+                    context(service, order.generic),
+                )
+                if resolved.latin:
+                    service.lookup_drug(resolved.latin)
             candidate, name_issues = prepare_names(
                 candidate,
                 source_text,
@@ -700,7 +796,12 @@ class ScribeTurn:
             *name_issues,
             *clinical_issues,
             *correction_issues,
+            *candidate._merge_issues,
         ]
+        if candidate._malformed_items:
+            # A rejected nonnumeric item still blocks confirmation; the model's
+            # generic placeholder is never promoted into a doctor question.
+            issues.append(ProposalIssue(item="all", code="clarification"))
         if not photo and command is None and missing_request(candidate, source_text):
             issues.append(ProposalIssue(item="all", code="request_missing"))
         lookup_only = intent == "find_patient" and (command in {"/find", "/qr"} or not issues)
@@ -792,7 +893,7 @@ class ScribeTurn:
                 candidate, photo, receipt, actor, selected.patient_id if selected else None
             )
         candidate, amendments, amendment_issues = amend.prepare(
-            self.repo, target, candidate, creating=creating
+            self.repo, target, candidate, creating=creating, source=source_text
         )
         support = "\n".join(amend.instruction_line(a.old) for a in amendments if a.old)
         issues = [
@@ -840,6 +941,20 @@ class ScribeTurn:
             for i in issues
             if not (i.code == "unassigned_number" and set(i.numbers) <= set(resolved_numbers))
         ]
+        from sanad.evidence.templates import render as render_evidence
+        from sanad.safety.alerts import refused_at_write
+        from sanad.scribe.commit import value_alert
+
+        for index, text in enumerate(candidate.alerts):
+            alert = value_alert(text)
+            if alert and refused_at_write(alert, self.runtime.safety_policy):
+                issues.append(
+                    ProposalIssue(
+                        item=f"alert:{index}",
+                        code="clinical_unclear",
+                        question=render_evidence("alert_refused", doctor.language),
+                    )
+                )
         if photo:
             issues.extend(review_issues(photo, candidate))
         # Worst-case record/marker overhead must fit DynamoDB's atomic transaction.
@@ -859,6 +974,7 @@ class ScribeTurn:
             scope=doctor.scope,
             doctor_id=doctor.id,
             timezone=doctor.timezone,
+            language=doctor.language,
             selected_patient_id=selected.patient_id if selected else None,
             selected_display_name=selected.display_name if selected else None,
             creating_patient=creating,
@@ -904,6 +1020,7 @@ class ScribeTurn:
             names=tuple(names),
             rxnorm_calls=service.budget.calls if not photo else 0,
             corrected=correction,
+            single_source=candidate._single_source,
             resolved_numbers=resolved_numbers,
         )
         if any(len(part) > DRAFT_SCRIBE_POLICY.card_max_chars for part in render_card(proposal)):
@@ -986,6 +1103,15 @@ class ScribeTurn:
         tokens: list[ScribeCallback] = []
         buttons: list[JsonValue] = []
         for action, label, patient_id in choices:
+            if proposal.language == "en" and not proposal.photo:
+                label = {
+                    "confirm": "✅ Confirm",
+                    "edit": "✏️ Edit",
+                    "reject": "❌ Cancel",
+                    "new": "New patient",
+                    "correct_reply": "Update card",
+                    "new_reply": "New patient",
+                }.get(action, label)
             token = issue_token()
             raw, hash = (
                 (confirm_raw, proposal.confirmation_nonce_hash)

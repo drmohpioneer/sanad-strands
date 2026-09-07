@@ -147,6 +147,7 @@ def configure(revision: str) -> FastAPI:
     )
     scribe.speech_factory = speech
     app.state.concierge.speech_factory = speech
+    app.state.concierge.vision_factory = scribe.vision_factory
     if isinstance(runtime.transport, TelegramTransport):
         scribe.media_factory = lambda receipt, principal: MediaRetriever(
             runtime.steward,

@@ -155,7 +155,9 @@ LEGAL_FOLLOWUP_TRANSITIONS: dict[FollowUpState, frozenset[type[ev.FollowUpEvent]
             ev.SuppressFollowUpContact,
         }
     ),
-    FollowUpState.contact_suppressed: frozenset({ev.ResponseReceived, ev.CancelFollowUp}),
+    FollowUpState.contact_suppressed: frozenset(
+        {ev.AnchorConfirmed, ev.ResponseReceived, ev.CancelFollowUp}
+    ),
     FollowUpState.fulfilled: frozenset(),
     FollowUpState.cancelled: frozenset(),
 }
@@ -764,7 +766,9 @@ def transition_followup(
         prompt = medication_day3_prompt_at(event.anchor_time, policy)
         due = followup_due_at(prompt, policy)
         changes.update(
-            state=FollowUpState.scheduled,
+            state=task.state
+            if task.state == FollowUpState.contact_suppressed
+            else FollowUpState.scheduled,
             anchor_kind=event.anchor_kind,
             anchor_time=event.anchor_time,
             anchor_source_ref=event.anchor_source_ref,

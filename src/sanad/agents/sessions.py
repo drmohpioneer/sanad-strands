@@ -28,6 +28,7 @@ class FencedSessionManager:
         clock: Callable[[], datetime],
         *,
         safety_epoch: int,
+        window: int = 8,
         source_order_versions: tuple[VersionRef, ...] = (),
     ):
         if fence.scope != scope:
@@ -35,6 +36,9 @@ class FencedSessionManager:
         self.store, self.scope, self.key, self.role = store, scope, key, role
         self.fence, self.clock = fence, clock
         self.safety_epoch, self.orders = safety_epoch, source_order_versions
+        if not 2 <= window <= 8 or window % 2:
+            raise ValueError("session window must retain complete pairs")
+        self.window = window
         self.snapshot = store.load_session(scope, key)
         if self.snapshot is not None and self.snapshot.role != role:
             raise ValueError("session role mismatch")
@@ -50,7 +54,7 @@ class FencedSessionManager:
                 )[-8:]
             except ValidationError:
                 self.turns = ()
-        self.turns = self._bounded(self.turns)
+        self.turns = self._bounded(self.turns[-self.window :])
 
     @staticmethod
     def _bounded(turns: tuple[Turn, ...]) -> tuple[Turn, ...]:
@@ -62,10 +66,12 @@ class FencedSessionManager:
             turns = turns[1:]
         return turns
 
-    def commit(self, prompt: str, reply: str) -> bool:
+    def prepare(self, prompt: str, reply: str) -> SessionSnapshot:
         now = self.clock()
         turns = self._bounded(
-            (*self.turns, Turn(role="user", text=prompt), Turn(role="assistant", text=reply))
+            (*self.turns, Turn(role="user", text=prompt), Turn(role="assistant", text=reply))[
+                -self.window :
+            ]
         )
         version = self.snapshot.version if self.snapshot else 0
         blob: dict[str, JsonValue] = {"turns": [t.model_dump(mode="json") for t in turns]}
@@ -82,6 +88,11 @@ class FencedSessionManager:
             safety_epoch=self.safety_epoch,
             fence_generation=self.fence.generation,
         )
+        return snapshot
+
+    def commit(self, prompt: str, reply: str) -> bool:
+        snapshot = self.prepare(prompt, reply)
+        version = self.snapshot.version if self.snapshot else 0
         return self.store.commit_session(
             self.scope, self.key, version, self.fence, snapshot=snapshot
         )

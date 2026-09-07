@@ -4,6 +4,7 @@ from typing import Literal, Self
 
 from pydantic import ConfigDict, model_validator
 
+from sanad.concierge.records import ReportFactPayload
 from sanad.domain import PatientScope, Provenance, VersionRef
 from sanad.domain.boundaries import NonblankStr, PositiveVersion, UtcInstant, _BoundaryValue
 from sanad.scribe.extract import LabRowCandidate, OrderCandidate, ProposalIssue
@@ -26,7 +27,7 @@ class ClinicalFact(ScribeRecord):
     category: Literal[
         "condition", "allergy", "history", "medication_history", "demographic", "patient_report"
     ]
-    payload: FactPayload | LabFactPayload
+    payload: FactPayload | LabFactPayload | ReportFactPayload
     provenance: Provenance
     visibility: Literal["doctor_private", "patient_released"] = "doctor_private"
 

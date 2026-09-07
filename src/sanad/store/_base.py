@@ -198,6 +198,7 @@ class StoreBase(ABC):
             "intake_callback": "INTAKE_CALLBACK",
             "intake_concern": "INTAKE_CONCERN",
             "patient_media": "PATIENT_MEDIA",
+            "patient_action": "PATIENT_ACTION",
             "scribe_invitation_work": "SCRIBE_INVITATION_WORK",
             "scribe_proposal": "SCRIBE_PROPOSAL",
             "scribe_callback": "SCRIBE_CALLBACK",
@@ -377,6 +378,7 @@ class StoreBase(ABC):
             "scribe_callback": "SCRIBE_CALLBACK#",
             "scribe_state": "SCRIBE_STATE#",
             "clinical_fact": "CLINICAL_FACT#",
+            "patient_action": "PATIENT_ACTION#",
             "care_order_head": "CARE_ORDER_HEAD#",
             "care_order_version": "CARE_ORDER_VERSION#",
             "care_plan": "CARE_PLAN#",
@@ -522,6 +524,7 @@ class StoreBase(ABC):
         scribe: bool = False,
     ) -> CommitResult:
         command = request.command
+        concierge = command.payload.get("executor") == "concierge-v1"
         scope = command.scope
         actor = command.principal
         if isinstance(scope, AccountScope) and not account:
@@ -610,6 +613,13 @@ class StoreBase(ABC):
                 Check(profile_record.key, profile_record.version),
                 Check(doctor_record.key, doctor_record.version),
             ]
+        if concierge:
+            from sanad.store.concierge import guards as concierge_guards
+
+            guarded_patient = concierge_guards(self, request, utc_instant(self._clock()))
+            if guarded_patient is None:
+                return Forbidden()
+            authority_checks.extend(guarded_patient)
         command_key = keys.uniqueness(scope, "CMD", command.command_id)
         # Replay identity is the immutable command payload, independent of retry time.
         digest = keys.digest(canonical_json(command.payload).decode())
@@ -632,21 +642,26 @@ class StoreBase(ABC):
             )
         )
         for record in records:
-            if not scribe and record.entity_type in {
-                "photo_association_work",
-                "intake_draft",
-                "intake_callback",
-                "intake_concern",
-                "patient_media",
-                "scribe_proposal",
-                "scribe_state",
-                "scribe_callback",
-                "scribe_invitation_work",
-                "clinical_fact",
-                "care_order_head",
-                "care_order_version",
-                "care_plan",
-            }:
+            if (
+                not scribe
+                and not (concierge and record.entity_type == "clinical_fact")
+                and record.entity_type
+                in {
+                    "photo_association_work",
+                    "intake_draft",
+                    "intake_callback",
+                    "intake_concern",
+                    "patient_media",
+                    "scribe_proposal",
+                    "scribe_state",
+                    "scribe_callback",
+                    "scribe_invitation_work",
+                    "clinical_fact",
+                    "care_order_head",
+                    "care_order_version",
+                    "care_plan",
+                }
+            ):
                 return Forbidden()
             unique = (
                 record.body.get("logical_key")
@@ -766,7 +781,8 @@ class StoreBase(ABC):
             ):
                 return StaleVersion(conflicts=("work_claim",))
         for record in records:
-            if not (identity or scribe) and record.entity_type in {
+            if not (identity or scribe or concierge) and record.entity_type in {
+                "patient_action",
                 "patient",
                 "consent",
                 "patient_binding",

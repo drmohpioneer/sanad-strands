@@ -88,7 +88,9 @@ def arabic_ratio(text: str) -> float:
 def patient_failure(text: str, context: OutputContext, policy: SafetyPolicy) -> str | None:
     if not text.strip():
         return "empty_output"
-    if arabic_ratio(text) < 0.5:
+    if (context.language == "ar" and arabic_ratio(text) < 0.5) or (
+        context.language == "en" and arabic_ratio(text) > 0.5
+    ):
         return "language_drift"
     # Validate the whole reply as well as every sentence; decimal points stay intact.
     sentences = re.split(r"(?<!\d)[.!؟?](?!\d)|[\n؛]", text)

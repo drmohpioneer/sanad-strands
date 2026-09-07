@@ -55,10 +55,10 @@ def test_full_doctor_claim_patient_browser_journey(enrollment: LoginWorld) -> No
     with world.client() as browser:
         result = browser_login(browser, patient_path)
         assert result.status_code == 303 and result.headers["location"] == "/pp"
-        assert browser.get("/api/patient/me").json() == {
-            "display_name": "Synthetic Patient",
-            "consent_version": 1,
-        }
+        data = browser.get("/api/patient/me").json()
+        assert data["display_name"] == "Synthetic Patient" and data["consent_version"] == 1
+        assert data["plan"] == browser.get("/api/patient/plan").json()
+        assert data["plan"]["orders"] == []
         assert browser.get("/pp").status_code == 200
 
 

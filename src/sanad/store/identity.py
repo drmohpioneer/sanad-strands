@@ -467,12 +467,11 @@ def live_snapshot(
             or auth.binding.binding_epoch != snapshot.binding_epoch
             or auth.principal.patient_id != snapshot.patient_id
             or patient.active_binding_id != snapshot.binding_id
-            or patient.contact_status != "active"
+            or patient.contact_status in {"awaiting_link", "frozen"}
             or consent.version != snapshot.consent_version
             or binding.consent_version != consent.version
             or patient.consent_version != consent.version
             or consent.withdrawn_at is not None
-            or not consent.routine_contact_enabled
             or "telegram" not in consent.permitted_channels
             or not profile.binding_active
             or not profile.consent_active

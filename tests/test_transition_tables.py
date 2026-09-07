@@ -519,7 +519,7 @@ FOLLOWUP_TABLE = {
     ),
     "contact_suppressed": (
         "reject",
-        "reject",
+        "contact_suppressed",
         "reject",
         "fulfilled",
         "reject",

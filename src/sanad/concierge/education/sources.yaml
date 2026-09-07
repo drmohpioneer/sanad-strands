@@ -1,0 +1,426 @@
+[
+  {
+    "id": "hypertension",
+    "title_ar": "يعني إيه ضغط عالي",
+    "title_en": "High blood pressure",
+    "topic_tags": [
+      "ضغط عالي",
+      "ارتفاع الضغط",
+      "hypertension",
+      "140/90"
+    ],
+    "permitted_questions": [
+      "يعني إيه ارتفاع الضغط",
+      "معنى 140/90 إيه"
+    ],
+    "text_ar": "ضغط الدم هو قوة الدم على جدران الأوعية وهو ماشي فيها. القراءة فيها رقم وقت نبضة القلب ورقم وقت راحته بين النبضات. منظمة الصحة العالمية بتعتمد 140/90 كحد عام لارتفاع الضغط، مش كهدف شخصي ليك. تشخيص الضغط محتاج قياسات وتقييم من الطبيب. الضغط العالي ممكن يبقى موجود من غير أعراض واضحة. هدفك ومواعيد القياس الخاصة بيك بيحددهم الدكتور في خطتك، والشرح العام لوحده مبيحكمش على قراءة تخصك.",
+    "text_en": "Blood pressure describes the force of blood against vessel walls. The two readings reflect the heartbeat and the rest between beats. WHO uses 140/90 as a general threshold for high blood pressure, not your personal treatment target. Diagnosis needs repeated measurements and a clinician’s assessment. High blood pressure may have no obvious symptoms. Your own targets and measurement times come from your doctor’s plan.",
+    "source_url": "https://www.who.int/news-room/fact-sheets/detail/hypertension",
+    "source_title": "Hypertension",
+    "source_label": "منظمة الصحة العالمية — يعني إيه ضغط عالي",
+    "retrieved_on": "2026-09-07",
+    "reviewed_by": "pending owner review",
+    "version": "education-v1-2026-09-07",
+    "content_kind": "clinical",
+    "source_label_en": "World Health Organization — High blood pressure"
+  },
+  {
+    "id": "home_bp",
+    "title_ar": "ليه نقيس الضغط في البيت",
+    "title_en": "Home blood pressure readings",
+    "topic_tags": [
+      "قياس الضغط",
+      "قياسات البيت",
+      "home blood pressure"
+    ],
+    "permitted_questions": [
+      "ليه أقيس الضغط في البيت",
+      "قراءة الضغط فيها كام رقم"
+    ],
+    "text_ar": "قياسات الضغط في البيت بتساعد الدكتور يشوف قراءات متكررة بعيد عن زيارة العيادة. جهاز الضغط بيطلع رقمين، وحفظ الرقمين بيساعد في نقل القراءة كاملة. طريقة تشغيل الجهاز بتختلف حسب نوعه، والدكتور أو الممرض يقدر يشرح طريقة استعماله. مواعيد القياس وعدد الأيام بتبقى حسب الخطة اللي الدكتور طلبها. تسجيل القراءة مع وقتها بيوضح هي اتقاست إمتى. وجود قراءة مسجلة مش معناه إن النتيجة اتراجعت طبيا أو إن العلاج اتغير.",
+    "text_en": "Home readings give your clinician repeated blood pressure measurements outside a clinic visit. Both numbers are needed to communicate the reading. Devices differ, so a clinician can explain the device instructions. Measurement times and the number of days should come from the agreed plan. Recording the measurement time helps identify each reading. Recording a value does not establish clinical review or a treatment change.",
+    "source_url": "https://www.nhs.uk/tests-and-treatments/blood-pressure-test/",
+    "source_title": "Blood pressure test - NHS",
+    "source_label": "NHS البريطانية — ليه نقيس الضغط في البيت",
+    "retrieved_on": "2026-09-07",
+    "reviewed_by": "pending owner review",
+    "version": "education-v1-2026-09-07",
+    "content_kind": "clinical",
+    "source_label_en": "NHS — Home blood pressure readings"
+  },
+  {
+    "id": "heart_failure",
+    "title_ar": "ضعف القلب ومتابعة الوزن",
+    "title_en": "Heart failure and weight",
+    "topic_tags": [
+      "ضعف القلب",
+      "هبوط القلب",
+      "وزن",
+      "heart failure"
+    ],
+    "permitted_questions": [
+      "يعني إيه ضعف عضلة القلب",
+      "ليه الدكتور طلب متابعة الوزن"
+    ],
+    "text_ar": "ضعف القلب معناه إن القلب مش بيضخ الدم بالكفاءة اللي الجسم محتاجها. الاسم مش معناه إن القلب وقف عن الشغل. بعض الناس ممكن يحصل عندها تجمع سوائل، وده ممكن يظهر في الوزن أو تورم الرجلين. عشان كده متابعة الوزن ممكن تبقى جزء من خطة الدكتور. التغير في الوزن محتاج يتشاف مع باقي الحالة، مش يتفسر من رقم لوحده. مواعيد الوزن وأي تعليمات خاصة بالسوائل أو الأكل لازم تكون من خطتك الشخصية.",
+    "text_en": "Heart failure means the heart does not pump blood as effectively as the body needs. It does not mean the heart has stopped. Fluid can accumulate and may affect body weight or cause swollen legs. Weight monitoring may therefore be part of a doctor’s plan. A change needs clinical context rather than interpretation from a single number. Personal weighing schedules and fluid instructions belong to the care plan.",
+    "source_url": "https://www.nhs.uk/conditions/heart-failure/",
+    "source_title": "Heart failure - NHS",
+    "source_label": "NHS البريطانية — ضعف القلب ومتابعة الوزن",
+    "retrieved_on": "2026-09-07",
+    "reviewed_by": "pending owner review",
+    "version": "education-v1-2026-09-07",
+    "content_kind": "clinical",
+    "source_label_en": "NHS — Heart failure and weight"
+  },
+  {
+    "id": "atrial_fibrillation",
+    "title_ar": "يعني إيه رجفان أذيني",
+    "title_en": "Atrial fibrillation",
+    "topic_tags": [
+      "رجفان أذيني",
+      "ذبذبة أذينية",
+      "atrial fibrillation",
+      "AF"
+    ],
+    "permitted_questions": [
+      "يعني إيه رجفان أذيني",
+      "إيه معنى لخبطة ضربات القلب"
+    ],
+    "text_ar": "الرجفان الأذيني نوع من اضطراب إيقاع القلب، وبيخلي النبض مش منتظم. ممكن ييجي مع خفقان أو تعب، وفي ناس مبتحسش بأعراض. الإحساس بالخفقان لوحده ميأكدش إن الشخص عنده رجفان أذيني. الطبيب بيقيّم الأعراض ويطلب الفحوص المناسبة عشان يعرف السبب. بعض المصابين محتاجين علاج لتقليل احتمال الجلطات حسب تقييمهم الشخصي. الكلام ده شرح للاسم، مش تشخيص ليك ولا اختيار لدوا، وتعليماتك الخاصة هي اللي الدكتور سجلها في الخطة.",
+    "text_en": "Atrial fibrillation is an irregular heart rhythm. It can cause palpitations or tiredness, and some people have no symptoms. Palpitations alone do not establish the diagnosis. A clinician assesses symptoms and tests to identify their cause. Clot prevention can be part of the clinician’s individually assessed plan. This explains the term; it does not diagnose you or select a medicine. Personal instructions come from your plan.",
+    "source_url": "https://www.nhs.uk/conditions/atrial-fibrillation/",
+    "source_title": "Atrial fibrillation - NHS",
+    "source_label": "NHS البريطانية — يعني إيه رجفان أذيني",
+    "retrieved_on": "2026-09-07",
+    "reviewed_by": "pending owner review",
+    "version": "education-v1-2026-09-07",
+    "content_kind": "clinical",
+    "source_label_en": "NHS — Atrial fibrillation"
+  },
+  {
+    "id": "anticoagulants",
+    "title_ar": "السيولة وعلامات النزيف",
+    "title_en": "Anticoagulants and bleeding",
+    "topic_tags": [
+      "سيولة",
+      "مضادات التجلط",
+      "نزيف",
+      "anticoagulants"
+    ],
+    "permitted_questions": [
+      "ليه أدوية السيولة مهمة",
+      "إيه علامات النزيف مع السيولة"
+    ],
+    "text_ar": "أدوية السيولة بتقلل تكوّن الجلطات، والاسم الدارج مش معناه إنها بتحول الدم لمية. الطبيب بيختارها لبعض الناس حسب خطر الجلطات عندهم. النزيف من المخاطر اللي لازم تبقى معروفة مع المجموعة دي. وجود دم في البول أو البراز، أو قيء دموي، أمثلة لعلامات محتاجة اهتمام طبي. ده شرح عام للمجموعة، مش حكم على عرض معين عندك. سؤال نسيان جرعة أو تغيير العلاج بيتراجع مع الطبيب، ومفيش جرعة بديلة بتتحدد من الشرح ده.",
+    "text_en": "Anticoagulants reduce clot formation; they do not literally turn blood into a thinner liquid. Clinicians prescribe them according to clot risk. Bleeding is a risk patients should understand. Blood in urine or stool, and vomiting blood, are examples of signs needing medical attention. This is general information rather than an assessment of your symptoms. Missed-dose and treatment-change questions need professional advice; this explanation gives no replacement dose.",
+    "source_url": "https://www.nhs.uk/medicines/anticoagulants/",
+    "source_title": "Anticoagulant medicines - NHS",
+    "source_label": "NHS البريطانية — السيولة وعلامات النزيف",
+    "retrieved_on": "2026-09-07",
+    "reviewed_by": "pending owner review",
+    "version": "education-v1-2026-09-07",
+    "content_kind": "clinical",
+    "source_label_en": "NHS — Anticoagulants and bleeding"
+  },
+  {
+    "id": "inr",
+    "title_ar": "تحليل سيولة الدم",
+    "title_en": "The INR blood test",
+    "topic_tags": [
+      "INR",
+      "تحليل السيولة",
+      "نسيان السيولة"
+    ],
+    "permitted_questions": [
+      "ليه الدكتور طلب INR",
+      "ليه مينفعش أتجاهل متابعة السيولة"
+    ],
+    "text_ar": "تحليل INR بيقيس زمن تجلط الدم بطريقة موحدة، وبيساعد في متابعة نوع معين من أدوية السيولة. نتيجته بتساعد الفريق المعالج يراجع تأثير الدوا والتوازن بين خطر الجلطات وخطر النزيف. مش كل أدوية السيولة محتاجة نفس التحليل أو نفس المتابعة. الجرعة ومواعيد الفحوص والهدف المناسب بيختلفوا حسب حالة الشخص وأمر الدكتور. نسيان العلاج أو المتابعة ممكن يأثر على الحماية المطلوبة، وسؤال الجرعة المنسية يتوجّه للطبيب. التحليل هنا معلومة عامة من غير هدف رقمي شخصي.",
+    "text_en": "INR standardizes a measure of blood clotting time and is used to monitor a particular anticoagulant treatment. It helps the treating team assess the balance between clotting and bleeding risks. Not every anticoagulant uses the same test. Doses, testing schedules and targets depend on the person and clinician’s instructions. Missing treatment or monitoring may affect protection. Missed-dose questions require professional advice; no individual target is supplied here.",
+    "source_url": "https://www.nth.nhs.uk/resources/anticoagulants-blood-thinners/",
+    "source_title": "Anticoagulants (Blood Thinners) - North Tees and Hartlepool NHS Foundation Trust",
+    "source_label": "NHS البريطانية — تحليل سيولة الدم",
+    "retrieved_on": "2026-09-07",
+    "reviewed_by": "pending owner review",
+    "version": "education-v1-2026-09-07",
+    "content_kind": "clinical",
+    "source_label_en": "NHS — The INR blood test"
+  },
+  {
+    "id": "statins",
+    "title_ar": "إيه فايدة أدوية الستاتين",
+    "title_en": "Statins",
+    "topic_tags": [
+      "ستاتين",
+      "ستاتينات",
+      "statins"
+    ],
+    "permitted_questions": [
+      "إيه فايدة الستاتين",
+      "ليه الدكتور كاتب دوا للكوليسترول"
+    ],
+    "text_ar": "الستاتين اسم مجموعة أدوية بتقلل كمية الكوليسترول اللي الجسم بيصنعها. الطبيب ممكن يكتبها ضمن خطة تقليل خطر مشاكل القلب والأوعية. الكوليسترول مادة الجسم محتاج جزء منها، لكن زيادتها ممكن تضر الأوعية مع الوقت. اختيار العلاج بيعتمد على تقييم الحالة ككل، مش على إحساس الشخص بس. اسم المجموعة مبيحددش جرعة ولا ميعاد مناسب لكل الناس. لو عندك سؤال عن الدوا اللي مكتوب ليك، التفاصيل الشخصية موجودة في أمر الدكتور الحالي في خطتك.",
+    "text_en": "Statins are a group of medicines that reduce the cholesterol the body produces. A clinician may prescribe them as part of cardiovascular risk management. The body needs some cholesterol, but excessive cholesterol can damage blood vessels over time. Treatment is selected from an overall assessment, not symptoms alone. A medicine-group name does not specify an individual dose or schedule. Your own instructions come from your current prescription.",
+    "source_url": "https://www.nhs.uk/medicines/statins/",
+    "source_title": "Statins - NHS",
+    "source_label": "NHS البريطانية — إيه فايدة أدوية الستاتين",
+    "retrieved_on": "2026-09-07",
+    "reviewed_by": "pending owner review",
+    "version": "education-v1-2026-09-07",
+    "content_kind": "clinical",
+    "source_label_en": "NHS — Statins"
+  },
+  {
+    "id": "ldl",
+    "title_ar": "يعني إيه الكوليسترول الضار",
+    "title_en": "What LDL means",
+    "topic_tags": [
+      "LDL",
+      "كوليسترول ضار",
+      "الكوليسترول",
+      "cholesterol"
+    ],
+    "permitted_questions": [
+      "يعني إيه LDL",
+      "إيه الفرق بين الكوليسترول الكلي والضار"
+    ],
+    "text_ar": "LDL هو النوع اللي ناس كتير بتسميه الكوليسترول الضار، لأنه ممكن يساهم في تراكم الدهون جوه الشرايين. تحليل الدهون فيه أكتر من جزء، والرقم الكلي مش هو نفسه كل جزء من الأجزاء. الجسم محتاج كوليسترول لبعض وظائفه، فالموضوع مش مجرد إن كل الدهون وحشة. الدكتور بيبص على التحليل مع عوامل الخطر وباقي حالتك. الهدف اللي يناسبك يتحدد في خطتك، ومفيش رقم هدف شخصي مصدره شرح اسم التحليل لوحده.",
+    "text_en": "LDL is often called bad cholesterol because it can contribute to fatty deposits in arteries. A lipid test contains different measurements, and total cholesterol is not identical to each component. The body needs cholesterol for some functions. Clinicians interpret measurements alongside overall cardiovascular risk. Your personal target belongs to your care plan; explaining the test’s name does not establish a target or interpret your result.",
+    "source_url": "https://www.essex.icb.nhs.uk/health/prevention/live-well/cardiovascular-health/cholesterol/",
+    "source_title": "High cholesterol | Causes, testing and treatment",
+    "source_label": "NHS البريطانية — يعني إيه الكوليسترول الضار",
+    "retrieved_on": "2026-09-07",
+    "reviewed_by": "pending owner review",
+    "version": "education-v1-2026-09-07",
+    "content_kind": "clinical",
+    "source_label_en": "NHS — What LDL means"
+  },
+  {
+    "id": "lipid_test",
+    "title_ar": "تحليل الدهون والصيام",
+    "title_en": "Lipid testing and fasting",
+    "topic_tags": [
+      "تحليل الدهون",
+      "صيام",
+      "صايم",
+      "lipid panel",
+      "fasting"
+    ],
+    "permitted_questions": [
+      "لازم أصوم لتحليل الدهون",
+      "ليه تحليل الدهون مش لازم صيام لكل الناس"
+    ],
+    "text_ar": "تحليل الدهون عينة دم بتساعد في قياس الكوليسترول وتقييم خطر مشاكل الأوعية مع عوامل تانية. أغلب الناس مش محتاجة صيام للتحليل ده، لكن في حالات الطبيب ممكن يطلب صيام. وجود تحاليل تانية في نفس الطلب ممكن يخلي تعليمات التحضير مختلفة. عشان كده المعلومة العامة مش بديل للتعليمات المكتوبة في طلبك. لو تعليمات التحضير مش واضحة، السؤال يتوجّه للدكتور أو المكان اللي هيعمل التحليل. الشرح ده مبيغيّرش أي تعليمات صريحة في خطتك.",
+    "text_en": "A lipid blood test helps assess cholesterol and cardiovascular risk together with other factors. Most people do not need to fast for cholesterol testing, but fasting may be requested in some cases. Other tests ordered at the same time may have different preparation instructions. This general information does not override your own test order. Unclear preparation needs clarification from the clinician or testing service.",
+    "source_url": "https://www.nhs.uk/conditions/high-cholesterol/getting-tested/",
+    "source_title": "High cholesterol - Getting tested - NHS",
+    "source_label": "NHS البريطانية — تحليل الدهون والصيام",
+    "retrieved_on": "2026-09-07",
+    "reviewed_by": "pending owner review",
+    "version": "education-v1-2026-09-07",
+    "content_kind": "clinical",
+    "source_label_en": "NHS — Lipid testing and fasting"
+  },
+  {
+    "id": "potassium",
+    "title_ar": "ليه نتابع البوتاسيوم",
+    "title_en": "Why potassium is checked",
+    "topic_tags": [
+      "بوتاسيوم",
+      "potassium",
+      "تحليل K"
+    ],
+    "permitted_questions": [
+      "ليه الدكتور طلب بوتاسيوم مع دوا الضغط",
+      "يعني إيه متابعة البوتاسيوم"
+    ],
+    "text_ar": "البوتاسيوم واحد من المواد اللي ممكن الدكتور يطلب قياسها في الدم مع متابعة الكلى. بعض أدوية الضغط والقلب محتاجة المتابعة دي قبل العلاج أو لما الدكتور يغيّر الجرعة. التحليل بيساعد الفريق المعالج يراجع تأثير العلاج على الجسم. طلب التحليل مش معناه لوحده إن في مشكلة اتشخصت. النتيجة بتحتاج تتشاف بالوحدة الصحيحة ومع باقي الحالة، والطبيب هو اللي يقرر معناها ليك. الشرح العام ده مبيحددش جرعة جديدة ولا تغيير في العلاج اللي اتكتب.",
+    "text_en": "Potassium may be measured with kidney-function monitoring. Some blood-pressure and heart medicines require these checks before treatment or when a clinician changes a dose. Testing helps the treating team assess the medicine’s effects. A test request alone does not diagnose a problem. Results need the correct units and individual clinical context. This explanation neither supplies a new dose nor changes the existing prescription.",
+    "source_url": "https://www.nhs.uk/medicines/ramipril/about-ramipril/",
+    "source_title": "About ramipril - NHS",
+    "source_label": "NHS البريطانية — ليه نتابع البوتاسيوم",
+    "retrieved_on": "2026-09-07",
+    "reviewed_by": "pending owner review",
+    "version": "education-v1-2026-09-07",
+    "content_kind": "clinical",
+    "source_label_en": "NHS — Why potassium is checked"
+  },
+  {
+    "id": "creatinine",
+    "title_ar": "تحليل الكرياتينين ووظائف الكلى",
+    "title_en": "Creatinine and kidney function",
+    "topic_tags": [
+      "كرياتينين",
+      "creatinine",
+      "وظائف الكلى"
+    ],
+    "permitted_questions": [
+      "يعني إيه كرياتينين",
+      "ليه تحليل وظائف الكلى مهم"
+    ],
+    "text_ar": "الكرياتينين مادة من فضلات الجسم، وقياسها في الدم جزء من تقييم شغل الكلى. الطبيب ممكن يستعين بالنتيجة مع معلومات تانية عشان يقدّر قدرة الكلى على الترشيح. في حالات بيحتاج كمان تحليل بول أو فحوص إضافية. رقم واحد من غير وحدة ولا سياق مش كفاية عشان نحكم على الحالة. متابعة التحاليل بتتفسر مع التاريخ المرضي وتعليمات الدكتور. دور الشرح هنا يفهمك اسم التحليل، مش يقول إن الكلى سليمة أو يغيّر دواء بسبب الرقم.",
+    "text_en": "Creatinine is a waste product measured as part of kidney assessment. Clinicians may combine its level with other information to estimate kidney filtration. Urine tests or other investigations may also be needed. A number without its units and clinical context is insufficient for an individual conclusion. This explains the test rather than declaring the kidneys healthy or changing a medicine because of a result.",
+    "source_url": "https://www.nhs.uk/conditions/kidney-disease/diagnosis/",
+    "source_title": "Chronic kidney disease - Diagnosis - NHS",
+    "source_label": "NHS البريطانية — تحليل الكرياتينين ووظائف الكلى",
+    "retrieved_on": "2026-09-07",
+    "reviewed_by": "pending owner review",
+    "version": "education-v1-2026-09-07",
+    "content_kind": "clinical",
+    "source_label_en": "NHS — Creatinine and kidney function"
+  },
+  {
+    "id": "diuretics",
+    "title_ar": "مدرات البول والدوخة",
+    "title_en": "Diuretics and dizziness",
+    "topic_tags": [
+      "مدرات البول",
+      "مدر البول",
+      "دوخة",
+      "بيدوخني",
+      "diuretics"
+    ],
+    "permitted_questions": [
+      "ليه مدر البول ممكن يعمل دوخة",
+      "إيه معنى مدر البول"
+    ],
+    "text_ar": "مدرات البول بتزود خروج المية والملح في البول، والطبيب ممكن يوصفها لما يكون في تجمع سوائل. الدوخة أو العطش ممكن يحصلوا مع بعض الأدوية من المجموعة دي. ظهور الدوخة مش كفاية لوحده عشان نحدد سببها أو نقول إنها بسيطة. وصف العرض ووقته بيساعد في مراجعته مع الطبيب. سؤال تغيير الدوا بسبب الدوخة محتاج قرار من الدكتور. المعلومة العامة دي مش إذن لتعديل كمية السوائل أو الملح أو أي جرعة في خطتك.",
+    "text_en": "Diuretics increase salt and water loss through urine and may be used for fluid accumulation. Dizziness or thirst can occur with medicines in this group. Dizziness alone does not establish its cause or determine its significance. Describing the symptom and its timing helps professional review. Treatment-change questions need the doctor’s decision. This information does not authorize changing fluids, salt amounts or a prescribed dose.",
+    "source_url": "https://www.nhs.uk/medicines/furosemide/",
+    "source_title": "Furosemide: a medicine to treat oedema - NHS",
+    "source_label": "NHS البريطانية — مدرات البول والدوخة",
+    "retrieved_on": "2026-09-07",
+    "reviewed_by": "pending owner review",
+    "version": "education-v1-2026-09-07",
+    "content_kind": "clinical",
+    "source_label_en": "NHS — Diuretics and dizziness"
+  },
+  {
+    "id": "nitrates",
+    "title_ar": "يعني إيه أدوية النترات",
+    "title_en": "Nitrates",
+    "topic_tags": [
+      "نترات",
+      "نترات القلب",
+      "nitrates",
+      "GTN"
+    ],
+    "permitted_questions": [
+      "يعني إيه نترات",
+      "إيه فايدة أدوية الذبحة من مجموعة النترات"
+    ],
+    "text_ar": "النترات اسم مجموعة أدوية بيوصف الطبيب بعض أنواعها مع ألم الذبحة الصدرية. في مستحضرات مختلفة، زي الرش والأقراص واللاصقات، وطريقة كل شكل مش هو نفس طريقة التاني. اسم المجموعة لوحده ميوضحش طريقة استعمال الدوا اللي عندك. المعلومات العامة عن الأشكال دي مش تعليمات لتجربة أي مستحضر أو تبديله. الجرعة والطريقة والتوقيت لازم يكونوا من أمر الدكتور المسجل. لو في ألم حالي محتاج تقييم عاجل، الشرح عن الدوا مش بديل لمسار الطوارئ.",
+    "text_en": "Nitrates are a medicine group used in angina care. Different preparations include sprays, tablets and patches, and their uses are not interchangeable. The group’s name alone does not specify how your preparation should be used. General information about available forms is not an instruction to try or substitute one. Individual dose and timing come from the prescription. Current pain needs its own clinical assessment.",
+    "source_url": "https://www.nhs.uk/medicines/glyceryl-trinitrate-gtn/about-glyceryl-trinitrate-gtn/",
+    "source_title": "About glyceryl trinitrate (GTN) - NHS",
+    "source_label": "NHS البريطانية — يعني إيه أدوية النترات",
+    "retrieved_on": "2026-09-07",
+    "reviewed_by": "pending owner review",
+    "version": "education-v1-2026-09-07",
+    "content_kind": "clinical",
+    "source_label_en": "NHS — Nitrates"
+  },
+  {
+    "id": "diabetes",
+    "title_ar": "السكر وصحة القلب",
+    "title_en": "Diabetes and heart health",
+    "topic_tags": [
+      "سكر",
+      "سكري",
+      "diabetes"
+    ],
+    "permitted_questions": [
+      "إيه علاقة السكر بالقلب",
+      "ليه متابعة السكر مهمة لمريض القلب"
+    ],
+    "text_ar": "مرض السكر ممكن يأثر على الأوعية الدموية مع الوقت، وعشان كده صحة القلب جزء مهم من متابعته. الاهتمام بالضغط والكوليسترول بيكون كمان جزء من الرعاية حسب تقييم الطبيب. المتابعة مش مجرد رقم سكر منفصل، لكنها خطة بتراعي الحالة كلها. نتيجة السكر بتحتاج وحدتها ووقت القياس وسياقها قبل تفسيرها. الطبيب هو اللي بيحدد الهدف والفحوص المناسبة لكل شخص. الكلام ده شرح عام للعلاقة بين السكر والقلب، ومبيغيّرش علاج ولا يفسر نتيجة شخصية.",
+    "text_en": "Diabetes can affect blood vessels over time, so cardiovascular health is part of its care. Blood pressure and cholesterol may also need attention according to the clinician’s assessment. Follow-up considers overall health rather than an isolated glucose number. A glucose result needs units, timing and context. Personal targets and tests come from the treating clinician. This explains the relationship and does not interpret a personal result or change treatment.",
+    "source_url": "https://www.nhs.uk/conditions/type-2-diabetes/complications/",
+    "source_title": "Complications of type 2 diabetes - NHS",
+    "source_label": "NHS البريطانية — السكر وصحة القلب",
+    "retrieved_on": "2026-09-07",
+    "reviewed_by": "pending owner review",
+    "version": "education-v1-2026-09-07",
+    "content_kind": "clinical",
+    "source_label_en": "NHS — Diabetes and heart health"
+  },
+  {
+    "id": "emergency",
+    "title_ar": "إمتى مسار الطوارئ مهم",
+    "title_en": "Emergency guidance",
+    "topic_tags": [
+      "طوارئ",
+      "اسعاف",
+      "emergency"
+    ],
+    "permitted_questions": [
+      "أعمل إيه لو رسالة الطوارئ ظهرت",
+      "إمتى أطلب مساعدة عاجلة"
+    ],
+    "text_ar": "في سند، إرشاد الطوارئ بييجي من سياسة الأمان المحددة في سند، مش من تخمين الرد في المحادثة. لو مسار الأمان أظهر الرسالة دي، النص المعتمد هو: الكلام ده ممكن يكون خطر. المطلوب دلوقتي أقرب مستشفى أو قسم طوارئ حالاً، أو الاتصال بالإسعاف 123. من غير انتظار رد هنا. وجود سؤال مسجل للدكتور أو رسالة مستنية التسليم ميثبتش إن الدكتور قراها، ومش وعد بوقت رد. الشرح ده بيوضح المسار ومبيشخصش سبب الأعراض.",
+    "text_en": "Sanad’s emergency instructions come from its safety policy. When that pathway triggers, the approved wording is: This could be an emergency. Go to the nearest emergency room now, or call 123 (ambulance). Do not wait for a reply here. A queued question or pending message does not establish that a doctor has read it. This describes the safety pathway and does not diagnose symptoms.",
+    "source_url": "https://www.nhs.uk/conditions/heart-attack/",
+    "source_title": "Heart attack - NHS",
+    "source_label": "سياسة الأمان في سند — إمتى مسار الطوارئ مهم",
+    "retrieved_on": "2026-09-07",
+    "reviewed_by": "pending owner review",
+    "version": "education-v1-2026-09-07",
+    "content_kind": "safety",
+    "source_basis": "Actionable wording exclusively from SAFETY_POLICY_V1_CARDIOLOGY_DRAFT patient_emergency; public NHS page is background, its UK telephone numbers and medicine advice are not imported.",
+    "source_label_en": "Sanad safety policy — Emergency guidance"
+  },
+  {
+    "id": "photo",
+    "title_ar": "تصوير التحليل أو الروشتة",
+    "title_en": "Photographing a report or prescription",
+    "topic_tags": [
+      "تصوير",
+      "صورة التحليل",
+      "روشتة",
+      "photograph",
+      "photo"
+    ],
+    "permitted_questions": [
+      "أصور التحليل إزاي",
+      "أصور الروشتة إزاي"
+    ],
+    "text_ar": "الصورة الواضحة محتاجة نور كويس وإيد ثابتة وخلفية من غير حاجات كتير تشتت النظر. إرشادات سند للورق: الصفحة كلها تبقى ظاهرة من فوق، والأسماء والأرقام والوحدات والتاريخ يبقوا مقروءين، من غير لمعان مغطي الكتابة. كل ورقة لوحدها بتقلل لخبطة الصفوف. الصورة بتتبعت في محادثتك الخاصة مع البوت بعد الربط والموافقة. حفظ الصورة مش معناه إن التحليل اتفسر أو الروشتة بقت خطة جديدة. صفحة NHS خلفية عامة لجودة الصور، وتعليمات الورق والبوت هنا من سند.",
+    "text_en": "A clear photograph needs good lighting, a steady device and an uncluttered background. Sanad’s document instructions are to show the whole page from above, with names, numbers, units and dates readable and without glare. Separate pages reduce row confusion. Use your bound private bot conversation. Saving an image does not interpret a result or activate a prescription. NHS guidance supports image quality; document and bot instructions are Sanad’s own.",
+    "source_url": "https://myhealth-devon.nhs.uk/my-referral/taking-medical-photographs/",
+    "source_title": "Taking Medical Photographs - MyHealth Devon",
+    "source_label": "إرشادات سند — تصوير التحليل أو الروشتة",
+    "retrieved_on": "2026-09-07",
+    "reviewed_by": "pending owner review",
+    "version": "education-v1-2026-09-07",
+    "content_kind": "product",
+    "source_basis": "Public NHS background only. Sanad-specific statements derive from docs/architecture.md and docs/contracts/10-patient-onboarding-concierge-and-education.md; not attributed to NHS.",
+    "source_label_en": "Sanad — Photographing a report or prescription"
+  },
+  {
+    "id": "qr",
+    "title_ar": "دعوة الربط في سند",
+    "title_en": "Your Sanad QR invitation",
+    "topic_tags": [
+      "QR",
+      "دعوة",
+      "دعوة الربط",
+      "كود الدعوة"
+    ],
+    "permitted_questions": [
+      "يعني إيه دعوة QR",
+      "مسح الكود يفتح ملفي فورًا"
+    ],
+    "text_ar": "كود الدعوة في سند وسيلة تفتح بيها رابط الربط بسند. الكود نفسه مفيهوش اسم المريض أو تفاصيل علاجه. فتح الرابط بيعرض تعريف سند والدكتور وتعليمات الموافقة، مش الملف الطبي. بعد طلب الربط والموافقة، الدكتور بيأكد إن الحساب للشخص المقصود قبل إتاحة الخطة. دعوة سند مؤقتة وصلاحيتها محدد، ومش وسيلة لنقل الملف لشخص تاني. صفحة NHS بتشرح مثال عام لفتح كود في الدخول، لكن قواعد الدعوة دي من تصميم سند نفسه.",
+    "text_en": "A Sanad invitation code opens a service-linking flow and contains no patient name or treatment details. Opening it shows the service, doctor and consent instructions rather than the chart. After consent and a claim, the doctor confirms the intended person before plan access. Invitations expire and cannot transfer a chart. The NHS page provides background on QR-based sign-in; these invitation rules are Sanad’s own specification.",
+    "source_url": "https://help.login.nhs.uk/manage/passkeys",
+    "source_title": "Passkeys",
+    "source_label": "إرشادات سند — دعوة الربط في سند",
+    "retrieved_on": "2026-09-07",
+    "reviewed_by": "pending owner review",
+    "version": "education-v1-2026-09-07",
+    "content_kind": "product",
+    "source_basis": "Public NHS background only. Sanad-specific statements derive from docs/architecture.md and docs/contracts/10-patient-onboarding-concierge-and-education.md; not attributed to NHS.",
+    "source_label_en": "Sanad — Your Sanad QR invitation"
+  }
+]

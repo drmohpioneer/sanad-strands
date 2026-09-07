@@ -12,6 +12,7 @@ from typing import Annotated, Any, Literal, Self
 
 from pydantic import BaseModel, Field, JsonValue, StrictBool, model_validator
 
+from sanad.concierge.records import PatientAction
 from sanad.domain import (
     FollowUpTask,
     Mission,
@@ -213,6 +214,8 @@ class PatientProfile(_Metadata):
     binding_epoch: NonnegativeInt = 0
     consent_version: PositiveVersion | None = None
     consent_active: StrictBool = False
+    routine_contact_enabled: StrictBool = True
+    routine_paused_until: UtcInstant | None = None
     binding_active: StrictBool = False
     recipient_ref: NonblankStr | None = None
     recipient_subject: NonblankStr | None = None
@@ -233,7 +236,10 @@ class Patient(_Metadata):
     display_name: Annotated[str, Field(strict=True, min_length=1, max_length=160)]
     language: Literal["ar", "en"]
     timezone: IanaZone
-    contact_status: Literal["awaiting_link", "active", "frozen"] = "awaiting_link"
+    contact_status: Literal[
+        "awaiting_link", "active", "paused", "opted_out", "unreachable", "frozen"
+    ] = "awaiting_link"
+    resume_at: UtcInstant | None = None
     record_version: PositiveVersion = 1
     identifiers: tuple[str, ...] = ()
     age: str | None = None
@@ -938,6 +944,7 @@ type InboundReceiptRecord = StoredRecord
 
 
 MODELS: dict[str, type[BaseModel]] = {
+    "patient_action": PatientAction,
     "photo_association_work": PhotoAssociationWork,
     "intake_draft": IntakeDraft,
     "intake_callback": IntakeCallback,
@@ -986,6 +993,8 @@ MODELS: dict[str, type[BaseModel]] = {
 
 
 def model_scope(model: BaseModel) -> Scope:
+    if isinstance(model, PatientAction):
+        return model.scope
     if isinstance(model, InvitationWork):
         return model.scope
     if isinstance(
@@ -1060,6 +1069,8 @@ def scope_owns(scope: Scope, other: Scope) -> bool:
 
 
 def model_key(model: BaseModel, scope: Scope) -> Key:
+    if isinstance(model, PatientAction):
+        return Key(keys.partition(model.scope), f"PATIENT_ACTION#{keys.component(model.id)}")
     if isinstance(model, InvitationWork):
         return Key(
             keys.partition(model.scope), f"SCRIBE_INVITATION_WORK#{keys.component(model.id)}"

@@ -1,0 +1,239 @@
+{
+  "run_count": 1,
+  "method": "GET",
+  "started_at": "2026-09-07T02:00:38.438808+00:00",
+  "retry_count": 0,
+  "sources": [
+    {
+      "id": "hypertension",
+      "requested_url": "https://www.who.int/news-room/fact-sheets/detail/hypertension",
+      "retrieved_on": "2026-09-07",
+      "http_status": 200,
+      "final_url": "https://www.who.int/news-room/fact-sheets/detail/hypertension",
+      "title": "Hypertension",
+      "redirects": [],
+      "sha256": "5d812ba0dbce63a3348ec4246f44f16c48a4fb6304a9b049dffdd21e821fc7e1"
+    },
+    {
+      "id": "home_bp",
+      "requested_url": "https://www.nhs.uk/tests-and-treatments/blood-pressure-test/",
+      "retrieved_on": "2026-09-07",
+      "http_status": 200,
+      "final_url": "https://www.nhs.uk/tests-and-treatments/blood-pressure-test/",
+      "title": "Blood pressure test - NHS",
+      "redirects": [],
+      "sha256": "2a613af966b83c8b653eecebb831ceec3e3abbf830021423f36cb4d9d87a38ce"
+    },
+    {
+      "id": "heart_failure",
+      "requested_url": "https://www.nhs.uk/conditions/heart-failure/",
+      "retrieved_on": "2026-09-07",
+      "http_status": 200,
+      "final_url": "https://www.nhs.uk/conditions/heart-failure/",
+      "title": "Heart failure - NHS",
+      "redirects": [],
+      "sha256": "8bf42800a258e79b1cd13ce36f29fa4ad2065e8d385828f9e0b834676aed6186"
+    },
+    {
+      "id": "atrial_fibrillation",
+      "requested_url": "https://www.nhs.uk/conditions/atrial-fibrillation/",
+      "retrieved_on": "2026-09-07",
+      "http_status": 200,
+      "final_url": "https://www.nhs.uk/conditions/atrial-fibrillation/",
+      "title": "Atrial fibrillation - NHS",
+      "redirects": [],
+      "sha256": "9de49b033b0fe1093564c8bed5f429e7ce106d8ebedea11992bcf381bfc44ef1"
+    },
+    {
+      "id": "anticoagulants",
+      "requested_url": "https://www.nhs.uk/medicines/anticoagulants/",
+      "retrieved_on": "2026-09-07",
+      "http_status": 200,
+      "final_url": "https://www.nhs.uk/medicines/anticoagulants/",
+      "title": "Anticoagulant medicines - NHS",
+      "redirects": [],
+      "sha256": "4b50db625dbb19e1807811491786057fe98c356d1ec20e125640f0610d5b66b3"
+    },
+    {
+      "id": "inr",
+      "requested_url": "https://www.nhs.uk/medicines/warfarin/how-and-when-to-take-warfarin/",
+      "retrieved_on": "2026-09-07",
+      "http_status": 404,
+      "final_url": "https://www.nhs.uk/medicines/warfarin/how-and-when-to-take-warfarin/",
+      "title": "Page not found - NHS",
+      "redirects": [],
+      "sha256": "a1593aff15d752101bc4e1d2f55b6f5de6f8034b093c6c79fb9488873baa34e4"
+    },
+    {
+      "id": "statins",
+      "requested_url": "https://www.nhs.uk/conditions/statins/",
+      "retrieved_on": "2026-09-07",
+      "http_status": 200,
+      "final_url": "https://www.nhs.uk/medicines/statins/",
+      "title": "Statins - NHS",
+      "redirects": [
+        {
+          "url": "https://www.nhs.uk/conditions/statins/",
+          "http_status": 301
+        }
+      ],
+      "sha256": "2add2753997feda66c8d3bc8d994286680d63447f7f87dd2158bc613160e8882"
+    },
+    {
+      "id": "ldl",
+      "requested_url": "https://www.nhs.uk/conditions/high-cholesterol/cholesterol-levels/",
+      "retrieved_on": "2026-09-07",
+      "http_status": 200,
+      "final_url": "https://www.nhs.uk/conditions/high-cholesterol/cholesterol-levels/",
+      "title": "High cholesterol - Cholesterol levels - NHS",
+      "redirects": [],
+      "sha256": "f8cf16f5e3c27209d719ad78dfae3f39ac79d53a27ffa5170fa8c6de52ecc31d"
+    },
+    {
+      "id": "lipid_test",
+      "requested_url": "https://www.nhs.uk/conditions/high-cholesterol/getting-tested/",
+      "retrieved_on": "2026-09-07",
+      "http_status": 200,
+      "final_url": "https://www.nhs.uk/conditions/high-cholesterol/getting-tested/",
+      "title": "High cholesterol - Getting tested - NHS",
+      "redirects": [],
+      "sha256": "b9f7dc9a9cd04745bca452f055a059eaa6953a8b481b670dc56def9c55e339b0"
+    },
+    {
+      "id": "potassium",
+      "requested_url": "https://www.nhs.uk/medicines/ramipril/about-ramipril/",
+      "retrieved_on": "2026-09-07",
+      "http_status": 200,
+      "final_url": "https://www.nhs.uk/medicines/ramipril/about-ramipril/",
+      "title": "About ramipril - NHS",
+      "redirects": [],
+      "sha256": "4d39c6a68d00b18362d6e1542971d4bde9719fbe7f0aad2921fdd65e5dca6e65"
+    },
+    {
+      "id": "creatinine",
+      "requested_url": "https://www.nhs.uk/conditions/kidney-disease/diagnosis/",
+      "retrieved_on": "2026-09-07",
+      "http_status": 200,
+      "final_url": "https://www.nhs.uk/conditions/kidney-disease/diagnosis/",
+      "title": "Chronic kidney disease - Diagnosis - NHS",
+      "redirects": [],
+      "sha256": "9a8f5bef199cade57b8c07257e4928edb45fb4fc98d52c29d8023cf9e4ec723b"
+    },
+    {
+      "id": "diuretics",
+      "requested_url": "https://www.nhs.uk/medicines/furosemide/side-effects-of-furosemide/",
+      "retrieved_on": "2026-09-07",
+      "http_status": 200,
+      "final_url": "https://www.nhs.uk/medicines/furosemide/",
+      "title": "Furosemide: a medicine to treat oedema - NHS",
+      "redirects": [
+        {
+          "url": "https://www.nhs.uk/medicines/furosemide/side-effects-of-furosemide/",
+          "http_status": 301
+        }
+      ],
+      "sha256": "ad36c26333957c2897a95521d2eb885015358e1e58f869863f6e0675b79a4076"
+    },
+    {
+      "id": "nitrates",
+      "requested_url": "https://www.nhs.uk/medicines/glyceryl-trinitrate-gtn/about-glyceryl-trinitrate-gtn/",
+      "retrieved_on": "2026-09-07",
+      "http_status": 200,
+      "final_url": "https://www.nhs.uk/medicines/glyceryl-trinitrate-gtn/about-glyceryl-trinitrate-gtn/",
+      "title": "About glyceryl trinitrate (GTN) - NHS",
+      "redirects": [],
+      "sha256": "fbeaee762fd8612385edaeb72cb77b4b7510d1f81e481d55c309232daca8b748"
+    },
+    {
+      "id": "diabetes",
+      "requested_url": "https://www.nhs.uk/conditions/type-2-diabetes/",
+      "retrieved_on": "2026-09-07",
+      "http_status": 200,
+      "final_url": "https://www.nhs.uk/conditions/type-2-diabetes/",
+      "title": "Type 2 diabetes - NHS",
+      "redirects": [],
+      "sha256": "381815c5bceb150d2fea68d03e23b6b5a515e407c77740325d85684e50b81b5e"
+    },
+    {
+      "id": "emergency",
+      "requested_url": "https://www.nhs.uk/conditions/heart-attack/",
+      "retrieved_on": "2026-09-07",
+      "http_status": 200,
+      "final_url": "https://www.nhs.uk/conditions/heart-attack/",
+      "title": "Heart attack - NHS",
+      "redirects": [],
+      "sha256": "0a189359e8ac7074f60eb965ad29d137f0eb433d47b5787b3afda276c27f892e"
+    },
+    {
+      "id": "photo",
+      "requested_url": "https://digital.nhs.uk/services/nhs-app/toolkit/step-by-step-guide",
+      "retrieved_on": "2026-09-07",
+      "http_status": 403,
+      "final_url": "https://digital.nhs.uk/services/nhs-app/toolkit/step-by-step-guide",
+      "title": "Just a moment...",
+      "redirects": [],
+      "sha256": "d7b726f5466ff9bcfbb88596e546b55341279cfdc1c7b1f5e39fe13c5434049f"
+    },
+    {
+      "id": "qr",
+      "requested_url": "https://help.login.nhs.uk/manage/passkeys",
+      "retrieved_on": "2026-09-07",
+      "http_status": 200,
+      "final_url": "https://help.login.nhs.uk/manage/passkeys",
+      "title": "Passkeys",
+      "redirects": [],
+      "sha256": "1a77677138a137e273e66a33d6b9939e3c46ffaf0ff14dff6d91693bb9276255"
+    },
+    {
+      "id": "inr_replacement",
+      "requested_url": "https://www.nth.nhs.uk/resources/anticoagulants-blood-thinners/",
+      "retrieved_on": "2026-09-07",
+      "http_status": 200,
+      "final_url": "https://www.nth.nhs.uk/resources/anticoagulants-blood-thinners/",
+      "title": "Anticoagulants (Blood Thinners) - North Tees and Hartlepool NHS Foundation Trust",
+      "redirects": [],
+      "sha256": "66211f6b77ac3124af55562a16aa6bd7aba0ca6aa7daf199de5194dbac230072"
+    },
+    {
+      "id": "photo_replacement",
+      "requested_url": "https://myhealth-devon.nhs.uk/my-referral/taking-medical-photographs/",
+      "retrieved_on": "2026-09-07",
+      "http_status": 200,
+      "final_url": "https://myhealth-devon.nhs.uk/my-referral/taking-medical-photographs/",
+      "title": "Taking Medical Photographs - MyHealth Devon",
+      "redirects": [],
+      "sha256": "ad9ea3473c5dd380caf8ebeb4a8225f30502490afa19a65afc932133c8904b98"
+    },
+    {
+      "id": "ldl_replacement",
+      "requested_url": "https://www.heart.org/en/health-topics/cholesterol/hdl-good-ldl-bad-cholesterol-and-triglycerides",
+      "retrieved_on": "2026-09-07",
+      "http_status": 403,
+      "final_url": "https://www.heart.org/en/health-topics/cholesterol/hdl-good-ldl-bad-cholesterol-and-triglycerides",
+      "title": "Attention Required! | Cloudflare",
+      "redirects": [],
+      "sha256": "b6105a4ed68a3f825b2a81cfb9fcfc3f58a4d3a56cdae58435e952106454d0b6"
+    },
+    {
+      "id": "diabetes_replacement",
+      "requested_url": "https://www.nhs.uk/conditions/type-2-diabetes/complications/",
+      "retrieved_on": "2026-09-07",
+      "http_status": 200,
+      "final_url": "https://www.nhs.uk/conditions/type-2-diabetes/complications/",
+      "title": "Complications of type 2 diabetes - NHS",
+      "redirects": [],
+      "sha256": "208976905a29c4362d41709b9f40df565b1db738c1b9037b8206c02f5a75ebe2"
+    },
+    {
+      "id": "ldl_nhs",
+      "requested_url": "https://www.essex.icb.nhs.uk/health/prevention/live-well/cardiovascular-health/cholesterol/",
+      "retrieved_on": "2026-09-07",
+      "http_status": 200,
+      "final_url": "https://www.essex.icb.nhs.uk/health/prevention/live-well/cardiovascular-health/cholesterol/",
+      "title": "High cholesterol | Causes, testing and treatment",
+      "redirects": [],
+      "sha256": "fb987d2ff9ee6288ca158bc7cc002a6572e9d5be8a9a7a3ec3598b8965147c96"
+    }
+  ],
+  "finished_at": "2026-09-07T02:19:59.727362+00:00"
+}

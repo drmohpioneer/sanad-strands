@@ -77,6 +77,7 @@ def configure(revision: str) -> FastAPI:
     )
     app = create_app(
         revision,
+        synthetic=os.environ.get("SANAD_ENV") in {"dev", "synthetic", "test", "judge"},
         telegram_settings=settings,
         store=store,
         receipt_submit=invoker,
@@ -122,6 +123,7 @@ def configure(revision: str) -> FastAPI:
         speech(source).caller, source, runtime.safety_policy, app.state.model_registry
     )
     scribe.speech_factory = speech
+    app.state.concierge.speech_factory = speech
     if isinstance(runtime.transport, TelegramTransport):
         scribe.media_factory = lambda receipt, principal: MediaRetriever(
             runtime.steward,
@@ -131,6 +133,23 @@ def configure(revision: str) -> FastAPI:
             IntakeScope(doctor_id=principal.doctor_id or "", intake_id=digest(receipt.id)),
             principal,
             lambda: app.state.claims.doctor(principal) is not None,
+            StewardPolicy(DRAFT_POLICY_2026_09),
+        )
+        from sanad.domain import PatientScope
+
+        app.state.concierge.media_factory = lambda receipt, principal: MediaRetriever(
+            runtime.steward,
+            app.state.media_store,
+            TelegramFileClient(runtime.transport),
+            FFmpegConverter(),
+            PatientScope(
+                doctor_id=principal.doctor_id or "", patient_id=principal.patient_id or ""
+            ),
+            principal,
+            lambda: bool(
+                (auth := store.authorize(settings.bot_id, principal.subject)).binding
+                and app.state.concierge.valid(principal, auth.binding)
+            ),
             StewardPolicy(DRAFT_POLICY_2026_09),
         )
     return app

@@ -112,6 +112,14 @@ def sweep_due(
                     if isinstance(runtime.scribe_route, ScribeTurn):
                         handlers["scribe"] = runtime.scribe_route.sweep
                         handlers["media"] = runtime.scribe_route.sweep
+                if runtime.concierge_route is not None:
+                    from sanad.concierge.turn import ConciergeTurn
+                    from sanad.domain import PatientScope
+
+                    if isinstance(runtime.concierge_route, ConciergeTurn) and isinstance(
+                        scope, PatientScope
+                    ):
+                        handlers["media"] = runtime.concierge_route.sweep
                 sweeper = Sweeper(
                     runtime.steward,
                     runtime.inbound,

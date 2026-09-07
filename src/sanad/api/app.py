@@ -26,6 +26,7 @@ def create_app(
     clock: Callable[[], datetime] | None = None,
     transport: Transport | None = None,
     process_receipts: bool = True,
+    synthetic: bool = False,
     web_settings: WebSettings | None = None,
     consent_policy: Callable[[str], ConsentPolicy | None] | None = None,
     receipt_submit: Callable[[ScopedKey], None] | None = None,
@@ -87,8 +88,11 @@ def create_app(
             login, intent, now
         )
         app.state.login, app.state.claims, app.state.web_settings = login, claims, web_settings
+        from sanad.concierge.turn import ConciergeTurn
         from sanad.scribe.turn import ScribeTurn
 
+        app.state.concierge = ConciergeTurn(runtime, synthetic=synthetic)
+        runtime.concierge_route = app.state.concierge
         app.state.scribe = ScribeTurn(runtime, claims)
         runtime.scribe_route = app.state.scribe
         from sanad.scribe.web import scribe_router

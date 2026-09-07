@@ -109,6 +109,7 @@ class OutputContext(_BoundaryValue):
     active_orders: tuple[OrderSummary, ...] = ()
     allowed_numbers: tuple[NonblankStr, ...] = ()
     mode: Literal["plan_explanation", "general_education", "safety_response", "barrier_help"]
+    language: Literal["ar", "en"] = "ar"
     doctor_notified: StrictBool = False
 
 

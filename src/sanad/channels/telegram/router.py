@@ -11,7 +11,7 @@ from sanad.accounts.service import AccountService
 from sanad.channels.telegram import wording
 from sanad.channels.telegram.settings import TelegramSettings
 from sanad.channels.transport import Transport
-from sanad.domain import DRAFT_POLICY_2026_09, ObservationRef, PatientScope
+from sanad.domain import DRAFT_POLICY_2026_09, ObservationRef, PatientScope, Principal
 from sanad.domain.boundaries import _BoundaryValue
 from sanad.safety import render_urgent, to_incident_facts
 from sanad.safety.models import IncidentFacts, ScreenVerdict
@@ -23,7 +23,14 @@ from sanad.steward.types import StewardPolicy
 from sanad.steward.urgent import UrgentService
 from sanad.store.keys import ScopedKey
 from sanad.store.protocol import Store
-from sanad.store.records import Authorization, InboundReceipt, Incident, OutboundIntent, from_record
+from sanad.store.records import (
+    Authorization,
+    InboundReceipt,
+    Incident,
+    OutboundIntent,
+    SubjectBinding,
+    from_record,
+)
 
 LANGUAGES: tuple[Literal["ar", "en"], ...] = ("ar", "en")
 
@@ -66,6 +73,9 @@ class TelegramRuntime:
             payload_resolver=self.patient_payload,
         )
         self.counters: dict[str, int] = {}
+        self.concierge_route: (
+            Callable[[InboundReceipt, Principal, SubjectBinding], RouteResult | None] | None
+        ) = None
         self.identity_route: (
             Callable[[InboundReceipt, Authorization], RouteResult | None] | None
         ) = None
@@ -153,6 +163,11 @@ def route_receipt(
     )
     if active_patient:
         assert isinstance(receipt.scope, PatientScope)
+        if verdict.level != "danger" and runtime.concierge_route is not None:
+            assert auth.binding is not None
+            concierge_result = runtime.concierge_route(receipt, auth.principal, auth.binding)
+            if concierge_result is not None:
+                return concierge_result
         if receipt.kind == "callback":
             runtime.transport.answer_callback(
                 str((receipt.payload or {}).get("callback_query_id", "")),

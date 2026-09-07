@@ -136,6 +136,11 @@ def freshness(
                 or profile.consent_version != intent.consent_version_seen
             ):
                 return "consent"
+            if intent.notification_purpose == "routine_prompt" and (
+                not profile.routine_contact_enabled
+                or (profile.routine_paused_until is not None and profile.routine_paused_until > now)
+            ):
+                return "routine_contact_disabled"
             if profile.delivery_epoch != intent.delivery_epoch_seen:
                 return "delivery_epoch"
         if profile.safety_epoch != intent.safety_epoch_seen:

@@ -76,6 +76,8 @@ Invitation confirmation transaction checks: valid unreplayed invitation/claim, v
 
 Lost/mistaken binding resolution uses explicit authenticated commands, records a reason, freezes old access, increments relevant epochs and revokes exchanges/sessions. A clinician can own a patient before that patient is linked; clinical disclosure and routine contact still require final consent/binding. The mission deadline is never silently shifted to compensate for late enrollment.
 
+Contract 10 adds `ReportFactPayload` to patient-released `ClinicalFact` values: medication start, day-three reply, raw reading or repeated-question attachment, always retaining patient-report provenance. `Reading` keeps the exact quoted measurement span separately from parsed value/unit and policy judgment. Patient routine-contact flags and snooze expiry are separate from clinical consent; a preference revision updates Patient, PatientProfile, Consent and PatientBinding together and increments delivery epoch. Hashed, expiring `PatientAction` choices bind renewed reminder consent or a specific current START/quiet slot to the patient, receipt and authority epochs. No model can provide these mutations.
+
 ## Missions, follow-up and review
 
 | Entity | Fields beyond common metadata / rules |
@@ -286,3 +288,5 @@ These are behavior checks to distribute through their owning contracts, not test
 - Fulfilled objective creates DONE before review; dangerous fulfillment sends one urgent report; correction invalidates prior fulfillment without automatic reopen; late new upload never silently corrects; acknowledgment does not resolve an incident.
 - Seven-day bundle contains unresolved eligible items once per doctor; resolved/cross-tenant items excluded; uncertain send does not claim acknowledgment; a missed tick catches up without a stale reminder burst.
 - Full supported patient journey and every required mission/agent capability remain in integration acceptance; a contest date cannot turn a missing executor into accepted completion.
+
+Contract 10 permits an `AnchorConfirmed` on a contact-suppressed MEDICATION_DAY3 task to record the reported start and derive its original timing while retaining suppression and independent review. It cannot restart contact. Patient web reading projections expose the raw report rather than the stored policy grading metadata.

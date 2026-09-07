@@ -206,7 +206,24 @@ def web_router(login: LoginService, claims: ClaimService, settings: WebSettings)
         session: Annotated[WebSession, Depends(require_session("patient"))],
     ) -> Response:
         patient = own_patient(session)
-        return HTMLResponse(pages.patient_home(patient.display_name, session.consent_version or 1))
+        from sanad.concierge.web import patient_page
+
+        return HTMLResponse(patient_page(patient.display_name, patient_plan_data(session)))
+
+    def patient_plan_data(session: WebSession) -> dict[str, object]:
+        from sanad.concierge.plan import load, projection
+
+        patient = own_patient(session)
+        snapshot = load(claims.store, patient.scope, claims.clock())
+        if snapshot is None:
+            raise HTTPException(401)
+        return dict(projection(snapshot))
+
+    @router.get("/api/patient/plan")
+    async def patient_plan(
+        session: Annotated[WebSession, Depends(require_session("patient"))],
+    ) -> Response:
+        return JSONResponse(patient_plan_data(session))
 
     @router.get("/api/patient/me")
     async def patient_me(
@@ -214,7 +231,11 @@ def web_router(login: LoginService, claims: ClaimService, settings: WebSettings)
     ) -> Response:
         patient = own_patient(session)
         return JSONResponse(
-            {"display_name": patient.display_name, "consent_version": session.consent_version}
+            {
+                "display_name": patient.display_name,
+                "consent_version": session.consent_version,
+                "plan": patient_plan_data(session),
+            }
         )
 
     @router.post("/api/claims/{claim_id}/confirm")

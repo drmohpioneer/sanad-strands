@@ -154,6 +154,10 @@ TEMPLATES = {
         "No current medication start matches this difficulty. "
         "Send the medicine name and your doctor's instruction.",
     ),
+    "patient_barrier_mission_choose": (
+        "العائق ده يخص أنهي طلب من طلبات الدكتور؟",
+        "Which of your doctor's requests does this difficulty concern?",
+    ),
     "patient_visit_choose": (
         "تقصد أنهي زيارة من اللي الدكتور طلبهم؟",
         "Which of your doctor's requested visits do you mean?",

@@ -162,6 +162,17 @@ Contract 10 adds `ReportFactPayload` to patient-released `ClinicalFact` values: 
 
 ## Missions, follow-up and review
 
+Contract 16a adds `Mission.barrier_attempts`, an ordered tuple of typed,
+doctor/patient/mission-scoped `BarrierAttempt` values. Each attempt has a sequence,
+revision, originating receipt, patient words, stated area and its receipt source,
+expiry, durable reasoning/question/search counters, attempted steps and outcomes,
+cached source-backed place fields, and resolved/unresolved/handed-to-doctor state.
+Expiry stops further work; it does not delete the record or resolve the mission.
+Only a new barrier type or an answer to the fact requested by the prior attempt
+opens another attempt. Repeated words append to the existing attempt. A receipt
+checkpoint advances only receipt revision metadata while preserving its processing
+claim and work clock; completion remains the final patient-turn transaction.
+
 Contract 14 adds `medication_stop`, `medication_change`, `start_date` and `barrier` to `ReportFactPayload`, with optional `barrier_type`, `effective_start` and `anchor_unknown`. They retain patient provenance and the exact target version. `PatientProfile.pending_start_clarification` contains `mission_ref`, `asked_at` and `expires_at`; a patient reply can change only that field and normal revision metadata, without changing consent, recipient, epochs or lease data. Medication `PatientAction` choices retain the screened `medication_report_text`, including for voice input, and keep the existing receipt, single-use and authority bindings.
 
 The medication executor emits the existing `BarrierRecorded`, `BarrierResolved` and `OrderSuperseded` events. The existing blocked shape retains a bounded `resume_at` and barrier reason; supersession ends unfinished work. A day-three barrier is a fact referenced by the fulfilled FollowUpTask, not an event on its already fulfilled parent. STOP/CHANGE acknowledgments never create an automatic day-three task. An accepted recent anchor whose deadline is already due retains that deadline and schedules an immediate accountability wake. No legal transition-table row is added.

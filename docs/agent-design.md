@@ -42,6 +42,19 @@ A correction retains a previous verified drug name unless disputed. Unsupported
 order fields stay blocked, are omitted from order lines, and are quoted once in
 the clarification section. Source frequency words remain words.
 
+Contract 16b implements the Coordinator row's `request_missing_evidence` and
+`schedule_next_contact` as wording selections only. Code supplies the exact move
+set, source-bound identifiers, missing monitoring slots, remaining document
+categories from the accepted predicate, visit/report requirements and deadline.
+The model orders identifiers; it writes no patient sentence or time. A fresh
+scoped Strands instance has no tools, one model turn, one provider attempt and a
+six-second ceiling. A durable Steward attempt checkpoint prevents another call
+on recovery. `pause_mission` is always refused as redundant; barrier classification,
+evidence receipt and verified completion retain their deterministic executors.
+Refusal audits retain a typed reason, source version and contact identity without
+provider prose. The original template remains the fallback; singleton sets skip
+the provider. The Coordinator never changes contact eligibility or timing.
+
 ## The Steward owns orchestration and all writes
 
 The deterministic Steward reads the authenticated event, evaluates safety, selects the required role, validates its typed proposal, commits accepted events/state/outbox intent and schedules derived work. Agents do not call one another freely. Fixed application routing can invoke the Evidence Reader for a Scribe input or the Resolver for a Coordinator barrier; the routing itself is code.

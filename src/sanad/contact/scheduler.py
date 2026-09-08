@@ -8,6 +8,7 @@ from sanad.auth.service import revise
 from sanad.contact.ladder import plan_next_contact, quiet_at, tomorrow
 from sanad.contact.policy import DRAFT_CONTACT_POLICY as POLICY
 from sanad.contact.templates import patient_text
+from sanad.coordinator.integration import coordinate
 from sanad.domain import FollowUpTask, Mission, PatientScope, ReviewKind
 from sanad.domain import events as ev
 from sanad.domain.entities import TERMINAL_STATES
@@ -124,6 +125,7 @@ def _missed(builder: CommitBuilder, source: Mission | FollowUpTask, slot: str) -
         builder.audit("CONTACT_WINDOW_MISSED", event_id, (to_record(source, builder.scope).ref,))
 
 
+@coordinate
 def prepare(
     builder: CommitBuilder, source: Mission | FollowUpTask, profile: PatientProfile
 ) -> None:

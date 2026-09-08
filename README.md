@@ -6,6 +6,16 @@ Sanad carries a doctor's plan after the visit: natural Telegram conversations be
 
 Start with the [A–Z master plan](docs/master-plan.md), then the [full roadmap](docs/roadmap.md). The [architecture](docs/architecture.md), [domain model](docs/domain-model.md), [care policy](docs/care-policy.md), [agent design](docs/agent-design.md), [security](docs/safety-security.md), [verification matrix](docs/verification.md) and [operations plan](docs/operations.md) supply the implementation detail.
 
+Practical barriers can attach to all six care-mission kinds. The bounded Resolver
+asks one clarification and can search OpenStreetMap near an area the patient
+names. Options disclose that prices, stock and suitability are unknown and
+nothing was booked. Unresolved attempts remain recorded with the mission and
+appear in its existing deadline report. This capability has offline fixture
+verification only; provider coverage and real-care readiness remain unproven.
+The optional adapter reads its descriptive User-Agent from `SANAD_OSM_USER_AGENT`;
+without configuration it returns the ordinary unavailable outcome. No account
+key is required and no personal contact address is hard-coded.
+
 [Current state](docs/project_state.md) records the planning/release state. The [contract 00 report](docs/contracts/00-skeleton-and-domain.md#report) records the implementation evidence and verdict. [Contract workflow](docs/contracts/README.md) explains the working loop.
 
 ## Run and test
@@ -288,6 +298,14 @@ A treatment-changing answer stays private on the question. The doctor must dicta
 **The contact policy and all reminder wording are pending owner review.** A linked, consented patient receives up to three reminders for an unfinished test, visit, task, requested record, or medication START report. Computed reminders use 10:00 in the patient's timezone: the first eligible morning, the midpoint of a sufficiently long deadline, and the day before it. Quiet hours defer these reminders until the quiet window ends. Across all missions, at most one chase is accepted per local day, at least 24 hours after the previous one. Three unanswered chases make the mission visibly unreachable; a reply resets the unanswered sequence, while the three-chase limit remains.
 
 Confirmed monitoring slots have their own prompts, within two hours of the slot. A reported medication start anchors the independent day-three check-in, with its existing two-day response window. A scheduled slot inside quiet hours requires separate consent; without it, a doctor review records the contact problem. Missed windows are recorded and rescheduled where appropriate, so recovery does not send a backlog of expired prompts. A stop or snooze invalidates queued routine messages. Contact never changes the doctor's deadline, escalation time, check-in time or monitoring slots.
+
+Reminder wording can name the specific readings or document types still outstanding,
+with local times and the recorded deadline. Sanad lists up to three items and the
+number of additional items. One bounded Coordinator turn selects among facts
+computed by the existing executors; it cannot invent a clinical sentence or move
+a contact. A refused, unavailable or timed-out model uses the original reminder.
+Single-choice prompts do not call a model. Wording and draft limits await owner
+review; contract 16b has scripted-provider evidence only, with no live allowance.
 
 The doctor still receives the individual deadline notice even when the patient is unlinked, unreachable or opted out. Seven days after the first accepted notice, unresolved items enter one weekly bundle for the owning doctor, up to 20 lines with an overflow count. Acknowledgment does not resolve an item. Current resolved items are omitted when sending; an empty bundle stops until new work re-arms it. Accepted deliveries are counted once and recover without resending after a restart; uncertain deliveries retain a timed review.
 

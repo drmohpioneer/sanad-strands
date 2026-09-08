@@ -243,6 +243,76 @@ class DeadlineHistory(_BoundaryValue):
     policy_version: NonblankStr
 
 
+class BarrierPlace(_BoundaryValue):
+    """Only source-backed map attributes; no service/stock/price assertions."""
+
+    source_id: NonblankStr
+    name: str = Field(min_length=1, max_length=60)
+    address: str | None = Field(default=None, max_length=100)
+    distance_m: int = Field(ge=0, le=5000)
+    opening_hours: str | None = Field(default=None, max_length=60)
+    phone: str | None = Field(default=None, max_length=40)
+
+
+class BarrierStep(_BoundaryValue):
+    receipt_id: NonblankStr
+    at: UtcInstant
+    action: Literal["reason", "ask_patient", "find_places", "patient_reply", "finish"]
+    outcome: NonblankStr
+
+
+class BarrierAttempt(_BoundaryValue):
+    doctor_id: NonblankStr
+    patient_id: NonblankStr
+    mission_id: NonblankStr
+    sequence: PositiveVersion
+    version: PositiveVersion = 1
+    receipt_id: NonblankStr
+    created_at: UtcInstant
+    updated_at: UtcInstant
+    expires_at: UtcInstant
+    barrier_type: Literal[
+        "cost", "availability", "forgot", "confusion", "side_effect_experience", "other"
+    ]
+    patient_words: tuple[NonblankStr, ...]
+    receipt_ids: tuple[NonblankStr, ...]
+    area: str | None = Field(default=None, max_length=120)
+    area_receipt_id: NonblankStr | None = None
+    requested_fact: Literal["area", "detail"] | None = None
+    answered: bool = False
+    reasoning_spent: int = Field(default=0, ge=0, le=1)
+    questions_spent: int = Field(default=0, ge=0, le=1)
+    searches_spent: int = Field(default=0, ge=0, le=2)
+    phase: Literal["reserved", "chosen", "search_reserved", "complete"] = "reserved"
+    choice: Literal["ask_patient", "find_places", "hand_to_doctor", "resume_chase"] | None = None
+    question: str = Field(default="", max_length=180)
+    steps: tuple[BarrierStep, ...] = ()
+    places: tuple[BarrierPlace, ...] = Field(default=(), max_length=10)
+    outcome: NonblankStr = "reasoning_reserved"
+    state: Literal["resolved", "unresolved", "handed_to_doctor"] = "unresolved"
+
+    @model_validator(mode="after")
+    def validate_attempt(self) -> Self:
+        if self.expires_at <= self.created_at or self.updated_at < self.created_at:
+            raise ValueError("barrier_attempt_times")
+        if (self.area is None) != (self.area_receipt_id is None):
+            raise ValueError("area_source_required")
+        if self.area_receipt_id and self.area_receipt_id not in self.receipt_ids:
+            raise ValueError("area_source_outside_attempt")
+        return self
+class CoordinatorChoice(_BoundaryValue):
+    """Presentation only, bound to the exact committed mission/contact version."""
+
+    source_version: PositiveVersion
+    slot_id: NonblankStr
+    contact_at: UtcInstant
+    window_end: UtcInstant
+    template_id: NonblankStr
+    move: NonblankStr
+    fact_ids: tuple[NonblankStr, ...]
+    bundle_digest: NonblankStr
+
+
 class Mission(_Aggregate):
     entity_type: Literal["mission"] = "mission"
     doctor_id: NonblankStr
@@ -290,6 +360,20 @@ class Mission(_Aggregate):
     danger_history: StrictBool = False
     latest_deadline_notice_event_id: NonblankStr | None = None
     cancellation_reason: NonblankStr | None = None
+    barrier_attempts: tuple[BarrierAttempt, ...] = ()
+
+    @model_validator(mode="after")
+    def validate_barrier_attempts(self) -> Self:
+        for index, attempt in enumerate(self.barrier_attempts, 1):
+            if (attempt.doctor_id, attempt.patient_id, attempt.mission_id, attempt.sequence) != (
+                self.doctor_id,
+                self.patient_id,
+                self.id,
+                index,
+            ):
+                raise ValueError("barrier_attempt_scope_or_sequence")
+        return self
+    coordinator_choice: CoordinatorChoice | None = None
 
     @model_validator(mode="after")
     def validate_mission(self) -> Self:

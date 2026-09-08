@@ -45,6 +45,10 @@ def guards(store: "StoreBase", request: CommitRequest, now: datetime) -> list["C
     from sanad.store._base import Check
 
     command = request.command
+    if request.receipt_completion is None and command.payload.get("resolver_action"):
+        from sanad.resolver.guard import checkpoint_guards
+
+        return checkpoint_guards(store, request, now)
     actor = command.principal
     if (
         command.payload.get("type") not in KINDS
@@ -169,6 +173,11 @@ def guards(store: "StoreBase", request: CommitRequest, now: datetime) -> list["C
             ):
                 return None
     for row in request.puts:
+        if row.entity_type == "outbound_intent" and command.payload.get("resolver_action"):
+            from sanad.resolver.guard import suppression as resolver_suppression
+
+            if resolver_suppression(store, snap, request, row, now, checks):
+                continue
         if (
             row.entity_type == "outbound_intent"
             and command.payload.get("type") == "RecordPatientReply"
@@ -226,6 +235,14 @@ def guards(store: "StoreBase", request: CommitRequest, now: datetime) -> list["C
                     return None
                 checks.append(Check(previous.key, previous.version))
         if row.entity_type == "mission":
+            from sanad.resolver.guard import hold
+            from sanad.resolver.guard import permits as resolver_permits
+
+            original_barrier = next((m for m in snap.missions if m.id == row.id), None)
+            if original_barrier and (
+                hold(original_barrier, row, now) or resolver_permits(snap, request, row, now)
+            ):
+                continue
             if command.payload.get(
                 "type"
             ) == "RecordPatientReply" and _medication_barrier_projection(snap, request, row, now):

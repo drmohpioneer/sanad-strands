@@ -216,6 +216,29 @@ Education is a versioned set of bounded excerpts. Clinical entries cite fetched 
 
 Coordinator chooses guarded mission proposals. Resolver addresses practical barriers within a question/search budget. They can propose contact times or verified places, but cannot change clinical deadlines, book without an authorized integration, invent availability/prices or prescribe substitutes. Provider failure uses the deterministic ladder with visible failure state. Both remain required capabilities.
 
+Contract 16a implements barrier routing and the Resolver separately from 16b's
+Coordinator. Its replaceable places adapter uses OpenStreetMap Nominatim and
+Overpass, superseding the earlier proposed Amazon Location provider. Only an
+area stated in the current barrier conversation enters the lookup. A typed
+attempt on the mission retains patient words, outcomes and cached places.
+Receipt-preserving fenced checkpoints reserve reasoning and tool budgets before
+external work; recovery cannot repeat spent reasoning or reset an attempt.
+Unresolved attempts retain the original clinical deadline and barrier pause.
+Contract 16b narrows Coordinator contact proposals to wording only: the accepted
+scheduler first prepares the unchanged contact and its exact slot/window. One
+bounded Coordinator turn selects a move and ordered fact identifiers from a
+code-built mission bundle. A separate fenced Steward audit checkpoint consumes
+the one attempt before the call; recovery of that checkpoint uses the template
+without another call. The unchanged source clock remains the recovery path.
+The Steward persists the version-bound selection and
+refusal audit with the original contact transaction; failed selection retains the
+existing template. Delivery renders from current patient language and rechecks
+the saved facts through the output validator and safety kernel. Monitoring uses
+its existing scheduled slots, never a new chase. Single-choice medication and
+pre-visit brief contacts keep their accepted templates without a model call.
+Pause, completion, barriers and any adjustment to contact time confer no new
+Coordinator authority. All policy numbers and wording remain owner-review pending.
+
 Patient conversation includes deterministic medication start, stop, change, date and barrier handling before the general Concierge fallback. After the existing safety, treatment-change, preference and identity/question gates, a day-three answer takes precedence over STOP, CHANGE and START acknowledgments; an unambiguous combined stop/start report records both in one transaction. The stopped current order is available solely for STOP acknowledgment, separately from the active plan projection. Choice callbacks retain the screened text and exact target version. No model chooses an acknowledgment, date anchor, barrier class or mutation.
 
 Medication amendment confirmation uses the existing pure transitions to supersede prior unfinished missions, cancel their day-three tasks and resolve their unmet-objective reviews atomically. Scoped outbox cleanup follows on an ordinary Steward command or sweep, with the existing active-order send check also applied before delivery attempt admission so stale source versions cannot obscure the `order_inactive` refusal. The patient store admits only clarification metadata changes, exact barrier projections and justified order-scoped suppression; existing identity, consent, lease and receipt guards still apply.

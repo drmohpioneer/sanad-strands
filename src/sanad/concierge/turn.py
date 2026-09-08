@@ -41,6 +41,7 @@ from sanad.store.records import (
 
 if TYPE_CHECKING:
     from sanad.channels.telegram.router import RouteResult, TelegramRuntime
+    from sanad.resolver.places import PlacesProvider
 
 
 class ConciergeTurn:
@@ -55,11 +56,13 @@ class ConciergeTurn:
         vision_factory: Callable[[Provenance], VisionAdapter] | None = None,
         observe: Callable[[CallMetadata], None] = lambda metadata: None,
         checkpoint: Callable[[str], None] = lambda stage: None,
+        places_provider: "PlacesProvider | None" = None,
     ):
         self.runtime, self.store = runtime, runtime.store
         self.synthetic, self.model_factory = synthetic, model_factory
         self.speech_factory, self.media_factory = speech_factory, media_factory
         self.observe, self.checkpoint = observe, checkpoint
+        self.places_provider = places_provider
         self.vision_factory = vision_factory
         from sanad.evidence.turn import EvidenceTurn
 
@@ -303,6 +306,22 @@ class ConciergeTurn:
             template, reply, status = self._decide(
                 tx, text, verdict, reading, transcript, source, session
             )
+            from sanad.resolver.turn import ResolverTurn, ResolverUnavailable, keep_blocked
+
+            resolver_target = tx.builder.command.payload.get("resolver_target")
+            if resolver_target:
+                try:
+                    help_text = ResolverTurn(self, getattr(self, "places_provider", None)).run(
+                        tx, source
+                    )
+                except ResolverUnavailable:
+                    return RouteResult(route="patient", status="resolver_pending")
+                reply = reply + "\n" + help_text if reply else help_text
+            keep_blocked(tx)
+            if resolver_target:
+                from sanad.resolver.turn import stage_reply
+
+                stage_reply(tx, str(resolver_target), template, reply)
             result = tx.finish(
                 template, reply, emit=not tx.builder.command.payload.get("media_reply_owned", False)
             )
@@ -338,6 +357,10 @@ class ConciergeTurn:
         session: FencedSessionManager,
     ) -> tuple[str, str, str]:
         language = tx.snapshot.patient.language
+        from sanad.resolver.turn import recover
+
+        if recover(tx):
+            return "patient_resolver_reply", "", "resolver"
 
         def reply(key: str, **fields: str) -> tuple[str, str, str]:
             return key, templates.render(key, language, **fields), key
@@ -390,6 +413,11 @@ class ConciergeTurn:
             ):
                 return reply("patient_callback_stale")
             tx.consume(token)
+            from sanad.concierge.barriers import callback as barrier_callback
+
+            barrier_choice = barrier_callback(tx, token, source)
+            if barrier_choice:
+                return reply(barrier_choice[0], **barrier_choice[1])
             from sanad.concierge.monitor_reports import callback as monitor_callback
 
             monitor_choice = monitor_callback(tx, token, source)
@@ -524,6 +552,10 @@ class ConciergeTurn:
         if medication_reply:
             key, fields = medication_reply
             return self._start_reply(tx) if key == "_start" else reply(key, **fields)
+        from sanad.resolver.turn import pending_reply
+
+        if pending_reply(tx, text):
+            return "patient_resolver_reply", "", "resolver"
         if reports.is_start(text):
             if reports.ambiguous_start_time(text):
                 return reply("patient_start_date")

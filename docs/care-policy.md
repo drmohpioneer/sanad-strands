@@ -109,6 +109,21 @@ Patient "stop" ends routine contact immediately, revokes future routine sends an
 
 The Concierge offers plan explanations and useful general education. The Resolver addresses cost, access, transport, upload problems, availability and forgetting with bounded questions and verified practical options. It cannot substitute a drug/test, quote unverified prices, promise a booking or change a clinical deadline. If it cannot solve the barrier, the barrier and attempted steps remain in the mission; the doctor sees it on a permitted report or when requesting status. Barrier solving is required even if the chosen places provider needs replacing with reviewed clinic resources.
 
+Contract 16a attaches recognized barriers to MEDICATION, TEST, VISIT, TASK,
+MONITOR and SEND_RECORDS missions. One durable attempt permits one reasoning
+turn, one clarification question and two places searches; retrying or restarting
+does not restore spent capacity. A new barrier type or an answer to the fact
+requested by the previous attempt may open a new versioned attempt. Seven-day
+expiry stops work without deleting the unresolved record. The existing one-day
+barrier resume time and clinical deadline are preserved.
+OpenStreetMap options use only the patient's stated area in this conversation.
+The code-rendered offer states that prices, stock and suitability are unknown
+and nothing has been booked. Failed or empty lookups offer the fixed suggestion
+to ask the clinic for practical help. The existing DEADLINE gateway shows the
+barrier and one attempt summary; no new proactive notice is introduced.
+Radius 5 km, ten retained results, three shown and the attempt budgets remain
+`OWNER_REVIEW_PENDING` operational defaults.
+
 ## One doctor communication path
 
 Only the Liaison's controlled delivery gateway sends unsolicited doctor messages. The Steward determines eligibility and supplies facts. If the model is slow or unavailable, the same gateway uses deterministic templates; safety delivery never waits for generated prose. Direct replies to doctor actions, account approval and claim confirmation are requested interactions, not extra proactive patient-status classes.
@@ -134,3 +149,24 @@ The doctor can fulfil review, request evidence, amend an order, extend a deadlin
 ## Full-build acceptance evidence
 
 Required evidence includes all seven mission types; simultaneous missions sharing one patient budget; four-hour and inferred deadlines; old records with historical dates and multiple requested categories; early medication acknowledgment followed by day-3 work; order amendment before a queued send; patient stop; delayed/unclaimed binding; corrected and late evidence; terminal mission with unresolved review; weekly doctor bundles; and crash/restart recovery. [Verification](verification.md) turns these policies into acceptance scenarios. A successful demo path alone does not establish full completion.
+
+
+## Coordinator reminder wording (contract 16b)
+
+**OWNER_REVIEW_PENDING.** For an already permitted contact, code may state the
+recorded title, local deadline, specific unfilled monitoring slots, document
+categories still required by the accepted evaluator, or the recorded visit/task
+report requirement. It names at most three items and gives the number of additional
+items. These are reminders of recorded requests, never a judgement about a value,
+treatment response, reassurance or consequence of missing a reading. Future
+monitoring slots are described as not yet recorded, without telling the patient
+to measure them early. Accepted document types are not invented requirements.
+
+The draft settings are `call_timeout_s=6`, `max_turns=1`, `max_named_items=3`,
+`min_choice_size=2`. First contacts and chases use the same guards. A sole move
+uses the existing template without a model. Unknown moves/facts, altered instants,
+clinical prose, redundant pause proposals and provider failures fall back to that
+template with durable refusal accounting. Code alone owns the original slot,
+window, consent and send-time version checks. Medication/day-three prompts and
+pre-visit briefs retain their existing single-choice wording. Barrier handling
+belongs to 16a; no new pause, resume or clinical policy is introduced here.

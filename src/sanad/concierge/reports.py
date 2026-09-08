@@ -854,15 +854,9 @@ def medication_reply(
         return "patient_start_date_expired", {}
     obstacle = recognize_barrier(text)
     if obstacle:
-        choices = medication_missions(tx.snapshot, text, "START", barrier=True)
-        if len(choices) == 1:
-            record_barrier(tx, choices[0], text, obstacle, source=source)
-            return "patient_barrier_recorded", {"drug": choices[0].title}
-        if choices:
-            for mission in choices:
-                medication_button(tx, mission, "barrier", text)
-            return "patient_barrier_choose", {}
-        return "patient_barrier_missing", {}
+        from sanad.concierge.barriers import route
+
+        return route(tx, text, source)
     return None
 
 

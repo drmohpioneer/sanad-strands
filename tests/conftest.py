@@ -49,3 +49,34 @@ def pytest_configure(config: pytest.Config) -> None:
         patch.setattr(socket, name, _deny_dns)
     config.add_cleanup(patch.undo)
     config.add_cleanup(pytest_socket.enable_socket)
+
+
+@pytest.fixture(autouse=True)
+def coordinator_scripted_only(
+    request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """16b has no live allowance: every default Coordinator is a scripted refusal."""
+    if request.config.getoption("--live"):
+        return
+    from providers.fixtures import ScriptedModel, response
+    from strands.models import Model
+
+    from sanad.coordinator import agent
+    from sanad.models.registry import ModelRegistry, ModelRole
+
+    real_calls: list[bool] = []
+
+    def forbidden(*args: object, **kwargs: object) -> Model:
+        real_calls.append(True)
+        raise AssertionError("Contract 16b forbids real provider calls")
+
+    def scripted(registry: ModelRegistry, role: ModelRole) -> Model:
+        return ScriptedModel(response('{"refused": true}'))
+
+    monkeypatch.setattr(agent, "bedrock_model", forbidden)
+    monkeypatch.setattr(agent, "model_factory", scripted)
+    request.addfinalizer(lambda: _assert_no_coordinator_provider_calls(real_calls))
+
+
+def _assert_no_coordinator_provider_calls(calls: list[bool]) -> None:
+    assert calls == [], "zero real Coordinator provider calls required"

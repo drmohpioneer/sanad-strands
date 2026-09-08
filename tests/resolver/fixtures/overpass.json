@@ -1,0 +1,6 @@
+{"version": 0.6, "elements": [
+  {"type":"node","id":100001,"lat":30.101,"lon":31.600,"tags":{"amenity":"laboratory","name":"Synthetic Cedar Laboratory","addr:street":"Example Street","opening_hours":"Mo-Sa 09:00-17:00","phone":"+20 000 000 0000"}},
+  {"type":"way","id":100002,"center":{"lat":30.102,"lon":31.600},"tags":{"amenity":"clinic","name":"Synthetic Palm Clinic","addr:full":"Sample Avenue"}},
+  {"type":"node","id":100003,"lat":30.103,"lon":31.600,"tags":{"amenity":"hospital","name":"Synthetic Nile Hospital"}},
+  {"type":"node","id":100004,"lat":31.100,"lon":31.600,"tags":{"amenity":"pharmacy","name":"Outside Radius"}}
+]}

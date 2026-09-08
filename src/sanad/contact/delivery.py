@@ -167,18 +167,21 @@ def doctor_payload(store: Store, intent: OutboundIntent) -> dict[str, JsonValue]
             title=title,
             due_local=format_local(source.due_at or source.review_at, zone),
         )
-        if (
-            isinstance(source, Mission)
-            and source.kind == "MEDICATION"
-            and source.barrier_type
-            and source.barrier_reason
-        ):
+        if isinstance(source, Mission) and source.barrier_type and source.barrier_reason:
             text += "\n" + render(
                 "doctor_medication_barrier",
                 language,
                 type=source.barrier_type,
                 text=source.barrier_reason,
             )
+            if source.barrier_attempts:
+                from sanad.resolver.templates import doctor_summary
+
+                text += "\n" + render(
+                    "doctor_barrier_attempt",
+                    language,
+                    summary=doctor_summary(source.barrier_attempts[-1], language),
+                )
     if isinstance(source, Mission) and source.details.kind == "MONITOR":
         from sanad.monitor.report import doctor_table
 

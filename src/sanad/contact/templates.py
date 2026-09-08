@@ -71,6 +71,10 @@ TEMPLATES = {
         "عائق: {type} — «{text}»",
         'Barrier: {type} - "{text}"',
     ),
+    "doctor_barrier_attempt": (
+        "محاولة المساعدة: {summary}",
+        "Barrier attempt: {summary}",
+    ),
     "patient_visit_brief": (
         "الزيارة المطلوبة: {title}، بتاريخ {due_local}.\n{lines}",
         "Your requested visit: {title}, on {due_local}.\n{lines}",
@@ -103,6 +107,10 @@ def render(key: str, language: str = default_language, **fields: str) -> str:
 def patient_text(
     store: Store, source: Mission | FollowUpTask, patient: Patient, template: str
 ) -> str:
+    from sanad.coordinator.integration import selected_text
+
+    if selected := selected_text(store, source, patient, template):
+        return selected
     scope = PatientScope(doctor_id=source.doctor_id, patient_id=source.patient_id)
     summaries = []
     drugs = []

@@ -76,3 +76,6 @@ class PatientAction(_BoundaryValue):
     consumed_at: UtcInstant | None = None
     medication_report_text: NonblankStr | None = Field(default=None, repr=False)
     report_text: str | None = Field(default=None, repr=False)
+    monitor_reading_text: NonblankStr | None = Field(default=None, repr=False)
+    monitor_observed_at: UtcInstant | None = None
+    monitor_received_at: UtcInstant | None = None

@@ -124,11 +124,18 @@ beside the proposed new instruction. Both identities use the common resolver;
 only a source-anchored change within the same seed-defined ingredient family is
 combined. Stated previous values are provenance, not an invented prior prescription
 date or evidence of adherence. Existing record amendments retain version guards.
+Contract 11e addendum 6 drops a bare continue for an identity already carried by a
+start, change or stop, including the verified previous identity on a change.
+The removal records only a count and removes its current-medication question;
+other continues retain the existing reconciliation rules. Incoming correction
+indices follow removals and spoken ordering while targets on the previous card
+keep their identity.
 
-Dictated monitoring requests currently become TASK instructions with the existing
-`doctor_task` patient-report predicate. An explicit duration sets the deadline at
-the receipt anchor plus that duration. No reading slots or coverage are inferred;
-slice 13 owns the later MONITOR upgrade.
+Supported dictated monitoring requests become MONITOR with a code-compiled
+schedule, a card showing the first slot and schedule-derived deadline, and an
+every-slot predicate. The 11e TASK compiler remains the fallback for unsupported
+metrics and unparsable cadence; its receipt-relative duration behavior is retained.
+Old TASK records are not migrated.
 
 Contract 11e consolidates doctor dictation around one deterministic name resolver.
 Doctor memory, clinic memory, seed vocabulary, already fetched drug lookup results,
@@ -144,9 +151,12 @@ candidates by resolved identity and quantities. Medication, patient and TEST
 disagreements retain field-specific code questions. Primary history and missions
 are authoritative; secondary-only history, missions and free questions are never
 added. A failed primary promotes the surviving reading. Two failures preserve the
-existing model-unavailable response. The existing missing-request guard applies
-to the resulting primary mission list; a secondary-only request cannot silently
-authorize work. Original source numbers and confirmation guards remain authoritative.
+existing model-unavailable response. The missing-request guard checks the primary
+mission list, including a frequency-bearing monitoring TASK even when a TEST is
+present. A missing request uses the primary's remaining single retry with the
+identical request, shared lookup cap and original deadline. A failed retry retains
+the valid blocked card; a secondary-only request cannot silently authorize work.
+Original source numbers and confirmation guards remain authoritative.
 
 The dictation card retains the 11b layout: patient, medications, requested work and
 its deadlines, individual history facts, alerts, then short questions. Code chooses
@@ -157,6 +167,10 @@ Single-source provenance adds wording only to an item's existing question.
 Dictation admits `finding` and `complaint` facts through extraction
 and confirmed storage. Code chooses ECG/Echo prefixes from resolved finding cues,
 uses Complaint/Dx for those categories, and retains unknown categories as History.
+A fact containing both ECG and Echo/EF cues splits into separate lines at render
+time, without changing the stored fact or inferring EF from other words. Dictated
+alerts require an explicit source instruction such as "notify me if" or «قوللي لو»;
+an observation alone cannot create an alert. This does not change danger screening.
 Merge comparisons normalize numeric formatting and patient name tokens; a missing
 reading cannot erase the other reading's patient name. Literal source doses remain
 the display authority, while unsupported model digits retain their existing blocks.
@@ -212,6 +226,19 @@ Medication amendment confirmation uses the existing pure transitions to supersed
 Treatment-changing answers are retained only on the doctor's question record. A real Scribe amendment confirmation sets durable readiness and its accepted order-version reference; a tick uses the ordinary answer command to resolve the question and send the fixed plan-update notice. The held sentence is never transmitted, paraphrased or validated for delivery. Terminal answer/closure consumes the held answer, so reopening does not replay its old amendment. Question extension moves the independent answer-review clock, and cancellation is refused while that review is unresolved. Patient output and delivery authority are checked independently of clinical completion.
 
 ## Fulfillment, evidence and clocks
+
+### Monitoring
+
+Contract 13 compiles supported repeated vital requests into confirmed MONITOR
+schedules. A pure executor assigns each accepted reading to its nearest dated
+slot within three hours, including replacements of an occupied slot; readings
+outside the window remain extras. Coverage counts distinct filled slots only.
+The existing safety screen runs first. Text facts and photo acceptance share
+the same slot predicate and atomic Steward transaction, including fulfillment
+and independent result review. Immutable source references retain values and
+threshold provenance. Code renders missing slots, values and descriptive trends
+on the existing DONE/DEADLINE gateway. Draft schedule policy remains pending
+owner review; no model supplies schedule arithmetic or patient wording.
 
 Decision 023 supports printed or typed Latin-script documents; handwriting and
 Arabic script in images remain unsupported. Contract 11d normalizes document

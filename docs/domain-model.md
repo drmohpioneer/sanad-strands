@@ -82,10 +82,11 @@ that resolved display or the plain spoken fallback. An unsupported English guess
 cannot be learned. Finding memory continues to strip numeric results and may
 hold a doctor-confirmed Arabic fallback; drug/test memory keeps its Latin constraint.
 TEST `clinical_en` is populated by code from resolved analytes, preserving its
-existing stored projection. A monitoring request becomes TASK with a normalized
-clinical-English instruction and the existing `doctor_task` patient-report predicate.
-The explicit duration is anchored at receipt; without one, the TASK default applies.
-Other mission text stays spoken. No MONITOR slots are created by dictation yet.
+existing stored projection. A supported repeated vital request becomes MONITOR
+with a typed schedule and the `monitor` evidence predicate. Unsupported metrics
+or an unparsable cadence retain the normalized TASK instruction and `doctor_task`
+patient-report predicate, with receipt-relative duration or the TASK default.
+Other mission text stays spoken. Existing TASK records remain unchanged.
 
 `Proposal.language` snapshots the doctor's language for card rendering. Doctor,
 Patient and presentation defaults share `domain/language.py`'s owner-review-pending
@@ -185,6 +186,16 @@ A correction to a previously delivered report is a separate proposed `DONE:CORRE
 Review source uniqueness is `(doctor, source_type, source_id, source_version, review_kind)`. Retrying creation returns the same obligation. A materially new version creates a new source key; resolving an old version never resolves a new one by accident. Cardinality is per review kind because one evidence version may require result review and an independent incident response. An incident has exactly one incident-response obligation.
 
 ### Mission details by kind
+
+Contract 13 adds a backward-compatible `MonitorDetails.readings` projection.
+Each `MonitorReading` references an immutable clinical fact or evidence version,
+its row index, observed and received instants, the normalized reported value,
+and one slot index or null for an extra. Replacements retain prior source links
+and never fill another slot. Distinct occupied indices establish coverage;
+missing values are never synthesized. The store admits a patient MONITOR
+revision only when its exact projection follows from accepted sources and the
+current receipt. Patient choices retain the screened reading and original time.
+Old TASK missions are not migrated.
 
 | Kind | Required executable details and objective |
 |---|---|
@@ -298,7 +309,7 @@ and never invents a transliteration or treats arbitrary identifiers as names.
 | `send_records` | Requested category coverage, historical period when present, and distinct-document count; pre-order dates are permitted |
 | `visit` | Only `report_received`, with a report/discharge/imaging category; other objectives retain their patient-report predicates |
 | `task_evidence` | Readable evidence stays pending until explicit doctor acceptance |
-| `monitor` | Screen readings and retain patient-report facts; `slot_assignment` remains incomplete without a review obligation |
+| `monitor` | The shared text/photo predicate checks accepted reading-to-slot links; every required slot must be filled. Missing slots have explicit `slot:<index>` identifiers. Unverified identity, disagreement and incompatible units cannot supply coverage. |
 
 Binding addendum 1 limits a photo to one document: multiple-document cues retain
 one candidate with `one_document_per_photo`, with no inferred grouping. The

@@ -174,7 +174,8 @@ The card keeps the patient, medications, required work, history, alerts and shor
 | `/lang en`, `/lang ar` | Set the doctor's language for subsequent turns |
 
 If your dictation mentions a requested test or examination and the primary reading
-omits it, the card asks which items were requested
+omits it, Scribe retries once within the existing extraction deadline. If it is
+still absent, the card asks which items were requested
 and cannot be confirmed until you supply the missing request. Unrelated corrections
 keep that question open. A bare label already included in another fact's terms,
 such as an extra `History: ECG`, is removed from the card.
@@ -194,14 +195,37 @@ values and a matching ingredient family; it does not choose a medication substit
 When extraction shortens the new brand, a longer brand explicitly named at the
 change target survives only when that ingredient family is verified. Previous
 values already verified on the change line do not produce duplicate questions.
+An extra bare continue for a drug already on a start, change or stop line is
+removed along with its current-medication question. A standalone continue stays.
 `Forxiga (start)` without a spoken dose asks for the dose.
 
+<<<<<<< HEAD
 “Blood pressure chart, 3 times a day for 5 days” becomes one TASK with that
 instruction and a deadline five days after receipt. Completion requires the existing
 patient report. It is separate from TEST; scheduled monitoring slots arrive in
-slice 13. Duplicate history folds before size checks. An oversized card retains
+slice 13. A TEST cannot mask an omitted monitoring TASK: that request receives the
+same bounded retry and remains blocked if still missing. ECG and Echo cues in one
+fact render on separate history lines. Only an explicit instruction such as
+“notify me if” creates a dictated alert; an observation remains a finding.
+Duplicate history folds before size checks. An oversized card retains
+=======
+"Blood pressure chart, 3 times a day for 5 days" becomes one MONITOR with 15
+readings, starting the next local day at 08:00, 14:00 and 20:00. The confirmation
+card shows the first reading and the actual deadline. Patients receive scheduled
+prompts and can send a value or a readable monitor photo. Each accepted reading
+fills its nearest slot within three hours; another reading for that slot replaces
+its displayed value. Readings outside those windows stay in the chart as extras.
+The doctor receives a table on completion or at the deadline, including missing
+slots, extras and a descriptive trend after three filled slots. Danger remains immediate.
+
+Supported schedules cover blood pressure (mmHg), glucose (mg/dL), weight (kg) and
+pulse (bpm), up to four readings per day for 30 days. Weight and pulse have no
+default safety-table judgment. Unsupported requests keep the TASK form; existing
+TASKs are not migrated. Schedule hours, tolerance and coverage remain draft policy
+pending owner review. Duplicate history folds before size checks. An oversized card retains
+>>>>>>> build/13
 every order and mission, shows six history lines and offers the rest through Edit.
-Frequency and duration counts already shown in the TASK do not raise unassigned
+Frequency and duration counts already shown in the request do not raise unassigned
 number questions; actual dose disagreements remain blocked.
 
 Patient creation, accepted facts, orders, care plan, missions and learned names commit atomically. A current medication without a recorded order can create its head on confirmation, without a day-three task. A new patient's explicitly stated previous brand/dose can support a change; an unknown existing order still requires clarification. Starting a medication creates the separate day-three follow-up; confirmation does not mean the patient has taken it.
@@ -245,7 +269,7 @@ Before an attendance/report visit, an eligible routine brief lists its local dat
 
 Bound, consented patients can send text or voice to ask about their active plan and supported health terms. `خطتي`, `أعمل إيه` and `/plan` show the current doctor instructions and next task without a model. For other answers, the Concierge selects sentences, it does not write them. One bounded proposal selects from permitted sentences: every sentence must match a current plan line or a labeled education excerpt and pass the safety, language, source, number and length checks. Treatment changes and unanswered questions enter a timed doctor QUESTION queue; the reply makes no promise about when the doctor will answer.
 
-Patients can report a medication start, answer an existing day-three check-in, or send readings. These remain self-reports with their original observation and voice provenance. A matching START report anchors its independent check-in; a matching CHANGE acknowledgment creates no automatic day-three task. Readings do not fulfill monitoring tasks. Photos and documents have durable pending media work; evidence interpretation is described in the patient evidence section below. Danger keeps the existing deterministic path before ordinary conversation.
+Patients can report a medication start, answer an existing day-three check-in, or send readings. These remain self-reports with their original observation and voice provenance. A matching START report anchors its independent check-in; a matching CHANGE acknowledgment creates no automatic day-three task. A MONITOR completes only when every confirmed slot has an accepted reading; completion creates an independent doctor review. If two schedules request the same metric, the patient chooses which one the reading belongs to. Photos and documents have durable pending media work; evidence interpretation is described in the patient evidence section below. Danger keeps the existing deterministic path before ordinary conversation.
 
 `وقف الرسايل` stops routine reminders while preserving the doctor's orders and access to patient-initiated answers. Snoozes last at most seven days. Resuming requires a separate consent button. Quiet-hour changes retain clinical times and identify any slot requiring its own consent. The patient page `/pp` and APIs `/api/patient/me` and `/api/patient/plan` share the active plan, next tasks, last reading, preferences and open questions.
 

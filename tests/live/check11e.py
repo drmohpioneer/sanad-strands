@@ -51,7 +51,7 @@ from .check11b import DictationClients, DictationSpend
 from .check11c import displayed_numbers_supported
 
 ROOT = Path(__file__).resolve().parents[2]
-EVIDENCE = ROOT / "docs/evidence/live-11e-2026-09-08.json"
+EVIDENCE = ROOT / "docs/evidence/live-11e-2026-09-08b.json"
 INVENTED = re.compile(
     r"\b(?:J wave|ST depression|LVH|RBBB|grade|New disease|null|none|daily)\b", re.I
 )
@@ -232,6 +232,7 @@ def card_parts(p: Proposal) -> dict[str, Any]:
     requested = sections.get("Requested:", [])
     tests = [line.split(" — due ")[0] for line in requested if line.startswith("TEST:")]
     tasks = [line for line in requested if line.startswith("TASK:")]
+    monitors = [line for line in requested if line.startswith("MONITOR:")]
     history = sections.get("History:", [])
     questions = sections.get("Needs confirmation:", [])
     exforge = [line for line in drugs if "Exforge" in line]
@@ -249,15 +250,23 @@ def card_parts(p: Proposal) -> dict[str, Any]:
         "tests": tests,
         "test_analytes": sorted(canonical),
         "tasks": tasks,
+        "monitors": monitors,
         "history": history,
         "questions": questions,
         "checks": {
-            "patient": sections.get("patient")
-            in (["New patient: Ahmed Saad, 53"], ["New patient: Ahmed Saad, 53, male"]),
+            "patient": len(sections.get("patient", [])) == 1
+            and bool(
+                re.fullmatch(
+                    r"New patient: Ahmed Saad, 53(?: (?:years?(?: old)?|yrs?))?(?:, male)?",
+                    sections["patient"][0],
+                )
+            ),
+            "one_line_per_drug": len(drugs) == 2 and len(exforge) == len(forxiga) == 1,
             "exforge_change": len(exforge) == 1
             and "Exforge 5/160 → Exforge HCT 10/160/25" in exforge[0]
             and "(change)" in exforge[0],
             "forxiga_start": forxiga == ["Forxiga (start)"],
+            "no_unrequested_alerts": not sections.get("Notify me if:"),
             "forxiga_dose_question": any("Forxiga" in q and "dose" in q for q in questions),
             "no_generic_line": not any(
                 re.search(r"amlodipine|valsartan|hydrochlorothiazide|dapagliflozin", line, re.I)
@@ -274,12 +283,12 @@ def card_parts(p: Proposal) -> dict[str, Any]:
                 == 1
                 for fragment in unresolved
             ),
-            "monitoring_task": len(tasks) == 1
-            and "blood pressure" in tasks[0].lower()
-            and bool(re.search(r"\b(?:3|three) times a day\b", tasks[0]))
-            and bool(re.search(r"\b(?:5|five) days\b", tasks[0]))
+            "monitoring_schedule": len(monitors) == 1
+            and "blood pressure" in monitors[0].lower()
+            and "3 times a day for 5 days (15 readings, first " in monitors[0]
+            and "08:00)" in monitors[0]
             and not any("blood pressure" in t.lower() for t in tests)
-            and "MONITOR:" not in card,
+            and not any("blood pressure" in t.lower() for t in tasks),
             "no_invented_tokens": INVENTED.search(card) is None,
             "no_question_marks": "(؟)" not in card,
             "at_most_four_questions": len(questions) <= 4,
@@ -319,6 +328,8 @@ def agreement(runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "forxiga_line": [line for line in run.get("drugs", []) if "Forxiga" in line]
             == ["Forxiga (start)"],
             "task_line": bool(run.get("tasks")) and run.get("tasks") == reference.get("tasks"),
+            "monitor_line": bool(run.get("monitors"))
+            and run.get("monitors") == reference.get("monitors"),
             "history_count": len(run.get("history", [])),
             "same_history_count": bool(run.get("history"))
             and len(run.get("history", [])) == len(reference.get("history", [])),
@@ -350,16 +361,16 @@ def run_check(
         raise ValueError("inject every provider or none")
     destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.exists() or any(
-        json.loads(path.read_text()).get("attempt", 1) == 5
+        json.loads(path.read_text()).get("implementation_attempt") == 7
         for path in destination.parent.glob("live-11e-*.json")
     ):
         raise RuntimeError("11e allowance already recorded; do not rerun")
     started = datetime.now(UTC)
     report: dict[str, Any] = {
         "contract": "11e",
-        "attempt": 5,
-        "implementation_attempt": 6,
-        "allowance": "Binding addendum 4, English five-run check",
+        "attempt": 7,
+        "implementation_attempt": 7,
+        "allowance": "Binding addendum 6, English five-run check",
         "language": "en",
         "state": "started",
         "run_count": 5,
@@ -527,7 +538,7 @@ def run_check(
             and r["exforge_line"]
             and r["forxiga_line"]
             and r["test_analytes"]
-            and r["task_line"]
+            and r["monitor_line"]
             for r in report["agreement"]
         )
         report["state"] = "passed" if passed else "failed"

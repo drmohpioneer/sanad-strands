@@ -115,6 +115,7 @@ def test_attempt5_live_oracle_preserves_labs_or_block_and_does_not_confirm_block
         response(calls=[("lookup_drug", {"name": "Bisoprolol"})]),
         candidate(value),
         candidate(retried),
+        *([] if restore_labs else [candidate(retried)]),
         candidate(corrected),
         candidate(corrected),
     )
@@ -136,9 +137,14 @@ def test_attempt5_live_oracle_preserves_labs_or_block_and_does_not_confirm_block
         "confirmed" if restore_labs else "blocked"
     )
     assert bool(report["memory_rows_written"]) == restore_labs
-    assert len(model.script.calls) == 5
+    assert len(model.script.calls) == (5 if restore_labs else 6)
     assert len(speech.calls) == 1 and len(fixture.calls) <= 6
-    assert not report["retries"]
+    assert report["retries"] == (
+        []
+        if restore_labs
+        else [{"provider": "scribe", "part": 0, "attempt": 2, "reason": "request_missing"}]
+    )
+    assert not model.script.scripts
 
 
 def test_11c_wire_request_count_order_size_and_cost() -> None:

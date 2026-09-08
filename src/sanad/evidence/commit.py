@@ -415,19 +415,12 @@ def prepare(builder: CommitBuilder) -> None:
         keyboard = patient_buttons(builder, evidence, plausible, identity=True)
         review(builder, evidence)
     elif evidence.category == "monitor_screen":
-        evidence = evidence.model_copy(
-            update={
-                "required_predicate_results": (
-                    PredicateResult(
-                        satisfied=False,
-                        missing=("slot_assignment",),
-                        detail="Reading retained for slot assignment.",
-                        evaluated_at=now,
-                    ),
-                )
-            }
+        from sanad.monitor.evidence import prepare as prepare_monitor
+
+        evidence, key, monitor_fields, keyboard = prepare_monitor(
+            builder, evidence, chosen, plausible
         )
-        record_monitor(builder, evidence)
+        fields.update(monitor_fields)
     elif chosen is None:
         if len(plausible) > 1 and evidence.category != "other":
             key = "patient_evidence_which"

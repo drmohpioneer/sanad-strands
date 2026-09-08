@@ -573,16 +573,20 @@ class ScribeTurn:
 
         async def extract_twice() -> object:
             deadline = monotonic() + EXTRACTION_TIMEOUT
+            attempts = [0, 0]
 
-            async def reading() -> object:
-                reason = ""
-                for attempt in range(2):
+            async def reading(
+                index: int, pending: ModelProposal[DictationCandidate] | None = None
+            ) -> object:
+                reason = "request_missing" if pending else ""
+                for attempt in range(attempts[index], 2):
                     remaining = deadline - monotonic()
                     if remaining <= 0:
-                        return ModelUnavailable(reason="timeout")
+                        return pending or ModelUnavailable(reason="timeout")
                     if attempt:
                         logger.info("scribe_extraction_retry attempt=2 reason=%s", reason)
                         self.observe_retry(reason)
+                    attempts[index] += 1
                     agent = make_agent(
                         "scribe",
                         scope=scope,
@@ -605,7 +609,9 @@ class ScribeTurn:
                         isinstance(result, ProposalFailure) and result.reason == "schema_validation"
                     ) or (isinstance(result, ModelUnavailable) and result.reason == "unavailable")
                     if not transient or attempt:
-                        return result
+                        return (
+                            pending if pending and not isinstance(result, ModelProposal) else result
+                        )
                     reason = (
                         "schema_validation"
                         if isinstance(result, ProposalFailure)
@@ -617,8 +623,38 @@ class ScribeTurn:
             # one unchanged worker deadline. A peer failure never cancels a survivor.
             if correction and correction.photo:
                 # Photo correction keeps its accepted single-extraction path.
-                return await reading()
-            results = await asyncio.gather(reading(), reading(), return_exceptions=True)
+                return await reading(0)
+            results = list(await asyncio.gather(reading(0), reading(1), return_exceptions=True))
+            primary = next((i for i, r in enumerate(results) if isinstance(r, ModelProposal)), None)
+            if primary is not None:
+                before = results[primary]
+                assert isinstance(before, ModelProposal)
+                if attempts[primary] < 2 and missing_request(before.value, text):
+                    try:
+                        retried = await reading(primary, before)
+                    except Exception:
+                        # Keep the durable clarification card on a retry setup or
+                        # adapter failure; never log the provider's raw exception.
+                        logger.warning("scribe_request_retry_failed")
+                        retried = before
+                    if isinstance(retried, ModelProposal):
+                        from sanad.scribe.extract import extracted_numbers
+
+                        represented = set(extracted_numbers(retried.value))
+                        retried.value._dropped_numbers = tuple(
+                            dict.fromkeys(
+                                (
+                                    *before.value._dropped_numbers,
+                                    *retried.value._dropped_numbers,
+                                    *(
+                                        n
+                                        for n in extracted_numbers(before.value)
+                                        if n not in represented
+                                    ),
+                                )
+                            )
+                        )
+                    results[primary] = retried
             good = [r for r in results if isinstance(r, ModelProposal)]
             if not good:
                 return next(
@@ -849,7 +885,15 @@ class ScribeTurn:
             # generic placeholder is never promoted into a doctor question.
             issues.append(ProposalIssue(item="all", code="clarification"))
         if not photo and command is None and missing_request(candidate, source_text):
-            issues.append(ProposalIssue(item="all", code="request_missing"))
+            from sanad.scribe.monitoring import task_request
+
+            issues.append(
+                ProposalIssue(
+                    item="all",
+                    code="request_missing",
+                    field="task" if task_request(source_text) else None,
+                )
+            )
         lookup_only = intent == "find_patient" and (command in {"/find", "/qr"} or not issues)
         if lookup_only and not choices:
             return self._reply(receipt, actor, claim, "doctor_patient_not_found", "not_found")

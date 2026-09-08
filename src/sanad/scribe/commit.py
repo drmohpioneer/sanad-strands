@@ -577,6 +577,19 @@ class ScribeCommit:
             elif instruction.kind == "SEND_RECORDS":
                 details = SendRecordsDetails(categories=(text,), required_count=1)
                 predicate = EvidencePredicate(evaluator="send_records")
+            elif instruction.kind == "MONITOR":
+                from sanad.scribe.monitoring import compile_schedule
+
+                schedule = compile_schedule(text)
+                if schedule is None:
+                    raise EffectsRejected("monitor_schedule_unclear")
+                details = schedule.details(proposal.created_at, patient.timezone)
+                preview = schedule.details(proposal.created_at, proposal.timezone)
+                if details.slots != preview.slots:
+                    raise EffectsRejected("monitor_timezone_changed")
+                if schedule.details(now, patient.timezone).slots != preview.slots:
+                    raise EffectsRejected("monitor_schedule_changed")
+                predicate = EvidencePredicate(evaluator="monitor")
             elif instruction.kind == "VISIT":
                 objective = (
                     "report_received"

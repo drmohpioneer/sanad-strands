@@ -1,11 +1,93 @@
 """Retain explicitly dictated previous/new medication values on one change order."""
 
+import logging
 import re
 
 from sanad.media.numbers import numbers_in
 from sanad.scribe.extract import DictationCandidate, OrderCandidate
 from sanad.scribe.names import dictionary, heard_dose, normalize, split_drug_dose
 from sanad.scribe.resolver import Context, generic_key, resolve_name
+
+logger = logging.getLogger(__name__)
+
+
+def _bare_continue(order: OrderCandidate) -> bool:
+    return (
+        order.action == "continue"
+        and not split_drug_dose(order.drug)[1]
+        and not any(
+            getattr(order, field)
+            for field in (
+                "dose",
+                "frequency",
+                "route",
+                "timing",
+                "duration",
+                "effective_expression",
+                "checkin_expression",
+                "previous_drug",
+                "previous_dose",
+            )
+        )
+    )
+
+
+def _without_orders(
+    candidate: DictationCandidate, removed: set[int]
+) -> tuple[DictationCandidate, dict[str, tuple[str, ...]]]:
+    if not removed:
+        return candidate, {}
+    kept = [i for i in range(len(candidate.orders)) if i not in removed]
+    targets: dict[str, tuple[str, ...]] = {f"order:{i}": () for i in removed}
+    targets.update({f"order:{old}": (f"order:{new}",) for new, old in enumerate(kept)})
+    edits = []
+    for edit in candidate.correction_edits:
+        if not edit.item.startswith("order:"):
+            edits.append(edit)
+            continue
+        incoming = f"order:{edit.proposal_index}"
+        for target in targets.get(incoming, (incoming,)):
+            # item addresses the previous card; only the incoming index moves.
+            edits.append(edit.model_copy(update={"proposal_index": int(target.split(":")[1])}))
+    result = candidate.model_copy(
+        update={
+            "orders": tuple(candidate.orders[i] for i in kept),
+            "correction_edits": tuple(edits),
+        }
+    )
+    from sanad.scribe.merge import remap_metadata
+
+    remap_metadata(result, targets)
+    return result, targets
+
+
+def drop_bare_continues(
+    candidate: DictationCandidate, source: str, ctx: Context
+) -> tuple[DictationCandidate, dict[str, tuple[str, ...]]]:
+    """An existing instruction owns its drug line, including a verified prior brand."""
+
+    def identity(order: OrderCandidate) -> str:
+        spoken = split_drug_dose(order.drug)[0]
+        resolved = resolve_name(spoken, "drug", source, order.name_latin, ctx)
+        return normalize(resolved.latin or spoken)
+
+    instructed = set()
+    for order in candidate.orders:
+        if order.action in {"start", "change", "stop"}:
+            instructed.add(identity(order))
+            prior = previous_instruction(order, source)
+            if prior:
+                instructed.add(identity(prior))
+    removed = {
+        i
+        for i, order in enumerate(candidate.orders)
+        if _bare_continue(order) and identity(order) in instructed
+    }
+    if not removed:
+        return candidate, {}
+    result, targets = _without_orders(candidate, removed)
+    logger.info("scribe_bare_continue_dropped count=%d", len(removed))
+    return result, targets
 
 
 def _same_family(left: str | None, right: str | None) -> bool:
@@ -110,6 +192,8 @@ def combine_changes(candidate: DictationCandidate, source: str, ctx: Context) ->
                 )
                 if j != i and other.action == "continue" and resolved.latin == prior.drug:
                     removed.add(j)
-    return candidate.model_copy(
-        update={"orders": tuple(o for i, o in enumerate(orders) if i not in removed)}
-    )
+    count = sum(_bare_continue(orders[i]) for i in removed)
+    if count:
+        logger.info("scribe_bare_continue_dropped count=%d", count)
+    result, _ = _without_orders(candidate.model_copy(update={"orders": tuple(orders)}), removed)
+    return drop_bare_continues(result, source, ctx)[0]

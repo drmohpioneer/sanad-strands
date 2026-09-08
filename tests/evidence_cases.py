@@ -245,12 +245,12 @@ EVALUATOR_ROWS: list[tuple[str, Mission, Evidence, tuple[Evidence, ...], bool, t
         (),
     ),
     (
-        "15 monitor awaits slots",
+        "15 monitor requires matching vital coverage",
         objective("monitor"),
         evidence("monitor_screen"),
         (),
         False,
-        ("slot_assignment",),
+        ("slot:0",),
     ),
     ("16 visit report", objective("visit"), evidence("discharge_summary"), (), True, ()),
     (

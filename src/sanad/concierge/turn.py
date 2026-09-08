@@ -223,6 +223,10 @@ class ConciergeTurn:
                 source = transcript.provenance[0]
         verdict = screen_text(text, policy=self.runtime.safety_policy)
         reading = reports.reading(text, self.runtime.safety_policy)
+        from sanad.monitor.executor import parse_reading
+
+        if any(m.kind == "MONITOR" for m in snapshot.missions):
+            reading = parse_reading(text, self.runtime.safety_policy)
         from sanad.evidence.screen import screen_values
 
         value_incidents, _ = screen_values(
@@ -282,6 +286,14 @@ class ConciergeTurn:
             if danger or value_incidents:
                 if reading.values:
                     reports.record_reading(tx, text, reading, source=source)
+                    from sanad.concierge.monitor_reports import attach_reading
+
+                    monitor_reply = attach_reading(tx, text, reading, source, danger=True)
+                    if monitor_reply and tx.buttons:
+                        result = tx.finish(*monitor_reply)
+                        return RouteResult(
+                            route="patient", status=result.status, template_id=monitor_reply[0]
+                        )
                 if receipt.kind in {"photo", "document"}:
                     self._decide(tx, text, verdict, reading, transcript, source, session)
                 result = tx.finish("patient_emergency", "", emit=False)
@@ -378,6 +390,11 @@ class ConciergeTurn:
             ):
                 return reply("patient_callback_stale")
             tx.consume(token)
+            from sanad.concierge.monitor_reports import callback as monitor_callback
+
+            monitor_choice = monitor_callback(tx, token, source)
+            if monitor_choice:
+                return *monitor_choice, monitor_choice[0]
             medication_choice = reports.medication_callback(tx, token, source)
             if medication_choice:
                 key, fields = medication_choice
@@ -525,6 +542,13 @@ class ConciergeTurn:
         if not is_question(text) and reading.incomplete_bp:
             return reply("patient_bp_incomplete")
         if not is_question(text) and reading.values:
+            from sanad.concierge.monitor_reports import attach_reading, unsupported_review
+
+            monitor_reply = attach_reading(tx, text, reading, source)
+            if monitor_reply:
+                return *monitor_reply, monitor_reply[0]
+            if unsupported_review(tx, text, reading, source):
+                return reply("patient_question_forwarded")
             reports.record_reading(tx, text, reading, source=source)
             # Only the measurement span is echoed, without patient-authored instructions.
             value = "، ".join(r.quoted for r in reading.values)

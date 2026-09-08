@@ -451,7 +451,7 @@ def test_old_prescription_and_monitor_do_not_change_orders(world: PatientWorld) 
     )
     f.providers(world, monitor, monitor, data=png(3))
     assert f.upload(world, 1101, "bp monitor") == "accepted"
-    assert f.current(world).required_predicate_results[0].missing == ("slot_assignment",)
+    assert f.current(world).required_predicate_results[0].missing == ("monitor_mission",)
     assert any(r.body["category"] == "patient_report" for r in world.rows("clinical_fact"))
     assert not any(r.body["review_kind"] == "evidence_association" for r in world.rows("review"))
 

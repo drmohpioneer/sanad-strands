@@ -599,7 +599,7 @@ def test_private_fact_and_other_patient_never_enter_context(world: PatientWorld)
     assert fact.id not in json.dumps(plan.projection(snapshot))
 
 
-def test_reading_does_not_fulfill_monitor(world: PatientWorld) -> None:
+def test_reading_fulfills_covered_monitor(world: PatientWorld) -> None:
     from sanad.domain import Mission
     from sanad.domain.entities import MonitorDetails
     from sanad.domain.predicates import EvidencePredicate
@@ -626,15 +626,15 @@ def test_reading_does_not_fulfill_monitor(world: PatientWorld) -> None:
     world.seed(monitor)
     world.send("ضغطي ١٥٠ على ٩٥")
     saved = world.store.get_mission(world.patient_scope, monitor.id)
-    assert saved is not None and saved.state == monitor.state
-    assert (saved.details, saved.due_at, saved.escalation_at, saved.evidence_refs) == (
-        monitor.details,
+    assert saved is not None and saved.state == "fulfilled"
+    assert isinstance(saved.details, MonitorDetails) and len(saved.details.readings) == 1
+    assert (saved.due_at, saved.escalation_at, saved.evidence_refs) == (
         monitor.due_at,
         monitor.escalation_at,
         monitor.evidence_refs,
     )
-    assert saved.fulfillment_validity == monitor.fulfillment_validity
-    assert saved.last_patient_reply_at == world.clock()
+    assert saved.fulfillment_validity == "valid"
+    assert saved.objective_received_at == world.clock()
     fact = next(
         from_record(r, ClinicalFact)
         for r in world.rows("clinical_fact")

@@ -19,21 +19,34 @@ Execution states are `proposed`, `awaiting_link`, `open`, `waiting_patient`, `bl
 | Type | What the doctor supplies or confirms | What fulfils the objective | Boundaries and remaining work |
 |---|---|---|---|
 | TEST | Named lab panel/analytes or imaging/report request; target date; any preparation instruction actually ordered | All requested evidence meets the confirmed identity, date and completeness predicate; partial reports may jointly fulfil it when the predicate permits | Evidence collection is not clinical clearance. DONE fires at valid fulfilment and a result-review obligation remains. A requested test must not be replaced by a different test. |
-| MONITOR | Metric, expected unit, slots/window, reporting instructions, coverage predicate and applicable safety policy | Accepted readings satisfy the confirmed coverage rule; report lists readings, missing slots, trend when meaningful and safety events | Duplicates do not fill extra slots. Silence does not count as a normal reading. Unsupported metrics can be collected and sent for review but cannot be declared safe by an unrelated threshold table. |
+| MONITOR | Metric, expected unit, dated local slots, reporting instructions, every-slot coverage and applicable safety policy | Accepted readings fill their nearest slot within three hours; every slot is required. Report lists values, missing slots, extras, descriptive trend after three filled slots and threshold provenance | A duplicate replaces its slot's displayed value, never fills another. An extra has no slot. Silence closes nothing. Unsupported metrics can be collected and sent for review but cannot be declared safe by an unrelated threshold table. |
 | MEDICATION | Exact doctor-issued start/stop/change instruction, including the relevant drug and complete dosing details when applicable | Patient explicitly reports carrying out the requested instruction; the report says it is self-reported | The agreed START scope is acknowledgment plus an independent day-3 check-in created at confirmation. Stop/change use their exact acknowledgment wording and only explicitly ordered additional check-ins. A reporting deadline never becomes a medication stop date. Recurring dose reminders remain a separately recorded later owner choice. |
 | SEND_RECORDS | Categories such as old labs, old prescriptions, medication packaging/list, discharge papers or imaging reports; requested period and count/completeness rule | Readable, correctly associated documents or inventory meet every requested category, period and count rule | Historical dates may precede the new request. A prescription/photo received as history cannot activate or replace a current medication order. Collection creates review work where specified. |
 | VISIT | Requested action and date/window: arrange, report booking, report attendance or supply a visit report | The specific requested predicate is met; a booking is not attendance and attendance is not a received report | No invented booking or external appointment promise. A pre-visit brief is a timed reporting action, not evidence that the visit occurred. |
 | QUESTION | The patient question, source message and relevant active plan; this support ticket may be created by the patient lane without a doctor confirmation | Doctor supplies an answer; the answer is delivered or remains visibly pending delivery | A treatment-changing answer must also create an explicit confirmed active-order amendment before it becomes executable guidance. Patient is told the queue and escalation behavior, never promised a doctor's response. |
 | TASK | A bounded doctor request with an allowed action, verifiable completion predicate and deadline | The required patient report, evidence or doctor acceptance exists | Covers additional follow-up instructions without inventing tools or clinical instructions. An unsupported action is explicitly shown as unsupported; an unclear completion rule is clarified on the existing card. |
 
-### TASK monitoring requests before slice 13
+### Monitoring schedules and the TASK fallback
 
-Contract 11e addendum 3: a dictated request to measure, record or chart a metric
-with a frequency and duration is one TASK, never TEST or MONITOR. Its instruction
-retains the spoken request in clinical English and uses the existing `doctor_task`
-patient-report predicate. An explicit “for five days” means due at the receipt
-anchor plus five days; absent duration uses the TASK default. No measurement slots,
-units or coverage are inferred. Slice 13 upgrades this shape to MONITOR.
+Contract 13 implements the upgrade from 11e addendum 3: a supported repeated
+measurement becomes MONITOR for blood pressure (mmHg), glucose (mg/dL), weight
+(kg) or pulse (bpm). Weight and pulse retain `cannot_judge` under the existing
+safety tables. Missing or incompatible units require verification. Unsupported
+metrics or an unparsable cadence retain the 11e TASK instruction and `doctor_task`
+predicate. Its explicit duration remains receipt-relative; without one the TASK
+default applies. Previously created TASKs are not migrated. A supported metric
+with unclear duration or an out-of-range cadence uses the existing clarification.
+
+Draft policy (`OWNER_REVIEW_PENDING`): local hours are `{1: (8,), 2: (8, 20),
+3: (8, 14, 20), 4: (8, 12, 16, 20)}`, maximum 30 days and four readings per day,
+three-hour tolerance, every-slot coverage, and a trend minimum of three filled
+slots. Slots start the day after confirmation unless an explicit start is stated;
+the existing quiet-hour and per-slot-consent rules control prompts without moving
+slots. The confirmed default deadline uses schedule end plus one day at the
+existing local 10:00 deadline time; an explicit deadline wins. Ambiguous
+measurement times are clarified; absent a time claim, the original receipt time
+is used. Replays retain one reading, duplicate updates retain history, and a
+pending identity or disputed photo never supplies accepted slot coverage.
 
 ### Visit, task and question execution
 

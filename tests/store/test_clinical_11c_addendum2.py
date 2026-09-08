@@ -138,7 +138,7 @@ def test_normalized_substrings_keep_original_fallback_text(world: ScribeWorld) -
     assert "Complaint: angina, وشيء غريب" in render_card(p)[0]
 
 
-def test_model_kinds_do_not_split_a_fact_and_new_patient_marker_is_not_a_fact(
+def test_cues_split_display_only_and_new_patient_marker_is_not_a_fact(
     world: ScribeWorld,
 ) -> None:
     f = fact("تي أوف إنفرجين، الأكو فانكشن 45%، أنجينا", None, "ECG")
@@ -154,7 +154,8 @@ def test_model_kinds_do_not_split_a_fact_and_new_patient_marker_is_not_a_fact(
         for line in render_card(p)[0].splitlines()
         if line.startswith(("ECG:", "Echo:", "Complaint:"))
     ] == [
-        "ECG: T wave inversion, EF 45%, angina",
+        "ECG: T wave inversion",
+        "Echo: EF 45%, angina",
     ]
     assert not dictation_questions(p)
     assert "New disease" not in render_card(p)[0]

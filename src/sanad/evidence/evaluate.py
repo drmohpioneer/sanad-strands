@@ -62,9 +62,9 @@ def evaluate(
     if candidate.category not in expected(mission):
         return result(("category",), "Document category does not meet the confirmed objective.")
     if predicate.evaluator == "monitor":
-        return result(
-            ("slot_assignment",), "Reading retained; slot assignment belongs to slice 13."
-        )
+        from sanad.monitor.evidence import evaluate as evaluate_monitor
+
+        return evaluate_monitor(mission, candidate, accepted_evidence_for_mission, now)
     if predicate.evaluator == "task_evidence":
         return result(
             () if "doctor_accepted" in candidate.flags else ("doctor_acceptance",),

@@ -137,6 +137,9 @@ def prepare_clinical(
     language: str = default_language,
     clarified_tests: frozenset[str] = frozenset(),
 ) -> tuple[DictationCandidate, tuple[ProposalIssue, ...]]:
+    from sanad.scribe.alerts import prepare_alerts
+
+    candidate = prepare_alerts(candidate, source)
     facts: list[FactCandidate] = []
     missions: list[MissionCandidate] = []
     orders, issues = list(candidate.orders), []
@@ -317,6 +320,14 @@ def prepare_clinical(
             for item, prepared in origins.items()
         },
     )
+    from sanad.scribe.changes import drop_bare_continues
+
+    result, targets = drop_bare_continues(result, source, context(service))
+    issues = [
+        issue.model_copy(update={"item": target})
+        for issue in issues
+        for target in targets.get(issue.item, (issue.item,))
+    ]
     # Preserve numbers from a converted medication fact for the existing coverage guard.
     from sanad.scribe.extract import extracted_numbers
 

@@ -97,7 +97,7 @@ def test_invalid_alerts_cannot_lower_kernel(
 
 
 def test_looser_alert_refused_on_real_dictation_card(world: PatientWorld) -> None:
-    text = "Synthetic Patient البوتاسيوم فوق 6.5 mmol/L"
+    text = "Synthetic Patient بلغني لو البوتاسيوم فوق 6.5 mmol/L"
     proposal = world.dictate(
         text,
         {

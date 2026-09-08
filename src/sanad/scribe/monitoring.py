@@ -1,7 +1,14 @@
-"""The released frequency/duration request shape is a TASK until slice 13."""
+"""Compile supported schedules; preserve the 11e TASK fallback verbatim."""
 
 import re
+from dataclasses import dataclass
+from datetime import date, datetime
 
+from sanad.domain import DoctorTimingPolicy, MissionKind
+from sanad.domain.deadlines import NeedsClarification, ResolvedTiming, resolve_timing
+from sanad.domain.entities import MonitorDetails
+from sanad.monitor import policy
+from sanad.monitor.slots import UNITS, generate, requested_metric
 from sanad.scribe.names import normalize
 
 _COUNT = (
@@ -97,3 +104,130 @@ def task_instruction(text: str) -> str:
         }.get(duration[2], duration[2])
         result += " for " + words.get(duration[1], duration[1]) + " " + unit
     return result
+
+
+@dataclass(frozen=True)
+class Schedule:
+    metric: str
+    unit: str
+    times_per_day: int
+    days: int
+    spoken_text: str
+
+    def details(self, anchor: datetime, timezone: str) -> MonitorDetails:
+        from datetime import timedelta
+        from zoneinfo import ZoneInfo
+
+        start = None
+        beginning = re.search(
+            r"\b(?:starting|start|from)\s+(today|tomorrow|\d{4}-\d{2}-\d{2})\b",
+            self.spoken_text,
+            re.I,
+        )
+        if beginning:
+            expression = beginning[1].lower()
+            start = (
+                anchor.astimezone(ZoneInfo(timezone)).date()
+                + timedelta(days=expression == "tomorrow")
+                if expression in {"today", "tomorrow"}
+                else date.fromisoformat(expression)
+            )
+        slots = generate(anchor, timezone, self.times_per_day, self.days, start=start)
+        return MonitorDetails(
+            metric=self.metric, unit=self.unit, slots=slots, required_coverage=len(slots)
+        )
+
+
+def compile_schedule(text: str) -> Schedule | None:
+    from sanad.scribe.timing import _DURATION_NUMBERS
+
+    normalized = normalize(text)
+    frequency, duration = _FREQUENCY.search(normalized), _DURATION.search(normalized)
+    name = requested_metric(normalized)
+    if not task_request(text) or not frequency or not duration or not name:
+        return None
+    if len(_FREQUENCY.findall(normalized)) != 1 or len(_DURATION.findall(normalized)) != 1:
+        return None
+    if re.search(r"\b(?:or|maybe|about|approximately)\b|تقريبا|\bاو\b", normalized):
+        return None
+    if re.search(r"(?:[-/]|\bto)\s*$", normalized[: frequency.start()]):
+        return None
+
+    def count(word: str) -> int:
+        return int(word) if word.isdigit() else _DURATION_NUMBERS.get(word, 0)
+
+    times = count(frequency[0].split()[0])
+    days = count(duration[1])
+    if duration[2].startswith(("week", "اسب")):
+        days *= 7
+    elif duration[2].startswith(("hour", "ساع")):
+        if days % 24:
+            return None
+        days //= 24
+    if not 1 <= times <= policy.max_times_per_day or not 1 <= days <= policy.max_days:
+        return None
+    return Schedule(name, UNITS[name], times, days, text)
+
+
+def _bare_duration(value: str) -> str:
+    return re.sub(r"^(?:for|لمده|مده)\s+", "", normalize(value)).strip()
+
+
+def timing(
+    text: str, expression: str | None, anchor: datetime, clock_policy: DoctorTimingPolicy
+) -> ResolvedTiming | NeedsClarification:
+    from sanad.scribe.timing import resolve_expression
+
+    schedule = compile_schedule(text)
+    if schedule is None:
+        return NeedsClarification(
+            reason_code="monitor_schedule_unclear", message="Clarify the schedule."
+        )
+    # "five days" and "for five days" are the same duration; only a genuinely
+    # different dictated expression is treated as an explicit deadline.
+    if expression and _bare_duration(expression) != _bare_duration(duration_expression(text) or ""):
+        return resolve_expression(expression, MissionKind.MONITOR, anchor, clock_policy)
+    try:
+        details = schedule.details(anchor, clock_policy.timezone)
+    except ValueError:
+        return NeedsClarification(
+            reason_code="monitor_start_unclear", message="Clarify the start date."
+        )
+    return resolve_timing(
+        MissionKind.MONITOR,
+        anchor,
+        clock_policy,
+        schedule_end=details.slots[-1],
+        state_hint="proposed",
+    )
+
+
+def card_line(text: str, anchor: datetime, timezone: str, language: str) -> str:
+    from sanad.monitor.report import render
+
+    schedule = compile_schedule(text)
+    if schedule is None:
+        return "MONITOR: " + text
+    try:
+        details = schedule.details(anchor, timezone)
+    except ValueError:
+        return "MONITOR: " + text
+    from zoneinfo import ZoneInfo
+
+    first = details.slots[0].astimezone(ZoneInfo(timezone)).strftime("%a %H:%M")
+    if language == "ar":
+        first = first.replace(
+            details.slots[0].astimezone(ZoneInfo(timezone)).strftime("%a"),
+            ("الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد")[
+                details.slots[0].astimezone(ZoneInfo(timezone)).weekday()
+            ],
+        )
+    return render(
+        "card",
+        language,
+        metric=schedule.metric,
+        times=str(schedule.times_per_day),
+        days=str(schedule.days),
+        count=str(len(details.slots)),
+        first=first,
+    )

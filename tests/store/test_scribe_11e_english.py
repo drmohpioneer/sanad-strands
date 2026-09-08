@@ -20,14 +20,17 @@ def test_english_card_and_monitoring_confirmation(store: StoreBase, clock: FakeC
     text = "\n".join(render_card(proposal))
     assert text.splitlines()[0] == "New patient: Ahmed Saad, 53"
     assert all(line in text.splitlines() for line in (*MEDICATIONS, *HISTORY))
-    assert "TASK: Blood pressure chart, 3 times a day for 5 days — due" in text
+    assert (
+        "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00)" in text
+    )
     assert "TEST: CBC, Na, K, lipid profile — due" in text
     assert "What dose of Forxiga did you intend?" in text
     assert "✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes" in text
     assert [i.code for i in proposal.issues] == ["dose_missing"]
     task = next(t.resolved for t in proposal.timings if t.item == "mission:0")
-    assert task.due_at == task.timing_anchor.instant + timedelta(days=5)
-    assert task.due_source == "doctor"
+    assert task.timing_anchor.kind == "schedule_end"
+    assert task.due_at.date() == (task.timing_anchor.instant + timedelta(days=1)).date()
+    assert task.due_source == "default"
     world.tap("✅ Confirm")
     p = world.scribe.repo.load(proposal.scope, "scribe_proposal", proposal.id, type(proposal))
     assert p and p.status == "confirmed"
@@ -39,11 +42,11 @@ def test_english_card_and_monitoring_confirmation(store: StoreBase, clock: FakeC
 
     scope = PatientScope(doctor_id=world.doctor.id, patient_id=str(patient_id))
     rows, _ = store.list_records(scope, "mission")
-    tasks = [r for r in rows if r.body["kind"] == "TASK"]
+    tasks = [r for r in rows if r.body["kind"] == "MONITOR"]
     assert len(tasks) == 1
-    assert "doctor_task" in str(tasks[0].body)
+    assert "monitor" in str(tasks[0].body)
     assert "Blood pressure chart, 3 times a day for 5 days" in str(tasks[0].body)
-    assert not any(r.body["kind"] == "MONITOR" for r in rows)
+    assert not any(r.body["kind"] == "TASK" for r in rows)
     heads, _ = store.list_records(scope, "care_order_head")
     assert [r.body["name"] for r in heads] == ["Exforge HCT"]
 
@@ -218,7 +221,7 @@ def test_same_family_brand_change_reuses_the_current_head(
     "source",
     ["Blood pressure chart, 3 times a day for 5 days", "قياس ضغط الدم 3 مرات في اليوم لمدة 5 ايام"],
 )
-def test_monitoring_text_is_task_with_explicit_duration(
+def test_monitoring_text_has_schedule_end_deadline(
     store: StoreBase, clock: FakeClock, source: str
 ) -> None:
     world = ScribeWorld.create(store, clock)
@@ -230,11 +233,9 @@ def test_monitoring_text_is_task_with_explicit_duration(
             "missions": [{"kind": "TEST", "text": source}],
         },
     )
-    assert proposal.candidate.missions[0].kind == "TASK"
-    assert (
-        proposal.candidate.missions[0].clinical_en
-        == "Blood pressure chart, 3 times a day for 5 days"
-    )
+    assert proposal.candidate.missions[0].kind == "MONITOR"
+    assert proposal.candidate.missions[0].text == source
     timing = proposal.timings[0].resolved
-    assert timing.due_at == timing.timing_anchor.instant + timedelta(days=5)
+    assert timing.timing_anchor.kind == "schedule_end"
+    assert timing.due_at.date() == (timing.timing_anchor.instant + timedelta(days=1)).date()
     assert not proposal.issues

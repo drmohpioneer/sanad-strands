@@ -36,7 +36,7 @@ def world(store: StoreBase, clock: FakeClock) -> ScribeWorld:
 
 
 def missing(world: ScribeWorld, text: str, *, by_voice: bool = False) -> ScriptedModel:
-    model = ScriptedModel(candidate(VALUE), candidate(VALUE))
+    model = ScriptedModel(candidate(VALUE), candidate(VALUE), candidate(VALUE))
     world.scribe.model_factory = lambda registry, role: model
     if by_voice:
         providers(world, text + " NUMBERS: 53 560 12.5 5 45")
@@ -58,8 +58,9 @@ def test_real_transcript_missing_missions_retries_and_blocks_confirmation(
     caplog.set_level(logging.INFO, logger="sanad.scribe.turn")
     model = missing(world, source, by_voice=by_voice)
     p = world.proposal
-    assert len(model.script.calls) == 2 and model.script.calls[0] == model.script.calls[1]
-    assert retries == []
+    assert len(model.script.calls) == 3
+    assert model.script.calls[0] == model.script.calls[1] == model.script.calls[2]
+    assert retries == ["request_missing"]
     assert render_card(p)[0].count(QUESTION) == 1
     assert dictation_questions(p).count(QUESTION) == 1 and p.blocked("all")
     with pytest.raises(AssertionError, match="card button missing"):
@@ -81,13 +82,13 @@ def test_real_transcript_missing_missions_retries_and_blocks_confirmation(
     assert not panel(world.store, world.doctor.scope)
     assert not memory_rows(world.store, world.doctor.scope)
     assert world.proposal == p
-    assert "reason=request_missing" not in caplog.text and source not in caplog.text
+    assert "reason=request_missing" in caplog.text and source not in caplog.text
 
 
 @pytest.mark.parametrize("cue", ["طلبت", "اعمل", "يعملوه", "تحليل", "أشعة", "إيكو", "TEST", "lab"])
 def test_each_binding_request_cue_retries_and_keeps_one_block(world: ScribeWorld, cue: str) -> None:
     model = missing(world, "سامي اختبار أنجينا " + cue)
-    assert len(model.script.calls) == 2
+    assert len(model.script.calls) == 3
     assert world.proposal.blocked("all")
     assert render_card(world.proposal)[0].count(QUESTION) == 1
 
@@ -145,17 +146,24 @@ def test_unrelated_correction_keeps_block_until_requested_mission_is_supplied(
 
 
 def test_schema_retry_and_missing_request_share_one_allowance(world: ScribeWorld) -> None:
-    model = ScriptedModel(response("malformed"), candidate(VALUE))
-    world.scribe.model_factory = lambda registry, role: model
+    models = [
+        ScriptedModel(response("malformed")),
+        ScriptedModel(candidate(VALUE)),
+        ScriptedModel(candidate(VALUE)),
+    ]
+    factories = iter(models)
+    world.scribe.model_factory = lambda *_: next(factories)
     retries: list[str] = []
     world.scribe.observe_retry = retries.append
     world.post(update(APPLICANT, "سامي اختبار أنجينا طلبت تحليل", 10))
-    assert len(model.script.calls) == 3 and retries == ["schema_validation"]
+    assert sum(len(m.script.calls) for m in models) == 3 and retries == ["schema_validation"]
     assert world.proposal.blocked("all") and QUESTION in render_card(world.proposal)[0]
 
 
 def test_missing_request_retry_failure_keeps_the_valid_blocked_card(world: ScribeWorld) -> None:
-    model = ScriptedModel(candidate(VALUE), RuntimeError("private provider failure"))
+    model = ScriptedModel(
+        candidate(VALUE), candidate(VALUE), RuntimeError("private provider failure")
+    )
     world.scribe.model_factory = lambda registry, role: model
     world.post(update(APPLICANT, "سامي اختبار أنجينا طلبت تحليل", 10))
     assert len(model.script.calls) == 3
@@ -168,7 +176,7 @@ def test_missing_request_retry_does_not_extend_extraction_deadline(
     import sanad.scribe.turn as turn
 
     ticks = iter([0.0, 0.0, 15.0])
-    monkeypatch.setattr(turn, "monotonic", lambda: next(ticks))
+    monkeypatch.setattr(turn, "monotonic", lambda: next(ticks, 15.0))
     model = missing(world, "سامي اختبار أنجينا طلبت تحليل")
     assert len(model.script.calls) == 1
     assert world.proposal.blocked("all") and QUESTION in render_card(world.proposal)[0]
@@ -182,10 +190,11 @@ def test_missing_request_retry_shares_six_http_call_budget(world: ScribeWorld) -
         candidate(VALUE),
         response(calls=[("lookup_drug", {"name": "Amlodipine"})]),
         candidate(VALUE),
+        candidate(VALUE),
     )
     world.scribe.model_factory = lambda registry, role: model
     world.post(update(APPLICANT, "سامي اختبار أنجينا طلبت تحليل", 10))
-    assert len(model.script.calls) == 4 and len(fixture.calls) == 6
+    assert len(model.script.calls) == 5 and len(fixture.calls) == 6
     assert world.proposal.rxnorm_calls == 6 and world.proposal.blocked("all")
 
 

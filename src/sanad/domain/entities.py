@@ -128,12 +128,22 @@ class TestDetails(_BoundaryValue):
         return self
 
 
+class MonitorReading(_BoundaryValue):
+    source_ref: VersionRef
+    reading_index: NonnegativeInt
+    observed_at: UtcInstant
+    received_at: UtcInstant
+    slot: NonnegativeInt | None
+    value: NonblankStr
+
+
 class MonitorDetails(_BoundaryValue):
     kind: Literal["MONITOR"] = "MONITOR"
     metric: NonblankStr
     unit: NonblankStr
     slots: Annotated[tuple[UtcInstant, ...], Field(min_length=1)]
     required_coverage: PositiveVersion
+    readings: tuple[MonitorReading, ...] = ()
 
 
 class MedicationDetails(_BoundaryValue):

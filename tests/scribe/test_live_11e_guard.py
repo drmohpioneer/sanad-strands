@@ -60,7 +60,7 @@ def test_five_full_runs_and_cross_run_agreement_are_not_self_confirmed(
     earlier.write_text('{"state": "failed", "runs": []}\n')
     original = earlier.read_bytes()
     report = run_check(path, **options)
-    assert earlier.read_bytes() == original and report["attempt"] == 5
+    assert earlier.read_bytes() == original and report["attempt"] == 7
     assert report["state"] == ("failed" if defect else "passed")
     assert len(report["runs"]) == len(speech.calls) == 5
     assert len(model.script.calls) == 10
@@ -174,3 +174,57 @@ def test_recorded_prompt_budget_when_live_evidence_exists() -> None:
             )
             for count in run.get("prompt_input_tokens", []):
                 assert prompt_within_budget(count, language), (file, run["run"], count, language)
+
+
+@pytest.mark.parametrize(
+    "age,accepted",
+    [
+        ("53", True),
+        ("53, male", True),
+        ("53 years old, male", True),
+        ("53 years", True),
+        ("53 yrs, male", True),
+        ("54 years old, male", False),
+        ("53 years old, female", False),
+    ],
+)
+def test_patient_oracle_allows_age_word_without_relaxing_identity(
+    monkeypatch: pytest.MonkeyPatch, age: str, accepted: bool
+) -> None:
+    from store.conftest import Clock
+    from store.scribe_fixtures import ScribeWorld
+
+    from sanad.store.memory import MemoryStore
+
+    clock = Clock()
+    world = ScribeWorld.create(MemoryStore(clock=clock), clock)
+    world.approve(language="en")
+    p = world.dictate(SOURCE, VALUE)
+    card = card_parts(p)["card"].replace("Ahmed Saad, 53", "Ahmed Saad, " + age)
+    monkeypatch.setattr("live.check11e.render_card", lambda p: (card,))
+    assert card_parts(p)["checks"]["patient"] == accepted
+
+
+def test_oracle_rejects_duplicate_drug_and_observation_alert(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from store.conftest import Clock
+    from store.scribe_fixtures import ScribeWorld
+
+    from sanad.store.memory import MemoryStore
+
+    clock = Clock()
+    world = ScribeWorld.create(MemoryStore(clock=clock), clock)
+    world.approve(language="en")
+    p = world.dictate(SOURCE, VALUE)
+    card = (
+        card_parts(p)["card"]
+        .replace("Requested:", "Exforge\nRequested:")
+        .replace(
+            "Needs confirmation:",
+            "Notify me if:\nblood pressure is high, 150/90\nNeeds confirmation:",
+        )
+    )
+    monkeypatch.setattr("live.check11e.render_card", lambda p: (card,))
+    checks = card_parts(p)["checks"]
+    assert not checks["one_line_per_drug"] and not checks["no_unrequested_alerts"]

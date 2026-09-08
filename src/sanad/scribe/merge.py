@@ -175,6 +175,7 @@ def merge_candidates(
     single: list[str] = []
     issues: list[ProposalIssue] = []
     values: dict[str, object] = {}
+    order_indices: dict[int, int] = {}
     for family, attr in (
         ("order", "orders"),
         ("fact", "facts"),
@@ -268,7 +269,11 @@ def merge_candidates(
                 at = normalize(source).find(normalize(split_drug_dose(item.drug)[0]))
             return at if at >= 0 else len(source)
 
+        primary_rows = combined[: len(left)]
         combined.sort(key=position)
+        if family == "order":
+            positions = {id(row): i for i, row in enumerate(combined)}
+            order_indices = {i: positions[id(row)] for i, row in enumerate(primary_rows)}
         values[attr] = tuple(item for item, _, _ in combined)
         for i, (_item, one, differing) in enumerate(combined):
             target = f"{family}:{i}"
@@ -294,6 +299,14 @@ def merge_candidates(
                 )
     values["patient"] = PatientCandidate.model_validate(patient)
     values["ambiguities"] = first.ambiguities
+    values["correction_edits"] = tuple(
+        edit.model_copy(
+            update={"proposal_index": order_indices.get(edit.proposal_index, edit.proposal_index)}
+        )
+        if edit.item.startswith("order:")
+        else edit
+        for edit in first.correction_edits
+    )
     result = surviving.model_copy(update=values)
     result._dropped_numbers = tuple(
         dict.fromkeys(

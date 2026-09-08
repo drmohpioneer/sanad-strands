@@ -88,10 +88,12 @@ ENGLISH_SYSTEM_PROMPT = (
     "Medication history is explicit past only, never a repeated current order. "
     "One mission per requested TEST/VISIT/TASK/SEND_RECORDS. TEST text lists only analytes. "
     "Measuring, recording or charting a metric N times a day for M days is one TASK, "
-    "never TEST or MONITOR; retain the frequency/duration in its instruction and put the "
+    "including when tests are also requested; never omit it. Never TEST or MONITOR; "
+    "retain the frequency/duration in its instruction and put the "
     "explicit duration in timing_expression. Other deadlines go in timing_expression. "
     "effective_expression and checkin_expression are explicit dates only. "
-    "Alerts retain spoken text. ambiguities contain real doubts only."
+    "Alerts require an explicit tell me if/notify me if instruction; retain its spoken "
+    "condition. An observation is only a fact. ambiguities contain real doubts only."
 )
 
 
@@ -113,6 +115,10 @@ def scribe_prompt(names: str, *, correction: bool = False, language: str = defau
             " Language: ar. A request to measure/record/chart a metric with frequency and "
             "duration is TASK, never TEST or MONITOR; keep its spoken text and duration."
         )
+    prompt += (
+        " MONITOR replaces the TASK fallback for a repeated measurement of one supported "
+        "vital over a stated period."
+    )
     return prompt + "\nKnown names (spelling hints): " + ", ".join(names.split(", ")[:200])
 
 
@@ -252,7 +258,7 @@ class OrderCandidate(_CandidateValue):
 
 
 class MissionCandidate(_CandidateValue):
-    kind: Literal["TEST", "VISIT", "TASK", "SEND_RECORDS"]
+    kind: Literal["TEST", "VISIT", "TASK", "SEND_RECORDS", "MONITOR"]
     text: str
     clinical_en: SkipJsonSchema[str | None] = None
     timing_expression: str | None = None
@@ -265,11 +271,15 @@ class MissionCandidate(_CandidateValue):
     @model_validator(mode="before")
     @classmethod
     def monitoring_task(cls, value: object) -> object:
-        from sanad.scribe.monitoring import task_request
+        from sanad.scribe.monitoring import compile_schedule, task_request
 
         if isinstance(value, dict) and isinstance(value.get("text"), str):
+            if compile_schedule(value["text"]):
+                return {**value, "kind": "MONITOR"}
             if task_request(value["text"]):
                 return {**value, "kind": "TASK"}
+            if value.get("kind") == "MONITOR":
+                raise ValueError("monitor_schedule_required")
         return value
 
 
@@ -389,7 +399,15 @@ def derive_intent(candidate: DictationCandidate, *, has_match: bool) -> ScribeIn
 
 def missing_request(candidate: DictationCandidate, source: str) -> bool:
     """A lexical omission rail, never an inferred test or clinical instruction."""
+    from sanad.scribe.monitoring import task_request
+
     text = normalize(source)
+    # Slice 13 compiles a supported monitoring request as MONITOR; 11e addendum 3
+    # promised that upgrade, so both kinds satisfy this rail.
+    if task_request(source) and not any(
+        m.kind in {"TASK", "MONITOR"} and task_request(m.text) for m in candidate.missions
+    ):
+        return True
     return not candidate.missions and bool(
         any(cue in text for cue in ("طلبت", "اعمل", "يعمل", "تحليل", "اشعه", "ايكو"))
         or re.search(r"\b(?:tests?|labs?)\b", text)

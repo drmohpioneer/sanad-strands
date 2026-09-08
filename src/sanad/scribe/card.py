@@ -533,6 +533,9 @@ def dictation_questions(proposal: Proposal) -> tuple[str, ...]:
         ):
             # The merge question quotes both readings; numeric blocking remains.
             continue
+        if issue.code == "request_missing" and issue.field == "task":
+            questions.append("سمعت طلب متابعة مش موجود في الكارت؛ أسجل إيه؟")
+            continue
         if issue.code in {"drug_unclear", "clinical_unclear"}:
             from sanad.scribe.clinical import TERM_QUESTION
 
@@ -648,6 +651,46 @@ def clinical_line(proposal: Proposal, item: str, spoken: str) -> str:
     return value + task_marker
 
 
+def history_lines(proposal: Proposal, item: str, spoken: str) -> tuple[str, ...]:
+    """Split mixed ECG/Echo cues for display only; retain every supported value."""
+    value = clinical_line(proposal, item, spoken)
+    # Unresolved fragments strip a leading legacy label too. Restore that cue
+    # before splitting a mixed fact; never infer a missing cue from "function".
+    leading = re.match(r"^(ECG|Echo):\s*", spoken, re.I)
+    if (
+        leading
+        and value.startswith(("Finding:", "History:"))
+        and re.search(r"\bECG\b", spoken, re.I)
+        and re.search(r"\b(?:Echo|EF|ejection fraction)\b", spoken, re.I)
+        and re.search(r"\b" + leading[1] + r"\b", proposal.source_text, re.I)
+    ):
+        value = leading[1] + ": " + value.split(": ", 1)[1]
+    cues = list(
+        re.finditer(
+            r"(?<!\w)(?:(?:no|not|without)\s*,?\s*)?"
+            r"(?P<cue>ECG|Echo(?:cardiogram|cardiography)?|EF|ejection fraction)(?!\w)",
+            value,
+            re.I,
+        )
+    )
+    kinds = ["ECG" if m["cue"].casefold() == "ecg" else "Echo" for m in cues]
+    if set(kinds) != {"ECG", "Echo"}:
+        return (value,)
+    starts = [(0, kinds[0])]
+    for cue, kind in zip(cues[1:], kinds[1:], strict=True):
+        if kind != starts[-1][1]:
+            starts.append((cue.start(), kind))
+    lines = []
+    for i, (start, kind) in enumerate(starts):
+        end = starts[i + 1][0] if i + 1 < len(starts) else len(value)
+        part = value[start:end].strip(" ,;:،")
+        part = re.sub(r"^(?:History|Finding):\s*", "", part)
+        part = re.sub(r"^(?:ECG|Echo)\b[\s,:;-]*", "", part, flags=re.I)
+        part = re.sub(r"[,\s]+and$", "", part, flags=re.I).rstrip(" ,;:،")
+        lines.append(kind + ": " + part)
+    return tuple(lines)
+
+
 def render_dictation(proposal: Proposal) -> tuple[str, ...]:
     if proposal.language == "en":
         from sanad.scribe.english import render
@@ -717,6 +760,10 @@ def render_dictation(proposal: Proposal) -> tuple[str, ...]:
     required = []
     for i, mission in enumerate(candidate.missions):
         line = mission.kind + ": " + clinical_line(proposal, f"mission:{i}", mission.text)
+        if mission.kind == "MONITOR":
+            from sanad.scribe.monitoring import card_line
+
+            line = card_line(mission.text, proposal.created_at, proposal.timezone, "ar")
         timing = next((t.resolved for t in proposal.timings if t.item == f"mission:{i}"), None)
         if timing and not any(
             x.item == f"mission:{i}" and x.code in {"unsupported_number", "disputed_number"}
@@ -766,10 +813,11 @@ def render_dictation(proposal: Proposal) -> tuple[str, ...]:
                 and not any(n.item == f"fact:{i}" for n in proposal.names)
                 else ""
             )
-            + clinical_line(proposal, f"fact:{i}", f.text)
+            + line
         )
         for i, f in enumerate(candidate.facts)
         if not any(x.item == f"fact:{i}" and x.code == "unsafe_text" for x in proposal.issues)
+        for line in history_lines(proposal, f"fact:{i}", f.text)
     ]
     if facts:
         limit = (

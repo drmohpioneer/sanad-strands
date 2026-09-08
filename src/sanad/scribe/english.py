@@ -70,6 +70,11 @@ def questions(proposal: Proposal) -> tuple[str, ...]:
     for issue in proposal.issues:
         before = len(result)
         code, item = issue.code, issue.item
+        if code == "request_missing" and issue.field == "task":
+            result.append(
+                "I heard a monitoring request missing from the card; what should I record?"
+            )
+            continue
         if code == "clinical_unclear":
             if issue.question and (issue.field == "analyte" or issue.blocked):
                 result.append(plain(issue.question))
@@ -155,7 +160,14 @@ def questions(proposal: Proposal) -> tuple[str, ...]:
 
 def render(proposal: Proposal) -> tuple[str, ...]:
     from sanad.domain import DRAFT_POLICY_2026_09, MissionKind
-    from sanad.scribe.card import clinical_line, medication_line, plain, split_card, supported_text
+    from sanad.scribe.card import (
+        clinical_line,
+        history_lines,
+        medication_line,
+        plain,
+        split_card,
+        supported_text,
+    )
 
     c = proposal.candidate
     name = proposal.selected_display_name or c.patient.name_as_spoken or "Who is the patient?"
@@ -192,6 +204,10 @@ def render(proposal: Proposal) -> tuple[str, ...]:
             from sanad.concierge.tasks import marker
 
             line += marker(mission.text, "en")
+        if mission.kind == "MONITOR":
+            from sanad.scribe.monitoring import card_line
+
+            line = card_line(mission.text, proposal.created_at, proposal.timezone, "en")
         timing = next((t.resolved for t in proposal.timings if t.item == f"mission:{i}"), None)
         if timing and not any(
             x.item == f"mission:{i}" and x.code in {"unsupported_number", "disputed_number"}
@@ -247,9 +263,10 @@ def render(proposal: Proposal) -> tuple[str, ...]:
     if requested:
         lines.extend(("Requested:", *requested))
     facts = [
-        clinical_line(proposal, f"fact:{i}", f.text)
+        line
         for i, f in enumerate(c.facts)
         if not any(x.item == f"fact:{i}" and x.code == "unsafe_text" for x in proposal.issues)
+        for line in history_lines(proposal, f"fact:{i}", f.text)
     ]
     tail: list[str] = []
     if c.alerts:

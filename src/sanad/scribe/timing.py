@@ -75,7 +75,7 @@ def resolve_expression(
             from sanad.scribe.names import normalize
 
             duration = re.fullmatch(
-                r"(?:for|لمده|مده)\s+(\w+)\s*(days?|hours?|weeks?|ايام|يوم|ساعات|ساعه|اسابيع|اسبوع)",
+                r"(?:(?:for|لمده|مده)\s+)?(\w+)\s*(days?|hours?|weeks?|ايام|يوم|ساعات|ساعه|اسابيع|اسبوع)",
                 normalize(text),
             )
             if duration:
@@ -154,6 +154,20 @@ def candidate_timings(
         if expression
     ]
     for item, kind, expression in values:
+        if item.startswith("mission:"):
+            from sanad.monitor.slots import requested_metric
+            from sanad.scribe.monitoring import timing as monitor_timing
+
+            mission = candidate.missions[int(item.split(":")[1])]
+            if kind == MissionKind.MONITOR or (
+                task_request(mission.text) and requested_metric(mission.text)
+            ):
+                monitor_result = monitor_timing(mission.text, expression, anchor, policy)
+                if isinstance(monitor_result, NeedsClarification):
+                    issues.append(ProposalIssue(item=item, code="timing_unclear"))
+                else:
+                    timings.append(ItemTiming(item=item, resolved=monitor_result))
+                continue
         resolved = resolve_expression(expression, kind, anchor, policy)
         if isinstance(resolved, NeedsClarification):
             issues.append(

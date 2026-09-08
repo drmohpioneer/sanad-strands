@@ -352,6 +352,11 @@ def guards(store: "StoreBase", request: CommitRequest, now: datetime) -> list["C
                 or command.payload.get("type") != "CreateSupportTicket"
             ):
                 return None
+            if row.body.get("kind") == "MONITOR":
+                from sanad.monitor.guard import permits as monitor_permits
+
+                if monitor_permits(store, snap, request, row, now):
+                    continue
             if row.version > 1 and (
                 row.body.get("kind") != "MEDICATION"
                 or row.body.get("state") != "fulfilled"

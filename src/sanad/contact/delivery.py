@@ -179,6 +179,10 @@ def doctor_payload(store: Store, intent: OutboundIntent) -> dict[str, JsonValue]
                 type=source.barrier_type,
                 text=source.barrier_reason,
             )
+    if isinstance(source, Mission) and source.details.kind == "MONITOR":
+        from sanad.monitor.report import doctor_table
+
+        text += "\n" + doctor_table(store, intent.scope, source, language)
     return {"text": text}
 
 

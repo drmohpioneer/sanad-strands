@@ -6,6 +6,7 @@ from pydantic import BaseModel, JsonValue
 
 from sanad.auth.service import read_of, revise
 from sanad.auth.tokens import issue_token
+from sanad.channels.telegram import wording
 from sanad.domain import DRAFT_POLICY_2026_09, CreateReview, Principal, ReviewKind, create_review
 from sanad.media.vision import DocumentRead
 from sanad.scribe.patients import panel
@@ -67,7 +68,7 @@ class IntakeService:
         return saved
 
     def buttons(
-        self, draft: IntakeDraft, doctor: Doctor, actor: Principal
+        self, draft: IntakeDraft, doctor: Doctor, actor: Principal, language: str
     ) -> tuple[tuple[BaseModel, ...], JsonValue]:
         now = self.repo.clock()
         choices = [
@@ -77,7 +78,10 @@ class IntakeService:
                 key=lambda p: (p.updated_at, p.id),
                 reverse=True,
             )[:5]
-        ] + [("new", "مريض جديد", None), ("later", "مش دلوقتي", None)]
+        ] + [
+            ("new", wording.button("new", language), None),
+            ("later", wording.button("later", language), None),
+        ]
         models: list[BaseModel] = []
         rows: list[JsonValue] = []
         for action, label, patient_id in choices:
@@ -139,7 +143,7 @@ class IntakeService:
                 doctor,
                 "liaison:DANGER",
                 {
-                    "text": "⚠️ نتيجة في صورة لسه مش مرتبطة بمريض محتاجة مراجعتك فورًا.",
+                    "text": wording.label("intake_danger", doctor.language),
                     "facts": facts,
                 },
                 id,

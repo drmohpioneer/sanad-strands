@@ -26,7 +26,7 @@ The owner authorized this development deployment and rollback on 2026-09-06. Acc
 | Table | `sanad-dev-data` |
 | Bucket | `sanad-dev-<owner-account>-us-east-1` (account component redacted) |
 | ECR repository / CodeBuild project | `sanad-dev-app` / `sanad-dev-build` |
-| Image digest | `sha256:41b5b1dd7d20bcc48be6472c502a5d0633392d15bae7544dba6f91968203ba8f` (slices 11e and 11d merged, checkpoint `ed20858`, deployed 2026-09-08 02:30 with all six smoke groups passing, first cold request 19.3 s; the previous image was `sha256:6feaf63a4350e6c05cac5ee6f1f6d0831f70a7f0b414c94099af4f15a464c428`, the 11c checkpoint) |
+| Image digest | `sha256:9726b177347921865a1f39aac69746ca78ab38d241bad645e6cd0fe8809fedf6` (slices 11d, 11e attempt 6, 11f and 12, checkpoint `3bda729`, deployed 2026-09-08 05:55 with all six smoke groups passing, first cold request 7.0 s; the previous image was `sha256:41b5b1dd7d20bcc48be6472c502a5d0633392d15bae7544dba6f91968203ba8f`, the 11d and 11e merge) |
 | Source archive SHA-256 | `357e56d60a5098790c99e3c10fdedb02d6622b0d82c9ee6b66ae02d8ed5ef725` |
 | Stack revision | `1e84abb9b2b8cd422f36d27035c47dbd2dce82c878bb1eaf91cb242fcb0279ad` |
 | Code / stored schema version | `1` / `1` |

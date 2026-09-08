@@ -58,6 +58,19 @@ TEMPLATES = {
         "بنود لسه محتاجة متابعة:\n{lines}",
         "Items still needing follow-up:\n{lines}",
     ),
+    "doctor_medication_done": (
+        "اكتمل المطلوب حسب كلام المريض: {title}. ده مش تأكيد مراجعة طبية.",
+        "The objective was fulfilled as reported by the patient: {title}. "
+        "This does not confirm clinical review.",
+    ),
+    "doctor_medication_anchor_unknown": (
+        "تاريخ البداية غير مؤكد.",
+        "The start date is uncertain.",
+    ),
+    "doctor_medication_barrier": (
+        "عائق: {type} — «{text}»",
+        'Barrier: {type} - "{text}"',
+    ),
 }
 
 

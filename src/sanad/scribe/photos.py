@@ -34,11 +34,11 @@ from sanad.media.vision import (
 from sanad.scribe import amend
 from sanad.scribe.card import plain
 from sanad.scribe.crosscheck import (
-    COLUMN_CAPTION,
-    HANDWRITING_REPLY,
     PhotoReview,
     candidate_from,
+    column_caption,
     grade_row,
+    handwriting_reply,
     lab_text,
     render_card,
     review_issues,
@@ -82,19 +82,23 @@ if TYPE_CHECKING:
 
 _KIND = re.compile(r"روشتة|روشته|prescription|تحاليل|تحليل|lab|نتيجة", re.I)
 _REASONS = {
-    "too_large": "حجم الملف كبير",
-    "dimensions_exceeded": "أبعاد الصورة كبيرة",
-    "unsupported_type": "نوع الملف مش صورة مدعومة",
-    "invalid_image": "ملف الصورة تالف",
-    "unreadable": "الكتابة مش واضحة",
-    "file_expired": "الملف مبقاش متاح",
-    "two_documents": "الصورة فيها أكتر من مستند",
-    "conversion_failed": "مش قادر أفتح صيغة الصورة دي",
-    "expired_handle": "الملف مبقاش متاح",
+    "too_large": ("حجم الملف كبير", "the file is too large"),
+    "dimensions_exceeded": ("أبعاد الصورة كبيرة", "the image dimensions are too large"),
+    "unsupported_type": ("نوع الملف مش صورة مدعومة", "the file is not a supported image type"),
+    "invalid_image": ("ملف الصورة تالف", "the image file is damaged"),
+    "unreadable": ("الكتابة مش واضحة", "the text is unclear"),
+    "file_expired": ("الملف مبقاش متاح", "the file is no longer available"),
+    "two_documents": ("الصورة فيها أكتر من مستند", "the image contains more than one document"),
+    "conversion_failed": ("مش قادر أفتح صيغة الصورة دي", "I could not open this image format"),
+    "expired_handle": ("الملف مبقاش متاح", "the file is no longer available"),
 }
+_UNKNOWN_REASON = (
+    "الصورة ماوصلتش أو القراءة ماكملتش",
+    "the image did not arrive or reading did not finish",
+)
 
 
-def unreadable(reason: str) -> str:
+def unreadable(reason: str, language: str = "ar") -> str:
     if reason in {
         "unreadable",
         "invalid_document_json",
@@ -104,9 +108,11 @@ def unreadable(reason: str) -> str:
         "unavailable",
         "budget_exhausted",
     }:
-        return HANDWRITING_REPLY
+        return handwriting_reply(language)
     return wording.render(
-        "doctor_photo_unreadable", reason=_REASONS.get(reason, "الصورة ماوصلتش أو القراءة ماكملتش")
+        "doctor_photo_unreadable",
+        language,
+        reason=_REASONS.get(reason, _UNKNOWN_REASON)[language == "en"],
     )
 
 
@@ -167,12 +173,14 @@ class PhotoTurn:
                 claim,
                 "doctor_photo_unreadable",
                 "media_unavailable",
-                text=unreadable("unavailable"),
+                text=unreadable("unavailable", doctor.language),
             )
         retriever = self.turn.media_factory(receipt, actor)
         retriever.failure_template = "doctor_photo_unreadable"
-        retriever.failure_text = unreadable("unavailable")
-        retriever.failure_renderer = unreadable
+        retriever.failure_text = unreadable("unavailable", doctor.language)
+        retriever.failure_renderer = lambda reason: unreadable(
+            reason, self.turn.runtime.accounts.language(doctor.telegram_user_id)
+        )
         media = fetch_telegram_file(
             receipt.provider_media_handle or "", retriever=retriever, receipt_id=receipt.id
         )
@@ -404,7 +412,12 @@ class PhotoTurn:
                     self.repo.intent(
                         doctor,
                         "doctor_photo_unreadable",
-                        {"text": unreadable_reply(draft.reads)},
+                        {
+                            "text": unreadable_reply(
+                                draft.reads,
+                                self.turn.runtime.accounts.language(doctor.telegram_user_id),
+                            )
+                        },
                         receipt.id,
                     ),
                 ),
@@ -575,10 +588,11 @@ class PhotoTurn:
             return self.unreadable_card(receipt, actor, claim, doctor, draft, None)
         now = self.repo.clock()
         changed = revise(draft, now)
-        tokens, markup = self.intake.buttons(changed, doctor, actor)
-        body = wording.render("scribe_intake_pending")
+        language = self.turn.runtime.accounts.language(doctor.telegram_user_id)
+        tokens, markup = self.intake.buttons(changed, doctor, actor, language)
+        body = wording.render("scribe_intake_pending", language)
         if draft.safety_epoch:
-            body += "\n⚠️ تم تنبيهك"
+            body += "\n" + wording.label("alerted", language)
         models: tuple[BaseModel, ...] = (changed, *tokens)
         previous, state = self.repo.pending(doctor.scope), self.repo.state(doctor.scope)
         if previous and previous.status == "pending":
@@ -746,7 +760,7 @@ class PhotoTurn:
                     claim,
                     "doctor_photo_unreadable",
                     "reread_required",
-                    text=unreadable("unavailable"),
+                    text=unreadable("unavailable", doctor.language),
                 )
             source_receipt = from_record(source_row, InboundReceipt)
             retriever = self.turn.media_factory(source_receipt, actor)
@@ -769,7 +783,9 @@ class PhotoTurn:
                     claim,
                     "doctor_photo_unreadable",
                     "reread_required",
-                    text=unreadable("unreadable"),
+                    text=unreadable(
+                        "unreadable", self.turn.runtime.accounts.language(actor.subject)
+                    ),
                 )
             if unreadable_read(fresh):
                 # Keep the surviving reread in the doctor-private draft before
@@ -935,7 +951,7 @@ class PhotoTurn:
         )
 
     def buttons(
-        self, proposal: Proposal, actor: Principal
+        self, proposal: Proposal, actor: Principal, language: str
     ) -> tuple[tuple[ScribeCallback, ...], list[JsonValue]]:
         if not proposal.photo or unreadable_read(proposal.photo.reads):
             return (), []
@@ -967,7 +983,8 @@ class PhotoTurn:
                 buttons.append(
                     [
                         {
-                            "text": f"قراءة {reading + 1}: " + plain(value or "غير مقروء")[:60],
+                            "text": wording.label("reading", language).format(number=reading + 1)
+                            + plain(value or wording.label("unreadable", language))[:60],
                             "callback_data": token.secret.get_secret_value(),
                         }
                     ]
@@ -1121,17 +1138,18 @@ class PhotoTurn:
     def card_intents(
         self, proposal: Proposal, doctor: Doctor, markup: JsonValue
     ) -> tuple[OutboundIntent, ...]:
+        language = self.turn.runtime.accounts.language(doctor.telegram_user_id)
         if proposal.photo and unreadable_read(proposal.photo.reads):
             return (
                 self.repo.intent(
                     doctor,
                     "doctor_photo_unreadable",
-                    {"text": unreadable_reply(proposal.photo.reads)},
+                    {"text": unreadable_reply(proposal.photo.reads, language)},
                     f"{proposal.id}:{proposal.version}",
                     proposal=proposal,
                 ),
             )
-        cards = render_card(proposal)
+        cards = render_card(proposal, language)
         intents = tuple(
             self.repo.intent(
                 doctor,
@@ -1149,7 +1167,7 @@ class PhotoTurn:
                 self.repo.intent(
                     doctor,
                     "scribe_photo_column",
-                    {"text": COLUMN_CAPTION, "photo_blob_ref": crop.blob_ref},
+                    {"text": column_caption(language), "photo_blob_ref": crop.blob_ref},
                     f"{proposal.id}:{proposal.version}",
                     proposal=proposal,
                     sequence=len(cards),

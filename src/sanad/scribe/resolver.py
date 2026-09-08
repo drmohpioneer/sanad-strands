@@ -383,6 +383,157 @@ def latin_in_source(name: str, source: str) -> bool:
     )
 
 
+def source_spans(
+    name: str, source: str, kind: NameKind = "test", ctx: Context | None = None
+) -> tuple[tuple[int, int], ...]:
+    """Literal token/alias anchors, with at most one edit and unchanged quantities."""
+    ctx = ctx or Context()
+    aliases = {name}
+    for entry in dictionary():
+        if entry.kind == ("drug" if kind == "drug" else "term") and normalize(
+            entry.latin
+        ) == normalize(name):
+            aliases.update((*entry.arabic_spellings, *entry.latin_spellings))
+    if ctx.vocabulary:
+        for rows in ctx.vocabulary.rows:
+            for row in rows:
+                if row.kind == kind and normalize(row.latin) == normalize(name):
+                    aliases.update(row.spoken_forms)
+    tokens = list(re.finditer(r"[\w%/+-]+", source))
+    spans: set[tuple[int, int]] = set()
+    for alias in aliases:
+        key = normalize(alias)
+        size = len(re.findall(r"[\w%/+-]+", alias))
+        if not size:
+            continue
+        for start in range(len(tokens) - size + 1):
+            a, b = tokens[start].start(), tokens[start + size - 1].end()
+            for variant in _variants(source[a:b]):
+                value = normalize(variant)
+                if value == key or (
+                    min(len(value), len(key)) >= 4
+                    and abs(len(value) - len(key)) <= 1
+                    and numbers_in(value) == numbers_in(key)
+                    and edit_distance(value, key) <= 1
+                ):
+                    spans.add((a, b))
+    return tuple(sorted(spans))
+
+
+def source_anchored(
+    name: str, source: str, kind: NameKind = "test", ctx: Context | None = None
+) -> bool:
+    return bool(source_spans(name, source, kind, ctx))
+
+
+_TEST_REQUEST = re.compile(
+    r"(?:\b(?:i\s+)?(?:ordered|request(?:ed)?)(?:\s+(?:tests?|labs?))?\s*:?\s+|"
+    r"(?:و?طلبت|تحاليل|تحليل)\s+)([^.;؛\n]+)",
+    re.I,
+)
+_NEXT_REQUEST = re.compile(
+    r"\s+and\s+(?:i\b|(?:can\s+)?(?:add|start|increase|decrease|change|visit|review)\b)"
+    r"|\s+و(?:ب?يراجع|يحضر|يزور|يقيس|يسجل|بلغني)\b",
+    re.I,
+)
+_TEST_TIMING = re.compile(
+    r"\s+(?:بعد|خلال|بكره|بكرا|غدا)\b|"
+    r"\s+(?:in|within|after|by|on|for)\s+"
+    r"(?:\d|one\b|two\b|three\b|four\b|five\b|six\b|seven\b|a\b|an\b|next\b|"
+    r"today\b|tomorrow\b|mon\w*\b|tue\w*\b|wed\w*\b|thu\w*\b|fri\w*\b|sat\w*\b|sun\w*\b)",
+    re.I,
+)
+
+
+def _test_gap(text: str) -> str:
+    """Remove request grammar at gap boundaries, preserving the heard test wording."""
+    words = list(re.finditer(r"[^\s,،;؛:]+", text))
+    grammar = _REQUEST_WORDS | {"and", "و", "please"}
+    while words and normalize(words[0][0]) in grammar:
+        words.pop(0)
+    while words and normalize(words[-1][0]) in grammar:
+        words.pop()
+    return text[words[0].start() : words[-1].end()].strip(" ,،:") if words else ""
+
+
+def unresolved_test_fragments(
+    names: tuple[str, ...], source: str, ctx: Context | None = None
+) -> tuple[str, ...]:
+    """Quote gaps in a spoken test request, never a model's guessed replacement."""
+    fragments: list[str] = []
+    for request in _TEST_REQUEST.finditer(source):
+        clause = _TEST_TIMING.split(_NEXT_REQUEST.split(request[1], maxsplit=1)[0], maxsplit=1)[
+            0
+        ].strip()
+        spans = sorted({span for name in names for span in source_spans(name, clause, ctx=ctx)})
+        # A clause belonging to another TEST must not contaminate this one.
+        if names and not spans:
+            continue
+        end = 0
+        gaps: list[str] = []
+        for a, b in spans:
+            if a > end:
+                gaps.append(clause[end:a])
+            end = max(end, b)
+        gaps.append(clause[end:])
+        for gap in gaps:
+            gap = _test_gap(gap)
+            if gap and normalize(gap) not in _CONNECTORS:
+                fragments.append(gap)
+    return tuple(dict.fromkeys(fragments))
+
+
+def resolve_tests(
+    spoken: str, source: str, ctx: Context | None = None, *, clarified: bool = False
+) -> tuple[tuple[Resolved, ...], tuple[str, ...]]:
+    """Only anchored analytes reach display; keep heard gaps for one clarification."""
+    accepted: list[Resolved] = []
+    rejected: list[Resolved] = []
+    for resolved in resolve_fragments(spoken, "test", source, ctx):
+        if (
+            not resolved.conflict
+            and all(
+                source_anchored(part.strip(), source, ctx=ctx)
+                for part in (resolved.latin or resolved.spoken).split(",")
+            )
+            and normalize(resolved.latin or resolved.spoken)
+            not in {"one", "two", "three", "four", "five", "i", "ordered", "request", "requested"}
+        ):
+            accepted.append(resolved)
+        else:
+            rejected.append(resolved)
+    fragments = (
+        ()
+        if clarified
+        else unresolved_test_fragments(
+            tuple(part.strip() for r in accepted for part in (r.latin or r.spoken).split(",")),
+            source,
+            ctx,
+        )
+    )
+    if rejected and not fragments:
+        fragments = tuple(
+            dict.fromkeys(
+                r.spoken
+                for r in rejected
+                if re.search(r"(?<!\w)" + re.escape(r.spoken) + r"(?!\w)", source, re.I)
+            )
+        ) or ("",)
+    return tuple(accepted), fragments
+
+
+def test_reply_resolves(
+    spoken: str, previous: tuple[str, ...], reply: str, source: str, ctx: Context
+) -> bool:
+    """A reply names the replacement analyte, or explicitly restates the retained set."""
+    resolved, _ = resolve_tests(spoken, source, ctx)
+    names = tuple(part.strip() for r in resolved for part in (r.latin or r.spoken).split(","))
+    prior = {normalize(name) for name in previous}
+    introduced = tuple(name for name in names if normalize(name) not in prior)
+    answered = introduced or names
+    return bool(answered) and all(source_anchored(name, reply, ctx=ctx) for name in answered)
+
+
 def _phonetic(english: str) -> str:
     """Bounded mechanical English-to-Arabic spelling, with no medical semantics."""
     value = normalize(english)

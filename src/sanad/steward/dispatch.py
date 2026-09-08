@@ -38,6 +38,14 @@ from sanad.store.records import (
 )
 
 
+def order_freshness(store: Store, intent: OutboundIntent) -> str | None:
+    for ref in intent.order_refs:
+        row = store.get(intent.scope, "care_order", ref.id)
+        if row is None or row.version != ref.version or row.body.get("status") != "active":
+            return "order_inactive"
+    return None
+
+
 def freshness(
     store: Store, intent: OutboundIntent, now: datetime, *, settings: IdentityConfig | None = None
 ) -> str | None:
@@ -160,10 +168,8 @@ def freshness(
         if row is None or row.version != ref.version:
             return "source_version"
         sources.append(row)
-    for ref in intent.order_refs:
-        row = store.get(scope, "care_order", ref.id)
-        if row is None or row.version != ref.version or row.body.get("status") != "active":
-            return "order_inactive"
+    if reason := order_freshness(store, intent):
+        return reason
     if intent.notification_purpose in {"DONE:FULFILLMENT", "DEADLINE"}:
         aggregates = [row for row in sources if row.entity_type in {"mission", "followup"}]
         if len(aggregates) != 1:
@@ -424,6 +430,14 @@ class Dispatcher:
             if r is not None
             and (r.entity_type == "doctor_authority" or intent.notification_purpose != "DANGER")
         )
+        if (
+            isinstance(scope, PatientScope)
+            and intent.status == "queued"
+            and intent.audience == "patient"
+            and intent.notification_purpose in {"routine_prompt", "solicited_reply"}
+            and order_freshness(self.store, intent) == "order_inactive"
+        ):
+            return self._suppress_inactive_orders(intent, owner, now)
         attempt = self.store.start_delivery(
             intent.id,
             (row.ref, *intent.source_versions),
@@ -618,6 +632,51 @@ class Dispatcher:
             if isinstance(intent.scope, PatientScope)
             else StewardPolicy(DRAFT_POLICY_2026_09)
         )
+
+    def _suppress_inactive_orders(
+        self, intent: OutboundIntent, owner: str, now: datetime
+    ) -> OutboundIntent:
+        from sanad.domain.events import SuppressRoutineIntents
+        from sanad.steward.apply import CommitBuilder
+        from sanad.steward.service import system_command
+        from sanad.store import keys
+
+        assert isinstance(intent.scope, PatientScope)
+        scope = intent.scope
+        lease = self.store.acquire_patient(
+            scope, "suppress:" + owner, now, self._policy(intent).operations.lease_ttl
+        )
+        if lease is None:
+            return intent
+        try:
+            orders = [self.store.get(scope, "care_order", ref.id) for ref in intent.order_refs]
+            stale = tuple(
+                ref
+                for ref, row in zip(intent.order_refs, orders, strict=True)
+                if row is None or row.ref != ref or row.body.get("status") != "active"
+            )
+            if not stale:
+                return intent
+            command = system_command(
+                scope,
+                "suppress-order:" + keys.digest(intent.id + ":" + str(intent.version)),
+                {"type": "_ScheduleContact"},
+                now,
+                lane="delivery",
+            )
+            command = command.model_copy(
+                update={
+                    "fence": lease,
+                    "expected_versions": tuple(row.ref for row in orders if row),
+                }
+            )
+            builder = CommitBuilder(scope, command, now, self._policy(intent), self.store)
+            builder.effect(SuppressRoutineIntents(reason="order_inactive", order_refs=stale), None)
+            self.store.commit(builder.finish())
+            row = self.store.get(scope, "outbound_intent", intent.id)
+            return from_record(row, OutboundIntent) if row else intent
+        finally:
+            self.store.release_patient(lease)
 
     def _finish(
         self,

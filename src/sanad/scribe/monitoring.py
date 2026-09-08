@@ -17,6 +17,27 @@ _DURATION = re.compile(
     re.I,
 )
 
+_ENGLISH_COUNTS = dict(
+    zip(
+        "one two three four five six seven eight nine ten".split(),
+        (str(n) for n in range(1, 11)),
+        strict=True,
+    )
+)
+
+
+def spoken_counts(text: str) -> set[str]:
+    """Word counts for presentation coverage only; never clinical numeric support."""
+    return {_ENGLISH_COUNTS[t] for t in normalize(text).split() if t in _ENGLISH_COUNTS}
+
+
+def request_counts(text: str) -> set[str]:
+    normalized = normalize(text)
+    counts = {match[0].split()[0] for match in _FREQUENCY.finditer(normalized)} | {
+        match[1] for match in _DURATION.finditer(normalized)
+    }
+    return {_ENGLISH_COUNTS.get(value, value) for value in counts}
+
 
 def task_request(text: str) -> bool:
     text = normalize(text)

@@ -97,7 +97,7 @@ def test_lossless_big_sender_and_metadata_cannot_grant_a_role(accounts: AccountW
     )
     assert accounts.actor(subject).verified_roles == frozenset()
     assert accounts.post(callback(accounts.token(), subject, id=2)).status_code == 200
-    assert accounts.transport.callback_calls[-1].text == wording.render("callback_refused")
+    assert accounts.transport.callback_calls[-1].text == wording.render("callback_refused", "en")
     assert accounts.actor(subject).verified_roles == frozenset()
 
 

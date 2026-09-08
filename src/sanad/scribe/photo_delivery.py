@@ -3,7 +3,7 @@
 from sanad.domain import TenantScope
 from sanad.media.limits import MAX_IMAGE_BYTES, image_info
 from sanad.media.storage import MediaStore
-from sanad.scribe.crosscheck import COLUMN_CAPTION
+from sanad.scribe.crosscheck import column_caption
 from sanad.scribe.proposal import Proposal
 from sanad.store.keys import IntakeScope
 from sanad.store.protocol import Store
@@ -28,11 +28,16 @@ def load_crop(store: Store, media: MediaStore, intent: OutboundIntent) -> bytes:
     if (
         not proposal.photo
         or not crop
-        or intent.payload
-        != {
-            "text": COLUMN_CAPTION,
-            "photo_blob_ref": crop.blob_ref,
-        }
+        # The caption was rendered when queued, possibly before a /lang switch.
+        # Accept only the two exact released captions and the same private blob.
+        or not any(
+            intent.payload
+            == {
+                "text": column_caption(language),
+                "photo_blob_ref": crop.blob_ref,
+            }
+            for language in ("ar", "en")
+        )
     ):
         raise ValueError("photo_reference")
     data = media.get(

@@ -280,6 +280,7 @@ def unreadable_media_guards(
     store: "StoreBase",
     request: CommitRequest,
     now: datetime,
+    language: str,
 ) -> list["Check"] | None:
     """11b media-only association: retained reads, no candidate or clinical mutation."""
     from sanad.scribe.crosscheck import unreadable_read, unreadable_reply
@@ -308,7 +309,7 @@ def unreadable_media_guards(
         return None
     intent = from_record(request.intents[0], OutboundIntent)
     if intent.template_id != "doctor_photo_unreadable" or intent.payload != {
-        "text": unreadable_reply(draft.reads)
+        "text": unreadable_reply(draft.reads, language)
     }:
         return None
     checks = [Check(old_row.key, old_row.version)]

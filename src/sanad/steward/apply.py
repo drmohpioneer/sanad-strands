@@ -225,6 +225,7 @@ class CommitBuilder:
                             event_id=self.command.command_id + ":anchor",
                             anchor_kind=effect.anchor_kind,
                             anchor_time=effect.anchor_time,
+                            allow_elapsed_deadline=effect.allow_elapsed_deadline,
                         ),
                         self.now,
                         self.policy.timing,
@@ -262,8 +263,26 @@ class CommitBuilder:
                         )
                     )
         elif isinstance(effect, ev.SuppressRoutineIntents):
+            if effect.order_refs is not None and self.command.principal.actor_kind == "patient":
+                payload = self.command.payload
+                declared = payload.get("medication_suppressions", [])
+                assert isinstance(declared, list)
+                self.command = self.command.model_copy(
+                    update={
+                        "payload": {
+                            **payload,
+                            "medication_suppressions": [*declared, effect.model_dump(mode="json")],
+                        }
+                    }
+                )
             for row in records(self.store, self.scope, "outbound_intent"):
                 intent = from_record(row, OutboundIntent)
+                if effect.order_refs is not None and not set(intent.order_refs).intersection(
+                    effect.order_refs
+                ):
+                    continue
+                if ("outbound_intent", intent.id) in self.puts:
+                    continue
                 if intent.status == "queued" and is_routine(intent):
                     self.put(
                         to_record(
@@ -340,6 +359,24 @@ class CommitBuilder:
             raise EffectsRejected("unsupported_effect")
 
     def finish(self, *, complete_receipt: bool = True) -> CommitRequest:
+        if (
+            self.command.principal.actor_kind == "system"
+            or self.command.payload.get("type") == "RecordPatientReply"
+        ):
+            stale = set()
+            for row in records(self.store, self.scope, "outbound_intent"):
+                intent = from_record(row, OutboundIntent)
+                if intent.status != "queued" or not is_routine(intent):
+                    continue
+                for ref in intent.order_refs:
+                    order = self.store.get(self.scope, "care_order", ref.id)
+                    if not order or order.ref != ref or order.body.get("status") != "active":
+                        stale.add(ref)
+            if stale:
+                self.effect(
+                    ev.SuppressRoutineIntents(reason="order_superseded", order_refs=tuple(stale)),
+                    None,
+                )
         if not self.events:
             self.audit("command_noop", keys.digest(self.command.command_id + ":noop"), ())
         completion = None

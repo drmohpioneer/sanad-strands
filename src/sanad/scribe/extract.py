@@ -28,7 +28,10 @@ REQUEST_MISSING_QUESTION = "سمعت إنك طلبت تحليل/فحص بس مش
 
 
 def placeholder_ambiguity(text: str) -> bool:
-    return normalize(text).startswith(normalize("فيه بند مش واضح")) and not numbers_in(text)
+    return (
+        normalize(text).startswith(normalize("فيه بند مش واضح"))
+        or normalize(text).rstrip(".") == "please confirm the clinical wording as heard"
+    ) and not numbers_in(text)
 
 
 SYSTEM_PROMPT = (

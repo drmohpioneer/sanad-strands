@@ -378,6 +378,10 @@ class ConciergeTurn:
             ):
                 return reply("patient_callback_stale")
             tx.consume(token)
+            medication_choice = reports.medication_callback(tx, token, source)
+            if medication_choice:
+                key, fields = medication_choice
+                return self._start_reply(tx) if key == "_start" else reply(key, **fields)
             if token.action == "resume":
                 return reply(
                     preferences.apply(tx, preferences.Preference("resume"), confirmed=True)
@@ -403,6 +407,7 @@ class ConciergeTurn:
             reports.record_start(tx, mission, "بدأت الدوا", source=source)
             return self._start_reply(tx)
         if wants_treatment_change(text, policy=self.runtime.safety_policy):
+            reports.record_day3(tx, text, source=source, verdict=verdict, treatment_change=True)
             question.open_ticket(tx, text)
             return reply("patient_treatment_change_relay")
         preference = preferences.parse(text)
@@ -439,6 +444,14 @@ class ConciergeTurn:
             return reply("patient_voice_unreadable")
         if not is_question(text) and reports.record_day3(tx, text, source=source, verdict=verdict):
             return reply("patient_day3_recorded")
+        if reports.recognize_barrier(text) and reports.record_day3(
+            tx, text, source=source, verdict=verdict
+        ):
+            return reply("patient_day3_recorded")
+        medication_reply = reports.medication_reply(tx, text, source=source)
+        if medication_reply:
+            key, fields = medication_reply
+            return self._start_reply(tx) if key == "_start" else reply(key, **fields)
         if reports.is_start(text):
             if reports.ambiguous_start_time(text):
                 return reply("patient_start_date")

@@ -18,37 +18,46 @@ type TemplateId = Literal[
     "doctor_suspended_notice",
 ]
 
-TEMPLATES: dict[str, str] = {
+TEMPLATES: dict[str, tuple[str, str]] = {
     "application_received": (
         "طلب التسجيل كدكتور وصل، ومستني مراجعة الإدارة.\n"
-        "Your doctor registration application was received and is awaiting admin review."
+        "Your doctor registration application was received and is awaiting admin review.",
+        "Your doctor registration application was received and is awaiting admin review.",
     ),
     "admin_new_application": (
         "طلب تسجيل دكتور جديد. البيانات دي مقدمة من صاحب الطلب ولسه مش متحققة:\n"
         "الاسم: {name}\nالتخصص: {specialty}\nالمدينة: {city}\n"
         "New doctor application. These applicant-provided details are unverified:\n"
-        "Name: {name}\nSpecialty: {specialty}\nCity: {city}"
+        "Name: {name}\nSpecialty: {specialty}\nCity: {city}",
+        "New doctor application. These applicant-provided details are unverified:\n"
+        "Name: {name}\nSpecialty: {specialty}\nCity: {city}",
     ),
     "doctor_approved": (
-        "تمت الموافقة على حسابك كدكتور في سند.\nYour doctor account in Sanad has been approved."
+        "تمت الموافقة على حسابك كدكتور في سند.\nYour doctor account in Sanad has been approved.",
+        "Your doctor account in Sanad has been approved.",
     ),
     "application_rejected": (
-        "طلب التسجيل مش مقبول حاليًا.\nYour registration application is not approved at this time."
+        "طلب التسجيل مش مقبول حاليًا.\nYour registration application is not approved at this time.",
+        "Your registration application is not approved at this time.",
     ),
     "doctor_welcome_back": (
         "أهلًا برجوعك. حسابك كدكتور في سند معتمد.\n"
-        "Welcome back. Your doctor account in Sanad is approved."
+        "Welcome back. Your doctor account in Sanad is approved.",
+        "Welcome back. Your doctor account in Sanad is approved.",
     ),
     "doctor_capability_pending": (
         "رسالتك وصلت. التعامل مع خطط المرضى والملفات مش متاح هنا لسه.\n"
-        "Your message was received. Patient plans and files cannot be handled here yet."
+        "Your message was received. Patient plans and files cannot be handled here yet.",
+        "Your message was received. Patient plans and files cannot be handled here yet.",
     ),
     "callback_refused": (
-        "الإجراء ده مش متاح من الزر ده.\nThis action is unavailable from this button."
+        "الإجراء ده مش متاح من الزر ده.\nThis action is unavailable from this button.",
+        "This action is unavailable from this button.",
     ),
     "doctor_suspended_notice": (
         "تم تعليق صلاحيات حسابك كدكتور في سند.\n"
-        "Your doctor account permissions in Sanad have been suspended."
+        "Your doctor account permissions in Sanad have been suspended.",
+        "Your doctor account permissions in Sanad have been suspended.",
     ),
 }
 APPROVE_BUTTON = "موافقة / Approve"
@@ -140,30 +149,98 @@ ENROLLMENT_TEMPLATES = {
 # Preserve the accepted account catalog; enrollment has its own public catalog.
 SCRIBE_TEMPLATES = {
     "doctor_photo_unreadable": (
-        "مش قادر أقرا الصورة: {reason}. صوّر من فوق في نور كويس وابعتها تاني."
+        "مش قادر أقرا الصورة: {reason}. صوّر من فوق في نور كويس وابعتها تاني.",
+        "I could not read the image: {reason}. "
+        "Photograph it from above in good light and resend it.",
     ),
-    "scribe_intake_pending": "الصورة محفوظة عندك. اختار المريض، أو مريض جديد، أو مش دلوقتي.",
-    "scribe_amendment_line": "{drug}: {old} ← {new}",
-    "scribe_card": "{body}",
-    "scribe_confirmed": "اتسجل:\n{body}",
-    "scribe_stale": "الكارت اتغير أو مبقاش صالح. ابعت التعليمات من جديد.",
-    "scribe_discarded": "تمام، لغيت الكارت ومفيش تعليمات اتسجلت.",
-    "scribe_expired": "صلاحية الكارت انتهت. ابعت التعليمات من جديد.",
-    "scribe_edit": "ابعت التعديل كتابة أو بصوتك؛ الكارت القديم مش هيتأكد.",
+    "scribe_intake_pending": (
+        "الصورة محفوظة عندك. اختار المريض، أو مريض جديد، أو مش دلوقتي.",
+        "Your image is saved. Choose a patient, New patient, or Not now.",
+    ),
+    "scribe_amendment_line": ("{drug}: {old} ← {new}", "{drug}: {old} → {new}"),
+    "scribe_card": ("{body}", "{body}"),
+    "scribe_confirmed": ("اتسجل:\n{body}", "Recorded:\n{body}"),
+    "scribe_stale": (
+        "الكارت اتغير أو مبقاش صالح. ابعت التعليمات من جديد.",
+        "The card changed or is no longer valid. Send the instructions again.",
+    ),
+    "scribe_discarded": (
+        "تمام، لغيت الكارت ومفيش تعليمات اتسجلت.",
+        "Card cancelled. No instructions were recorded.",
+    ),
+    "scribe_expired": (
+        "صلاحية الكارت انتهت. ابعت التعليمات من جديد.",
+        "The card expired. Send the instructions again.",
+    ),
+    "scribe_edit": (
+        "ابعت التعديل كتابة أو بصوتك؛ الكارت القديم مش هيتأكد.",
+        "Send your correction by text or voice. The previous card cannot be confirmed.",
+    ),
     "scribe_invitation": (
         "افتح اللينك أو امسح الكود، وبعدها وافق على الربط واستنى تأكيد الدكتور.\n"
-        "صالح 24 ساعة\n{link}"
+        "صالح 24 ساعة\n{link}",
+        "Open the link or scan the code, consent to linking, "
+        "and wait for the doctor's confirmation.\n"
+        "Valid for 24 hours\n{link}",
     ),
-    "doctor_voice_unreadable": "مش قادر أسمع التسجيل. ابعته تاني أو اكتب الكلام.",
-    "doctor_model_unavailable": "مش قادر أقرأ دلوقتي، ابعت تاني بعد شوية",
-    "doctor_patient_not_found": "ملقيتش المريض ده عندك. اكتب /new وبعدها الاسم لو مريض جديد.",
+    "doctor_voice_unreadable": (
+        "مش قادر أسمع التسجيل. ابعته تاني أو اكتب الكلام.",
+        "I could not hear the recording. Send it again or type the instructions.",
+    ),
+    "doctor_model_unavailable": (
+        "مش قادر أقرأ دلوقتي، ابعت تاني بعد شوية",
+        "I cannot read this right now. Please try again shortly.",
+    ),
+    "doctor_patient_not_found": (
+        "ملقيتش المريض ده عندك. اكتب /new وبعدها الاسم لو مريض جديد.",
+        "I could not find this patient. Use /new followed by the name for a new patient.",
+    ),
     "doctor_help": (
         "أوامر سند:\n/start — ترحيب\n/help — المساعدة\n/new الاسم — مريض جديد\n"
         "/find الاسم — بحث\n/qr الاسم — دعوة ربط\n/cancel — إلغاء الكارت\n"
-        "ابعت التعليمات كتابة أو بصوتك، وراجع الكارت قبل ✅ تمام."
+        "ابعت التعليمات كتابة أو بصوتك، وراجع الكارت قبل ✅ تمام.",
+        "Sanad commands:\n/start — welcome\n/help — help\n/new name — new patient\n"
+        "/find name — search\n/qr name — linking invitation\n/cancel — cancel card\n"
+        "/intake — saved images\n/lang en | ar — language\n"
+        "Send instructions by text or voice and review the card before tapping ✅ Confirm.\n"
+        "Contest mode is English; Arabic is a declared upgrade.",
     ),
 }
 ALL_TEMPLATES = TEMPLATES | ENROLLMENT_TEMPLATES | SCRIBE_TEMPLATES
+
+# Existing fixed button/call-site labels, separate from outbound template ids.
+BUTTONS = {
+    "confirm": ("✅ تمام", "✅ Confirm"),
+    "edit": ("✏️ تعديل", "✏️ Edit"),
+    "reject": ("❌ إلغاء", "❌ Cancel"),
+    "new": ("مريض جديد", "New patient"),
+    "correct_reply": ("تعديل للكارت", "Update card"),
+    "new_reply": ("مريض جديد", "New patient"),
+    "later": ("مش دلوقتي", "Not now"),
+}
+LABELS = {
+    "no_intake": ("مفيش صور مستنية اختيار مريض.", "No images are waiting for a patient selection."),
+    "choose_reply": ("ده تعديل للكارت ولا مريض جديد؟", "Is this a card update or a new patient?"),
+    "patient": ("المريض: ", "Patient: "),
+    "alerted": ("⚠️ تم تنبيهك", "⚠️ You have been alerted"),
+    "intake_danger": (
+        "⚠️ نتيجة في صورة لسه مش مرتبطة بمريض محتاجة مراجعتك فورًا.",
+        "⚠️ A result in an image not yet linked to a patient needs your immediate review.",
+    ),
+    "reading": ("قراءة {number}: ", "Reading {number}: "),
+    "unreadable": ("غير مقروء", "unreadable"),
+    "unchanged": (": زي ما هو", ": unchanged"),
+    "stop": ("إيقاف", "stop"),
+}
+
+
+def button(action: str, language: str) -> str:
+    return BUTTONS[action][language == "en"]
+
+
+def label(key: str, language: str) -> str:
+    return LABELS[key][language == "en"]
+
 
 FIELDS = {
     key: frozenset({"name", "specialty", "city"}) if key == "admin_new_application" else frozenset()
@@ -206,15 +283,29 @@ FIELDS.update(
 
 
 def check_templates() -> None:
-    for key, text in ALL_TEMPLATES.items():
-        fields = set()
-        for _, name, spec, conversion in string.Formatter().parse(text):
-            if name is not None:
-                if name not in FIELDS[key] or spec or conversion:
-                    raise ValueError("unsafe account template placeholder")
-                fields.add(name)
-        if fields != FIELDS[key]:
-            raise ValueError("account template placeholder mismatch")
+    for key, value in ALL_TEMPLATES.items():
+        texts: tuple[str, ...]
+        if key in ENROLLMENT_TEMPLATES:
+            if not isinstance(value, str):
+                raise ValueError("enrollment wording must remain unchanged")
+            texts = (value,)
+        else:
+            if (
+                not isinstance(value, tuple)
+                or len(value) != 2
+                or any(not isinstance(text, str) or not text for text in value)
+            ):
+                raise ValueError("account template requires both languages")
+            texts = value
+        for text in texts:
+            fields = set()
+            for _, name, spec, conversion in string.Formatter().parse(text):
+                if name is not None:
+                    if name not in FIELDS[key] or spec or conversion:
+                        raise ValueError("unsafe account template placeholder")
+                    fields.add(name)
+            if fields != FIELDS[key]:
+                raise ValueError("account template placeholder mismatch")
 
 
 def untrusted(value: str) -> str:
@@ -225,10 +316,12 @@ def untrusted(value: str) -> str:
     return html.escape(value, quote=True).replace("{", "&#123;").replace("}", "&#125;")
 
 
-def render(template_id: str, **fields: str) -> str:
+def render(template_id: str, language: str, **fields: str) -> str:
     if template_id not in ALL_TEMPLATES or set(fields) != FIELDS[template_id]:
         raise ValueError("account template requires exactly its declared fields")
-    return ALL_TEMPLATES[template_id].format(
+    value = ALL_TEMPLATES[template_id]
+    text = value if isinstance(value, str) else value[language == "en"]
+    return text.format(
         **{
             k: v
             if k == "link" or (k == "body" and template_id in {"scribe_card", "scribe_confirmed"})

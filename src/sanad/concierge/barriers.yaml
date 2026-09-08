@@ -1,0 +1,75 @@
+{
+  "OWNER_REVIEW_PENDING": true,
+  "cost": {
+    "en": [
+      "I can't afford it",
+      "can't afford",
+      "cannot afford",
+      "too expensive",
+      "no money"
+    ],
+    "ar": [
+      "غالي",
+      "معيش فلوس",
+      "معاياش فلوس"
+    ]
+  },
+  "availability": {
+    "en": [
+      "not available",
+      "out of stock",
+      "can't find",
+      "cannot find"
+    ],
+    "ar": [
+      "مش لاقي",
+      "مش موجود",
+      "خلص من الصيدلية"
+    ]
+  },
+  "forgot": {
+    "en": [
+      "I forgot",
+      "forgot"
+    ],
+    "ar": [
+      "نسيت"
+    ]
+  },
+  "confusion": {
+    "en": [
+      "I don't understand",
+      "do not understand",
+      "confused",
+      "how to take it"
+    ],
+    "ar": [
+      "مش فاهم",
+      "ازاي اخده"
+    ]
+  },
+  "side_effect_experience": {
+    "en": [
+      "makes me feel unwell",
+      "dizzy",
+      "dizziness",
+      "nausea",
+      "nauseous"
+    ],
+    "ar": [
+      "بيتعبني",
+      "دوخة",
+      "غثيان"
+    ]
+  },
+  "other": {
+    "en": [
+      "I won't be able",
+      "I cannot do it",
+      "I can't do it"
+    ],
+    "ar": [
+      "مش هقدر"
+    ]
+  }
+}

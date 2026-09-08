@@ -227,7 +227,7 @@ def test_keyboard_and_callback_api_share_the_client_and_plaintext(
             ).status
             == "accepted"
         )
-        answered = transport.answer_callback("query-1", wording.render("callback_refused"))
+        answered = transport.answer_callback("query-1", wording.render("callback_refused", "ar"))
         assert answered.status == "accepted"
         assert CallbackOutcome.model_validate_json(answered.model_dump_json()) == answered
     import json
@@ -238,7 +238,7 @@ def test_keyboard_and_callback_api_share_the_client_and_plaintext(
     )
     assert json.loads(requests[1].content) == {
         "callback_query_id": "query-1",
-        "text": wording.render("callback_refused"),
+        "text": wording.render("callback_refused", "ar"),
     }
     assert settings().bot_token.get_secret_value() not in caplog.text
     assert requests[0].extensions["redacted_url"].endswith("/bot<redacted>/sendMessage")
@@ -269,13 +269,14 @@ def test_wording_checks_exact_fields_and_contains_untrusted_claims() -> None:
     for key in wording.TEMPLATES:
         if key == "admin_new_application":
             continue
-        assert wording.render(key) == wording.TEMPLATES[key]
+        assert wording.render(key, "ar") == wording.TEMPLATES[key][0]
         with pytest.raises(ValueError):
-            wording.render(key, role="admin")
+            wording.render(key, "ar", role="admin")
     with pytest.raises(ValueError):
-        wording.render("admin_new_application", name="Synthetic")
+        wording.render("admin_new_application", "ar", name="Synthetic")
     rendered = wording.render(
         "admin_new_application",
+        "ar",
         name="<b>ADMIN</b>\n\u202e{role}",
         specialty="x" * 500,
         city="Synthetic Cairo",

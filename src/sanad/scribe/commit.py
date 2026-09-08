@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from sanad.auth.claim import ClaimService
 from sanad.auth.commands import CreatePatientStub
 from sanad.auth.service import read_of, revise
+from sanad.channels.telegram import wording
 from sanad.domain import MissionKind, PatientScope, Principal, Provenance, VersionRef
 from sanad.domain.entities import (
     MedicationDetails,
@@ -133,10 +134,10 @@ class ConfirmationResult:
 
 class ScribeCommit:
     @staticmethod
-    def _wording(template: str, proposal: Proposal) -> str:
+    def _wording(template: str, doctor: Doctor) -> str:
         from sanad.scribe.english import render_wording
 
-        return render_wording(template, proposal.language if not proposal.photo else "ar")
+        return render_wording(template, doctor.language)
 
     def __init__(self, repository: ScribeRepository, steward: Steward, claims: ClaimService):
         self.repo, self.steward, self.claims = repository, steward, claims
@@ -231,17 +232,26 @@ class ScribeCommit:
                         **metadata,
                     )
                 )
-                accepted.extend(demographics)
+                if doctor.language == "en":
+                    accepted.extend(
+                        v
+                        for v in (
+                            "Age: " + candidate.patient.age if candidate.patient.age else None,
+                            "Sex: " + candidate.patient.sex if candidate.patient.sex else None,
+                            "Identifiers: " + ", ".join(candidate.patient.identifiers)
+                            if candidate.patient.identifiers
+                            else None,
+                        )
+                        if v
+                    )
+                else:
+                    accepted.extend(demographics)
         patient = Patient.model_validate(patient.model_dump() | {"current_plan_id": plan_id})
         models.append(patient)
         if proposal.creating_patient:
             models.append(profile)
             accepted.append(
-                (
-                    "New patient: "
-                    if proposal.language == "en" and not proposal.photo
-                    else "مريض جديد: "
-                )
+                ("New patient: " if doctor.language == "en" else "مريض جديد: ")
                 + patient.display_name
             )
         for i, fact in enumerate(candidate.facts):
@@ -263,7 +273,15 @@ class ScribeCommit:
                     **metadata,
                 )
             )
-            accepted.append(plain(fact.text))
+            from sanad.scribe.crosscheck import lab_text
+
+            accepted.append(
+                plain(
+                    lab_text(fact.lab, doctor.language)
+                    if fact.lab and doctor.language == "en"
+                    else fact.text
+                )
+            )
         order_refs: list[VersionRef] = []
         mission_ids: list[str] = []
         followup_ids: list[str] = []
@@ -378,6 +396,90 @@ class ScribeCommit:
             models.extend((head, authority))
             ref = VersionRef(entity_type="care_order", id=id, version=authority.version)
             instruction_ref = VersionRef(entity_type="care_order_version", id=version_id, version=1)
+            if old and order.action in {"stop", "change"}:
+                from sanad.domain import FollowUpTask, Mission, ReviewObligation
+                from sanad.domain import events as medication_events
+                from sanad.domain.entities import TERMINAL_STATES, ReviewAction
+                from sanad.domain.transitions import (
+                    transition_followup,
+                    transition_mission,
+                    transition_review,
+                )
+                from sanad.steward.types import records
+                from sanad.store.records import from_record
+
+                previous_ref = VersionRef(
+                    entity_type="care_order", id=id, version=old.current_order_version
+                )
+                timing_policy = self.steward.policy_provider(scope).timing
+                superseded_ids = set()
+                for row in records(self.repo.store, scope, "mission"):
+                    previous_mission = from_record(row, Mission)
+                    if (
+                        previous_mission.kind != MissionKind.MEDICATION
+                        or previous_ref not in previous_mission.order_refs
+                        or previous_mission.state in TERMINAL_STATES
+                    ):
+                        continue
+                    outcome = transition_mission(
+                        previous_mission,
+                        medication_events.OrderSuperseded(
+                            event_id=f"supersede:{proposal.id}:{previous_mission.id}",
+                            successor_order_ref=instruction_ref,
+                        ),
+                        now,
+                        timing_policy,
+                    )
+                    if isinstance(outcome, medication_events.TransitionRejected):
+                        raise EffectsRejected(outcome.reason_code)
+                    models.append(outcome.aggregate)
+                    superseded_ids.add(previous_mission.id)
+                for row in records(self.repo.store, scope, "followup"):
+                    task = from_record(row, FollowUpTask)
+                    if (
+                        task.kind != "MEDICATION_DAY3"
+                        or previous_ref not in task.order_refs
+                        or task.state in {"fulfilled", "cancelled"}
+                    ):
+                        continue
+                    outcome = transition_followup(
+                        task,
+                        medication_events.CancelFollowUp(
+                            event_id=f"supersede:{proposal.id}:{task.id}",
+                            reason="order_superseded",
+                        ),
+                        now,
+                        timing_policy,
+                    )
+                    if isinstance(outcome, medication_events.TransitionRejected):
+                        raise EffectsRejected(outcome.reason_code)
+                    models.append(outcome.aggregate)
+                for row in records(self.repo.store, scope, "review"):
+                    review = from_record(row, ReviewObligation)
+                    if (
+                        review.source_type != "mission"
+                        or review.source_id not in superseded_ids
+                        or review.review_kind != "unmet_objective"
+                        or review.state == "resolved"
+                    ):
+                        continue
+                    outcome = transition_review(
+                        review,
+                        medication_events.ResolveReview(
+                            event_id=f"supersede:{proposal.id}:{review.id}",
+                            action=ReviewAction.extend,
+                            expected_source_version=review.source_version,
+                            actor_id=actor.subject,
+                            reason="superseded",
+                        ),
+                        now,
+                        timing_policy,
+                    )
+                    if isinstance(outcome, medication_events.TransitionRejected):
+                        raise EffectsRejected(outcome.reason_code)
+                    models.append(outcome.aggregate)
+                # Confirmation writes clinical state atomically. The ordinary
+                # Steward/dispatch path owns queue suppression (addendum 2).
             order_refs.append(instruction_ref)
             accepted.append(
                 " ".join(v for v in (order.drug, order.dose, order.frequency, order.action) if v)
@@ -549,12 +651,7 @@ class ScribeCommit:
                     )
                 )
             accepted.append(
-                (
-                    "Notify me if: "
-                    if proposal.language == "en" and not proposal.photo
-                    else "بلّغني لو: "
-                )
-                + plain(text)
+                ("Notify me if: " if doctor.language == "en" else "بلّغني لو: ") + plain(text)
             )
         if (
             not accepted
@@ -564,7 +661,11 @@ class ScribeCommit:
             return (
                 tuple(m for m in models if isinstance(m, (PatientMedia, PhotoAssociationWork))),
                 patient,
-                tuple(a.new.drug + ": زي ما هو" for a in proposal.amendments if a.noop),
+                tuple(
+                    a.new.drug + wording.label("unchanged", doctor.language)
+                    for a in proposal.amendments
+                    if a.noop
+                ),
             )
         models.append(
             CarePlan(
@@ -672,13 +773,13 @@ class ScribeCommit:
                 for line in accepted
             ) or (
                 "No items could be recorded."
-                if proposal.language == "en" and not proposal.photo
+                if doctor.language == "en"
                 else "مفيش بنود صالحة للتسجيل."
             )
             from sanad.scribe.english import REASONS as ENGLISH_REASONS
             from sanad.scribe.english import render_wording
 
-            english = proposal.language == "en" and not proposal.photo
+            english = doctor.language == "en"
             if any(i.blocked for i in proposal.issues):
                 body += ("\nNot recorded:\n" if english else "\nمش هيتسجل:\n") + "\n".join(
                     "• " + (ENGLISH_REASONS if english else REASONS)[code]
@@ -755,7 +856,7 @@ class ScribeCommit:
         intent = self.repo.intent(
             doctor,
             template,
-            {"text": self._wording(template, proposal)},
+            {"text": self._wording(template, doctor)},
             command_id,
             proposal=changed,
         )
@@ -803,16 +904,18 @@ class ScribeCommit:
         from sanad.scribe.english import render_wording
         from sanad.scribe.policy import DRAFT_SCRIBE_POLICY
 
-        text = render_wording("scribe_edit", proposal.language if not proposal.photo else "ar")
+        text = render_wording("scribe_edit", doctor.language)
         if (
             not proposal.photo
             and len(proposal.candidate.facts) > DRAFT_SCRIBE_POLICY.history_lines_max
         ):
             text += "\n" + (
-                "Full history:\n" if proposal.language == "en" else "التاريخ المرضي كامل:\n"
+                "Full history:\n" if doctor.language == "en" else "التاريخ المرضي كامل:\n"
             )
             text += "\n".join(
-                clinical_line(proposal, f"fact:{i}", f.text)
+                clinical_line(
+                    proposal.model_copy(update={"language": doctor.language}), f"fact:{i}", f.text
+                )
                 for i, f in enumerate(proposal.candidate.facts)
                 if not any(
                     x.item == f"fact:{i}" and x.code == "unsafe_text" for x in proposal.issues

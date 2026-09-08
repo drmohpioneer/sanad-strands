@@ -11,7 +11,6 @@ from sanad.store import keys
 from sanad.store.records import Claim, Doctor, InboundReceipt, IntakeConcern, IntakeDraft
 
 
-
 def corroborated_values(read: DocumentRead) -> tuple[LabRowCandidate, ...]:
     """Rows slice 11d allows a danger decision to rest on.
 
@@ -49,13 +48,14 @@ def corroborated_values(read: DocumentRead) -> tuple[LabRowCandidate, ...]:
             seen.add(key)
             rows.append(
                 LabRowCandidate(
-                    analyte=row.item.name,
+                    analyte=name,
                     value=row.item.value,
                     unit=row.item.unit,
                     flag=row.item.flag,
                 )
             )
     return tuple(rows)
+
 
 class AlertPhotoTurn(PhotoTurn):
     def raise_patient(self, reads: DocumentRead, patient_id: str, actor: Principal) -> bool:

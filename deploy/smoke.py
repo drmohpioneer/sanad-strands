@@ -184,9 +184,9 @@ def tenant(aws: Any, table: str, url: str) -> dict[str, Any]:
         store,
         utc_now,
         IdentityConfig(bot_id=bot, admin_user_id=admin),
-        lambda key, fields: wording.render(key, **fields),
-        approve_label=wording.APPROVE_BUTTON,
-        reject_label=wording.REJECT_BUTTON,
+        lambda key, language, fields: wording.render(key, language, **fields),
+        approve_label=(wording.APPROVE_BUTTON, "Approve"),
+        reject_label=(wording.REJECT_BUTTON, "Reject"),
     )
     doctors = []
     actors = []

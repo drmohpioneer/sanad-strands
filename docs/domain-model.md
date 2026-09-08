@@ -161,6 +161,10 @@ Contract 10 adds `ReportFactPayload` to patient-released `ClinicalFact` values: 
 
 ## Missions, follow-up and review
 
+Contract 14 adds `medication_stop`, `medication_change`, `start_date` and `barrier` to `ReportFactPayload`, with optional `barrier_type`, `effective_start` and `anchor_unknown`. They retain patient provenance and the exact target version. `PatientProfile.pending_start_clarification` contains `mission_ref`, `asked_at` and `expires_at`; a patient reply can change only that field and normal revision metadata, without changing consent, recipient, epochs or lease data. Medication `PatientAction` choices retain the screened `medication_report_text`, including for voice input, and keep the existing receipt, single-use and authority bindings.
+
+The medication executor emits the existing `BarrierRecorded`, `BarrierResolved` and `OrderSuperseded` events. The existing blocked shape retains a bounded `resume_at` and barrier reason; supersession ends unfinished work. A day-three barrier is a fact referenced by the fulfilled FollowUpTask, not an event on its already fulfilled parent. STOP/CHANGE acknowledgments never create an automatic day-three task. An accepted recent anchor whose deadline is already due retains that deadline and schedules an immediate accountability wake. No legal transition-table row is added.
+
 | Entity | Fields beyond common metadata / rules |
 |---|---|
 | Mission | kind (TEST/MONITOR/MEDICATION/SEND_RECORDS/VISIT/QUESTION/TASK), title, typed details, objective_predicate, order_refs, state, fulfillment_validity, fulfillment_event_id optional, fulfilled_at optional, objective_received_at optional, timeliness (undetermined/on_time/late), evidence_refs, confirmed_at/by optional, source_proposal_id optional, due_at, due_source (doctor/scribe/default), due_reason, timing_anchor, original_time_expression optional, timezone, grace_seconds, escalation_at, review_at, resume_at optional, next_contact_at optional, deadline_generation, WorkClock while nonterminal, contact_count/unanswered_delivered_count/evidence_request_count, barrier_type/reason optional, danger_history flag, latest_deadline_notice_event_id optional |
@@ -360,6 +364,8 @@ Index delays or a missed tick do not lose deadlines: due records stay due until 
 | ReplayNonce | issuer/key_id, nonce_digest, timestamp, expires_at; conditional insert prevents tick/callback replay |
 
 ### Outbound scope and purpose variants
+
+`SuppressRoutineIntents.order_refs` is optional. When supplied, only queued routine intents with an intersecting order reference are suppressed; empty or absent intent refs do not match. Omitting the effect's scope preserves the existing patient-wide behavior. The patient store guard requires a declared scope plus an inactive order or the exact accepted barrier projection. Medication STOP DONE notices retain their completed mission source but carry no active-order guidance reference, allowing the doctor to receive the self-report about the stopped order.
 
 OutboundIntent has common delivery metadata plus a discriminated `scope_kind` and `audience`; patient-only fields are not fabricated for account/intake messages. Common fields include `recipient_ref` (server-resolved verified private channel subject/chat), `notification_purpose` (solicited_reply, DANGER, DONE:FULFILLMENT, DONE:CORRECTION, DEADLINE, routine_prompt or patient_safety_response), source versions, payload reference/hash, expiry and delivery/work state.
 

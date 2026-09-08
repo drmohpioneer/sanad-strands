@@ -262,7 +262,7 @@ class ScribeTurn:
                 )
             retriever = self.media_factory(receipt, principal)
             retriever.failure_template = "doctor_voice_unreadable"
-            retriever.failure_text = wording.render("doctor_voice_unreadable")
+            retriever.failure_text = wording.render("doctor_voice_unreadable", doctor.language)
             media = fetch_telegram_file(
                 receipt.provider_media_handle or "", retriever=retriever, receipt_id=receipt.id
             )
@@ -374,7 +374,7 @@ class ScribeTurn:
                 claim,
                 "scribe_card",
                 "no_intake",
-                text="مفيش صور مستنية اختيار مريض.",
+                text=wording.label("no_intake", doctor.language),
             )
         if command in {"/start", "/help"}:
             return self._reply(
@@ -640,7 +640,7 @@ class ScribeTurn:
         intent = self.repo.intent(
             doctor,
             "scribe_card",
-            {"text": "ده تعديل للكارت ولا مريض جديد؟", "reply_markup": markup},
+            {"text": wording.label("choose_reply", doctor.language), "reply_markup": markup},
             f"{changed.id}:{changed.version}",
             proposal=changed,
         )
@@ -713,8 +713,42 @@ class ScribeTurn:
 
                 service.forbidden_names += (normalize(candidate.patient.name_as_spoken),)
             service.patient_identity_pending = False
+            clarified_tests: frozenset[str] = frozenset()
+            if correction and previous:
+                from sanad.scribe.resolver import context, test_reply_resolves
+
+                # Item-level correction authority does not settle its analyte:
+                # a timing answer may also cause the model to reword the list.
+                prefix = previous.source_text + "\n"
+                reply = source_text[len(prefix) :] if source_text.startswith(prefix) else ""
+                settled = set()
+                for i, (before_test, after_test) in enumerate(
+                    zip(previous.candidate.missions, candidate.missions, strict=False)
+                ):
+                    if before_test.kind != "TEST" or after_test.kind != "TEST":
+                        continue
+                    item = f"mission:{i}"
+                    prior_names = tuple(
+                        n.latin for n in previous.names if n.item == item and n.kind == "test"
+                    )
+                    unanswered = any(
+                        q.item == item and q.field == "analyte" for q in previous.issues
+                    )
+                    if (prior_names and not unanswered) or (
+                        before_test.text != after_test.text
+                        and test_reply_resolves(
+                            after_test.text, prior_names, reply, source_text, context(service)
+                        )
+                    ):
+                        settled.add(item)
+                clarified_tests = frozenset(settled)
             candidate, clinical_issues = prepare_clinical(
-                candidate, source_text, service, names, language=doctor.language
+                candidate,
+                source_text,
+                service,
+                names,
+                language=doctor.language,
+                clarified_tests=clarified_tests,
             )
             verified_names = {}
             if correction and previous:
@@ -853,7 +887,7 @@ class ScribeTurn:
                 claim,
                 "scribe_card",
                 "found",
-                text="المريض: " + selected.display_name,
+                text=wording.label("patient", doctor.language) + selected.display_name,
             )
         creating = force_new or (
             intent == "create_patient" and not choices and bool(candidate.patient.name_as_spoken)
@@ -1023,7 +1057,10 @@ class ScribeTurn:
             single_source=candidate._single_source,
             resolved_numbers=resolved_numbers,
         )
-        if any(len(part) > DRAFT_SCRIBE_POLICY.card_max_chars for part in render_card(proposal)):
+        if any(
+            len(part) > DRAFT_SCRIBE_POLICY.card_max_chars
+            for part in render_card(proposal, doctor.language)
+        ):
             proposal = Proposal.model_validate(
                 proposal.model_dump()
                 | {
@@ -1081,6 +1118,10 @@ class ScribeTurn:
 
         if proposal.photo and unreadable_read(proposal.photo.reads):
             return (), {"inline_keyboard": []}
+        doctor = self.claims.doctor(actor)
+        from sanad.domain.language import default_language
+
+        language = doctor.language if doctor else default_language
         choices: list[tuple[str, str, str | None]] = []
         if proposal.pending_reply:
             choices.extend(
@@ -1103,15 +1144,8 @@ class ScribeTurn:
         tokens: list[ScribeCallback] = []
         buttons: list[JsonValue] = []
         for action, label, patient_id in choices:
-            if proposal.language == "en" and not proposal.photo:
-                label = {
-                    "confirm": "✅ Confirm",
-                    "edit": "✏️ Edit",
-                    "reject": "❌ Cancel",
-                    "new": "New patient",
-                    "correct_reply": "Update card",
-                    "new_reply": "New patient",
-                }.get(action, label)
+            if action in wording.BUTTONS:
+                label = wording.button(action, language)
             token = issue_token()
             raw, hash = (
                 (confirm_raw, proposal.confirmation_nonce_hash)
@@ -1135,7 +1169,7 @@ class ScribeTurn:
                 )
             )
             buttons.append([{"text": label, "callback_data": raw}])
-        photo_tokens, photo_buttons = self.photos.buttons(proposal, actor)
+        photo_tokens, photo_buttons = self.photos.buttons(proposal, actor, language)
         return (*tokens, *photo_tokens), {"inline_keyboard": [*photo_buttons, *buttons]}
 
     def _callback(
@@ -1178,7 +1212,9 @@ class ScribeTurn:
                 return self._select(receipt, actor, claim, proposal, token)
         self.runtime.transport.answer_callback(
             str((receipt.payload or {}).get("callback_query_id", "")),
-            "" if result.status in {"accepted", "duplicate"} else wording.render(result.template),
+            ""
+            if result.status in {"accepted", "duplicate"}
+            else wording.render(result.template, self.runtime.accounts.language(actor.subject)),
         )
         current = self.repo.store.get(receipt.scope, "inbound_receipt", receipt.id)
         if current and from_record(current, InboundReceipt).state != "completed":
@@ -1386,7 +1422,7 @@ class ScribeTurn:
                 self.repo.intent(
                     doctor,
                     "scribe_card",
-                    {"text": "المريض: " + display_name},
+                    {"text": wording.label("patient", doctor.language) + display_name},
                     "found:" + proposal.id,
                 ),
             )

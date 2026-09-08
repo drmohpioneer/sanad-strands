@@ -958,6 +958,22 @@ def transition_followup(
         updated = FollowUpTask.model_validate(data)
         if not terminal:
             at = _followup_next_action(updated, now, policy)
+            if (
+                at <= now
+                and isinstance(event, ev.AnchorConfirmed)
+                and event.allow_elapsed_deadline
+                and task.kind == FollowUpKind.MEDICATION_DAY3
+                and updated.state == FollowUpState.scheduled
+                and updated.due_at is not None
+                and updated.due_at <= now
+            ):
+                # Retain the actual reported date, even if its response window
+                # has passed. An immediate ordinary wake owns the deadline.
+                data["work_clock"] = _clock(task, now, "followup")
+                return ev.TransitionResult(
+                    aggregate=FollowUpTask.model_validate(data),
+                    effects=(*effects, _audit(event, task.version, task.version + 1)),
+                )
             if at <= now:
                 return _reject(
                     task,

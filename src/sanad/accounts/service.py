@@ -29,6 +29,7 @@ from sanad.accounts.records import (
     SubjectBinding,
 )
 from sanad.domain import Principal, TenantScope, VersionRef
+from sanad.domain.language import default_language
 from sanad.store import keys
 from sanad.store.keys import AccountScope
 from sanad.store.protocol import Store
@@ -54,7 +55,7 @@ from sanad.store.records import (
     to_record,
 )
 
-type Presenter = Callable[[str, dict[str, str]], str]
+type Presenter = Callable[[str, str, dict[str, str]], str]
 DEFAULT_ACCOUNT_POLICY = AccountPolicy()
 
 
@@ -66,8 +67,8 @@ class AccountService:
         identity: IdentityConfig,
         present: Presenter,
         *,
-        approve_label: str,
-        reject_label: str,
+        approve_label: tuple[str, str],
+        reject_label: tuple[str, str],
         policy: AccountPolicy = DEFAULT_ACCOUNT_POLICY,
     ):
         self.store, self.clock, self.identity = store, clock, identity
@@ -85,6 +86,17 @@ class AccountService:
             self.scope, VersionRef(entity_type="doctor", id=id, version=1)
         )
         return from_record(row, Doctor) if row else None
+
+    def language(self, subject: str) -> str:
+        auth = self.store.authorize(self.identity.bot_id, subject)
+        doctor_id = auth.principal.doctor_id or (auth.binding.doctor_id if auth.binding else None)
+        # A patient binding's doctor is not the recipient of this message.
+        doctor = (
+            self.doctor(doctor_id)
+            if doctor_id and (not auth.binding or "patient" not in auth.binding.role_set)
+            else None
+        )
+        return doctor.language if doctor else default_language
 
     def _admin(self, actor: Principal) -> bool:
         return (
@@ -198,7 +210,9 @@ class AccountService:
                 auth_epoch = admin.auth_epoch
         logical = keys.digest(f"{source.id}:{template_id}:{ref.version}:{logical_suffix}")
         payload: dict[str, JsonValue] = {
-            "text": text if text is not None else self.present(template_id, fields or {}),
+            "text": text
+            if text is not None
+            else self.present(template_id, self.language(subject), fields or {}),
         }
         if markup is not None:
             payload["reply_markup"] = markup
@@ -322,7 +336,12 @@ class AccountService:
                     }
                 )
                 models.append(token)
-                buttons.append({"text": label, "callback_data": raw})
+                buttons.append(
+                    {
+                        "text": label[self.language(self.identity.admin_user_id) == "en"],
+                        "callback_data": raw,
+                    }
+                )
             intents.append(
                 self.intent(
                     to_record(application, self.scope),

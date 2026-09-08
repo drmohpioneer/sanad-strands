@@ -288,6 +288,7 @@ class AnchorConfirmed(_Event):
     anchor_time: UtcInstant
     anchor_source_ref: ObservationRef | None = None
     replace_existing: StrictBool = False
+    allow_elapsed_deadline: StrictBool = False
 
 
 class PromptScheduled(_Event):
@@ -404,6 +405,7 @@ class AnchorFollowUp(_BoundaryValue):
     parent_mission_id: NonblankStr
     anchor_time: UtcInstant
     anchor_kind: FollowUpAnchorKind
+    allow_elapsed_deadline: StrictBool = False
 
 
 class EmitIntent(_BoundaryValue):
@@ -422,6 +424,7 @@ class EmitIntent(_BoundaryValue):
 class SuppressRoutineIntents(_BoundaryValue):
     effect_type: Literal["suppress_routine_intents"] = "suppress_routine_intents"
     reason: NonblankStr
+    order_refs: tuple[VersionRef, ...] | None = None
 
 
 class RecordAudit(_BoundaryValue):

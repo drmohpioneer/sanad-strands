@@ -133,7 +133,7 @@ def instruction_line(order: OrderCandidate) -> str:
     return " ".join(plain(v) for name in FIELDS if (v := getattr(order, name)))
 
 
-def diff_lines(changes: tuple[OrderChange, ...]) -> tuple[str, ...]:
+def diff_lines(changes: tuple[OrderChange, ...], language: str = "ar") -> tuple[str, ...]:
     from sanad.channels.telegram import wording
     from sanad.scribe.card import plain
 
@@ -141,12 +141,20 @@ def diff_lines(changes: tuple[OrderChange, ...]) -> tuple[str, ...]:
     for change in changes:
         name = plain(change.new.drug)
         if change.noop:
-            result.append(name + ": زي ما هو")
+            result.append(name + wording.label("unchanged", language))
         elif change.old:
-            new = "إيقاف" if change.new.action == "stop" else instruction_line(change.new)
+            new = (
+                wording.label("stop", language)
+                if change.new.action == "stop"
+                else instruction_line(change.new)
+            )
             result.append(
                 wording.render(
-                    "scribe_amendment_line", drug=name, old=instruction_line(change.old), new=new
+                    "scribe_amendment_line",
+                    language,
+                    drug=name,
+                    old=instruction_line(change.old),
+                    new=new,
                 )
             )
         if change.note:

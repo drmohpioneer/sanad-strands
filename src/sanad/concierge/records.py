@@ -18,10 +18,25 @@ class Reading(_BoundaryValue):
 
 
 class ReportFactPayload(_BoundaryValue):
-    report_kind: Literal["medication_start", "day3", "reading", "question_attachment"]
+    report_kind: Literal[
+        "medication_start",
+        "day3",
+        "reading",
+        "question_attachment",
+        "medication_stop",
+        "medication_change",
+        "start_date",
+        "barrier",
+    ]
     text: NonblankStr
     target_ref: VersionRef | None = None
     readings: tuple[Reading, ...] = ()
+    barrier_type: (
+        Literal["cost", "availability", "forgot", "confusion", "side_effect_experience", "other"]
+        | None
+    ) = None
+    effective_start: UtcInstant | None = None
+    anchor_unknown: bool = False
 
 
 class PatientAction(_BoundaryValue):
@@ -51,3 +66,4 @@ class PatientAction(_BoundaryValue):
     binding_epoch: int
     consent_version: int
     consumed_at: UtcInstant | None = None
+    medication_report_text: NonblankStr | None = Field(default=None, repr=False)

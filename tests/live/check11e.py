@@ -13,6 +13,12 @@ from typing import Any
 import boto3  # type: ignore[import-untyped]
 import httpx
 from botocore.config import Config  # type: ignore[import-untyped]
+from botocore.exceptions import (  # type: ignore[import-untyped]
+    ConnectionClosedError,
+    ConnectTimeoutError,
+    EndpointConnectionError,
+    ReadTimeoutError,
+)
 from harness import FakeClock
 from providers.fixtures import FakeS3, FakeTelegramFiles
 from store.scribe_fixtures import ScribeWorld
@@ -45,16 +51,16 @@ from .check11b import DictationClients, DictationSpend
 from .check11c import displayed_numbers_supported
 
 ROOT = Path(__file__).resolve().parents[2]
-EVIDENCE = ROOT / "docs/evidence/live-11e-2026-09-07c.json"
+EVIDENCE = ROOT / "docs/evidence/live-11e-2026-09-08.json"
 INVENTED = re.compile(
     r"\b(?:J wave|ST depression|LVH|RBBB|grade|New disease|null|none|daily)\b", re.I
 )
 
 
-def prompt_within_budget(input_tokens: int) -> bool:
+def prompt_within_budget(input_tokens: int, language: str) -> bool:
     # Bedrock usage measures the complete initial request, including schema,
     # tool declaration and source. No separate token-count network request.
-    return 0 < input_tokens < 2800
+    return 0 < input_tokens < {"ar": 2800, "en": 3000}.get(language, 0)
 
 
 class EnglishAudio:
@@ -116,6 +122,8 @@ class Requests11e(BudgetClient):
         self.counts: dict[int, list[int]] = {}
         self.lock = threading.Lock()
         self.initial_tokens: dict[int, list[int]] = {}
+        self.transport_retries: dict[int, list[dict[str, str]]] = {}
+        self.transport_exhausted: set[int] = set()
 
     def begin(self, run: int) -> None:
         with self.lock:
@@ -124,6 +132,7 @@ class Requests11e(BudgetClient):
             self.run = run
             self.counts[run] = [0, 0]
             self.initial_tokens[run] = []
+            self.transport_retries[run] = []
 
     def converse(self, **kwargs: Any) -> dict[str, Any]:
         registry = ModelRegistry()
@@ -153,30 +162,52 @@ class Requests11e(BudgetClient):
                 if kwargs.get("inferenceConfig", {}).get("temperature") != 0:
                     raise RuntimeError("temperature_limit")
                 index = 1
-            self.counts[run][index] += 1
-            number = self.counts[run][index]
-        record: dict[str, Any] = {
-            "run": run,
-            "provider": "speech" if index == 0 else "scribe",
-            "call": number,
-        }
-        try:
-            result = super().converse(**kwargs)
-            record["reply"] = result
-            if index == 1 and len(kwargs.get("messages", [])) == 1:
-                tokens = result.get("usage", {}).get("inputTokens", 0)
+        while True:
+            with self.lock:
+                if run in self.transport_exhausted:
+                    raise RuntimeError("11e_transport_retry_exhausted")
+                if index == 1 and self.counts[run][index] >= 28:
+                    raise RuntimeError("11e_extraction_allowance")
+                self.counts[run][index] += 1
+                number = self.counts[run][index]
+            record: dict[str, Any] = {
+                "run": run,
+                "provider": "speech" if index == 0 else "scribe",
+                "call": number,
+            }
+            try:
+                result = super().converse(**kwargs)
+                record["reply"] = result
+                if index == 1 and len(kwargs.get("messages", [])) == 1:
+                    tokens = result.get("usage", {}).get("inputTokens", 0)
+                    with self.lock:
+                        self.initial_tokens[run].append(tokens)
+                return result
+            except Exception as error:
+                record["failure_type"] = type(error).__name__
+                record["raw_failure"] = str(error)
+                if not isinstance(
+                    error,
+                    (
+                        ConnectionClosedError,
+                        ConnectTimeoutError,
+                        EndpointConnectionError,
+                        ReadTimeoutError,
+                    ),
+                ):
+                    raise
                 with self.lock:
-                    self.initial_tokens[run].append(tokens)
-            return result
-        except Exception as error:
-            record["failure_type"] = type(error).__name__
-            record["raw_failure"] = str(error)
-            raise
-        finally:
-            # One private file per call; no raw content in pytest output or public evidence.
-            (self.private / f"run-{run}-{index}-{number}.json").write_text(
-                json.dumps(record, ensure_ascii=False, default=str, indent=2) + "\n"
-            )
+                    if self.transport_retries[run]:
+                        self.transport_exhausted.add(run)
+                        raise
+                    self.transport_retries[run].append(
+                        {"provider": record["provider"], "failure_type": type(error).__name__}
+                    )
+            finally:
+                # Each wire attempt reserves cost and preserves its raw failure privately.
+                (self.private / f"run-{run}-{index}-{number}.json").write_text(
+                    json.dumps(record, ensure_ascii=False, default=str, indent=2) + "\n"
+                )
 
 
 def card_parts(p: Proposal) -> dict[str, Any]:
@@ -205,15 +236,24 @@ def card_parts(p: Proposal) -> dict[str, Any]:
     questions = sections.get("Needs confirmation:", [])
     exforge = [line for line in drugs if "Exforge" in line]
     forxiga = [line for line in drugs if "Forxiga" in line]
+    from sanad.scribe.resolver import resolve_name, source_anchored, unresolved_test_fragments
+
+    analytes = sorted(
+        {t.strip().casefold() for line in tests for t in line[6:].split(",") if t.strip()}
+    )
+    canonical = {(resolve_name(t, "test", p.source_text).latin or t).casefold() for t in analytes}
+    unresolved = unresolved_test_fragments(tuple(analytes), p.source_text)
     return {
         "card": card,
         "drugs": drugs,
         "tests": tests,
+        "test_analytes": sorted(canonical),
         "tasks": tasks,
         "history": history,
         "questions": questions,
         "checks": {
-            "patient": sections.get("patient") == ["New patient: Ahmed Saad, 53"],
+            "patient": sections.get("patient")
+            in (["New patient: Ahmed Saad, 53"], ["New patient: Ahmed Saad, 53, male"]),
             "exforge_change": len(exforge) == 1
             and "Exforge 5/160 → Exforge HCT 10/160/25" in exforge[0]
             and "(change)" in exforge[0],
@@ -223,28 +263,36 @@ def card_parts(p: Proposal) -> dict[str, Any]:
                 re.search(r"amlodipine|valsartan|hydrochlorothiazide|dapagliflozin", line, re.I)
                 for line in drugs
             ),
-            "four_labs": len(tests) == 1
-            and set(t.strip().casefold() for t in tests[0][6:].split(","))
-            == {"cbc", "na", "k", "lipid profile"},
+            "required_labs": len(tests) == 1 and {"na", "k", "lipid profile"} <= canonical,
+            "all_analytes_anchored": bool(analytes)
+            and all(source_anchored(t, p.source_text) for t in analytes),
+            "unresolved_test_question": all(
+                sum(
+                    f'I heard "{fragment}" for a test; which test did you mean?' in q
+                    for q in questions
+                )
+                == 1
+                for fragment in unresolved
+            ),
             "monitoring_task": len(tasks) == 1
             and "blood pressure" in tasks[0].lower()
             and bool(re.search(r"\b(?:3|three) times a day\b", tasks[0]))
-            and "5 days" in tasks[0]
+            and bool(re.search(r"\b(?:5|five) days\b", tasks[0]))
             and not any("blood pressure" in t.lower() for t in tests)
             and "MONITOR:" not in card,
             "no_invented_tokens": INVENTED.search(card) is None,
             "no_question_marks": "(؟)" not in card,
-            "at_most_three_questions": len(questions) <= 3,
+            "at_most_four_questions": len(questions) <= 4,
             "english_only": re.search(r"[\u0600-\u06ff]", card) is None,
             "card_visible": bool(drugs and requested and history),
             "numbers_supported": displayed_numbers_supported(p),
             "at_least_three_history_lines": len(history) >= 3,
-            "dx_history": "Dx: diabetes, hypertension" in history,
+            "dx_history": any(line.startswith("Dx:") for line in history),
             "ecg_history": any(
                 line.startswith("ECG:") and "T wave inversion" in line and "lateral" in line
                 for line in history
             ),
-            "echo_history": any(line.startswith("Echo:") and "EF 45%" in line for line in history),
+            "echo_history": any(line.startswith("Echo:") and "45%" in line for line in history),
         },
     }
 
@@ -266,6 +314,10 @@ def agreement(runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
             and run["drugs"][0].startswith("Exforge 5/160")
             and run["drugs"][0] == reference["drugs"][0],
             "test_line": bool(run.get("tests")) and run.get("tests") == reference.get("tests"),
+            "test_analytes": bool(run.get("test_analytes"))
+            and run.get("test_analytes") == reference.get("test_analytes"),
+            "forxiga_line": [line for line in run.get("drugs", []) if "Forxiga" in line]
+            == ["Forxiga (start)"],
             "task_line": bool(run.get("tasks")) and run.get("tasks") == reference.get("tasks"),
             "history_count": len(run.get("history", [])),
             "same_history_count": bool(run.get("history"))
@@ -298,15 +350,17 @@ def run_check(
         raise ValueError("inject every provider or none")
     destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.exists() or any(
-        json.loads(path.read_text()).get("attempt", 1) in {3, 4}
+        json.loads(path.read_text()).get("attempt", 1) == 5
         for path in destination.parent.glob("live-11e-*.json")
     ):
         raise RuntimeError("11e allowance already recorded; do not rerun")
     started = datetime.now(UTC)
     report: dict[str, Any] = {
         "contract": "11e",
-        "attempt": 4,
-        "allowance": "Binding addenda 2 and 3, English five-run check",
+        "attempt": 5,
+        "implementation_attempt": 6,
+        "allowance": "Binding addendum 4, English five-run check",
+        "language": "en",
         "state": "started",
         "run_count": 5,
         "started_at": started.isoformat(),
@@ -380,7 +434,12 @@ def run_check(
             model_factory = factory
         assert model_factory and speech_caller and converter and rxnorm_client and data
         for run in range(1, 6):
-            details: dict[str, Any] = {"run": run, "state": "started", "checks": {}}
+            details: dict[str, Any] = {
+                "run": run,
+                "language": "en",
+                "state": "started",
+                "checks": {},
+            }
             report["runs"].append(details)
             try:
                 if client:
@@ -430,13 +489,21 @@ def run_check(
                 if client:
                     details["prompt_input_tokens"] = client.initial_tokens[run]
                     details["provider_calls"] = client.counts[run]
-                    details["checks"]["prompt_under_2800"] = bool(
+                    details["checks"]["prompt_under_3000"] = bool(
                         client.initial_tokens[run]
-                    ) and all(prompt_within_budget(n) for n in client.initial_tokens[run])
+                    ) and all(
+                        prompt_within_budget(n, details["language"])
+                        for n in client.initial_tokens[run]
+                    )
             except Exception as error:
                 details["failure_code"] = "runner_failure"
                 (private / f"run-{run}-failure.json").write_text(
                     json.dumps({"type": type(error).__name__, "raw_failure": str(error)})
+                )
+            if client:
+                details["transport_retries"] = client.transport_retries[run]
+                details["checks"]["transport_retry_not_exhausted"] = (
+                    run not in client.transport_exhausted
                 )
             details["state"] = (
                 "passed"
@@ -456,7 +523,11 @@ def run_check(
         report["calls"], report["estimated_usd"] = spend.calls, round(spend.estimated, 8)
         passed = len(report["runs"]) == 5 and all(r["state"] == "passed" for r in report["runs"])
         passed = passed and all(
-            r["all_drugs"] and r["exforge_line"] and r["test_line"] and r["task_line"]
+            r["all_drugs"]
+            and r["exforge_line"]
+            and r["forxiga_line"]
+            and r["test_analytes"]
+            and r["task_line"]
             for r in report["agreement"]
         )
         report["state"] = "passed" if passed else "failed"

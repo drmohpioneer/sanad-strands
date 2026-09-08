@@ -73,7 +73,11 @@ class IdentityRouting:
         if known_callback:
             runtime.transport.answer_callback(
                 str(payload.get("callback_query_id", "")),
-                "" if accepted else wording.render("claim_refused"),
+                ""
+                if accepted
+                else wording.render(
+                    "claim_refused", runtime.accounts.language(receipt.source_subject)
+                ),
             )
         if not accepted:
             source = auth.binding or revise(

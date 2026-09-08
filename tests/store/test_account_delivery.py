@@ -22,7 +22,7 @@ def test_approval_http_to_patient_danger_and_captured_delivery(accounts: Account
         assert accounts.dispatch(intent).status == "provider_accepted"
     admin_send = next(call for call in accounts.transport.calls if "reply_markup" in call.payload)
     assert admin_send.payload["text"] == wording.render(
-        "admin_new_application", name="", specialty="", city=""
+        "admin_new_application", "en", name="", specialty="", city=""
     )
     token = accounts.token()
     assert accounts.post(callback(token)).status_code == 200

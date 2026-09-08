@@ -16,7 +16,7 @@ from sanad.scribe.extract import (
     extracted_numbers,
 )
 from sanad.scribe.names import compound_question, heard_dose, normalize, split_drug_dose
-from sanad.scribe.resolver import Context, NameKind, resolve_fragments, resolve_name
+from sanad.scribe.resolver import Context, NameKind, resolve_fragments, resolve_name, resolve_tests
 
 type Item = OrderCandidate | FactCandidate | MissionCandidate | str
 logger = logging.getLogger(__name__)
@@ -63,15 +63,41 @@ def _source_format(item: Item, source: str) -> Item:
 def _preferred(first: Item, second: Item, source: str) -> Item:
     """A supported reading wins display; both readings still contribute numeric blocks."""
     if isinstance(first, OrderCandidate) and isinstance(second, OrderCandidate):
+        from sanad.scribe.changes import previous_instruction
+
         supported = set(numbers_in(source))
         return min(
             (first, second),
             key=lambda o: (
                 len(set(numbers_in(o.drug + " " + (o.dose or ""))) - supported),
                 not bool(o.dose or split_drug_dose(o.drug)[1]),
+                previous_instruction(o, source) is None,
             ),
         )
     return first
+
+
+def _previous_displayed(first: Item, second: Item, chosen: Item, source: str) -> bool:
+    """An absent peer reading cannot dispute an explicitly supported previous instruction."""
+    from sanad.scribe.changes import previous_instruction
+
+    if not all(isinstance(item, OrderCandidate) for item in (first, second, chosen)):
+        return False
+    assert isinstance(chosen, OrderCandidate)
+    prior = previous_instruction(chosen, source)
+    if prior is None:
+        return False
+    for item in (first, second):
+        assert isinstance(item, OrderCandidate)
+        if item.previous_drug:
+            named = resolve_name(item.previous_drug, "drug", source)
+            if named.latin != prior.drug:
+                return False
+        if item.previous_dose and _content_key(item.previous_dose) != _content_key(
+            prior.dose or ""
+        ):
+            return False
+    return True
 
 
 def _name(
@@ -84,7 +110,11 @@ def _name(
     if isinstance(item, str):
         return _without_numbers(item)
     kind: NameKind = "test" if isinstance(item, MissionCandidate) else "finding"
-    terms = resolve_fragments(item.text, kind, source, ctx)
+    terms = (
+        resolve_tests(item.text, source, ctx)[0]
+        if isinstance(item, MissionCandidate) and item.kind == "TEST"
+        else resolve_fragments(item.text, kind, source, ctx)
+    )
     names = tuple(_without_numbers(r.latin or r.spoken) for r in terms)
     return ", ".join(names)
 
@@ -202,6 +232,10 @@ def merge_candidates(
                 _conflict(item, other, field, chosen, source, ctx)
                 for field in a
                 if a[field] != b[field]
+                and not (
+                    field in {"previous_drug", "previous_dose"}
+                    and _previous_displayed(item, other, chosen, source)
+                )
                 and not (
                     field
                     in {"timing", "effective_expression", "checkin_expression", "timing_expression"}

@@ -110,6 +110,7 @@ one draft language policy. `/lang en` and `/lang ar` change only the authenticat
 doctor's language in a guarded, replay-safe transaction. Speech, extraction and
 the saved confirmation card use that language; patient binding takes the doctor's
 current default. Arabic prompts, vocabulary and rendering remain available.
+Doctor templates, photo labels/buttons and reply wrappers select the current doctor's language at render time; queued captions retain their rendered language, enrollment wording remains bilingual, and clinical fields retain their original content.
 
 The first successful extraction owns history and requested missions. Its peer
 checks medication fields, patient identity and TEST analytes without contributing
@@ -160,8 +161,16 @@ Merge comparisons normalize numeric formatting and patient name tokens; a missin
 reading cannot erase the other reading's patient name. Literal source doses remain
 the display authority, while unsupported model digits retain their existing blocks.
 Placeholder ambiguities and absent timing sentinels are omitted from questions.
-The five-run English measurement uses the released under-2,800-token bound and
-the primary-history, same-family change, TASK and TEST requirements of addenda 2–3.
+Decision 024 and contract 11e addendum 4 require each displayed TEST analyte to
+match a transcript token or accepted alias within one edit. An unanchored proposed
+analyte is omitted, and its heard fragment is quoted once for correction; the guess
+cannot become a confirmed mission or learned name. Authorized corrections retain that resolution
+on the same card. Source-named longer brands on change orders require a verified
+ingredient family; Echo wording remains as transcribed. Rendered mission counts
+and already displayed previous instructions do not create redundant questions.
+The measured initial-request budget is under 2,800 tokens for Arabic and under
+3,000 for English. The single five-run measurement retries a transport failure
+once per run, sharing that allowance across speech and extraction.
 
 Replies while a card is open retain the same patient, unanswered fields, original
 thirty-minute expiry and correction guards. Revisions rotate buttons and say
@@ -188,6 +197,10 @@ Contract 10 implementation boundary: patient-initiated replies require the activ
 Education is a versioned set of bounded excerpts. Clinical entries cite fetched public health sources; the emergency entry takes its actionable wording exclusively from the safety policy. Product-specific QR and photo instructions cite their local Sanad specification separately from the public NHS background source, so no public body is credited with describing Sanad. Pending translations are synthetic-only. Model-selected sentences must match the bundle's permitted plan or education sentences, in addition to the existing clinical, language, numeric, source and length gates; the model cannot invent a new drug-number association.
 
 Coordinator chooses guarded mission proposals. Resolver addresses practical barriers within a question/search budget. They can propose contact times or verified places, but cannot change clinical deadlines, book without an authorized integration, invent availability/prices or prescribe substitutes. Provider failure uses the deterministic ladder with visible failure state. Both remain required capabilities.
+
+Patient conversation includes deterministic medication start, stop, change, date and barrier handling before the general Concierge fallback. After the existing safety, treatment-change, preference and identity/question gates, a day-three answer takes precedence over STOP, CHANGE and START acknowledgments; an unambiguous combined stop/start report records both in one transaction. The stopped current order is available solely for STOP acknowledgment, separately from the active plan projection. Choice callbacks retain the screened text and exact target version. No model chooses an acknowledgment, date anchor, barrier class or mutation.
+
+Medication amendment confirmation uses the existing pure transitions to supersede prior unfinished missions, cancel their day-three tasks and resolve their unmet-objective reviews atomically. Scoped outbox cleanup follows on an ordinary Steward command or sweep, with the existing active-order send check also applied before delivery attempt admission so stale source versions cannot obscure the `order_inactive` refusal. The patient store admits only clarification metadata changes, exact barrier projections and justified order-scoped suppression; existing identity, consent, lease and receipt guards still apply.
 
 ## Fulfillment, evidence and clocks
 

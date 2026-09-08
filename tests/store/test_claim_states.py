@@ -194,7 +194,7 @@ def test_bound_subject_cannot_claim_other_doctor_and_no_disclosure(enrollment: L
     )
     refusal = next(i for i in world.intents() if i.template_id == "claim_refused")
     assert world.dispatch(refusal).status == "provider_accepted"
-    assert refusal.payload == {"text": wording.render("claim_refused")}
+    assert refusal.payload == {"text": wording.render("claim_refused", "en")}
     assert other.id not in str(refusal.payload) and bound.id not in str(refusal.payload)
     assert world.actor(PATIENT).patient_id == bound.id
 
@@ -209,11 +209,11 @@ def test_wrong_actor_callback_and_one_time_action(enrollment: LoginWorld, action
     intended = PATIENT if action == "accept" else APPLICANT
     token = world.action_token(pending.id, template)
     assert world.post(callback(token, "50005", 103)).status_code == 200
-    assert world.transport.callback_calls[-1].text == wording.render("claim_refused")
+    assert world.transport.callback_calls[-1].text == wording.render("claim_refused", "en")
     assert world.post(callback(token, intended, 104)).status_code == 200
     assert world.transport.callback_calls[-1].text == ""
     assert world.post(callback(token, intended, 105)).status_code == 200
-    assert world.transport.callback_calls[-1].text == wording.render("claim_refused")
+    assert world.transport.callback_calls[-1].text == wording.render("claim_refused", "en")
 
 
 def test_role_escalation_payload_rejected(enrollment: LoginWorld) -> None:

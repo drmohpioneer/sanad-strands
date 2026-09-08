@@ -238,7 +238,7 @@ def scribe_guards(
     if kind == "PhotoUnreadable":
         from sanad.store.intake import unreadable_media_guards
 
-        media_checks = unreadable_media_guards(store, request, now)
+        media_checks = unreadable_media_guards(store, request, now, doctor.language)
         if media_checks is None:
             return None
         checks.extend(media_checks)

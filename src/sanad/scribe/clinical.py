@@ -117,9 +117,9 @@ def _drug_mentions(text: str, service: DrugLookupService) -> tuple[DrugMention, 
 def test_names(
     spoken: str, source: str, service: DrugLookupService
 ) -> tuple[str, tuple[tuple[str, str], ...]]:
-    from sanad.scribe.resolver import context, resolve_fragments
+    from sanad.scribe.resolver import context, resolve_tests
 
-    names = resolve_fragments(spoken, "test", source, context(service))
+    names, _ = resolve_tests(spoken, source, context(service))
     pairs = tuple(
         (r.spoken, component.strip())
         for r in names
@@ -135,6 +135,7 @@ def prepare_clinical(
     readings: list[NameReading],
     *,
     language: str = default_language,
+    clarified_tests: frozenset[str] = frozenset(),
 ) -> tuple[DictationCandidate, tuple[ProposalIssue, ...]]:
     facts: list[FactCandidate] = []
     missions: list[MissionCandidate] = []
@@ -217,7 +218,7 @@ def prepare_clinical(
                         question=TERM_QUESTION,
                     )
                 )
-    from sanad.scribe.resolver import context, resolve_fragments
+    from sanad.scribe.resolver import context, resolve_tests
 
     for i, mission in enumerate(candidate.missions):
         missions.append(mission.model_copy(update={"clinical_en": None}))
@@ -233,7 +234,9 @@ def prepare_clinical(
         spoken = mission.text
         if mission.timing_expression:
             spoken = spoken.replace(mission.timing_expression, "").strip()
-        resolved_tests = resolve_fragments(spoken, "test", source, context(service))
+        resolved_tests, unresolved = resolve_tests(
+            spoken, source, context(service), clarified=f"mission:{i}" in clarified_tests
+        )
         if resolved_tests and all(r.latin for r in resolved_tests):
             missions[-1] = missions[-1].model_copy(
                 update={
@@ -245,6 +248,23 @@ def prepare_clinical(
                         )
                     )
                 }
+            )
+        for fragment in unresolved:
+            issues.append(
+                ProposalIssue(
+                    item=f"mission:{i}",
+                    field="analyte",
+                    code="clinical_unclear",
+                    question=(
+                        f'I heard "{fragment}" for a test; which test did you mean?'
+                        if language == "en" and fragment
+                        else "Which test did you mean?"
+                        if language == "en"
+                        else f'سمعت "{fragment}" كتحليل، قصدك إيه؟'
+                        if fragment
+                        else "قصدك تحليل إيه؟"
+                    ),
+                )
             )
         for resolved in resolved_tests:
             for latin in (resolved.latin or resolved.spoken).split(","):

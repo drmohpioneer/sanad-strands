@@ -12,7 +12,7 @@ REASONS = {
         "I heard a request for tests or an examination; which items did you request?"
     ),
     "extraction_conflict": "The two readings differ; please clarify the item.",
-    "clinical_unclear": "Please confirm the clinical wording as heard.",
+    "clinical_unclear": "Please clarify this item.",
     "drug_unclear": "Please confirm the drug name as heard.",
     "fact_medication": "Should I record the current medication as continue?",
     "correction_unclear": "Which item does your correction refer to?",
@@ -36,35 +36,16 @@ REASONS = {
     "unassigned_number": "Which item does the number heard belong to?",
 }
 
-_WORDING = {
-    "scribe_confirmed": "Recorded:\n{body}",
-    "scribe_stale": "The card changed or is no longer valid. Send the instructions again.",
-    "scribe_discarded": "Card cancelled. No instructions were recorded.",
-    "scribe_expired": "The card expired. Send the instructions again.",
-    "scribe_edit": "Send your correction by text or voice. The previous card cannot be confirmed.",
-    "doctor_voice_unreadable": (
-        "I could not hear the recording. Send it again or type the instructions."
-    ),
-    "doctor_model_unavailable": "I cannot read this right now. Please try again shortly.",
-    "doctor_patient_not_found": (
-        "I could not find this patient. Use /new followed by the name for a new patient."
-    ),
-    "doctor_welcome_back": "Welcome back. Your doctor account in Sanad is approved.",
-    "doctor_help": (
-        "Send a patient's name and your instructions by text or voice. "
-        "Commands: /new, /find, /qr, /cancel, /intake, /lang en, /lang ar."
-        " Contest mode is English; Arabic is a declared upgrade."
-    ),
-    "scribe_help": "Use /new, /find, /qr, /cancel, /intake, /lang en or /lang ar.",
-}
-
 
 def render_wording(template: str, language: str, **values: str) -> str:
     from sanad.channels.telegram import wording
 
-    if language == "en" and template in _WORDING:
-        return _WORDING[template].format(**values)
-    return wording.render(template, **values)
+    # This legacy reply id already uses the help surface; keep its English wording.
+    if template == "scribe_help":
+        if language == "en":
+            return "Use /new, /find, /qr, /cancel, /intake, /lang en or /lang ar."
+        template = "doctor_help"
+    return wording.render(template, language, **values)
 
 
 def date(instant: datetime, proposal: Proposal) -> str:
@@ -80,14 +61,21 @@ def date(instant: datetime, proposal: Proposal) -> str:
 
 
 def questions(proposal: Proposal) -> tuple[str, ...]:
-    from sanad.scribe.card import plain, unsupported_order_fields
+    from sanad.scribe.card import consumed_question_numbers, plain, unsupported_order_fields
     from sanad.scribe.extract import placeholder_ambiguity
 
     result: list[str] = []
+    consumed = consumed_question_numbers(proposal)
     asked = {n for i in proposal.issues if i.code == "extraction_conflict" for n in i.numbers}
     for issue in proposal.issues:
         before = len(result)
         code, item = issue.code, issue.item
+        if code == "clinical_unclear":
+            if issue.question and (issue.field == "analyte" or issue.blocked):
+                result.append(plain(issue.question))
+            elif issue.blocked:
+                result.append(REASONS[code])
+            continue
         order = (
             proposal.candidate.orders[int(item.split(":")[1])]
             if item.startswith("order:")
@@ -102,7 +90,7 @@ def questions(proposal: Proposal) -> tuple[str, ...]:
             continue
         if code in {"unassigned_number", "disputed_number"}:
             for n in issue.numbers:
-                if n not in asked:
+                if n not in asked and not (code == "unassigned_number" and n in consumed):
                     asked.add(n)
                     result.append(
                         f'I heard "{n}"; which item does it belong to?'
@@ -153,7 +141,9 @@ def questions(proposal: Proposal) -> tuple[str, ...]:
         if item in proposal.single_source:
             result[before:] = [q + " Heard once." for q in result[before:]]
     result.extend(
-        f'I heard "{n}"; is that correct?' for n in proposal.disputed_numbers if n not in asked
+        f'I heard "{n}"; is that correct?'
+        for n in proposal.disputed_numbers
+        if n not in asked and n not in consumed
     )
     result.extend(
         f'I heard "{plain(a)}"; please clarify.'

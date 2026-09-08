@@ -44,6 +44,15 @@ class Snapshot:
     followups: tuple[FollowUpTask, ...]
     facts: tuple[ClinicalFact, ...]
     names: Context = Context()
+    stopped_heads: tuple[CareOrderHead, ...] = ()
+    stopped_orders: tuple[CareOrderVersion, ...] = ()
+
+    @property
+    def acknowledgment_refs(self) -> tuple[VersionRef, ...]:
+        return self.order_refs + tuple(
+            VersionRef(entity_type="care_order", id=h.order_id, version=h.current_order_version)
+            for h in self.stopped_heads
+        )
 
     @property
     def scope(self) -> PatientScope:
@@ -70,6 +79,8 @@ class Snapshot:
                 *self.orders,
                 *self.missions,
                 *self.followups,
+                *self.stopped_heads,
+                *self.stopped_orders,
             )
         )
 
@@ -108,8 +119,22 @@ def load(store: Store, scope: PatientScope, now: datetime) -> Snapshot | None:
     ):
         return None
     heads, orders = [], []
+    stopped_heads, stopped_orders = [], []
     for row in records(store, scope, "care_order_head"):
         h = from_record(row, CareOrderHead)
+        if h.status == "stopped" and h.type == "medication":
+            stopped = get("care_order_version", h.current_version_id, CareOrderVersion)
+            authority_row = store.get(scope, "care_order", h.order_id)
+            if (
+                stopped
+                and isinstance(stopped.structured_instruction, OrderCandidate)
+                and stopped.structured_instruction.action == "stop"
+                and authority_row
+                and authority_row.version == h.current_order_version
+                and authority_row.body.get("status") == "stopped"
+            ):
+                stopped_heads.append(h)
+                stopped_orders.append(stopped)
         if h.status != "active" or h.type != "medication":
             continue
         order = get("care_order_version", h.current_version_id, CareOrderVersion)
@@ -146,6 +171,8 @@ def load(store: Store, scope: PatientScope, now: datetime) -> Snapshot | None:
             and r.body.get("category") == "patient_report"
         ),
         Context(vocabulary=NameVocabulary(store, doctor)),
+        tuple(stopped_heads),
+        tuple(stopped_orders),
     )
 
 
@@ -248,6 +275,15 @@ def render_summary(snapshot: Snapshot) -> str:
     )
     if not snapshot.orders:
         lines.append("No active medication is recorded." if en else "مفيش دوا حالي مسجل في الخطة.")
+    if any(
+        isinstance(f.payload, ReportFactPayload)
+        and f.payload.report_kind
+        in {"medication_start", "medication_stop", "medication_change", "day3"}
+        for f in snapshot.facts
+    ):
+        lines.append(
+            "Medication reports: self-reported." if en else "بلاغات الدوا: حسب كلام المريض."
+        )
     data = summary(snapshot)
     next_mission = data["next_mission"]
     if isinstance(next_mission, dict):
@@ -269,6 +305,19 @@ def projection(snapshot: Snapshot) -> dict[str, JsonValue]:
     last = max(readings, key=lambda f: f.created_at) if readings else None
     return {
         **summary(snapshot),
+        "medication_reports": [
+            {
+                "text": f.payload.text,
+                "kind": f.payload.report_kind,
+                "label": "Self-reported"
+                if snapshot.patient.language == "en"
+                else "حسب كلام المريض",
+            }
+            for f in snapshot.facts
+            if isinstance(f.payload, ReportFactPayload)
+            and f.payload.report_kind
+            in {"medication_start", "medication_stop", "medication_change", "day3"}
+        ],
         "last_reading": last.payload.model_dump(
             mode="json", exclude={"readings": {"__all__": {"judgment", "rule_id"}}}
         )

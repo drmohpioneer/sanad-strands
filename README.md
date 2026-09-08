@@ -143,6 +143,13 @@ that setting as a declared upgrade. The contest photo target is printed or typed
 Latin-script documents; handwriting and Arabic images are declared upgrades, with
 photo acceptance governed by the separate photo contracts.
 
+English covers account notices, help, confirmation and edit replies, photo cards,
+reading-choice buttons, intake choices, failure explanations and instruction-column
+captions. These render in the doctor's current language, including after a language
+switch; messages already sent keep their wording. Names and text read from a paper
+retain their original script. Enrollment and consent messages retain their accepted
+bilingual wording.
+
 An approved doctor sends English text or voice. The worker searches only that
 doctor's patients and returns an English confirmation card showing identity,
 medications, requested work, deadlines and escalation times, history and questions.
@@ -172,11 +179,21 @@ and cannot be confirmed until you supply the missing request. Unrelated correcti
 keep that question open. A bare label already included in another fact's terms,
 such as an extra `History: ECG`, is removed from the card.
 
+Every displayed TEST analyte must match a transcript token or an accepted alias
+with at most one spelling edit. An unanchored model guess is omitted and the card
+quotes the heard fragment once for clarification. That test stays blocked until
+the doctor supplies its name; unrelated replies preserve the question. A corrected
+test stays corrected on later replies. Echo findings keep the transcript wording:
+`function 45%` is not changed to `EF 45%`.
+
 Tap **✅ Confirm** to save the valid items together, or **❌ Cancel** to discard. While a card is open, answer its questions or send a correction by text or voice; **✏️ Edit** is an optional hint. The same card keeps its patient, unanswered fields and original 30-minute expiry, with new buttons and “Card updated from your reply”. Arabic mode retains the Arabic labels. An undisputed verified drug name keeps its verification; answering a compound-dose question also clears its associated compressed-number question. Use `/new`, name a different existing patient, or begin with “New patient” to start another card. A new-patient phrase mid-message asks whether this is a correction or a new patient before proceeding. Old, expired and used buttons cannot confirm a revision. Long cards place buttons on the last message.
 
 Spoken changes retain both values on one line, for example
 `Exforge 5/160 → Exforge HCT 10/160/25 (change)`. Code requires the stated previous
 values and a matching ingredient family; it does not choose a medication substitute.
+When extraction shortens the new brand, a longer brand explicitly named at the
+change target survives only when that ingredient family is verified. Previous
+values already verified on the change line do not produce duplicate questions.
 `Forxiga (start)` without a spoken dose asks for the dose.
 
 “Blood pressure chart, 3 times a day for 5 days” becomes one TASK with that
@@ -184,6 +201,8 @@ instruction and a deadline five days after receipt. Completion requires the exis
 patient report. It is separate from TEST; scheduled monitoring slots arrive in
 slice 13. Duplicate history folds before size checks. An oversized card retains
 every order and mission, shows six history lines and offers the rest through Edit.
+Frequency and duration counts already shown in the TASK do not raise unassigned
+number questions; actual dose disagreements remain blocked.
 
 Patient creation, accepted facts, orders, care plan, missions and learned names commit atomically. A current medication without a recorded order can create its head on confirmation, without a day-three task. A new patient's explicitly stated previous brand/dose can support a change; an unknown existing order still requires clarification. Starting a medication creates the separate day-three follow-up; confirmation does not mean the patient has taken it.
 
@@ -217,9 +236,13 @@ The session-protected record API includes all facts with provenance and visibili
 
 ## Patient conversation
 
+After a doctor changes or stops a medicine, patients can reply "I took the new dose" or "I stopped Atorvastatin", naming the medicine when there is more than one. "I started Atorvastatin" also acknowledges a matching change when no START instruction remains for that medicine. Sanad records what the patient reports and relays unmatched instructions to the doctor. A combined "I stopped the old medicine and started the new medicine" records both when each medicine is clear.
+
+After a start-date question, reply with "yesterday", a weekday, `YYYY-MM-DD` or "3 days ago" within 24 hours. Reports older than seven days keep the start date uncertain. Patients can also report "I can't afford it", "not available", "I forgot" or another supported difficulty. Sanad records the barrier, preserves the deadline and pauses start-chase contact for one day; it does not promise a solution. A day-three answer keeps its own outcome. Medication reports are labeled as self-reported. Arabic phrases remain supported alongside English, and these clarification and barrier policy values await owner review.
+
 Bound, consented patients can send text or voice to ask about their active plan and supported health terms. `خطتي`, `أعمل إيه` and `/plan` show the current doctor instructions and next task without a model. For other answers, the Concierge selects sentences, it does not write them. One bounded proposal selects from permitted sentences: every sentence must match a current plan line or a labeled education excerpt and pass the safety, language, source, number and length checks. Treatment changes and unanswered questions enter a timed doctor QUESTION queue; the reply makes no promise about when the doctor will answer.
 
-Patients can report a medication start, answer an existing day-three check-in, or send readings. These remain self-reports with their original observation and voice provenance. A start fulfills only the matching current START mission and anchors its independent check-in. Readings do not fulfill monitoring tasks. Photos and documents have durable pending media work; evidence interpretation remains in its later contract. Danger keeps the existing deterministic path before ordinary conversation.
+Patients can report a medication start, answer an existing day-three check-in, or send readings. These remain self-reports with their original observation and voice provenance. A matching START report anchors its independent check-in; a matching CHANGE acknowledgment creates no automatic day-three task. Readings do not fulfill monitoring tasks. Photos and documents have durable pending media work; evidence interpretation is described in the patient evidence section below. Danger keeps the existing deterministic path before ordinary conversation.
 
 `وقف الرسايل` stops routine reminders while preserving the doctor's orders and access to patient-initiated answers. Snoozes last at most seven days. Resuming requires a separate consent button. Quiet-hour changes retain clinical times and identify any slot requiring its own consent. The patient page `/pp` and APIs `/api/patient/me` and `/api/patient/plan` share the active plan, next tasks, last reading, preferences and open questions.
 

@@ -85,7 +85,7 @@ def record_router(claims: ClaimService) -> APIRouter:
                 "status": p.status,
                 "expires_at": p.expires_at.isoformat(),
                 "blocked_items": [i.model_dump() for i in p.issues],
-                "card_text": list(render_card(p)),
+                "card_text": list(render_card(p, language)),
             }
             for p in proposals
             if p.selected_patient_id == patient_id

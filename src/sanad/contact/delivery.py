@@ -107,6 +107,36 @@ def doctor_payload(store: Store, intent: OutboundIntent) -> dict[str, JsonValue]
     )
     if intent.notification_purpose == "DONE:FULFILLMENT":
         text = render("doctor_objective_done", language, title=title)
+        if (isinstance(source, Mission) and source.kind == "MEDICATION") or (
+            isinstance(source, FollowUpTask) and source.kind == "MEDICATION_DAY3"
+        ):
+            text = render("doctor_medication_done", language, title=title)
+            from sanad.concierge.records import ReportFactPayload
+            from sanad.scribe.records import ClinicalFact
+
+            for report_row in records(store, intent.scope, "clinical_fact"):
+                report = from_record(report_row, ClinicalFact).payload
+                if not isinstance(report, ReportFactPayload) or not report.target_ref:
+                    continue
+                if (report.target_ref.entity_type, report.target_ref.id) != (
+                    source.entity_type,
+                    source.id,
+                ):
+                    continue
+                if report.anchor_unknown and report.report_kind == "medication_start":
+                    text += "\n" + render("doctor_medication_anchor_unknown", language)
+                if (
+                    report.report_kind == "barrier"
+                    and report.barrier_type
+                    and isinstance(source, FollowUpTask)
+                    and report_row.id in source.source_report_ids
+                ):
+                    text += "\n" + render(
+                        "doctor_medication_barrier",
+                        language,
+                        type=report.barrier_type,
+                        text=report.text,
+                    )
     else:
         from sanad.evidence.delivery import pending_verification
         from sanad.evidence.templates import render as render_evidence
@@ -121,4 +151,16 @@ def doctor_payload(store: Store, intent: OutboundIntent) -> dict[str, JsonValue]
             title=title,
             due_local=format_local(source.due_at or source.review_at, zone),
         )
+        if (
+            isinstance(source, Mission)
+            and source.kind == "MEDICATION"
+            and source.barrier_type
+            and source.barrier_reason
+        ):
+            text += "\n" + render(
+                "doctor_medication_barrier",
+                language,
+                type=source.barrier_type,
+                text=source.barrier_reason,
+            )
     return {"text": text}

@@ -35,25 +35,86 @@ SINGLE_READER_WARNING = "قريت الورقة قراءة واحدة بس، مش
 AGREEMENT_WARNING = "قريت الورقة قراءتين مختلفتين، مش هسجّل منها حاجة"
 COLUMN_CAPTION = "التعليمات بالعربي زي ما هي في الورقة؛ الصفوف جنبها في الكارت"
 
+# The Arabic aliases above remain available to the accepted literal fixtures.
+PHOTO_WORDING = {
+    "shift_warning": (
+        SHIFT_WARNING,
+        "⚠️ Values may be shifted away from their row names; check the image.",
+    ),
+    "photo_supported_scope": (
+        PHOTO_SUPPORTED_SCOPE,
+        "Supported now: printed or typed documents in Latin script. "
+        "Handwriting and Arabic script in images are not supported yet.",
+    ),
+    "handwriting_reply": (
+        HANDWRITING_REPLY,
+        "I could not read this paper confidently. Photograph it from above in good light, "
+        "or tell me what it says so I can record it.\n"
+        "Supported now: printed or typed documents in Latin script. "
+        "Handwriting and Arabic script in images are not supported yet.",
+    ),
+    "single_reader_warning": (
+        SINGLE_READER_WARNING,
+        "Only one reader could read the paper; I will record nothing from it.",
+    ),
+    "agreement_warning": (
+        AGREEMENT_WARNING,
+        "The two readings of the paper differ; I will record nothing from it.",
+    ),
+    "column_caption": (
+        COLUMN_CAPTION,
+        "The Arabic instruction column, photographed as it is on the paper; "
+        "the corresponding rows are in the card.",
+    ),
+    "missing_unit": ("بدون وحدة", "no unit"),
+    "printed_flag": ("؛ علامة مطبوعة: ", "; printed flag: "),
+}
+
+
+def shift_warning(language: str) -> str:
+    return PHOTO_WORDING["shift_warning"][language == "en"]
+
+
+def photo_supported_scope(language: str) -> str:
+    return PHOTO_WORDING["photo_supported_scope"][language == "en"]
+
+
+def handwriting_reply(language: str) -> str:
+    return PHOTO_WORDING["handwriting_reply"][language == "en"]
+
+
+def single_reader_warning(language: str) -> str:
+    return PHOTO_WORDING["single_reader_warning"][language == "en"]
+
+
+def agreement_warning(language: str) -> str:
+    return PHOTO_WORDING["agreement_warning"][language == "en"]
+
+
+def column_caption(language: str) -> str:
+    return PHOTO_WORDING["column_caption"][language == "en"]
+
 
 def two_readers(read: DocumentRead) -> bool:
     # Check both the persisted marker and actual slots, including older caches.
     return not read.single_reader and len(read.readers) == 2
 
 
-def unreadable_reply(read: DocumentRead) -> str:
+def unreadable_reply(read: DocumentRead, language: str = "ar") -> str:
     if not two_readers(read):
-        return HANDWRITING_REPLY + "\n" + SINGLE_READER_WARNING
-    return HANDWRITING_REPLY + ("\n" + AGREEMENT_WARNING if unreadable_read(read) else "")
+        return handwriting_reply(language) + "\n" + single_reader_warning(language)
+    return handwriting_reply(language) + (
+        "\n" + agreement_warning(language) if unreadable_read(read) else ""
+    )
 
 
-def render_card(proposal: "Proposal") -> tuple[str, ...]:
+def render_card(proposal: "Proposal", language: str | None = None) -> tuple[str, ...]:
     """Keep the accepted layout behind the minimum-independent-read gate."""
     from sanad.scribe.card import render_card as accepted_card
 
     if proposal.photo and unreadable_read(proposal.photo.reads):
-        return (unreadable_reply(proposal.photo.reads),)
-    return accepted_card(proposal)
+        return (unreadable_reply(proposal.photo.reads, language or proposal.language),)
+    return accepted_card(proposal, language)
 
 
 def unreadable_read(read: DocumentRead) -> bool:
@@ -153,10 +214,10 @@ def lab_rows(read: DocumentRead, policy: SafetyPolicy) -> tuple[LabRowCandidate,
     )
 
 
-def lab_text(row: LabRowCandidate) -> str:
-    return " ".join((row.analyte, row.value or "", row.unit or "بدون وحدة")) + (
-        "؛ علامة مطبوعة: " + row.flag if row.flag else ""
-    )
+def lab_text(row: LabRowCandidate, language: str = "ar") -> str:
+    return " ".join(
+        (row.analyte, row.value or "", row.unit or PHOTO_WORDING["missing_unit"][language == "en"])
+    ) + (PHOTO_WORDING["printed_flag"][language == "en"] + row.flag if row.flag else "")
 
 
 def candidate_from(read: DocumentRead, kind: str, policy: SafetyPolicy) -> DictationCandidate:

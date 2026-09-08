@@ -49,7 +49,7 @@ def test_all_enrollment_wording_is_complete_bilingual_plain_text() -> None:
         fields = {k: "Synthetic" for k in wording.FIELDS[key]}
         if "link" in fields:
             fields["link"] = "https://sanad.example/d/" + "A" * 43
-        text = wording.render(key, **fields)
+        text = wording.render(key, "en", **fields)
         assert len(text) <= 4096
         assert any("\u0600" <= c <= "\u06ff" for c in text)
         assert any(c.isascii() and c.isalpha() for c in text)

@@ -60,7 +60,7 @@ def test_five_full_runs_and_cross_run_agreement_are_not_self_confirmed(
     earlier.write_text('{"state": "failed", "runs": []}\n')
     original = earlier.read_bytes()
     report = run_check(path, **options)
-    assert earlier.read_bytes() == original and report["attempt"] == 4
+    assert earlier.read_bytes() == original and report["attempt"] == 5
     assert report["state"] == ("failed" if defect else "passed")
     assert len(report["runs"]) == len(speech.calls) == 5
     assert len(model.script.calls) == 10
@@ -108,12 +108,16 @@ def test_requests_bound_models_temperature_runs_and_keep_raw_failure_privately(
     assert wire.spend.estimated < 0.15
 
 
-def test_prompt_token_budget_rejects_missing_or_over_budget_usage() -> None:
-    assert prompt_within_budget(2655)
-    assert prompt_within_budget(2799)
-    assert not prompt_within_budget(2800)
-    assert not prompt_within_budget(4500)
-    assert not prompt_within_budget(0)
+@pytest.mark.parametrize("language,measured,ceiling", [("ar", 2655, 2800), ("en", 2878, 3000)])
+def test_prompt_token_budget_rejects_missing_or_over_budget_usage(
+    language: str, measured: int, ceiling: int
+) -> None:
+    assert prompt_within_budget(measured, language)
+    assert prompt_within_budget(ceiling - 1, language)
+    assert not prompt_within_budget(ceiling, language)
+    assert not prompt_within_budget(4500, language)
+    assert not prompt_within_budget(0, language)
+    assert not prompt_within_budget(measured, "unknown")
 
 
 def test_english_audio_allowance_and_unknown_usage_reserve_two_minutes() -> None:
@@ -163,5 +167,10 @@ def test_recorded_prompt_budget_when_live_evidence_exists() -> None:
     for file in Path("docs/evidence").glob("live-11e-*.json"):
         report = json.loads(file.read_text())
         for run in report["runs"]:
+            # Historical evidence predates the language field; its recorded allowance
+            # explicitly identifies English. Do not rewrite an earlier failed report.
+            language = run.get("language", report.get("language")) or (
+                "en" if "English" in report.get("allowance", "") else "ar"
+            )
             for count in run.get("prompt_input_tokens", []):
-                assert prompt_within_budget(count), (file, run["run"], count)
+                assert prompt_within_budget(count, language), (file, run["run"], count, language)

@@ -61,9 +61,9 @@ class TelegramRuntime:
             store,
             clock,
             settings.identity,
-            lambda key, fields: wording.render(key, **fields),
-            approve_label=wording.APPROVE_BUTTON,
-            reject_label=wording.REJECT_BUTTON,
+            lambda key, language, fields: wording.render(key, language, **fields),
+            approve_label=(wording.APPROVE_BUTTON, "Approve"),
+            reject_label=(wording.REJECT_BUTTON, "Reject"),
         )
         self.steward = Steward(store, clock, lambda scope: StewardPolicy(DRAFT_POLICY_2026_09))
         self.inbound = InboundProcessor(self.steward, transport="telegram")
@@ -191,7 +191,7 @@ def route_receipt(
         if receipt.kind == "callback":
             runtime.transport.answer_callback(
                 str((receipt.payload or {}).get("callback_query_id", "")),
-                wording.render("callback_refused"),
+                wording.render("callback_refused", "ar"),
             )
             runtime.inbound.process_inbound(key, owner, now)
             return RouteResult(
@@ -257,7 +257,11 @@ def route_receipt(
             str(payload.get("callback_token_hash", "")), auth.principal, "callback:" + receipt.id
         )
         refused = result.status not in {"accepted", "duplicate"}
-        callback_text = wording.render("callback_refused") if refused else ""
+        callback_text = (
+            wording.render("callback_refused", runtime.accounts.language(receipt.source_subject))
+            if refused
+            else ""
+        )
         outcome = runtime.transport.answer_callback(
             str(payload.get("callback_query_id", "")), callback_text
         )

@@ -261,6 +261,18 @@ class OperationalIssue(_Metadata):
         return self
 
 
+class PendingStartClarification(_BoundaryValue):
+    mission_ref: VersionRef
+    asked_at: UtcInstant
+    expires_at: UtcInstant
+
+    @model_validator(mode="after")
+    def shape(self) -> Self:
+        if self.mission_ref.entity_type != "mission" or self.expires_at <= self.asked_at:
+            raise ValueError("start clarification requires a mission and a future expiry")
+        return self
+
+
 class PatientProfile(_Metadata):
     """Operational authority facts, including the accepted enrollment facts."""
 
@@ -283,6 +295,7 @@ class PatientProfile(_Metadata):
     recipient_ref: NonblankStr | None = None
     recipient_subject: NonblankStr | None = None
     recipient_auth_epoch: NonnegativeInt = 0
+    pending_start_clarification: PendingStartClarification | None = None
 
     @model_validator(mode="after")
     def identity(self) -> Self:

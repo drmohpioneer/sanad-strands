@@ -126,91 +126,192 @@ def supported_text(text: str, proposal: Proposal) -> str:
     )
 
 
-def render_card(proposal: Proposal) -> tuple[str, ...]:
+PHOTO_LABELS = {
+    "who": ("مين المريض؟", "Who is the patient?"),
+    "new": ("مريض جديد: ", "New patient: "),
+    "patient": ("المريض: ", "Patient: "),
+    "heard": ("سمعت:", "I heard:"),
+    "read": ("قريت في الصورة:", "I read in the image:"),
+    "printed_name": ("الاسم المطبوع (غير مؤكد): ", "Printed name (unverified): "),
+    "row": ("صف ", "Row "),
+    "document": ("بيانات الصورة", "Image details"),
+    "disagreement": (" — ⚠️ قراءتين مختلفتين: ", " — ⚠️ Two different readings: "),
+    "printed_note": ("ملاحظة مطبوعة (مش تعليمات): ", "Printed note (not an instruction): "),
+    "edit_row": (
+        "للتعديل: صف 1: الاسم=...؛ القيمة=...؛ الوحدة=... (أو الجرعة=... للدوا)",
+        "To edit: row 1: name=...; value=...; unit=... (or dose=... for medication)",
+    ),
+    "effective": ("التغيير يبدأ: ", "Change starts: "),
+    "checkin": ("المتابعة المطلوبة: ", "Requested check-in: "),
+    "or": (" أو ", " or "),
+    "question_confirmation": ("؟ — محتاج تأكيد", "? — needs confirmation"),
+    "numbers": ("الأرقام: ", "Numbers: "),
+    "comma": ("، ", ", "),
+    "age": ("العمر: ", "Age: "),
+    "sex": ("النوع: ", "Sex: "),
+    "male": ("ذكر", "male"),
+    "female": ("أنثى", "female"),
+    "identifiers": ("أرقام التعريف: ", "Identifiers: "),
+    "last_activity": ("آخر نشاط: ", "Last activity: "),
+    "confirmation": (" — محتاج تأكيد", " — needs confirmation"),
+    "explicit": ("صريح", "explicit"),
+    "explicit_expression": ("صريح: ", "explicit: "),
+    "default": ("افتراضي ", "default "),
+    "days_reason": (" يوم؛ الموعد الافتراضي لنوع المهمة", " days; default for this task type"),
+    "due": ("  الموعد: {due} ({reason})", "  Due: {due} ({reason})"),
+    "escalation": ("  لو متعملش هبلّغك: {time}", "  If not done I will notify you: {time}"),
+    "start_deadline": (
+        "تأكيد بداية {drug}: {time} (افتراضي 3 أيام)؛ لو متأكدش هبلّغك في نفس الموعد.",
+        "Start confirmation for {drug}: {time} (default 3 days); "
+        "if unconfirmed I will notify you at the same time.",
+    ),
+    "day_three": (
+        "متابعة اليوم الثالث من تاريخ البداية اللي المريض يبلّغنا بيه؛ التأكيد هنا مش دليل إنه بدأ.",
+        "The day-three check-in follows the start date the patient reports; "
+        "confirmation here does not prove the patient started.",
+    ),
+    "alert": ("بلّغني لو: ", "Notify me if: "),
+    "clarify": ("محتاج توضيح: ", "Needs clarification: "),
+    "unassigned": (
+        "سمعت الرقم {number} ومش عارف يتحط فين",
+        "I heard {number}; which item is it for?",
+    ),
+    "not_recorded": ("مش هيتسجل:", "Not recorded:"),
+    "superseded": (
+        "الكارت ده بدّل الكارت اللي قبله؛ الأزرار القديمة مش شغالة.",
+        "This card replaces the previous card; the old buttons no longer work.",
+    ),
+    "valid": ("صالح لمدة 30 دقيقة", "Valid for 30 minutes"),
+}
+PHOTO_FACTS = {
+    "patient_report": ("نتيجة في الصورة", "Result in the image"),
+    "condition": ("التاريخ المرضي", "History"),
+    "allergy": ("حساسية", "Allergy"),
+    "history": ("التاريخ المرضي", "History"),
+    "medication_history": ("أدوية قديمة", "Previous medication"),
+    "finding": ("Finding", "Finding"),
+    "complaint": ("Complaint", "Complaint"),
+}
+PHOTO_ACTIONS = {action: (text, action) for action, text in _ACTIONS.items()}
+PHOTO_REASONS = {
+    "reader_disagreement": (
+        REASONS["reader_disagreement"],
+        "The readings differ; choose a reading or edit the item.",
+    ),
+    "shifted_rows": (
+        REASONS["shifted_rows"],
+        "Values may be shifted; edit each row or resend the image.",
+    ),
+    "document_unclear": (
+        REASONS["document_unclear"],
+        "Please clarify the image; send each document separately.",
+    ),
+    "unsupported_number": (
+        REASONS["unsupported_number"],
+        "A proposed number is not in your input; edit the item.",
+    ),
+}
+
+
+def _photo_date(instant: datetime, proposal: Proposal, timezone: str | None = None) -> str:
+    if proposal.language == "en":
+        from sanad.scribe.english import date
+
+        return date(
+            instant, proposal.model_copy(update={"timezone": timezone or proposal.timezone})
+        )
+    return arabic_datetime(instant, timezone or proposal.timezone, reference=proposal.created_at)
+
+
+def render_card(proposal: Proposal, language: str | None = None) -> tuple[str, ...]:
+    # A presentation copy selects today's language without rewriting the saved proposal.
+    if language is not None and language != proposal.language:
+        proposal = proposal.model_copy(update={"language": language})
     if not proposal.photo:
         return render_dictation(proposal)
+    language = proposal.language
+
+    def label(key: str) -> str:
+        return PHOTO_LABELS[key][language == "en"]
+
     candidate = proposal.candidate
-    name = proposal.selected_display_name or candidate.patient.name_as_spoken or "مين المريض؟"
-    line = "مريض جديد: " if proposal.creating_patient else "المريض: "
+    name = proposal.selected_display_name or candidate.patient.name_as_spoken or label("who")
+    line = label("new") if proposal.creating_patient else label("patient")
     lines = [
         line + (plain(name) if proposal.selected_display_name else supported_text(name, proposal)),
-        "سمعت:",
+        label("heard"),
     ]
     if proposal.photo:
-        from sanad.scribe.crosscheck import SHIFT_WARNING
+        from sanad.scribe.crosscheck import shift_warning
 
-        lines[1] = "قريت في الصورة:"
+        lines[1] = label("read")
         for printed_name in dict.fromkeys(
             r.printed_identity_hint.text
             for r in (proposal.photo.reads.first, proposal.photo.reads.second)
         ):
             if printed_name:
-                lines.append("الاسم المطبوع (غير مؤكد): " + plain(printed_name))
+                lines.append(label("printed_name") + plain(printed_name))
         if proposal.photo.shift_detected:
-            lines.append(SHIFT_WARNING)
+            lines.append(shift_warning(language))
         if proposal.photo.danger_raised:
-            lines.append("⚠️ تم تنبيهك")
+            lines.append(wording.label("alerted", language))
         for d in proposal.photo.reads.disagreements:
             if d.field not in proposal.photo.resolved_fields:
-                label = (
-                    ("صف " + str(int(d.field.split(".")[1]) + 1))
+                row_label = (
+                    (label("row") + str(int(d.field.split(".")[1]) + 1))
                     if d.field.startswith("items.")
-                    else "بيانات الصورة"
+                    else label("document")
                 )
                 lines.append(
-                    label
-                    + " — ⚠️ قراءتين مختلفتين: "
-                    + plain(d.first or "غير مقروء")
+                    row_label
+                    + label("disagreement")
+                    + plain(d.first or wording.label("unreadable", language))
                     + " / "
-                    + plain(d.second or "غير مقروء")
+                    + plain(d.second or wording.label("unreadable", language))
                 )
         for note in dict.fromkeys(
             (*proposal.photo.reads.first.notes, *proposal.photo.reads.second.notes)
         ):
-            lines.append("ملاحظة مطبوعة (مش تعليمات): " + plain(note))
+            lines.append(label("printed_note") + plain(note))
         if candidate.orders or candidate.facts:
-            lines.append("للتعديل: صف 1: الاسم=...؛ القيمة=...؛ الوحدة=... (أو الجرعة=... للدوا)")
+            lines.append(label("edit_row"))
     from sanad.scribe.amend import diff_lines
 
-    lines.extend(diff_lines(proposal.amendments))
+    lines.extend(diff_lines(proposal.amendments, language))
     for t in proposal.timings:
         if t.item.startswith(("effective:", "checkin:")):
-            label = "التغيير يبدأ: " if t.item.startswith("effective:") else "المتابعة المطلوبة: "
-            lines.append(
-                label
-                + arabic_datetime(
-                    t.resolved.due_at, proposal.timezone, reference=proposal.created_at
-                )
+            timing_label = (
+                label("effective") if t.item.startswith("effective:") else label("checkin")
             )
+            lines.append(timing_label + _photo_date(t.resolved.due_at, proposal))
     if proposal.disputed_numbers:
-        lines.append("⚠️ " + " أو ".join(proposal.disputed_numbers) + "؟ — محتاج تأكيد")
+        lines.append(
+            "⚠️ " + label("or").join(proposal.disputed_numbers) + label("question_confirmation")
+        )
     heard = numbers_in(proposal.source_text)
     if heard:
-        lines.append("الأرقام: " + "، ".join(heard))
+        lines.append(label("numbers") + label("comma").join(heard))
     if candidate.patient.age:
-        lines.append("العمر: " + supported_text(candidate.patient.age, proposal))
+        lines.append(label("age") + supported_text(candidate.patient.age, proposal))
     if candidate.patient.sex:
-        lines.append("النوع: " + ("ذكر" if candidate.patient.sex == "male" else "أنثى"))
+        lines.append(label("sex") + label("male" if candidate.patient.sex == "male" else "female"))
     if candidate.patient.identifiers:
         lines.append(
-            "أرقام التعريف: "
-            + "، ".join(supported_text(v, proposal) for v in candidate.patient.identifiers)
+            label("identifiers")
+            + label("comma").join(
+                supported_text(v, proposal) for v in candidate.patient.identifiers
+            )
         )
     if proposal.choices and not proposal.selected_patient_id and not proposal.creating_patient:
-        lines.append("مين المريض؟")
+        lines.append(label("who"))
         for choice in proposal.choices:
             details = [plain(choice.display_name)]
             if choice.age:
                 details.append(plain(choice.age))
             if choice.sex:
-                details.append("ذكر" if choice.sex == "male" else "أنثى")
-            details.append(
-                "آخر نشاط: "
-                + arabic_datetime(
-                    choice.updated_at, proposal.timezone, reference=proposal.created_at
-                )
-            )
-            lines.append("• " + "، ".join(details))
+                details.append(label("male" if choice.sex == "male" else "female"))
+            details.append(label("last_activity") + _photo_date(choice.updated_at, proposal))
+            lines.append("• " + label("comma").join(details))
     clarification = proposal.intent == "unclear" or any(
         i.code == "batch_too_large" for i in proposal.issues
     )
@@ -229,16 +330,17 @@ def render_card(proposal: Proposal) -> tuple[str, ...]:
                 if v
             ]
             first = " ".join(fields[:2])
-            suffix = "، " + "، ".join(fields[2:]) if len(fields) > 2 else ""
-            line = "• " + first + suffix + " (" + _ACTIONS[order.action] + ")"
+            suffix = label("comma") + label("comma").join(fields[2:]) if len(fields) > 2 else ""
+            action = PHOTO_ACTIONS[order.action][language == "en"]
+            line = "• " + first + suffix + " (" + action + ")"
             if proposal.blocked(f"order:{i}"):
-                line += " — محتاج تأكيد"
+                line += label("confirmation")
             lines.append(line)
         for i, mission in enumerate(candidate.missions):
             lines.append(
                 "• "
                 + supported_text(mission.text, proposal)
-                + (" — محتاج تأكيد" if proposal.blocked(f"mission:{i}") else "")
+                + (label("confirmation") if proposal.blocked(f"mission:{i}") else "")
             )
             timing = next((t.resolved for t in proposal.timings if t.item == f"mission:{i}"), None)
             if timing and not any(
@@ -246,78 +348,87 @@ def render_card(proposal: Proposal) -> tuple[str, ...]:
                 and issue.code in {"unsupported_number", "disputed_number"}
                 for issue in proposal.issues
             ):
-                due = arabic_datetime(timing.due_at, timing.timezone, reference=proposal.created_at)
-                escalation = arabic_datetime(
-                    timing.escalation_at, timing.timezone, reference=proposal.created_at
-                )
+                due = _photo_date(timing.due_at, proposal, timing.timezone)
+                escalation = _photo_date(timing.escalation_at, proposal, timing.timezone)
                 expression = plain(timing.original_time_expression or "")
                 reason = (
                     (
-                        "صريح"
+                        label("explicit")
                         if re.search(r"\d{4}-\d{2}-\d{2}", expression)
-                        else "صريح: " + expression
+                        else label("explicit_expression") + expression
                     )
                     if timing.due_source == "doctor"
-                    else "افتراضي "
+                    else label("default")
                     + str(
                         int((timing.due_at - timing.timing_anchor.instant).total_seconds() / 86400)
                     )
-                    + " يوم؛ الموعد الافتراضي لنوع المهمة"
+                    + label("days_reason")
                 )
-                lines.append(f"  الموعد: {due} ({reason})")
-                lines.append(f"  لو متعملش هبلّغك: {escalation}")
+                lines.append(label("due").format(due=due, reason=reason))
+                lines.append(label("escalation").format(time=escalation))
         for i, order in enumerate(candidate.orders):
             timing = next((t.resolved for t in proposal.timings if t.item == f"order:{i}"), None)
             if order.action == "start" and timing and not proposal.blocked(f"order:{i}"):
-                local = arabic_datetime(
-                    timing.due_at, timing.timezone, reference=proposal.created_at
-                )
-                lines.append(
-                    f"تأكيد بداية {plain(order.drug)}: {local}"
-                    " (افتراضي 3 أيام)؛ لو متأكدش هبلّغك في نفس الموعد."
-                )
-                lines.append(
-                    "متابعة اليوم الثالث من تاريخ البداية اللي المريض يبلّغنا بيه؛ "
-                    "التأكيد هنا مش دليل إنه بدأ."
-                )
+                local = _photo_date(timing.due_at, proposal, timing.timezone)
+                lines.append(label("start_deadline").format(drug=plain(order.drug), time=local))
+                lines.append(label("day_three"))
         for i, fact in enumerate(candidate.facts):
             if not any(
                 issue.item == f"fact:{i}" and issue.code == "unsafe_text"
                 for issue in proposal.issues
             ):
-                lines.append(_FACTS[fact.category] + ": " + supported_text(fact.text, proposal))
+                from sanad.scribe.crosscheck import lab_text
+
+                fact_text = (
+                    lab_text(fact.lab, language) if fact.lab and language == "en" else fact.text
+                )
+                lines.append(
+                    PHOTO_FACTS[fact.category][language == "en"]
+                    + ": "
+                    + supported_text(fact_text, proposal)
+                )
         for i, alert in enumerate(candidate.alerts):
             if not any(
                 issue.item == f"alert:{i}" and issue.code == "unsafe_text"
                 for issue in proposal.issues
             ):
-                lines.append("بلّغني لو: " + supported_text(alert, proposal))
+                lines.append(label("alert") + supported_text(alert, proposal))
     for i, ambiguity in enumerate(candidate.ambiguities):
         if not any(
             issue.item == f"ambiguity:{i}" and issue.code == "unsafe_text"
             for issue in proposal.issues
         ):
-            lines.append("محتاج توضيح: " + supported_text(ambiguity, proposal))
+            lines.append(label("clarify") + supported_text(ambiguity, proposal))
     for issue in proposal.issues:
         if issue.code == "unassigned_number":
-            lines.extend(f"سمعت الرقم {n} ومش عارف يتحط فين" for n in issue.numbers)
+            lines.extend(label("unassigned").format(number=n) for n in issue.numbers)
     blocked = [i for i in proposal.issues if i.blocked]
     if blocked:
-        lines.append("مش هيتسجل:")
-        lines.extend("• " + REASONS[code] for code in dict.fromkeys(i.code for i in blocked))
+        from sanad.scribe.english import REASONS as ENGLISH_REASONS
+
+        lines.append(label("not_recorded"))
+        lines.extend(
+            "• " + PHOTO_REASONS.get(code, (REASONS[code], ENGLISH_REASONS[code]))[language == "en"]
+            for code in dict.fromkeys(i.code for i in blocked)
+        )
     if proposal.supersedes_id:
-        lines.append("الكارت ده بدّل الكارت اللي قبله؛ الأزرار القديمة مش شغالة.")
-    lines.append("صالح لمدة 30 دقيقة")
-    text = wording.render("scribe_card", body="\n".join(lines))
+        lines.append(label("superseded"))
+    lines.append(label("valid"))
+    text = wording.render("scribe_card", language, body="\n".join(lines))
     cap = DRAFT_SCRIBE_POLICY.card_max_chars
     if len(text) <= cap:
         return (text,)
     if len(text) > 2 * cap:
         if any(i.code == "batch_too_large" for i in proposal.issues):
             return (
-                "المريض: مين المريض؟\nمش هيتسجل:\n• "
-                + REASONS["batch_too_large"]
-                + "\nصالح لمدة 30 دقيقة",
+                label("patient")
+                + label("who")
+                + "\n"
+                + label("not_recorded")
+                + "\n• "
+                + (ENGLISH_REASONS if language == "en" else REASONS)["batch_too_large"]
+                + "\n"
+                + label("valid"),
             )
         # Caller records batch_too_large and re-renders before offering confirmation.
         return (text,)
@@ -386,12 +497,30 @@ def medication_line(proposal: Proposal, index: int) -> str:
     return line
 
 
+def consumed_question_numbers(proposal: Proposal) -> set[str]:
+    """Rendered request counts and quoted test words need no extra global question."""
+    from sanad.scribe.monitoring import request_counts, spoken_counts
+
+    consumed = set().union(
+        *(
+            request_counts(clinical_line(proposal, f"mission:{i}", mission.text))
+            for i, mission in enumerate(proposal.candidate.missions)
+        )
+    ) & request_counts(proposal.source_text)
+    for issue in proposal.issues:
+        if issue.code == "clinical_unclear" and issue.field == "analyte":
+            for fragment in re.findall(r'"([^"\n]+)"', issue.question or ""):
+                consumed.update(spoken_counts(re.sub(r"[,،;؛]", " ", fragment)))
+    return consumed
+
+
 def dictation_questions(proposal: Proposal) -> tuple[str, ...]:
     if proposal.language == "en" and not proposal.photo:
         from sanad.scribe.english import questions as english_questions
 
         return english_questions(proposal)
     questions: list[str] = []
+    consumed = consumed_question_numbers(proposal)
     numbers_asked = {
         n for i in proposal.issues if i.code == "extraction_conflict" for n in i.numbers
     }
@@ -407,7 +536,9 @@ def dictation_questions(proposal: Proposal) -> tuple[str, ...]:
         if issue.code in {"drug_unclear", "clinical_unclear"}:
             from sanad.scribe.clinical import TERM_QUESTION
 
-            questions.append(TERM_QUESTION)
+            questions.append(
+                issue.question if issue.field == "analyte" and issue.question else TERM_QUESTION
+            )
             continue
         if any(
             q.item == issue.item and q.code == "extraction_conflict" and q.field == "dose"
@@ -443,7 +574,7 @@ def dictation_questions(proposal: Proposal) -> tuple[str, ...]:
                 questions.append(f'سمعت "{n}"، الرقم ده صح؟')
         elif issue.code == "unassigned_number":
             for n in issue.numbers:
-                if n not in numbers_asked:
+                if n not in numbers_asked and n not in consumed:
                     numbers_asked.add(n)
                     questions.append(f'سمعت "{n}"، ده يخص إيه؟')
         elif issue.question:
@@ -472,7 +603,7 @@ def dictation_questions(proposal: Proposal) -> tuple[str, ...]:
         if issue.item in proposal.single_source:
             questions[before:] = [q + " سمعتها مرة واحدة" for q in questions[before:]]
     for number in proposal.disputed_numbers:
-        if number not in numbers_asked:
+        if number not in numbers_asked and number not in consumed:
             questions.append(f'سمعت "{number}"، الرقم ده صح؟')
     questions.extend(
         f'سمعت "{supported_text(a, proposal)}"، توضح المقصود؟'
@@ -495,6 +626,9 @@ def clinical_line(proposal: Proposal, item: str, spoken: str) -> str:
     if fragments:
         values = [supported_text(n.latin, proposal) for n in fragments]
         value = ", ".join(dict.fromkeys(values) if kind == "test" else values)
+    elif item.startswith("mission:") and mission.kind == "TEST" and not proposal.photo:
+        # An unanchored analyte is only a question, never an instruction.
+        value = ""
     else:
         value = supported_text(spoken, proposal)
     if item.startswith("fact:"):

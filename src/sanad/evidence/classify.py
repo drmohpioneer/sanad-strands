@@ -120,10 +120,10 @@ def classify(read: DocumentRead, caption: str, missions: Sequence[Mission]) -> C
     if read.first.document_type != read.second.document_type:
         return "other"
     items = [row.item for reader in readers for row in reader.items]
-    names = " ".join(normalize(i.name) for i in items)
+    names = " ".join(normalize(i.name) for i in items if i.name)
     cues = caption_categories(names)
     caption_cues = caption_categories(caption)
-    lab = any(rule_for(analyte(i.name)) is not None for i in items)
+    lab = any(i.name and rule_for(analyte(i.name)) is not None for i in items)
     drugs = any(i.dose or i.frequency or i.route or i.timing for i in items)
     if "monitor_screen" in cues | caption_cues and (
         lab or "bp" in names.split() or "pressure" in names
@@ -237,7 +237,11 @@ def document_identity(read: DocumentRead, display_name: str) -> str:
     for reader in (read.first, read.second):
         lines = [
             *reader.notes,
-            *(r.item.name for r in reader.items if not r.item.value and not r.item.dose),
+            *(
+                r.item.name
+                for r in reader.items
+                if r.item.name and not r.item.value and not r.item.dose
+            ),
         ]
         for line in lines:
             match = re.match(

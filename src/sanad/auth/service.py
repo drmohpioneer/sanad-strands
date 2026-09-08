@@ -10,6 +10,7 @@ from sanad.accounts.service import AccountService
 from sanad.auth.commands import AuthPolicy
 from sanad.auth.tokens import consume_token
 from sanad.domain import PatientScope, Principal
+from sanad.domain.language import default_language
 from sanad.store import keys
 from sanad.store.keys import Scope
 from sanad.store.records import (
@@ -22,6 +23,7 @@ from sanad.store.records import (
     IdentityRead,
     OperationalClock,
     OutboundIntent,
+    Patient,
     PatientProfile,
     ReceiptCompletion,
     TokenHead,
@@ -200,7 +202,12 @@ class IdentityService:
         scope = PatientScope(doctor_id=profile.doctor_id, patient_id=profile.patient_id)
         now = self.clock()
         logical = keys.digest(f"{row.id}:{template}:{row.version}:{credential_hash or ''}")
-        payload: dict[str, JsonValue] = {"text": self.accounts.present(template, fields or {})}
+        patient = self.load(scope, "patient", profile.patient_id, Patient)
+        payload: dict[str, JsonValue] = {
+            "text": self.accounts.present(
+                template, patient.language if patient else default_language, fields or {}
+            )
+        }
         return OutboundIntent(
             id=logical,
             scope=scope,

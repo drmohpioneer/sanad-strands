@@ -50,7 +50,7 @@ def test_callback_refusals_are_neutral_and_change_no_account_state(
     assert isinstance(result, CallbackRefused)
     assert CallbackRefused.model_validate_json(result.model_dump_json()) == result
     assert accounts.post(callback(raw, actor.subject, id=99)).status_code == 200
-    assert accounts.transport.callback_calls[-1].text == wording.render("callback_refused")
+    assert accounts.transport.callback_calls[-1].text == wording.render("callback_refused", "en")
     assert accounts.runtime.accounts.application(app.id) == before and [
         (i.id, i.payload, i.source_versions) for i in accounts.intents()
     ] == [(i.id, i.payload, i.source_versions) for i in intents_before]
@@ -70,7 +70,7 @@ def test_callback_hash_single_use_and_duplicate_http_update(accounts: AccountWor
     assert accounts.receipt(2) == receipt and len(accounts.transport.callback_calls) == 1
     assert accounts.post(callback(raw, id=3)).status_code == 200
     assert len(accounts.transport.callback_calls) == 2
-    assert accounts.transport.callback_calls[-1].text == wording.render("callback_refused")
+    assert accounts.transport.callback_calls[-1].text == wording.render("callback_refused", "en")
     assert len([i for i in accounts.intents() if i.template_id == "doctor_approved"]) == 1
 
 
@@ -79,7 +79,7 @@ def test_patient_copied_callback_is_refused_without_admin_rights(accounts: Accou
     accounts.patient(doctor)
     raw = accounts.token()
     assert accounts.post(callback(raw, PATIENT, id=4)).status_code == 200
-    assert accounts.transport.callback_calls[-1].text == wording.render("callback_refused")
+    assert accounts.transport.callback_calls[-1].text == wording.render("callback_refused", "ar")
     assert accounts.receipt(4).state == "completed"
     assert accounts.actor(PATIENT).verified_roles == frozenset({"patient"})
 
@@ -295,7 +295,9 @@ def test_admin_reject_callback_consumes_token_and_sends_neutral_decision(
     assert decided and decided.status == "rejected" and decided.reviewer_id == ADMIN
     notice = next(i for i in accounts.intents() if i.template_id == "application_rejected")
     assert accounts.dispatch(notice).status == "provider_accepted"
-    assert accounts.transport.calls[-1].payload["text"] == wording.render("application_rejected")
+    assert accounts.transport.calls[-1].payload["text"] == wording.render(
+        "application_rejected", "en"
+    )
     row = accounts.store.get(app.scope, "callback_token", keys.digest(raw))
     assert row and from_record(row, CallbackToken).consumed_at == accounts.clock()
     assert accounts.actor(APPLICANT).actor_kind == "unknown"

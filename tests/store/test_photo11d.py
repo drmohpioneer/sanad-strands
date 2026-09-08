@@ -301,7 +301,7 @@ def test_legacy_unreadable_proposal_cannot_render_buttons_or_be_confirmed(
     assert token
     assert legacy.blocked("all") and not world.scribe.photos.confirmable(legacy)
     assert world.scribe.buttons(legacy, actor, "unused") == ((), {"inline_keyboard": []})
-    assert world.scribe.photos.buttons(legacy, actor) == ((), [])
+    assert world.scribe.photos.buttons(legacy, actor, legacy.language) == ((), [])
     assert render_card(legacy) == (HANDWRITING_REPLY + "\n" + warning,)
     intents = world.scribe.photos.card_intents(
         legacy, world.doctor, {"inline_keyboard": [[{"text": "old button"}]]}

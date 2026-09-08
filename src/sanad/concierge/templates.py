@@ -103,6 +103,57 @@ TEMPLATES = {
         "الاختيار ده مبقاش متاح. ابعت طلبك في رسالة جديدة.",
         "That choice is no longer available. Please send a new message.",
     ),
+    "patient_stop_recorded": (
+        "سجلت إنك بلّغت بتنفيذ طلب الدكتور بإيقاف الدوا.",
+        "Your report of carrying out your doctor's medication stop is recorded.",
+    ),
+    "patient_change_recorded": (
+        "سجلت إنك بلّغت بتنفيذ تعديل الدوا اللي الدكتور طلبه.",
+        "Your report of carrying out your doctor's medication change is recorded.",
+    ),
+    "patient_stop_choose": (
+        "وقفت أنهي دوا من اللي الدكتور طلب إيقافهم؟",
+        "Which medicine did you stop from those your doctor asked you to stop?",
+    ),
+    "patient_change_choose": (
+        "عدّلت أنهي دوا من اللي الدكتور طلب تعديلهم؟",
+        "Which medicine did you change from those your doctor asked you to change?",
+    ),
+    "patient_stop_missing": (
+        "مفيش طلب إيقاف مسجل يطابق كلامك. وصّلت كلامك للدكتور.",
+        "No recorded medication stop matches your report. It is in your doctor's queue.",
+    ),
+    "patient_change_missing": (
+        "مفيش تعديل دوا مسجل يطابق كلامك. وصّلت كلامك للدكتور.",
+        "No recorded medication change matches your report. It is in your doctor's queue.",
+    ),
+    "patient_stop_start_recorded": (
+        "سجلت إنك بلّغت بإيقاف الدوا القديم وبداية الدوا الجديد حسب خطة الدكتور.",
+        "Your reports of stopping the old medicine and starting the new medicine are recorded.",
+    ),
+    "patient_start_unknown": (
+        "سجلت بلاغ البداية؛ تاريخ البداية غير مؤكد، ومتابعة اليوم الثالث مستنية تحديده.",
+        "Your start report is recorded; the start date is uncertain. "
+        "The day-three check-in still needs its start date.",
+    ),
+    "patient_start_date_expired": (
+        "مفيش سؤال بداية دوا ساري. ابعت اسم الدوا وقلّي بدأت إمتى.",
+        "There is no current medication start-date question. "
+        "Send the medicine name and when you started.",
+    ),
+    "patient_barrier_recorded": (
+        "سجلت إن عندك عائق مع {drug}؛ هوصل ده للدكتور. لو الحالة اتغيرت ابعتلي.",
+        "Your difficulty with {drug} is recorded for your doctor. Message me if things change.",
+    ),
+    "patient_barrier_choose": (
+        "العائق ده مع أنهي دوا من اللي الدكتور طلب تبدأهم؟",
+        "Which medicine your doctor asked you to start does this difficulty concern?",
+    ),
+    "patient_barrier_missing": (
+        "مفيش طلب بداية دوا ساري يطابق العائق. ابعت اسم الدوا وطلب الدكتور.",
+        "No current medication start matches this difficulty. "
+        "Send the medicine name and your doctor's instruction.",
+    ),
 }
 
 

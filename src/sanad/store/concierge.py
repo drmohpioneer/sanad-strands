@@ -254,6 +254,99 @@ def guards(store: "StoreBase", request: CommitRequest, now: datetime) -> list["C
                         and prime(reply.aggregate, now).model_dump(mode="json") == row.body
                     ):
                         continue
+                if (
+                    original
+                    and command.payload.get("type") == "RecordPatientReply"
+                    and original.kind in {"VISIT", "TASK"}
+                ):
+                    from sanad.domain import events as ev
+                    from sanad.domain.entities import VisitDetails
+                    from sanad.domain.predicates import PredicateResult
+                    from sanad.store.records import InboundReceipt, to_record
+
+                    reported = [
+                        from_record(r, ClinicalFact)
+                        for r in request.puts
+                        if r.entity_type == "clinical_fact"
+                    ]
+                    report = next(
+                        (
+                            f.payload
+                            for f in reported
+                            if isinstance(f.payload, ReportFactPayload)
+                            and f.payload.target_ref == to_record(original, snap.scope).ref
+                        ),
+                        None,
+                    )
+                    if report is not None:
+                        if report.report_kind not in (
+                            {"task_done"}
+                            if original.kind == "TASK"
+                            else {"visit_booking", "visit_attendance", "visit_report_pending"}
+                        ):
+                            return None
+                        revised_mission = from_record(row, Mission)
+                        at = from_record(receipt, InboundReceipt).received_at
+                        if report.original_receipt_id:
+                            source_row = store.get(
+                                snap.scope, "inbound_receipt", report.original_receipt_id
+                            )
+                            if (
+                                not source_row
+                                or source_row.body.get("source_subject") != actor.subject
+                            ):
+                                return None
+                            at = from_record(source_row, InboundReceipt).received_at
+                            checks.append(Check(source_row.key, source_row.version))
+                        base = original
+                        if isinstance(original.details, VisitDetails):
+                            # Window-only revisions preserve every clinical and lifecycle field.
+                            if not isinstance(revised_mission.details, VisitDetails) or (
+                                original.details.model_dump(exclude={"window_start", "window_end"})
+                                != revised_mission.details.model_dump(
+                                    exclude={"window_start", "window_end"}
+                                )
+                            ):
+                                return None
+                            base = original.model_copy(update={"details": revised_mission.details})
+                            if (
+                                revised_mission.state == original.state
+                                and revised_mission
+                                == Mission.model_validate(
+                                    base.model_dump()
+                                    | {"version": original.version + 1, "updated_at": now}
+                                )
+                            ):
+                                continue
+                            if not (
+                                original.details.objective in {"arrange", "booking_reported"}
+                                and report.report_kind == "visit_booking"
+                                or original.details.objective == "attendance_reported"
+                                and report.report_kind == "visit_attendance"
+                            ):
+                                return None
+                        fulfillment = transition_mission(
+                            base,
+                            ev.ObjectiveFulfilled(
+                                event_id=command.command_id,
+                                fulfillment_event_id=command.command_id,
+                                actor_kind="patient",
+                                objective_received_at=at,
+                                danger_flag=False,
+                                predicate_result=PredicateResult(
+                                    satisfied=True,
+                                    evaluated_at=now,
+                                    detail="Explicit patient report.",
+                                ),
+                            ),
+                            now,
+                            DRAFT_POLICY_2026_09,
+                        )
+                        if (
+                            isinstance(fulfillment, TransitionResult)
+                            and fulfillment.aggregate == revised_mission
+                        ):
+                            continue
             if row.version == 1 and (
                 row.body.get("kind") != "QUESTION"
                 or command.payload.get("type") != "CreateSupportTicket"

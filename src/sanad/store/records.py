@@ -1016,6 +1016,13 @@ class OutboundIntent(_Metadata):
     recipient_subject: NonblankStr | None = None
     payload: dict[str, JsonValue] | None = Field(default=None, repr=False)
 
+    task_accept_token_hash: str | None = Field(default=None, repr=False)
+    task_reopen_token_hash: str | None = Field(default=None, repr=False)
+    task_action_expires_at: UtcInstant | None = None
+    question_listing_token: str | None = Field(default=None, repr=False)
+    question_listing_targets: tuple[tuple[str, str], ...] = Field(default=(), repr=False)
+    question_listing_expires_at: UtcInstant | None = None
+
     @model_validator(mode="after")
     def shape(self) -> Self:
         if self.scope_kind == "doctor" and (

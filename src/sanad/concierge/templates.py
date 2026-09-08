@@ -154,6 +154,143 @@ TEMPLATES = {
         "No current medication start matches this difficulty. "
         "Send the medicine name and your doctor's instruction.",
     ),
+    "patient_visit_choose": (
+        "تقصد أنهي زيارة من اللي الدكتور طلبهم؟",
+        "Which of your doctor's requested visits do you mean?",
+    ),
+    "patient_visit_missing": (
+        "مفيش زيارة مسجلة تطابق كلامك. سؤالك في قائمة الدكتور.",
+        "No recorded visit matches your report. Your question is in the doctor's queue.",
+    ),
+    "patient_visit_booked": (
+        "سجلت إنك بلّغت بحجز الزيارة.",
+        "Your report that you booked the visit is recorded.",
+    ),
+    "patient_visit_booked_wait": (
+        "سجلت الحجز؛ ابعتلي لما تروح.",
+        "Your booking is recorded. Please tell me when you attend.",
+    ),
+    "patient_visit_attended": (
+        "سجلت إنك بلّغت بحضور الزيارة.",
+        "Your report that you attended the visit is recorded.",
+    ),
+    "patient_visit_report_needed": (
+        "تمام؛ ابعت صورة تقرير الزيارة لما تستلمه.",
+        "Please send a photo of the visit report when you receive it.",
+    ),
+    "patient_visit_not_attended": (
+        "سجلت إنك مقدرتش تروح. الزيارة لسه ما اكتملتش.",
+        "Your report that you could not attend is recorded. The visit remains unfinished.",
+    ),
+    "patient_visit_booking_needed": (
+        "سجلت كلامك عن الحضور. المطلوب المسجل هو تأكيد الحجز؛ وضّح الحجز في رسالة.",
+        "Your attendance report is recorded. This request needs a booking report; "
+        "please confirm the booking in a message.",
+    ),
+    "patient_visit_date": (
+        "تاريخ الحجز مش واضح. ابعت تاريخ واحد بصيغة سنة-شهر-يوم.",
+        "The booking date is unclear. Please send one date as YYYY-MM-DD.",
+    ),
+    "patient_visit_late_booking": (
+        "سجلت الحجز، لكن تاريخه بعد الميعاد المطلوب. الميعاد الأصلي زي ما هو ومستني قرار الدكتور.",
+        "Your booking is recorded, but its date is after the deadline. "
+        "The original deadline remains for your doctor's decision.",
+    ),
+    "patient_task_choose": (
+        "خلصت أنهي طلب من اللي الدكتور سجّلهم؟",
+        "Which of your doctor's recorded tasks did you finish?",
+    ),
+    "patient_task_missing": (
+        "مفيش طلب مسجل يطابق كلامك. سؤالك في قائمة الدكتور.",
+        "No recorded task matches your report. Your question is in the doctor's queue.",
+    ),
+    "patient_task_recorded": (
+        "سجلت إنك بلّغت بإتمام المطلوب؛ لسه مستني قبول الدكتور.",
+        "Your completion report is recorded; it is awaiting your doctor's acceptance.",
+    ),
+    "patient_task_reopened": (
+        "الدكتور محتاج المطلوب يتعمل بشكل أوضح: {instruction}. الميعاد الجديد {due_local}.",
+        "Your doctor needs the task completed more clearly: {instruction}. "
+        "The new deadline is {due_local}.",
+    ),
+    "patient_question_answered": (
+        "رد الدكتور على سؤالك: {answer}",
+        "Your doctor's answer to your question: {answer}",
+    ),
+    "patient_question_closed": (
+        "الدكتور قفل السؤال ده؛ اسأله في الزيارة.",
+        "Your doctor closed this question. Please ask about it at your visit.",
+    ),
+    "patient_question_plan_pending": (
+        "الدكتور شاف سؤالك وهيعدّل الخطة؛ التعديل هيوصلك لما يتأكد.",
+        "Your doctor has reviewed your question and needs to update the plan. "
+        "The change will follow once confirmed.",
+    ),
+    "patient_question_plan_updated": (
+        'الدكتور رد بتعديل خطتك. التعديل موجود في الخطة؛ ابعت "الخطة" علشان تشوفها.',
+        "Your doctor answered by updating your plan. The change is in your plan; "
+        'send "plan" to see it.',
+    ),
+    "doctor_question_recorded": (
+        "الرد متسجل وفي انتظار الإرسال للمريض.",
+        "The answer is recorded and queued for the patient.",
+    ),
+    "doctor_question_delivery_pending": (
+        "الرد متسجل ولسه موصلش للمريض.",
+        "The answer is recorded but has not reached the patient.",
+    ),
+    "doctor_question_held": (
+        "الرد ده بيغير العلاج؛ سجّل التعديل بالإملاء عشان يتبعت.",
+        "This answer changes treatment. Dictate and confirm the plan amendment to send it.",
+    ),
+    "doctor_question_refused": (
+        "الرد ماتبعتش: {reason}.",
+        "The answer was not sent: {reason}.",
+    ),
+    "doctor_question_list_stale": (
+        "القائمة مش متاحة أو انتهت. ابعت /questions من جديد.",
+        "The listing is unavailable or expired. Run /questions again.",
+    ),
+    "doctor_questions_empty": (
+        "مفيش أسئلة مفتوحة في القائمة دي.",
+        "There are no open questions on this page.",
+    ),
+    "doctor_questions_usage": (
+        "استخدم /questions أو /questions <page>، وبعدها /answer <n> <text> أو /close <n>.",
+        "Use /questions or /questions <page>, then /answer <n> <text> or /close <n>.",
+    ),
+    "doctor_task_accepted": (
+        "سجلت قبولك لبلاغ إتمام المطلوب.",
+        "Your acceptance of the task completion report is recorded.",
+    ),
+    "doctor_task_reopened": (
+        "فتحت المطلوب من جديد وسجلت الميعاد الجديد.",
+        "The task is reopened with its new deadline.",
+    ),
+    "doctor_task_stale": (
+        "الاختيار ده اتستخدم أو مبقاش صالح.",
+        "This choice has already been used or is no longer valid.",
+    ),
+    "doctor_questions_page": (
+        "الأسئلة — صفحة {page}/{pages}",
+        "Questions — page {page}/{pages}",
+    ),
+    "doctor_questions_no_plan": (
+        "مفيش أمر دوا نشط.",
+        "No active medication order.",
+    ),
+    "doctor_questions_age": (
+        "{hours} ساعة",
+        "{hours}h",
+    ),
+    "doctor_questions_held": (
+        "رد محفوظ فقط: {answer}",
+        "Held (record only): {answer}",
+    ),
+    "question_title": (
+        "سؤال للمراجعة",
+        "Question for review",
+    ),
 }
 
 

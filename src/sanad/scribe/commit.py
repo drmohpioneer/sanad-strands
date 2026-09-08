@@ -590,10 +590,12 @@ class ScribeCommit:
                 details = VisitDetails.model_validate({"objective": objective})
                 predicate = PatientReportPredicate(report_kind="visit_" + objective)
             else:
+                from sanad.concierge.tasks import unsupported
+
                 details = TaskDetails(
                     category="doctor_request",
                     instruction=text,
-                    completion_rule="patient_report_of_requested_action",
+                    completion_rule="unsupported_action" if unsupported(text) else "patient_report",
                 )
                 predicate = PatientReportPredicate(report_kind="doctor_task")
             mission(item, MissionKind(instruction.kind), text, details, predicate)
@@ -747,6 +749,9 @@ class ScribeCommit:
                             proposal, actor, command_id, reason="stale_version", claim=claim
                         )
             models, patient, accepted = self._compile(proposal, actor, doctor)
+            from sanad.concierge.answer_command import flag_amended_answers
+
+            models += flag_amended_answers(self.repo.store, proposal, models, now)
             from sanad.scribe.resolver import learn
 
             learned = learn(self.repo.store, doctor, proposal, lambda: now)

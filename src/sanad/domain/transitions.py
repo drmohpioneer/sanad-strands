@@ -377,6 +377,17 @@ def transition_mission(
     )
     if not historical_contact and type(event) not in LEGAL_TRANSITIONS[mission.state]:
         return _illegal(mission, event)
+    if (
+        mission.kind == MissionKind.QUESTION
+        and isinstance(event, ev.DoctorCancel)
+        and event.question_review_open
+    ):
+        return _reject(
+            mission,
+            event,
+            "question_requires_close",
+            "Use the doctor close-question command while its answer review is open.",
+        )
     now = utc_instant(now)
     if now < mission.updated_at:
         return _reject(
@@ -524,6 +535,8 @@ def transition_mission(
         if isinstance(timing, NeedsClarification):
             return _reject(mission, event, "timing_needs_clarification", timing.message)
         changes.update(timing.model_dump())
+        if mission.kind == MissionKind.QUESTION:
+            changes["review_at"] = timing.due_at
         changes.update(
             state=MissionState.open if event.consent_active else MissionState.awaiting_link,
             timing_anchor=TimingAnchor(

@@ -615,10 +615,15 @@ def dictation_questions(proposal: Proposal) -> tuple[str, ...]:
 
 
 def clinical_line(proposal: Proposal, item: str, spoken: str) -> str:
+    task_marker = ""
     if item.startswith("mission:"):
         mission = proposal.candidate.missions[int(item.split(":")[1])]
+        if mission.kind == "TASK" and not proposal.photo and proposal.language != "en":
+            from sanad.concierge.tasks import marker
+
+            task_marker = marker(mission.text, proposal.language)
         if mission.kind == "TASK" and mission.clinical_en:
-            return supported_text(mission.clinical_en, proposal)
+            return supported_text(mission.clinical_en, proposal) + task_marker
     # NameReadings are built by code, outside the provider schema. Legacy free
     # clinical_en fields never participate in a rendered line or question.
     kind = "finding" if item.startswith("fact:") else "test"
@@ -640,7 +645,7 @@ def clinical_line(proposal: Proposal, item: str, spoken: str) -> str:
         if len(fragments) > 1 and fragments[0].latin.casefold() == prefix.casefold():
             value = ", ".join(supported_text(n.latin, proposal) for n in fragments[1:])
         value = prefix + ": " + value
-    return value
+    return value + task_marker
 
 
 def render_dictation(proposal: Proposal) -> tuple[str, ...]:

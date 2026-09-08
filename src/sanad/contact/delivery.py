@@ -32,6 +32,18 @@ def contact_freshness(store: Store, intent: OutboundIntent, now: datetime) -> st
         if intent.slot_id != "chase:" + day or ref.entity_type != "mission":
             return "slot_invalid"
         mission = from_record(row, Mission)
+        if intent.template_id == "patient_visit_brief":
+            from sanad.domain.entities import VisitDetails
+
+            if not isinstance(mission.details, VisitDetails) or (
+                mission.details.window_start and mission.details.window_start <= now
+            ):
+                return "visit_window_passed"
+        if (
+            mission.details.kind == "TASK"
+            and mission.details.completion_rule == "unsupported_action"
+        ):
+            return "unsupported_task"
         if (
             mission.state not in {"open", "waiting_patient"}
             or mission.contact_count >= POLICY.per_mission_chase_limit
@@ -73,6 +85,10 @@ def payload(store: Store, intent: OutboundIntent) -> dict[str, JsonValue]:
         if ref.entity_type == "mission"
         else from_record(row, FollowUpTask)
     )
+    if intent.template_id == "patient_visit_brief" and isinstance(source, Mission):
+        from sanad.concierge.visits import brief_text
+
+        return {"text": brief_text(store, source, from_record(patient_row, Patient))}
     return {
         "text": patient_text(store, source, from_record(patient_row, Patient), intent.template_id)
     }
@@ -164,3 +180,27 @@ def doctor_payload(store: Store, intent: OutboundIntent) -> dict[str, JsonValue]
                 text=source.barrier_reason,
             )
     return {"text": text}
+
+
+def task_done_payload(
+    mission: Mission, language: str, accept: str, reopen: str, patient_name: str
+) -> dict[str, JsonValue]:
+    from sanad.contact.templates import render
+
+    return {
+        "text": render("doctor_task_done", language, title=mission.title, patient=patient_name),
+        "reply_markup": {
+            "inline_keyboard": [
+                [
+                    {
+                        "text": render("doctor_task_accept_button", language),
+                        "callback_data": accept,
+                    },
+                    {
+                        "text": render("doctor_task_reopen_button", language),
+                        "callback_data": reopen,
+                    },
+                ]
+            ]
+        },
+    }

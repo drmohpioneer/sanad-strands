@@ -229,11 +229,22 @@ def prepare(
     ):
         return
     pause = profile.routine_paused_until
+    if (
+        isinstance(source, Mission)
+        and source.details.kind == "TASK"
+        and (source.details.completion_rule == "unsupported_action")
+    ):
+        return
+    if isinstance(source, Mission) and _visit_brief(
+        builder, source, patient, consent, profile, own
+    ):
+        return
     if isinstance(source, Mission) and source.details.kind != "MONITOR":
         plan = plan_next_contact(
             source, patient, consent, profile, POLICY, builder.policy.timing, now
         )
         if plan is None:
+            _arm_visit_brief(builder, source, patient, consent, own)
             return
         at = plan.at
         # A consumed/uncertain slot or exhausted window is never replayed as a new contact.
@@ -268,6 +279,7 @@ def prepare(
             expires_at=min(at + POLICY.scheduled_prompt_window, source.escalation_at),
         )
         builder.add(transition_mission(source, event, now, builder.policy.timing))
+        _arm_visit_brief(builder, source, patient, consent, own)
         return
     if isinstance(source, Mission):
         if source.state not in {"open", "waiting_patient"} or source.details.kind != "MONITOR":
@@ -364,3 +376,88 @@ def prepare(
             builder.puts[(source.entity_type, source.id)] = to_record(changed, scope)
         return
     _rearm(builder, source, next_at)
+
+
+def _brief_key(source: Mission) -> str:
+    return f"visit-brief:{source.id}:{source.deadline_generation}"
+
+
+def _arm_visit_brief(
+    builder: CommitBuilder,
+    source: Mission,
+    patient: Patient,
+    consent: Consent,
+    own: list[OutboundIntent],
+) -> None:
+    from sanad.concierge.visits import brief_at
+
+    at = brief_at(source, patient, consent)
+    if (
+        at is None
+        or at <= builder.now
+        or any(_brief_key(source) in i.source_event_ids for i in own)
+    ):
+        return
+    row = builder.puts.get((source.entity_type, source.id))
+    if row:
+        current = from_record(row, Mission)
+        builder.puts[(source.entity_type, source.id)] = to_record(prime(current, at), builder.scope)
+    else:
+        _rearm(builder, source, at)
+
+
+def _visit_brief(
+    builder: CommitBuilder,
+    source: Mission,
+    patient: Patient,
+    consent: Consent,
+    profile: PatientProfile,
+    own: list[OutboundIntent],
+) -> bool:
+    from sanad.concierge.visits import brief_at
+    from sanad.contact.ladder import after_quiet
+    from sanad.domain.entities import VisitDetails
+
+    at = brief_at(source, patient, consent)
+    if at is None or at > builder.now or not isinstance(source.details, VisitDetails):
+        return False
+    if any(_brief_key(source) in i.source_event_ids for i in own):
+        return False
+    end = min(source.due_at, source.details.window_start or source.due_at)
+    if end <= builder.now or patient.contact_status == "unreachable":
+        return False
+    if source.contact_count >= POLICY.per_mission_chase_limit:
+        return False
+    at = after_quiet(
+        max(
+            at,
+            builder.now,
+            profile.routine_paused_until or at,
+            (profile.last_chase_accepted_at + POLICY.chase_min_gap)
+            if profile.last_chase_accepted_at
+            else at,
+        ),
+        patient,
+        consent,
+    )
+    if at >= end:
+        return False
+    if at > builder.now:
+        _rearm(builder, source, at)
+        return True
+    builder.add(
+        transition_mission(
+            source,
+            ev.ContactScheduled(
+                event_id=_brief_key(source),
+                next_contact_at=at,
+                slot_id="chase:" + at.astimezone(ZoneInfo(patient.timezone)).date().isoformat(),
+                template_id="patient_visit_brief",
+                kind="chase",
+                expires_at=min(at + POLICY.scheduled_prompt_window, end),
+            ),
+            builder.now,
+            builder.policy.timing,
+        )
+    )
+    return True

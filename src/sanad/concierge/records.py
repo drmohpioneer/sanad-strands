@@ -27,6 +27,10 @@ class ReportFactPayload(_BoundaryValue):
         "medication_change",
         "start_date",
         "barrier",
+        "visit_booking",
+        "visit_attendance",
+        "visit_report_pending",
+        "task_done",
     ]
     text: NonblankStr
     target_ref: VersionRef | None = None
@@ -37,6 +41,8 @@ class ReportFactPayload(_BoundaryValue):
     ) = None
     effective_start: UtcInstant | None = None
     anchor_unknown: bool = False
+    detail: str | None = None
+    original_receipt_id: str | None = None
 
 
 class PatientAction(_BoundaryValue):
@@ -56,6 +62,8 @@ class PatientAction(_BoundaryValue):
         "evidence_yes",
         "evidence_no",
         "evidence_other",
+        "visit_report",
+        "task_report",
     ]
     evidence_id: str | None = None
     evidence_version: PositiveVersion | None = None
@@ -67,3 +75,4 @@ class PatientAction(_BoundaryValue):
     consent_version: int
     consumed_at: UtcInstant | None = None
     medication_report_text: NonblankStr | None = Field(default=None, repr=False)
+    report_text: str | None = Field(default=None, repr=False)

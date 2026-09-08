@@ -97,6 +97,9 @@ def parse_command(text: str) -> tuple[str | None, str]:
         "/cancel",
         "/intake",
         "/lang",
+        "/questions",
+        "/answer",
+        "/close",
     }:
         return parts[0], parts[1].strip() if len(parts) > 1 else ""
     return None, text
@@ -144,7 +147,12 @@ class ScribeTurn:
             if doctor_id and callback_hash
             else None
         )
+        from sanad.concierge.answer_command import task_route
         from sanad.evidence.doctor import route as evidence_route
+
+        task_result = task_route(self, receipt, auth)
+        if task_result is not None:
+            return task_result
 
         evidence_result = evidence_route(self, receipt, auth)
         if evidence_result is not None:
@@ -328,6 +336,10 @@ class ScribeTurn:
                     text=self.runtime.general("patient_emergency"),
                 )
         command, argument = parse_command(text)
+        if command in {"/questions", "/answer", "/close"}:
+            from sanad.concierge.answer_command import doctor_command
+
+            return doctor_command(self, receipt, principal, claim, doctor, command, argument)
         if command == "/lang":
             if argument not in {"en", "ar"}:
                 return self._reply(

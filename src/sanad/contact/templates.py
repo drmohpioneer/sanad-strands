@@ -71,6 +71,24 @@ TEMPLATES = {
         "عائق: {type} — «{text}»",
         'Barrier: {type} - "{text}"',
     ),
+    "patient_visit_brief": (
+        "الزيارة المطلوبة: {title}، بتاريخ {due_local}.\n{lines}",
+        "Your requested visit: {title}, on {due_local}.\n{lines}",
+    ),
+    "patient_visit_bring_test": (
+        "خد معاك: نتيجة تحليل {title}.",
+        "Bring with you: test results for {title}.",
+    ),
+    "patient_visit_bring_records": (
+        "خد معاك: {title}.",
+        "Bring with you: {title}.",
+    ),
+    "doctor_task_done": (
+        "بلاغ إتمام المطلوب للمريض {patient}: {title}. ده بلاغ من المريض؛ لسه مستني قبولك.",
+        "Task completion report for {patient}: {title}. Self-reported; pending doctor acceptance.",
+    ),
+    "doctor_task_accept_button": ("تمام ✅", "Accept ✅"),
+    "doctor_task_reopen_button": ("مش كفاية ↩", "Not enough ↩"),
 }
 
 

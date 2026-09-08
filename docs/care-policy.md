@@ -35,6 +35,16 @@ patient-report predicate. An explicit “for five days” means due at the recei
 anchor plus five days; absent duration uses the TASK default. No measurement slots,
 units or coverage are inferred. Slice 13 upgrades this shape to MONITOR.
 
+### Visit, task and question execution
+
+Contract 15 records booking as `visit_booking`, attendance as `visit_attendance`, and attendance awaiting a document as `visit_report_pending`. Only booking fulfils `arrange`/`booking_reported`; only attendance fulfils `attendance_reported`. Text never fulfils `report_received`. Nonattendance records a fact without changing state or promising a new booking. A reported local booking day may set the visit window on or before escalation; a later day preserves the original deadline and opens an unmet-objective review for the doctor's decision. Early reported attendance is retained with an explicit note. The routine brief is due one day before the visit at the chase local hour, subject to consent, quiet hours and the existing chase budget; terminal visits and passed visit windows suppress it.
+
+`task_done` is self-reported completion, pending doctor acceptance. Accept records `DoctorAccepted` as an immutable doctor action and resolves no other review. Reopen records `doctor_not_satisfied`, uses a new deadline three days after the action, and tells the patient the original instruction and new deadline. Both buttons share one consumption key and expire after the accepted 30-minute card interval. The seed unsupported-action list marks tasks `unsupported_action`; other TASKs use `patient_report`. Unsupported requests remain recorded missions with `doctor_task` and DEADLINE, but no chase or autonomous executor.
+
+A question opens silently and retains its answer-review deadline. An ordinary doctor answer passes the existing validator, fulfils the ticket, resolves its `question_answer` review with `answer`, and queues one solicited patient reply. Failed validation writes none of these effects. Full consent loss or unreachable delivery is recorded visibly to the doctor; routine opt-out alone does not suppress this solicited reply. `/close` resolves with `close` and closes unsuccessfully. Extension moves due time and the answer review together; ordinary cancellation is refused until that review is resolved.
+
+A treatment-changing answer is doctor-private record text. A subsequent confirmed order amendment durably flags it for a separate atomic release on the next tick. Release fulfils the question and resolves its review, sending only the fixed sentence directing the patient to the updated plan. The held words themselves are never sent or paraphrased, including after an amendment. Resolved held answers cannot replay on reopening. `visit_brief_offset=1 day`, `task_reopen_offset=3 days`, and `question_list_ttl=1 hour` are draft operational policy, **OWNER_REVIEW_PENDING**.
+
 For medication lists and old documents, collection does not mean medication reconciliation or clinical interpretation. For a multi-part request, receiving one readable file is insufficient unless that file meets all confirmed requirements. TEST date requirements do not apply wholesale to SEND_RECORDS.
 
 ## Deadline inference and the three clocks

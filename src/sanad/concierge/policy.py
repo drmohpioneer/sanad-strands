@@ -16,6 +16,10 @@ class ConciergePolicy(_BoundaryValue):
     start_anchor_max_age: timedelta = timedelta(days=7)
     barrier_resume_after: timedelta = timedelta(days=1)
     barrier_seed: str = "concierge/barriers.yaml"
+    # Contract 15 draft policy: OWNER_REVIEW_PENDING.
+    visit_brief_offset: timedelta = timedelta(days=1)
+    task_reopen_offset: timedelta = timedelta(days=3)
+    question_list_ttl: timedelta = timedelta(hours=1)
 
 
 DRAFT_CONCIERGE_POLICY = ConciergePolicy()

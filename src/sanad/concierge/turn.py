@@ -392,6 +392,40 @@ class ConciergeTurn:
                         tx, preferences.Preference("quiet"), slot_id=token.slot_id, confirmed=True
                     )
                 )
+            if token.action in {"visit_report", "task_report"}:
+                from sanad.concierge import tasks, visits
+
+                selected = next(
+                    (
+                        m
+                        for m in tx.snapshot.missions
+                        if to_record(m, tx.snapshot.scope).ref == token.target_ref
+                        and all(r in tx.snapshot.order_refs for r in m.order_refs)
+                    ),
+                    None,
+                )
+                if not selected or not token.report_text:
+                    return reply("patient_callback_stale")
+                if token.action == "visit_report" and selected.kind == "VISIT":
+                    return reply(
+                        visits.record_visit(
+                            tx,
+                            selected,
+                            token.report_text,
+                            source=source,
+                            original_receipt_id=token.source_receipt_id,
+                        )
+                    )
+                if token.action == "task_report" and selected.kind == "TASK":
+                    tasks.record_task_done(
+                        tx,
+                        selected,
+                        token.report_text,
+                        source=source,
+                        original_receipt_id=token.source_receipt_id,
+                    )
+                    return reply("patient_task_recorded")
+                return reply("patient_callback_stale")
             mission = next(
                 (
                     m
@@ -442,6 +476,27 @@ class ConciergeTurn:
             return reply("patient_question_forwarded")
         if transcript and transcript.disputed_numbers:
             return reply("patient_voice_unreadable")
+        from sanad.concierge import tasks, visits
+
+        if visits.is_booked(text) or visits.is_attended(text) or visits.not_attended(text):
+            visit_choices = visits.visit_missions(tx.snapshot, text)
+            if len(visit_choices) == 1:
+                return reply(visits.record_visit(tx, visit_choices[0], text, source=source))
+            if visit_choices:
+                visits.choose(tx, visit_choices, text, "visit_report")
+                return reply("patient_visit_choose")
+            question.open_ticket(tx, text)
+            return reply("patient_visit_missing")
+        if tasks.is_task_done(text):
+            task_choices = tasks.task_missions(tx.snapshot, text)
+            if len(task_choices) == 1:
+                tasks.record_task_done(tx, task_choices[0], text, source=source)
+                return reply("patient_task_recorded")
+            if task_choices:
+                visits.choose(tx, task_choices, text, "task_report")
+                return reply("patient_task_choose")
+            question.open_ticket(tx, text)
+            return reply("patient_task_missing")
         if not is_question(text) and reports.record_day3(tx, text, source=source, verdict=verdict):
             return reply("patient_day3_recorded")
         if reports.recognize_barrier(text) and reports.record_day3(
@@ -478,6 +533,9 @@ class ConciergeTurn:
                 body += " " + templates.render("patient_reading_verify", language)
                 return "patient_reading_recorded", body, "reading"
             return reply("patient_reading_recorded", value=value)
+        # These are the exact reply words in the held-answer plan-update notice.
+        if text.strip().casefold() in {"plan", "الخطة"}:
+            return "patient_plan_summary", plan.render_summary(tx.snapshot), "plan"
         if plan_command(text):
             return "patient_plan_summary", plan.render_summary(tx.snapshot), "plan"
         history: tuple[str, ...] = ()

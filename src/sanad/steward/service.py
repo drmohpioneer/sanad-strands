@@ -51,6 +51,9 @@ SUPPORTED = frozenset(
         "SetContactPreference",
         "AssociateEvidence",
         "RejectEvidence",
+        "AnswerQuestion",
+        "AcceptTask",
+        "ReopenTask",
     }
 )
 INTERNAL = frozenset(
@@ -287,6 +290,18 @@ class Steward:
             )
             if kind == "SetContactPreference":
                 return self._preference(command, profile)
+            if kind in {"AnswerQuestion", "AcceptTask", "ReopenTask"}:
+                from sanad.concierge.answer_command import prepare_answer, prepare_task
+
+                builder = CommitBuilder(scope, command, now, policy, self.store)
+                reason = (
+                    prepare_answer(builder, profile)
+                    if kind == "AnswerQuestion"
+                    else prepare_task(builder, profile)
+                )
+                return command_result(
+                    self.store.commit(builder.finish().model_copy(update={"reason_code": reason}))
+                )
             if kind == "_ContactFeedback":
                 from sanad.contact.feedback import prepare
 
@@ -346,6 +361,23 @@ class Steward:
             return CommandResult(
                 status="invalid_input", reason_code="aggregate_missing_or_ambiguous"
             )
+        if isinstance(aggregate, Mission) and aggregate.details.kind == "QUESTION":
+            from sanad.concierge.answer_command import prepare_answer, reviews
+
+            question_builder = CommitBuilder(scope, command, now, policy, self.store)
+            if command.payload.get("type") == "CancelMission" and reviews(
+                question_builder, aggregate
+            ):
+                return CommandResult(
+                    status="needs_confirmation", reason_code="question_requires_close"
+                )
+            if command.payload.get("type") == "_Wake" and aggregate.details.held_answer_ready:
+                reason = prepare_answer(question_builder, profile, release=True)
+                return command_result(
+                    self.store.commit(
+                        question_builder.finish().model_copy(update={"reason_code": reason})
+                    )
+                )
         translated: list[VersionRef] = []
         for ref in command.expected_versions:
             record = self.store.get(scope, ref.entity_type, ref.id)
@@ -477,6 +509,19 @@ class Steward:
             )
         if isinstance(result, ev.TransitionRejected) and not result.effects:
             return CommandResult(status="needs_confirmation", reason_code=result.reason_code)
+        if (
+            isinstance(aggregate, Mission)
+            and aggregate.kind == "QUESTION"
+            and isinstance(event, (ev.DoctorExtend, ev.DoctorReopen))
+            and isinstance(result, ev.TransitionResult)
+        ):
+            from sanad.concierge.answer_command import maintain_question_review
+
+            builder = CommitBuilder(scope, command, now, policy, self.store)
+            builder.add(result)
+            assert isinstance(result.aggregate, Mission)
+            maintain_question_review(builder, aggregate, result.aggregate)
+            return command_result(self.store.commit(builder.finish()))
         request = build_commit(scope, command, result, now, policy, store=self.store)
         return command_result(self.store.commit(request))
 
@@ -527,6 +572,17 @@ class Steward:
                 | {"actor_id": actor, "consent_active": active, "current_active_order_refs": orders}
             )
         if kind == "CancelMission":
+            if isinstance(aggregate, Mission) and aggregate.kind == "QUESTION":
+                from sanad.concierge.answer_command import reviews
+
+                data["question_review_open"] = bool(
+                    reviews(
+                        CommitBuilder(
+                            scope, command, self.clock(), self.policy_provider(scope), self.store
+                        ),
+                        aggregate,
+                    )
+                )
             return ev.DoctorCancel.model_validate(data | {"actor_id": actor})
         if kind == "CloseUnfulfilledMission":
             open_incident = any(

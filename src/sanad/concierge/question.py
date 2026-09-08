@@ -2,6 +2,7 @@
 
 from sanad.concierge.policy import DRAFT_CONCIERGE_POLICY as POLICY
 from sanad.concierge.records import ReportFactPayload
+from sanad.concierge.templates import render
 from sanad.concierge.text import normalized
 from sanad.domain import (
     CreateSupportTicket,
@@ -54,7 +55,7 @@ def open_ticket(tx: PatientTurnCommit, text: str) -> Mission:
         mission_id=keys.digest(tx.id + ":question"),
         doctor_id=tx.snapshot.scope.doctor_id,
         patient_id=tx.snapshot.scope.patient_id,
-        title="سؤال للمراجعة",
+        title=render("question_title", tx.snapshot.patient.language),
         question_text=text,
         source_observation_ref=ObservationRef(observation_id=tx.receipt.id),
     )

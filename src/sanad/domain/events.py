@@ -159,6 +159,7 @@ class DoctorCancel(_Event):
     event_type: Literal["DOCTOR_CANCEL"] = "DOCTOR_CANCEL"
     actor_id: NonblankStr
     reason: NonblankStr
+    question_review_open: StrictBool = True
 
 
 class DoctorCloseUnfulfilled(_Event):

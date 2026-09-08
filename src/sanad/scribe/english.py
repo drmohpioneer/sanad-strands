@@ -188,6 +188,10 @@ def render(proposal: Proposal) -> tuple[str, ...]:
     requested: list[str] = []
     for i, mission in enumerate(c.missions):
         line = mission.kind + ": " + clinical_line(proposal, f"mission:{i}", mission.text)
+        if mission.kind == "TASK" and not proposal.photo:
+            from sanad.concierge.tasks import marker
+
+            line += marker(mission.text, "en")
         timing = next((t.resolved for t in proposal.timings if t.item == f"mission:{i}"), None)
         if timing and not any(
             x.item == f"mission:{i}" and x.code in {"unsupported_number", "disputed_number"}

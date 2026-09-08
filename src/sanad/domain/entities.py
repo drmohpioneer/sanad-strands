@@ -172,6 +172,12 @@ class QuestionDetails(_BoundaryValue):
     question_text: NonblankStr
     source_observation_ref: ObservationRef
 
+    held_answer: str | None = Field(default=None, repr=False)
+    held_answer_ready: StrictBool = False
+    held_answer_by: str | None = None
+    held_answer_amendment_ref: VersionRef | None = None
+    held_answer_consumed_at: UtcInstant | None = None
+
 
 class TaskDetails(_BoundaryValue):
     kind: Literal["TASK"] = "TASK"

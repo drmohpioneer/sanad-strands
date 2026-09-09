@@ -43,7 +43,7 @@ class PatientWorld(ScribeWorld):
         self.concierge.synthetic = True
         if medication:
             self.dictate(
-                "Synthetic Patient أتورفاستاتين 40 مج مرة يوميا بالليل",
+                "Synthetic Patient ابدأ أتورفاستاتين 40 مج مرة يوميا بالليل",
                 {
                     "patient": {"name_as_spoken": "Synthetic Patient"},
                     "orders": [

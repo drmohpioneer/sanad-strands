@@ -709,6 +709,9 @@ class ScribeCommit:
         claim: Claim | None = None,
     ) -> ConfirmationResult:
         now = self.repo.clock()
+        from sanad.scribe.grounding import ensure_evidence
+
+        proposal = ensure_evidence(proposal)
         doctor = self.claims.doctor(actor)
         if doctor is None:
             if proposal.doctor_id == actor.doctor_id:
@@ -742,6 +745,11 @@ class ScribeCommit:
                 return ConfirmationResult("clarification", "scribe_stale")
         if proposal.blocked("all"):
             return ConfirmationResult("clarification", "scribe_stale")
+        if not proposal.photo:
+            from sanad.scribe.grounding import confirmable_evidence
+
+            if not confirmable_evidence(proposal):
+                return ConfirmationResult("clarification", "scribe_stale")
         lease = None
         try:
             if not proposal.creating_patient:

@@ -228,7 +228,7 @@ def test_absent_medication_fields_never_render_literal_null(
     world: ScribeWorld, empty: str | None
 ) -> None:
     p = world.dictate(
-        "سامي اختبار إكسفورج إتش سي تي 5/160/12.5",
+        "سامي اختبار taking إكسفورج إتش سي تي 5/160/12.5",
         {
             "patient": {"name_as_spoken": "سامي اختبار"},
             "orders": [

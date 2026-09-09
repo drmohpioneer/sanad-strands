@@ -1,0 +1,35 @@
+{
+  "id": "20-dose-shapes",
+  "source": "New patient Synthetic Person. Start levothyroxine 50 mcg. Add insulin 10 units. Start timolol 2 drops.",
+  "extraction": {
+    "patient": {
+      "name_as_spoken": "Synthetic Person"
+    },
+    "orders": [
+      {
+        "action": "start",
+        "drug": "levothyroxine",
+        "dose": "50 mcg"
+      },
+      {
+        "action": "start",
+        "drug": "insulin",
+        "dose": "10 units"
+      },
+      {
+        "action": "start",
+        "drug": "timolol",
+        "dose": "2 drops"
+      }
+    ],
+    "facts": [],
+    "missions": []
+  },
+  "required": [
+    "levothyroxine 50 mcg",
+    "insulin 10 units",
+    "timolol 2 drops"
+  ],
+  "forbidden": [],
+  "questions": []
+}

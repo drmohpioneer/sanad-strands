@@ -209,16 +209,6 @@ An extra bare continue for a drug already on a start, change or stop line is
 removed along with its current-medication question. A standalone continue stays.
 `Forxiga (start)` without a spoken dose asks for the dose.
 
-<<<<<<< HEAD
-“Blood pressure chart, 3 times a day for 5 days” becomes one TASK with that
-instruction and a deadline five days after receipt. Completion requires the existing
-patient report. It is separate from TEST; scheduled monitoring slots arrive in
-slice 13. A TEST cannot mask an omitted monitoring TASK: that request receives the
-same bounded retry and remains blocked if still missing. ECG and Echo cues in one
-fact render on separate history lines. Only an explicit instruction such as
-“notify me if” creates a dictated alert; an observation remains a finding.
-Duplicate history folds before size checks. An oversized card retains
-=======
 "Blood pressure chart, 3 times a day for 5 days" becomes one MONITOR with 15
 readings, starting the next local day at 08:00, 14:00 and 20:00. The confirmation
 card shows the first reading and the actual deadline. Patients receive scheduled
@@ -233,7 +223,6 @@ pulse (bpm), up to four readings per day for 30 days. Weight and pulse have no
 default safety-table judgment. Unsupported requests keep the TASK form; existing
 TASKs are not migrated. Schedule hours, tolerance and coverage remain draft policy
 pending owner review. Duplicate history folds before size checks. An oversized card retains
->>>>>>> build/13
 every order and mission, shows six history lines and offers the rest through Edit.
 Frequency and duration counts already shown in the request do not raise unassigned
 number questions; actual dose disagreements remain blocked.
@@ -387,3 +376,66 @@ an on-time file whose reading or identity confirmation is still pending. Confirm
 later preserves the original receipt time and deadline. Critical rows raise danger
 immediately, before the identity decision; confirming whose paper it is never
 approves a disputed clinical value. Post-fulfilment corrections remain in slice 19.
+
+## Grounded doctor cards
+
+Fixed doctor and patient messages use English/Arabic catalogs with matching named
+placeholders. A message's locale and audience are fixed when rendering begins;
+doctor and patient preferences are independent, with the contest override still
+selecting English for both. Clinical values retain their exact text after the
+existing security sanitisation. Catalog migration preserves each locale's current
+wording, including punctuation and legacy labels. Dictation and photo layouts
+keep their existing behavior. See [presentation boundaries](docs/architecture.md#presentation).
+
+Dictated numeric separators are canonicalized before extraction in both interface languages;
+the raw speech response remains private beside the canonical transcript. Medication actions,
+doses, findings and requested tests carry field-level evidence. The card asks about unsupported
+or ambiguous claims, preserves an unknown multiword test as one question, distinguishes
+unverified medication names and excludes unsupported items from confirmation. Stored prior
+orders and code-computed deadlines and monitoring schedules remain supported. The synthetic
+corpus checks both rendered languages and confirmed records with scripted providers; it does
+not establish speech accuracy or clinical readiness. See the [11g implementation report](docs/contracts/11g-grounded-card.md#report-attempt-3), pending architect review.
+
+## Browser surfaces
+
+The doctor's `/a` dashboard provides patient search, filters, stable sorting and 50-row pages. `/a/patients/{patient_id}` shows orders, care requests, monitoring slots and evidence provenance. `/a/inbox` lists patient and unassigned reviews, `/a/history` shows resolved patient and unassigned reviews, and `/a/preferences` saves language through the same durable `/lang` command. Acknowledge/resolve remain in Telegram until slice-17 integration is reviewed. The contest override still displays English.
+
+The patient's `/pp` browser is read-only in this slice: medication plan, requests, medication reports, last reading, reminders and open questions. Messages continue through Telegram. An upload API exists (see below); the dashboard control for it is not built. No admin browser or new identity is added. Existing session, consent, CSRF and epoch guards remain in force.
+
+`/demo` uses a labelled, separate static synthetic dataset without authenticated navigation or a clinical data source. The UI uses self-hosted fonts, light/dark themes and structural RTL; no npm, bundler or external assets. [Design tokens and computed contrast](docs/design-system.md) are documented. Actual browser inspection remains an open contract-18 acceptance gate; offline test success alone does not establish visual, accessibility or clinical readiness.
+
+## Patient browser uploads
+
+A signed-in patient can submit a single image through `POST /api/patient/uploads`.
+The API returns HTTP 202 with `status: received`, an opaque staged `handle`, and
+`receipt_id` only after durable receipt acceptance. Image receipt time is when
+the complete bounded body arrives. Receipt is not evidence
+acceptance or medical review. Existing workers read the image twice, apply the
+agreement and safety rules, and record the outcome on the same patient evidence
+and doctor record surfaces used for Telegram images. Dashboard upload controls
+belong to slice 18.
+
+Send original image bytes as the request body with their actual image MIME type.
+Include the existing session/CSRF cookies, `Origin`, and `X-CSRF-Token`. An optional
+`X-Upload-Caption` header holds standard base64 of UTF-8 caption text (at most
+4,096 characters and 8,192 encoded header characters). Captions never belong in
+the URL. Multipart bodies and query parameters are refused. The server derives
+all ownership and identity fields from the authenticated patient session.
+The actual streamed body is limited to 8 MiB, 8,000 pixels per dimension and
+20 million pixels, with a 30-second transfer timeout. The declared MIME type
+must match a safely decodable single-frame image. Printed/typed Latin-script
+photo support remains unchanged; no new OCR language or clinical capability is
+implied. Rejected images retain permitted dangerous captions for safety handling.
+
+Uploads are privately staged with a durable owner/receipt ledger. An unfinished
+stage becomes recoverable after ten minutes. Recovery attaches complete bytes
+only while its saved authorization remains valid; otherwise it disposes the
+unlinked object. Disposal retains a daily cleanup clock to catch late writes.
+A staged handle attaches once and can be fetched repeatedly by that receipt's
+workers. It is neither a download URL nor a credential. No browser storage or
+provider calls bypass the normal evidence processing path.
+
+Checkpoint 1 of 18b is implemented locally for review, with synthetic verification.
+Administrator browser sessions remain unreleased checkpoint 2. Telegram is still
+required by runtime setup, patient consent/binding and delivery; this change does
+not establish that Telegram can yet be removed from the application.

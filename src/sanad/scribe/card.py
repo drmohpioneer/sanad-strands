@@ -99,6 +99,13 @@ def plain(text: str) -> str:
 
 def supported_text(text: str, proposal: Proposal) -> str:
     """Do not read a hallucinated number back as if it came from the doctor."""
+    from sanad.scribe.grounding import invalid_claims, inventory
+
+    if proposal.evidence_fingerprint:
+        matching = [c for c in inventory(proposal) if c.value == text]
+        invalid = invalid_claims(proposal)
+        if matching and all(c in invalid for c in matching):
+            return ""
     from sanad.scribe.clinical import normalize_units
 
     text = normalize_units(plain(text)).translate(
@@ -224,6 +231,9 @@ def _photo_date(instant: datetime, proposal: Proposal, timezone: str | None = No
 
 
 def render_card(proposal: Proposal, language: str | None = None) -> tuple[str, ...]:
+    from sanad.scribe.grounding import ensure_evidence
+
+    proposal = ensure_evidence(proposal)
     # A presentation copy selects today's language without rewriting the saved proposal.
     if language is not None and language != proposal.language:
         proposal = proposal.model_copy(update={"language": language})
@@ -460,10 +470,35 @@ def unsupported_order_fields(proposal: Proposal, order: OrderCandidate) -> dict[
 
 
 def display_order(proposal: Proposal, order: OrderCandidate) -> OrderCandidate:
+    from sanad.scribe.grounding import permits
+
+    if proposal.evidence_fingerprint and not proposal.photo:
+        index = proposal.candidate.orders.index(order)
+        order = order.model_copy(
+            update={
+                f: None
+                for f in (
+                    "dose",
+                    "frequency",
+                    "route",
+                    "timing",
+                    "duration",
+                    "effective_expression",
+                    "checkin_expression",
+                )
+                if not permits(proposal, f"order:{index}", f)
+            }
+        )
     return order.model_copy(update=dict.fromkeys(unsupported_order_fields(proposal, order)))
 
 
 def medication_line(proposal: Proposal, index: int) -> str:
+    from sanad.scribe.grounding import permits
+
+    if proposal.evidence_fingerprint and not all(
+        permits(proposal, f"order:{index}", f) for f in ("drug", "action")
+    ):
+        return ""
     order = display_order(proposal, proposal.candidate.orders[index])
     name = supported_text(order.drug, proposal)
     dose = supported_text(order.dose or "", proposal)
@@ -488,12 +523,27 @@ def medication_line(proposal: Proposal, index: int) -> str:
             None,
         )
         if change and change.old:
+            from sanad.scribe.grounding import invalid_claims
+
+            if proposal.evidence_fingerprint and any(
+                c.item == f"order:{index}" and c.field.startswith("prior:")
+                for c in invalid_claims(proposal)
+            ):
+                change = None
+        if change and change.old:
             previous = " ".join(v for v in (change.old.drug, change.old.dose) if v)
             line = supported_text(previous, proposal) + " → " + line
         if order.action != "continue":
             line += " (" + order.action + ")"
     elif order.action != "continue":
         line += " (" + _ACTIONS[order.action] + ")"
+    if proposal.evidence_fingerprint and any(
+        e.item == f"order:{index}"
+        and e.field.startswith("name:")
+        and e.transformation == "name_resolver:proposal"
+        for e in proposal.evidence
+    ):
+        line += " (unverified)" if proposal.language == "en" else " (غير متحقق)"
     return line
 
 
@@ -526,6 +576,12 @@ def dictation_questions(proposal: Proposal) -> tuple[str, ...]:
     }
     for issue in proposal.issues:
         before = len(questions)
+        if issue.field == "verification" and issue.question:
+            questions.append(plain(issue.question))
+            continue
+        if issue.code == "clinical_unclear" and issue.blocked and issue.question:
+            questions.append(plain(issue.question))
+            continue
         if (
             issue.code == "unsupported_number"
             and issue.numbers
@@ -614,10 +670,16 @@ def dictation_questions(proposal: Proposal) -> tuple[str, ...]:
         if not placeholder_ambiguity(a)
         and not any(x.item == f"ambiguity:{i}" and x.code == "unsafe_text" for x in proposal.issues)
     )
-    return tuple(dict.fromkeys(questions))
+    from sanad.scribe.grounding import unique_questions
+
+    return unique_questions(questions, proposal)
 
 
 def clinical_line(proposal: Proposal, item: str, spoken: str) -> str:
+    from sanad.scribe.grounding import permits
+
+    if proposal.evidence_fingerprint and not permits(proposal, item, "text"):
+        return ""
     task_marker = ""
     if item.startswith("mission:"):
         mission = proposal.candidate.missions[int(item.split(":")[1])]
@@ -631,6 +693,10 @@ def clinical_line(proposal: Proposal, item: str, spoken: str) -> str:
     # clinical_en fields never participate in a rendered line or question.
     kind = "finding" if item.startswith("fact:") else "test"
     fragments = [n for n in proposal.names if n.item == item and n.kind == kind]
+    if proposal.evidence_fingerprint:
+        fragments = [
+            n for n in fragments if permits(proposal, item, f"name:{proposal.names.index(n)}")
+        ]
     if fragments:
         values = [supported_text(n.latin, proposal) for n in fragments]
         value = ", ".join(dict.fromkeys(values) if kind == "test" else values)
@@ -692,6 +758,8 @@ def history_lines(proposal: Proposal, item: str, spoken: str) -> tuple[str, ...]
 
 
 def render_dictation(proposal: Proposal) -> tuple[str, ...]:
+    from sanad.scribe.grounding import invalid_claims, permits
+
     if proposal.language == "en":
         from sanad.scribe.english import render
 
@@ -705,7 +773,7 @@ def render_dictation(proposal: Proposal) -> tuple[str, ...]:
     if candidate.patient.age:
         age = PatientCandidate.age_without_repeated_year_unit(candidate.patient.age) or ""
         identity.append(supported_text(age, proposal) + " سنة")
-    if candidate.patient.sex:
+    if candidate.patient.sex and permits(proposal, "patient", "sex"):
         identity.append("ذكر" if candidate.patient.sex == "male" else "أنثى")
     identity.extend(supported_text(v, proposal) for v in candidate.patient.identifiers)
     lines = [("مريض جديد: " if proposal.creating_patient else "المريض: ") + "، ".join(identity)]
@@ -734,10 +802,20 @@ def render_dictation(proposal: Proposal) -> tuple[str, ...]:
                 tuple(
                     change.model_copy(update={"new": display_order(proposal, change.new)})
                     for change in proposal.amendments
+                    if not proposal.evidence_fingerprint
+                    or (
+                        permits(proposal, change.item, "action")
+                        and not any(
+                            c.item == change.item and c.field.startswith("prior:")
+                            for c in invalid_claims(proposal)
+                        )
+                    )
                 )
             )
         )
         for auxiliary in proposal.timings:
+            if not permits(proposal, auxiliary.item, "deadline"):
+                continue
             if auxiliary.item.startswith(("effective:", "checkin:")):
                 field, index = auxiliary.item.split(":")
                 if field + "_expression" in unsupported_order_fields(
@@ -759,15 +837,23 @@ def render_dictation(proposal: Proposal) -> tuple[str, ...]:
                 )
     required = []
     for i, mission in enumerate(candidate.missions):
+        if proposal.evidence_fingerprint and not permits(proposal, f"mission:{i}", "text"):
+            continue
         line = mission.kind + ": " + clinical_line(proposal, f"mission:{i}", mission.text)
         if mission.kind == "MONITOR":
+            if not permits(proposal, f"mission:{i}", "schedule:ar"):
+                continue
             from sanad.scribe.monitoring import card_line
 
             line = card_line(mission.text, proposal.created_at, proposal.timezone, "ar")
         timing = next((t.resolved for t in proposal.timings if t.item == f"mission:{i}"), None)
-        if timing and not any(
-            x.item == f"mission:{i}" and x.code in {"unsupported_number", "disputed_number"}
-            for x in proposal.issues
+        if (
+            timing
+            and permits(proposal, f"mission:{i}", "deadline")
+            and not any(
+                x.item == f"mission:{i}" and x.code in {"unsupported_number", "disputed_number"}
+                for x in proposal.issues
+            )
         ):
             due = arabic_datetime(timing.due_at, timing.timezone, reference=proposal.created_at)
             escalation = arabic_datetime(

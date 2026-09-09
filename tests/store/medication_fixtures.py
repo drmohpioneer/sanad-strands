@@ -72,7 +72,13 @@ def confirm(
         created_at=now,
         updated_at=now,
         source_receipt_id="synthetic-doctor:" + id,
-        source_text="Synthetic doctor-confirmed medication plan",
+        source_text="Synthetic Patient. "
+        + ". ".join(
+            " ".join(str(v) for k, v in order.items() if v and k not in {"name_latin", "generic"})
+            for order in orders
+        )
+        + ". "
+        + ". ".join(f["text"] for f in facts),
         source_provenance=(
             Provenance(
                 source_observation_id="synthetic-doctor:" + id,

@@ -1,0 +1,28 @@
+{
+  "id": "12-distinct-brand",
+  "source": "New patient Synthetic Person. Stop Norvasc and start Amlor 5.",
+  "extraction": {
+    "patient": {
+      "name_as_spoken": "Synthetic Person"
+    },
+    "orders": [
+      {
+        "action": "stop",
+        "drug": "Norvasc"
+      },
+      {
+        "action": "start",
+        "drug": "Amlor",
+        "dose": "5"
+      }
+    ],
+    "facts": [],
+    "missions": []
+  },
+  "required": [
+    "Norvasc (stop)",
+    "Amlor 5 (start)"
+  ],
+  "forbidden": [],
+  "questions": []
+}

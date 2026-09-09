@@ -85,7 +85,7 @@ def test_oversized_card_keeps_orders_and_missions_and_edit_reveals_history(
         {"category": "history", "text": f"Previous event {i}: " + (f"symptom{i} " * 45).strip()}
         for i in range(1, 10)
     ]
-    source = "New patient Synthetic Person. Concor 5. Request CBC. " + " ".join(
+    source = "New patient Synthetic Person. Taking Concor 5. Request CBC. " + " ".join(
         str(f["text"]) for f in facts
     )
     p = world.dictate(

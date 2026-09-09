@@ -1,0 +1,24 @@
+{
+  "id": "19-mixed-language",
+  "source": "New patient Synthetic Person. ابدأ Concor ٥ مج مرة الصبح.",
+  "extraction": {
+    "patient": {
+      "name_as_spoken": "Synthetic Person"
+    },
+    "orders": [
+      {
+        "action": "start",
+        "drug": "Concor",
+        "dose": "5 مج",
+        "frequency": "مرة الصبح"
+      }
+    ],
+    "facts": [],
+    "missions": []
+  },
+  "required": [
+    "Concor 5 mg, مرة الصبح"
+  ],
+  "forbidden": [],
+  "questions": []
+}

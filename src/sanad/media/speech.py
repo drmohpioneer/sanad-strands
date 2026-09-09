@@ -57,16 +57,46 @@ def vocabulary_prompt(names: str, language: str = default_language) -> str:
 
 
 def normalize_transcript(text: str, language: str) -> str:
-    """Change spoken separators only; never supply or remove a digit."""
-    if language != "en":
-        return text
-    text = re.sub(r"(?<=\d)\s+(?:over|slash|by)\s+(?=\d)", "/", text, flags=re.I)
+    """Canonical numeric wording, independent of the doctor's interface language."""
+    text = text.translate(str.maketrans("٠١٢٣٤٥٦٧٨٩۰۱۲۳۴۵۶۷۸۹٫", "01234567890123456789."))
+    # Spoken number words are rewritten only inside an explicit dose ratio.
+    words = {
+        "zero": "0",
+        "one": "1",
+        "two": "2",
+        "three": "3",
+        "four": "4",
+        "five": "5",
+        "six": "6",
+        "seven": "7",
+        "eight": "8",
+        "nine": "9",
+        "ten": "10",
+        "twelve": "12",
+        "twenty": "20",
+        "sixty": "60",
+        "one sixty": "160",
+    }
+    number = r"(?:\d+(?:\.\d+)?|" + "|".join(sorted(words, key=len, reverse=True)) + r")"
+    ratio = re.compile(
+        r"\b" + number + r"(?:\s+(?:over|on|slash|by|على)\s+" + number + r")+\b", re.I
+    )
+
+    def written(match: re.Match[str]) -> str:
+        # Dimensions are measurements; preserve their separator and their units.
+        if re.match(r"\s*(?:cm|mm|m|inches?|feet)\b", text[match.end() :], re.I):
+            return match[0]
+        parts = re.split(r"\s+(?:over|on|slash|by|على)\s+", match[0], flags=re.I)
+        return "/".join(words.get(part.casefold(), part) for part in parts)
+
+    text = ratio.sub(written, text)
     text = re.sub(r"(?<=\d)\s+point\s+(?=\d)", ".", text, flags=re.I)
     return re.sub(r"(?<=\d)\s+percent\b", "%", text, flags=re.I)
 
 
 class Transcript(_BoundaryValue):
     text: str = Field(repr=False)
+    raw_text: str = Field(default="", repr=False)
     spans: tuple[AudioSpan, ...]
     duration: float
     model_id: str
@@ -186,6 +216,7 @@ class SpeechAdapter:
         )
         return Transcript(
             text=text,
+            raw_text=response.text,
             spans=(span,),
             duration=converted.duration,
             model_id=self.registry.speech,

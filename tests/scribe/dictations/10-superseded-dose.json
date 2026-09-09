@@ -1,0 +1,25 @@
+{
+  "id": "10-superseded-dose",
+  "source": "New patient Synthetic Person. Start Concor 5 mg, actually make that 10 mg.",
+  "extraction": {
+    "patient": {
+      "name_as_spoken": "Synthetic Person"
+    },
+    "orders": [
+      {
+        "action": "start",
+        "drug": "Concor",
+        "dose": "5 mg"
+      }
+    ],
+    "facts": [],
+    "missions": []
+  },
+  "required": [],
+  "forbidden": [
+    "Concor 5 mg"
+  ],
+  "questions": [
+    "dose"
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "id": "11-learned-alias",
+  "source": "New patient Synthetic Person. Stop heartbrand and start Amlor 5.",
+  "extraction": {
+    "patient": {
+      "name_as_spoken": "Synthetic Person"
+    },
+    "orders": [
+      {
+        "action": "stop",
+        "drug": "heartbrand"
+      },
+      {
+        "action": "start",
+        "drug": "Amlor",
+        "dose": "5"
+      }
+    ],
+    "facts": [],
+    "missions": []
+  },
+  "required": [
+    "Norvasc (stop)",
+    "Amlor 5 (start)"
+  ],
+  "forbidden": [],
+  "questions": [],
+  "memory": {
+    "spoken": "heartbrand",
+    "latin": "Norvasc",
+    "generic": "amlodipine"
+  }
+}

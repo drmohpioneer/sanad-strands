@@ -1,0 +1,22 @@
+{
+  "id": "21-code-computed-monitor",
+  "source": "New patient Synthetic Person. Blood pressure chart, 3 times a day for 5 days.",
+  "extraction": {
+    "patient": {
+      "name_as_spoken": "Synthetic Person"
+    },
+    "orders": [],
+    "facts": [],
+    "missions": [
+      {
+        "kind": "MONITOR",
+        "text": "Blood pressure chart, 3 times a day for 5 days"
+      }
+    ]
+  },
+  "required": [
+    "MONITOR: blood pressure, 3 times a day for 5 days (15 readings"
+  ],
+  "forbidden": [],
+  "questions": []
+}

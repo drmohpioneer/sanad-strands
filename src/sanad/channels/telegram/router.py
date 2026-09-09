@@ -13,6 +13,7 @@ from sanad.channels.telegram.settings import TelegramSettings
 from sanad.channels.transport import Transport
 from sanad.domain import DRAFT_POLICY_2026_09, ObservationRef, PatientScope, Principal
 from sanad.domain.boundaries import _BoundaryValue
+from sanad.domain.language import default_language
 from sanad.safety import render_urgent, to_incident_facts
 from sanad.safety.models import IncidentFacts, ScreenVerdict
 from sanad.safety.policy import SAFETY_POLICY_V1_CARDIOLOGY_DRAFT, SafetyPolicy
@@ -120,7 +121,9 @@ class TelegramRuntime:
                     from sanad.store.records import Doctor
 
                     doctor_row = self.store.get(intent.scope, "doctor", intent.scope.doctor_id)
-                    language = from_record(doctor_row, Doctor).language if doctor_row else "ar"
+                    language = (
+                        from_record(doctor_row, Doctor).language if doctor_row else default_language
+                    )
 
                     return {
                         "text": (

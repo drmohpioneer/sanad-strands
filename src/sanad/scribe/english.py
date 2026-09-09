@@ -69,6 +69,9 @@ def questions(proposal: Proposal) -> tuple[str, ...]:
     asked = {n for i in proposal.issues if i.code == "extraction_conflict" for n in i.numbers}
     for issue in proposal.issues:
         before = len(result)
+        if issue.field == "verification" and issue.question:
+            result.append(plain(issue.question))
+            continue
         code, item = issue.code, issue.item
         if code == "request_missing" and issue.field == "task":
             result.append(
@@ -155,7 +158,9 @@ def questions(proposal: Proposal) -> tuple[str, ...]:
         for a in proposal.candidate.ambiguities
         if not placeholder_ambiguity(a)
     )
-    return tuple(dict.fromkeys(result))
+    from sanad.scribe.grounding import unique_questions
+
+    return unique_questions(result, proposal)
 
 
 def render(proposal: Proposal) -> tuple[str, ...]:
@@ -168,6 +173,7 @@ def render(proposal: Proposal) -> tuple[str, ...]:
         split_card,
         supported_text,
     )
+    from sanad.scribe.grounding import permits
 
     c = proposal.candidate
     name = proposal.selected_display_name or c.patient.name_as_spoken or "Who is the patient?"
@@ -199,12 +205,16 @@ def render(proposal: Proposal) -> tuple[str, ...]:
         )
     requested: list[str] = []
     for i, mission in enumerate(c.missions):
+        if proposal.evidence_fingerprint and not permits(proposal, f"mission:{i}", "text"):
+            continue
         line = mission.kind + ": " + clinical_line(proposal, f"mission:{i}", mission.text)
         if mission.kind == "TASK" and not proposal.photo:
             from sanad.concierge.tasks import marker
 
             line += marker(mission.text, "en")
         if mission.kind == "MONITOR":
+            if not permits(proposal, f"mission:{i}", "schedule:en"):
+                continue
             from sanad.scribe.monitoring import card_line
 
             line = card_line(mission.text, proposal.created_at, proposal.timezone, "en")
@@ -229,6 +239,8 @@ def render(proposal: Proposal) -> tuple[str, ...]:
             )
         requested.append(line)
     for t in proposal.timings:
+        if not permits(proposal, t.item, "deadline"):
+            continue
         family, index = t.item.split(":")
         if family in {"effective", "checkin"}:
             from sanad.scribe.card import unsupported_order_fields

@@ -469,12 +469,13 @@ TEST: BUN, creatinine, Na, K — الموعد: الأحد 20 سبتمبر، 10 �
 التاريخ المرضي:
 Dx: hypertension, diabetes
 ECG: T wave inversion, lateral
-Echo: EF 45%, segmental hypokinesia inferoposterolateral
+Echo: EF 45%
 Complaint: angina
 محتاج تأكيد:
 سمعت 45، ده الـ EF؟
 سمعت "560 12.5" لـ Exforge HCT، قصدك 5/160/12.5؟
 جرعة "Forxiga" إيه؟
+سمعت "سيجمنتال انفروبوسترو لاترال"؛ وضّح العبارة الطبية.
 ✅ تمام | ✏️ تعديل | ❌ إلغاء
 صالح 30 دقيقة""",
 )

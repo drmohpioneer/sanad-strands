@@ -29,7 +29,7 @@ def world(store: StoreBase, clock: FakeClock) -> ScribeWorld:
     [
         ("finding", "ECG في تي أوف إنفرجين في اللاترال", "ECG:"),
         ("finding", "أكو فانكشن 45%", "Echo:"),
-        ("finding", "سيجمنتال إنفروبوسترو لاترال", "Echo:"),
+        ("finding", "سيجمنتال هايبوقنيزيا إنفروبوسترو لاترال", "Echo:"),
         ("finding", "أنجينا", "Finding:"),
         ("complaint", "أنجينا", "Complaint:"),
         ("condition", "ضغطه سكر", "Dx:"),

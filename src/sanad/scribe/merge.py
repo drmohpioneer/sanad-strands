@@ -337,6 +337,9 @@ def merge_candidates(
     result._malformed_items = first._malformed_items
     result._merge_issues = tuple(issues)
     result = fold_facts(result, source, ctx)
+    from sanad.scribe.grounding import deduplicate_instructions
+
+    result = deduplicate_instructions(result, source, ctx)
     return MergeResult(result, result._single_source, result._merge_issues)
 
 

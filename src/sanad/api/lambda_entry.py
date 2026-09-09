@@ -87,22 +87,27 @@ def configure(revision: str) -> FastAPI:
     verifier = TickVerifier(
         values["tick-secret"], NonceStore(store, "tick:" + os.environ["SANAD_ENV"]), utc_now
     )
+    media_store = S3MediaStore(os.environ["SANAD_BUCKET"], boto3.client("s3", config=config))
     app = create_app(
         revision,
         synthetic=os.environ.get("SANAD_ENV") in {"dev", "synthetic", "test", "judge"},
         telegram_settings=settings,
         store=store,
         receipt_submit=invoker,
+        upload_storage=media_store,
         web_settings=WebSettings(
             public_base_url=values["public-base-url"], bot_username=values["bot-username"]
         ),
         tick_verifier=verifier,
-        tick_sweep=lambda: sweep_due(app.state.telegram, store, app.state.claim_lane),
+        tick_sweep=lambda: sweep_due(
+            app.state.telegram,
+            store,
+            app.state.claim_lane,
+            upload_handler=app.state.uploads.recover,
+        ),
     )
     app.state.model_registry = ModelRegistry()
-    app.state.media_store = S3MediaStore(
-        os.environ["SANAD_BUCKET"], boto3.client("s3", config=config)
-    )
+    app.state.media_store = media_store
     from sanad.channels.telegram.transport import TelegramTransport
     from sanad.domain import DRAFT_POLICY_2026_09, Provenance
     from sanad.media.retrieve import MediaRetriever
@@ -160,11 +165,14 @@ def configure(revision: str) -> FastAPI:
             StewardPolicy(DRAFT_POLICY_2026_09),
         )
         from sanad.domain import PatientScope
+        from sanad.media.upload import patient_source
 
         app.state.concierge.media_factory = lambda receipt, principal: MediaRetriever(
             runtime.steward,
             app.state.media_store,
-            TelegramFileClient(runtime.transport),
+            patient_source(
+                receipt, principal, store, media_store, TelegramFileClient(runtime.transport)
+            ),
             _audio_converter,
             PatientScope(
                 doctor_id=principal.doctor_id or "", patient_id=principal.patient_id or ""

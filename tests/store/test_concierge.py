@@ -384,7 +384,7 @@ def test_danger_bypasses_busy_patient_and_preferences(world: PatientWorld) -> No
 
 def test_ambiguous_start_buttons_and_current_target(world: PatientWorld) -> None:
     world.dictate(
-        "Synthetic Patient ميتوبرولول 25 مج مرة يوميا",
+        "Synthetic Patient ابدأ ميتوبرولول 25 مج مرة يوميا",
         {
             "patient": {"name_as_spoken": "Synthetic Patient"},
             "orders": [

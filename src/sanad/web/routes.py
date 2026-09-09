@@ -2,7 +2,7 @@
 
 import hmac
 from collections.abc import Awaitable, Callable
-from typing import Annotated, Literal
+from typing import TYPE_CHECKING, Annotated, Literal
 from urllib.parse import parse_qs
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -16,9 +16,13 @@ from sanad.auth.tokens import token_hash
 from sanad.domain import VersionRef
 from sanad.domain.boundaries import _BoundaryValue
 from sanad.store import keys
-from sanad.store.records import Patient, WebSession
+from sanad.store.records import InboundReceipt, Patient, WebSession
 from sanad.web import pages
 from sanad.web.settings import WebSettings
+
+if TYPE_CHECKING:
+    from sanad.media.upload import UploadIngress
+
 
 SESSION_COOKIE = "sanad_session"
 PRE_COOKIE = "sanad_pre"
@@ -184,7 +188,9 @@ def web_router(login: LoginService, claims: ClaimService, settings: WebSettings)
         doctor = login.accounts.doctor(session.doctor_id)
         if doctor is None:
             raise HTTPException(401)
-        return HTMLResponse(pages.doctor_home(doctor.id, doctor.name))
+        from sanad.web.browser import surface
+
+        return HTMLResponse(surface(doctor.name, doctor.language))
 
     @router.get("/api/me")
     async def doctor_me(
@@ -206,9 +212,16 @@ def web_router(login: LoginService, claims: ClaimService, settings: WebSettings)
         session: Annotated[WebSession, Depends(require_session("patient"))],
     ) -> Response:
         patient = own_patient(session)
-        from sanad.concierge.web import patient_page
+        from sanad.web.browser import surface
 
-        return HTMLResponse(patient_page(patient.display_name, patient_plan_data(session)))
+        return HTMLResponse(
+            surface(
+                patient.display_name,
+                patient.language,
+                audience="patient",
+                patient_plan=patient_plan_data(session),
+            )
+        )
 
     def patient_plan_data(session: WebSession) -> dict[str, object]:
         from sanad.concierge.plan import load, projection
@@ -262,5 +275,119 @@ def web_router(login: LoginService, claims: ClaimService, settings: WebSettings)
         if result.status != "accepted":
             return HTMLResponse(pages.refused_page(), status_code=403)
         return JSONResponse({"status": "accepted"})
+
+    # Contract 18: additive route registration, independent of inbox/correction verbs.
+    from sanad.web.browser import browser_router
+    from sanad.web.preferences import preference_router
+    from sanad.web.reviews import review_router
+
+    router.include_router(browser_router(login, claims))
+    router.include_router(preference_router(login))
+    router.include_router(review_router(claims))
+    return router
+
+
+def upload_router(ingress: "UploadIngress", settings: WebSettings) -> APIRouter:
+    """Raw image bodies avoid multipart spooling before authorization."""
+    import asyncio
+    import base64
+    import binascii
+
+    from starlette.concurrency import run_in_threadpool
+    from starlette.requests import ClientDisconnect
+
+    from sanad.media.limits import MAX_IMAGE_BYTES, MediaInvalid
+    from sanad.media.upload import new_upload_id
+    from sanad.safety import screen_text
+
+    router = APIRouter()
+
+    @router.post("/api/patient/uploads")
+    async def upload(request: Request) -> Response:
+        cookie = request.cookies.get(SESSION_COOKIE, "")
+        session = await run_in_threadpool(ingress.login.require, cookie, "patient")
+        if session is None:
+            raise HTTPException(401)
+        csrf, csrf_cookie = (
+            request.headers.get("x-csrf-token", ""),
+            request.cookies.get(CSRF_COOKIE, ""),
+        )
+        if (
+            not same_origin(request, settings)
+            or not csrf
+            or not csrf_cookie
+            or not hmac.compare_digest(csrf.encode(), csrf_cookie.encode())
+            or not hmac.compare_digest(keys.digest(csrf), session.csrf_secret_ref)
+        ):
+            raise HTTPException(403)
+        # UTF-8 captions travel as base64 in a header, never a URL/access log.
+        encoded = request.headers.get("x-upload-caption", "")
+        if len(encoded) > 8192:
+            raise HTTPException(400)
+        try:
+            caption = base64.b64decode(encoded, validate=True).decode("utf-8")
+        except (ValueError, UnicodeError, binascii.Error):
+            raise HTTPException(400) from None
+        if len(caption) > 4096:
+            raise HTTPException(400)
+        verdict = screen_text(caption, policy=ingress.runtime.safety_policy)
+        receipt = await run_in_threadpool(
+            ingress.receipt, session, caption, verdict, new_upload_id()
+        )
+        body = bytearray()
+        try:
+            # No browser-provided scope, kind, subject, receipt id or staged handle is accepted.
+            if request.query_params:
+                raise MediaInvalid("unsupported_parameter")
+            declared = request.headers.get("content-type", "").split(";", 1)[0].lower()
+            if not declared.startswith("image/"):
+                raise MediaInvalid("unsupported_type")
+            async with asyncio.timeout(30):
+                async for part in request.stream():
+                    if len(body) + len(part) > MAX_IMAGE_BYTES:
+                        raise MediaInvalid("too_large")
+                    body.extend(part)
+            # Receipt timing belongs to the complete image, not its first HTTP byte.
+            received_at = ingress.runtime.clock()
+            assert receipt.work_clock is not None
+            receipt = InboundReceipt.model_validate(
+                receipt.model_dump()
+                | {
+                    "received_at": received_at,
+                    "created_at": received_at,
+                    "updated_at": received_at,
+                    "work_clock": receipt.work_clock.model_copy(
+                        update={"next_action_at": received_at}
+                    ),
+                }
+            )
+            current = await run_in_threadpool(ingress.login.require, cookie, "patient")
+            if current is None or current.id != session.id:
+                raise PermissionError("upload_session_changed")
+            stage = await run_in_threadpool(ingress.stage, current, receipt, bytes(body), declared)
+            saved = await run_in_threadpool(ingress.accept, stage)
+        except (MediaInvalid, ClientDisconnect, TimeoutError, PermissionError) as error:
+            await run_in_threadpool(ingress.rejected_caption, receipt, verdict)
+            status = (
+                403
+                if isinstance(error, PermissionError)
+                else 413
+                if str(error) == "too_large"
+                else 400
+            )
+            return JSONResponse({"status": "not_received"}, status_code=status)
+        except Exception:
+            # Reserved stages retain their clock; outages never receive a saved ACK.
+            return JSONResponse({"status": "unavailable"}, status_code=503)
+        await run_in_threadpool(ingress.danger, receipt, verdict)
+        await run_in_threadpool(ingress.handoff, saved)
+        return JSONResponse(
+            {
+                "status": "received",
+                "handle": stage.receipt.provider_media_handle,
+                "receipt_id": receipt.id,
+            },
+            status_code=202,
+        )
 
     return router

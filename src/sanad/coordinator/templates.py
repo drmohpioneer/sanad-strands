@@ -34,43 +34,12 @@ TEMPLATES = {
 
 
 def render(bundle: Permitted, fact_ids: tuple[str, ...], patient: Patient) -> str:
-    language = patient.language
+    from sanad.presentation.context import resolve
+    from sanad.presentation.coordinator import compose
 
-    def fragment(key: str, value: str = "") -> str:
-        return TEMPLATES[key][language == "en"].format(value=value)
-
-    by_id = {f.id: f for f in bundle.facts}
-    selected = [by_id[id] for id in fact_ids]
-    lines: list[str] = []
-    consumed: set[str] = set()
-    numbers: list[str] = []
-    named = 0
-    for fact in selected:
-        if fact.id in consumed:
-            continue
-        if fact.kind in {"slot", "category"}:
-            group = [f for f in selected if f.kind == fact.kind]
-            remaining = max(0, policy.max_named_items - named)
-            shown = group[:remaining]
-            named += len(shown)
-            values = [fragment(f.value) if f.kind == "category" else f.value for f in shown]
-            numbers.extend(f.value for f in shown if f.kind == "slot")
-            extra = len(group) - len(shown)
-            if extra:
-                values.append(fragment("more_one" if extra == 1 else "more", str(extra)))
-                numbers.append(str(extra))
-            lines.append(
-                fragment("slots" if fact.kind == "slot" else "categories", ", ".join(values))
-            )
-            consumed.update(f.id for f in group)
-        elif fact.kind == "visit":
-            lines.append(fragment(fact.value))
-        elif fact.kind == "task":
-            lines.append(fragment("task"))
-        else:
-            lines.append(fragment(fact.kind, fact.value))
-            numbers.append(fact.value)
-    text = " ".join(lines)
+    context = resolve(patient.language, "patient")
+    language = context.locale
+    text, numbers, lines = compose(bundle, fact_ids, context, policy.max_named_items)
     if any(kind in {"dose", "count", "frequency"} for _, kind, _ in typed_numbers(text)):
         raise ValueError("output_validation")
     # These are code-owned fragments from the closed fact bundle, never model

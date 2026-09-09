@@ -1,0 +1,28 @@
+{
+  "id": "22-visit-records",
+  "source": "New patient Synthetic Person. Visit the clinic tomorrow. Send previous test results.",
+  "extraction": {
+    "patient": {
+      "name_as_spoken": "Synthetic Person"
+    },
+    "orders": [],
+    "facts": [],
+    "missions": [
+      {
+        "kind": "VISIT",
+        "text": "Visit the clinic",
+        "timing_expression": "tomorrow"
+      },
+      {
+        "kind": "SEND_RECORDS",
+        "text": "Send previous test results"
+      }
+    ]
+  },
+  "required": [
+    "VISIT: Visit the clinic",
+    "SEND_RECORDS: Send previous test results"
+  ],
+  "forbidden": [],
+  "questions": []
+}

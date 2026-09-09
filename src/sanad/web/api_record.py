@@ -96,6 +96,10 @@ def record_router(claims: ClaimService) -> APIRouter:
             from_record(r, PatientMedia) for r in records(claims.store, scope, "patient_media")
         ]
         return {
+            # Browser fields from the already scoped patient/review reads.
+            "age": patient.age,
+            "timezone": patient.timezone,
+            "review_history": [r for r in reviews if r.get("state") == "resolved"],
             "patient_id": patient.id,
             "display_name": patient.display_name,
             "contact_status": patient.contact_status,

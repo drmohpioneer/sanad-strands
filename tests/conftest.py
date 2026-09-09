@@ -8,6 +8,12 @@ import pytest_socket
 
 _REAL_GETADDRINFO = socket.getaddrinfo
 
+# The deployed build renders English whatever a record stores (Decision 023), so
+# the switch defaults on in production. The suite turns it off so the bilingual
+# machinery underneath keeps its coverage; tests/test_contest_language.py is the
+# one place that exercises the switch on.
+os.environ.setdefault("SANAD_CONTEST_ENGLISH", "0")
+
 
 def pytest_addoption(parser: pytest.Parser) -> None:
     parser.addoption("--live", action="store_true", help="explicit isolated live-check suite")

@@ -3,6 +3,8 @@
 from html import escape
 from string import Template
 
+from sanad.domain.language import effective
+
 OWNER_REVIEW_PENDING = True
 PAGE_STRINGS = {
     "service": "سند / Sanad",
@@ -22,7 +24,7 @@ PAGE_STRINGS = {
     "consent_label": "نسخة الموافقة / Consent version",
 }
 SHELL = Template("""<!doctype html>
-<html lang="ar" dir="rtl"><head><meta charset="utf-8">
+<html lang="$language" dir="$direction"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>$title</title></head><body><main>$content</main></body></html>""")
 CONTINUE = Template("""<h1>$title</h1><p>$message</p>
@@ -40,9 +42,15 @@ def render(template: Template, **values: str) -> str:
     return template.substitute({k: escape(v, quote=True) for k, v in values.items()})
 
 
-def shell(title: str, content: str) -> str:
+def shell(title: str, content: str, language: str = "ar") -> str:
     # Content is markup rendered exclusively by the escaping functions in this module.
-    return SHELL.substitute(title=escape(title, quote=True), content=content)
+    locale = effective(language)
+    return SHELL.substitute(
+        title=escape(title, quote=True),
+        content=content,
+        language=locale,
+        direction="rtl" if locale == "ar" else "ltr",
+    )
 
 
 def continue_page(action: str, csrf: str) -> str:

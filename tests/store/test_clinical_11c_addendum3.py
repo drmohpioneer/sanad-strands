@@ -90,7 +90,11 @@ def test_no_english_without_a_spoken_anchor_in_fact_and_source(
         {"patient": {"name_as_spoken": "سامي اختبار"}, "facts": [f]},
     )
     assert english not in render_card(p)[0]
-    assert dictation_questions(p) == (TERM_QUESTION,)
+    if fabricate_fact:
+        assert p.blocked("fact:0")
+        assert any('سمعت "سامي اختبار طنين"' in q for q in dictation_questions(p))
+    else:
+        assert dictation_questions(p) == (TERM_QUESTION,)
     world.tap()
     assert english not in str(memory_rows(world.store, world.doctor.scope))
 
@@ -101,7 +105,7 @@ def test_verified_name_survives_dose_reply_without_another_resolution(
     fixture = RxNormFixture()
     world.scribe.rxnorm_client = fixture.client
     first = world.dictate(
-        "سامي اختبار bisoprolol 5",
+        "سامي اختبار taking bisoprolol 5",
         {
             "patient": {"name_as_spoken": "سامي اختبار"},
             "orders": [{"action": "continue", "drug": "bisoprolol", "dose": "5"}],
@@ -133,7 +137,7 @@ def test_compound_answer_retires_only_its_old_compressed_number(
     world: ScribeWorld, compressed: str
 ) -> None:
     first = world.dictate(
-        f"سامي اختبار 53 إكس فورش إتش سي تي {compressed} 12.5 وكونكور 5",
+        f"سامي اختبار 53 taking إكس فورش إتش سي تي {compressed} 12.5 وكونكور 5",
         {
             "patient": {"name_as_spoken": "سامي اختبار"},
             "orders": [
@@ -161,7 +165,7 @@ def test_unsupported_order_field_is_omitted_quoted_once_and_still_blocked(
 ) -> None:
     order = {"action": "continue", "drug": "Concor", "dose": "5", field: unsupported}
     p = world.dictate(
-        "سامي اختبار Concor 5",
+        "سامي اختبار taking Concor 5",
         {"patient": {"name_as_spoken": "سامي اختبار"}, "orders": [order]},
     )
     card = render_card(p)[0]
@@ -181,7 +185,7 @@ def test_unsupported_order_field_is_omitted_quoted_once_and_still_blocked(
 @pytest.mark.parametrize("frequency", ["مرة واحدة يوميا", "مرتين يوميا"])
 def test_spoken_frequency_words_never_generate_digits(world: ScribeWorld, frequency: str) -> None:
     p = world.dictate(
-        "سامي اختبار Concor 5 " + frequency,
+        "سامي اختبار taking Concor 5 " + frequency,
         {
             "patient": {"name_as_spoken": "سامي اختبار"},
             "orders": [

@@ -36,6 +36,7 @@ LANES = (
     "scribe",
     "media",
     "delivery",
+    "operational",
 )
 DEFAULT_BUDGET = SweepBudget()
 
@@ -45,6 +46,7 @@ def sweep_due(
     store: StoreBase,
     claim_handler: Callable[[StoredRecord], None] | None = None,
     *,
+    upload_handler: Callable[[StoredRecord], None] | None = None,
     budget: SweepBudget = DEFAULT_BUDGET,
     elapsed_clock: Callable[[], float] = monotonic,
 ) -> dict[str, Any]:
@@ -147,6 +149,10 @@ def sweep_due(
                     bundle=bundle,
                     review=review,
                 )
+                if upload_handler:
+                    handlers["operational"] = lambda row: (
+                        upload_handler(row) if row.entity_type == "upload_stage" else None
+                    )
                 if claim_handler:
                     handlers["claim"] = claim_handler
                 if runtime.scribe_route is not None:

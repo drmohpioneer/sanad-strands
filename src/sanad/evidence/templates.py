@@ -1,6 +1,7 @@
 """Code-rendered evidence wording. Every string is OWNER_REVIEW_PENDING."""
 
-from string import Formatter
+from sanad.domain.language import default_language
+from sanad.presentation.context import PresentationContext
 
 OWNER_REVIEW_PENDING = True
 TEXT = {
@@ -157,11 +158,17 @@ def missing_text(missing: tuple[str, ...], language: str) -> str:
     )
 
 
-def render(key: str, language: str = "ar", **fields: str) -> str:
-    text = TEXT[key][language == "en"]
-    wanted = {field for _, field, _, _ in Formatter().parse(text) if field}
+def render(key: str, language: str | PresentationContext = default_language, **fields: str) -> str:
+    from sanad.presentation import evidence
+    from sanad.presentation.catalog import opaque_fields
+    from sanad.presentation.catalog import render as catalog_render
+    from sanad.presentation.context import resolve
+
+    context = resolve(language, "patient" if key.startswith("patient_") else "doctor")
+    catalog_key = "evidence." + key
+    wanted = evidence.FIELDS[catalog_key]
     if wanted != fields.keys() or any(
         not v.strip() or "{" in v or "}" in v for v in fields.values()
     ):
         raise ValueError("evidence_template_fields")
-    return text.format(**fields)
+    return catalog_render(evidence.CATALOG, catalog_key, context, **opaque_fields(fields))

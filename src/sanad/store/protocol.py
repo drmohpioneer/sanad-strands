@@ -40,6 +40,7 @@ from sanad.store.records import (
     ReviewCreation,
     SessionSnapshot,
     StoredRecord,
+    UploadStage,
     WorkerCapability,
 )
 
@@ -75,8 +76,11 @@ class Store(Protocol):
         ...
 
     def accept_inbound(
-        self, transport_key: str, receipt: InboundReceiptRecord
+        self, transport_key: str, receipt: InboundReceiptRecord, *, upload_id: str | None = None
     ) -> InboundAccept: ...
+    def upload_authorized(self, stage: UploadStage) -> bool: ...
+    def reserve_upload(self, stage: UploadStage) -> bool: ...
+    def discard_upload(self, scope: PatientScope, id: str, version: int) -> UploadStage | None: ...
     def claim_work(
         self,
         record_key: ScopedKey,

@@ -34,7 +34,7 @@ def world(store: StoreBase, clock: FakeClock) -> ScribeWorld:
 
 def amendment(world: ScribeWorld, action: str = "change", **changes: Any) -> Proposal:
     return world.dictate(
-        "أحمد رضا أتورفاستاتين 40 مج بالليل بعد 3 أيام بعد 4 ساعات",
+        f"أحمد رضا {action} أتورفاستاتين 40 مج بالليل بعد 3 أيام بعد 4 ساعات",
         {
             "patient": {"name_as_spoken": "أحمد رضا"},
             "orders": [

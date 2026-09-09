@@ -1,0 +1,32 @@
+{
+  "id": "02-action-negated",
+  "source": "New patient Synthetic Person. Do not start Concor 5; start Forxiga 10.",
+  "extraction": {
+    "patient": {
+      "name_as_spoken": "Synthetic Person"
+    },
+    "orders": [
+      {
+        "action": "start",
+        "drug": "Concor",
+        "dose": "5"
+      },
+      {
+        "action": "start",
+        "drug": "Forxiga",
+        "dose": "10"
+      }
+    ],
+    "facts": [],
+    "missions": []
+  },
+  "required": [
+    "Forxiga 10 (start)"
+  ],
+  "forbidden": [
+    "Concor 5"
+  ],
+  "questions": [
+    "Do not start Concor"
+  ]
+}

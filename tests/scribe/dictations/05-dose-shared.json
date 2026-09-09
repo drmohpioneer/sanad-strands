@@ -1,0 +1,29 @@
+{
+  "id": "05-dose-shared",
+  "source": "New patient Synthetic Person. Start Concor and amlodipine 5 mg each.",
+  "extraction": {
+    "patient": {
+      "name_as_spoken": "Synthetic Person"
+    },
+    "orders": [
+      {
+        "action": "start",
+        "drug": "Concor",
+        "dose": "5 mg"
+      },
+      {
+        "action": "start",
+        "drug": "amlodipine",
+        "dose": "5 mg"
+      }
+    ],
+    "facts": [],
+    "missions": []
+  },
+  "required": [
+    "Concor 5 mg",
+    "Amlodipine 5 mg"
+  ],
+  "forbidden": [],
+  "questions": []
+}

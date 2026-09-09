@@ -300,6 +300,8 @@ class BarrierAttempt(_BoundaryValue):
         if self.area_receipt_id and self.area_receipt_id not in self.receipt_ids:
             raise ValueError("area_source_outside_attempt")
         return self
+
+
 class CoordinatorChoice(_BoundaryValue):
     """Presentation only, bound to the exact committed mission/contact version."""
 
@@ -373,6 +375,7 @@ class Mission(_Aggregate):
             ):
                 raise ValueError("barrier_attempt_scope_or_sequence")
         return self
+
     coordinator_choice: CoordinatorChoice | None = None
 
     @model_validator(mode="after")

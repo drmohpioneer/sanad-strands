@@ -3,31 +3,13 @@
 import re
 from dataclasses import dataclass, field
 from time import monotonic
-from typing import Literal, Protocol
 
 import httpx
-from pydantic import Field
 
 from sanad.channels.telegram.transport import TelegramTransport
-from sanad.domain.boundaries import _BoundaryValue
 from sanad.media.limits import MAX_AUDIO_BYTES
-
-
-class FileBytes(_BoundaryValue):
-    data: bytes = Field(repr=False)
-
-
-class MediaFailure(_BoundaryValue):
-    reason: str
-    route: Literal["media_failure"] = "media_failure"
-    request_resend: bool = True
-    durable: bool = False
-    review_obligation_id: str | None = None
-    resend_intent_id: str | None = None
-
-
-class TelegramFiles(Protocol):
-    def fetch(self, handle: str) -> FileBytes | MediaFailure: ...
+from sanad.media.source import FileBytes as FileBytes
+from sanad.media.source import MediaFailure as MediaFailure
 
 
 @dataclass

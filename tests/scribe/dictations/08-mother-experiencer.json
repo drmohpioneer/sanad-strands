@@ -1,0 +1,24 @@
+{
+  "id": "08-mother-experiencer",
+  "source": "New patient Synthetic Person. The mother has diabetes.",
+  "extraction": {
+    "patient": {
+      "name_as_spoken": "Synthetic Person"
+    },
+    "orders": [],
+    "facts": [
+      {
+        "category": "condition",
+        "text": "diabetes"
+      }
+    ],
+    "missions": []
+  },
+  "required": [],
+  "forbidden": [
+    "Dx: diabetes"
+  ],
+  "questions": [
+    "mother has diabetes"
+  ]
+}

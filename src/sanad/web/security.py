@@ -11,7 +11,9 @@ HEADERS = {
     "Referrer-Policy": "no-referrer",
     "Cache-Control": "no-store",
     "Content-Security-Policy": (
-        "default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'"
+        "default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'; "
+        "style-src 'self'; font-src 'self'; script-src 'self'; img-src 'self' data:; "
+        "connect-src 'self'"
     ),
     "X-Content-Type-Options": "nosniff",
 }

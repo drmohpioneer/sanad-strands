@@ -299,7 +299,7 @@ def resolve_fragments(
                 if len(key) >= 4 or word.isascii()
                 else Resolved(None, None, "unresolved", word)
             )
-            if resolved.latin:
+            if resolved.latin and not (kind == "test" and resolved.tier == "proposal"):
                 match = (i + 1, resolved)
         if match:
             i, resolved = match
@@ -487,11 +487,15 @@ def resolve_tests(
     spoken: str, source: str, ctx: Context | None = None, *, clarified: bool = False
 ) -> tuple[tuple[Resolved, ...], tuple[str, ...]]:
     """Only anchored analytes reach display; keep heard gaps for one clarification."""
+    from sanad.scribe.grounding import restore_phrase_boundaries
+
+    spoken = restore_phrase_boundaries(spoken, source, ctx or Context())
     accepted: list[Resolved] = []
     rejected: list[Resolved] = []
     for resolved in resolve_fragments(spoken, "test", source, ctx):
         if (
             not resolved.conflict
+            and not (resolved.tier == "unresolved" and len(resolved.spoken.split()) > 1)
             and all(
                 source_anchored(part.strip(), source, ctx=ctx)
                 for part in (resolved.latin or resolved.spoken).split(",")
@@ -499,6 +503,8 @@ def resolve_tests(
             and normalize(resolved.latin or resolved.spoken)
             not in {"one", "two", "three", "four", "five", "i", "ordered", "request", "requested"}
         ):
+            if not resolved.latin and re.fullmatch(r"[A-Za-z][A-Za-z0-9+-]*", resolved.spoken):
+                resolved = Resolved(resolved.spoken, None, "proposal", resolved.spoken)
             accepted.append(resolved)
         else:
             rejected.append(resolved)

@@ -20,6 +20,7 @@ from sanad.auth.tokens import issue_token
 from sanad.channels.telegram import wording
 from sanad.channels.telegram.router import RouteResult
 from sanad.domain import DRAFT_POLICY_2026_09, PatientScope, Principal, Provenance, TenantScope
+from sanad.domain.language import effective as contest_language
 from sanad.media.audio import ConvertedAudio
 from sanad.media.numbers import numbers_in
 from sanad.media.retrieve import MediaRetriever, fetch_telegram_file
@@ -218,7 +219,7 @@ class ScribeTurn:
     def wording(template: str, doctor: Doctor) -> str:
         from sanad.scribe.english import render_wording
 
-        return render_wording(template, doctor.language)
+        return render_wording(template, contest_language(doctor.language))
 
     def run(self, receipt: InboundReceipt, principal: Principal) -> RouteResult:
         try:
@@ -296,7 +297,7 @@ class ScribeTurn:
             speech_result = asyncio.run(
                 speech.transcribe_converted(
                     ConvertedAudio(data=audio, duration=media.duration or 0),
-                    expected_language=doctor.language,
+                    expected_language=contest_language(doctor.language),
                 )
             )
             if not isinstance(speech_result, Transcript):
@@ -335,6 +336,9 @@ class ScribeTurn:
                     "safety_response",
                     text=self.runtime.general("patient_emergency"),
                 )
+        from sanad.media.speech import normalize_transcript
+
+        text = normalize_transcript(text, contest_language(doctor.language))
         command, argument = parse_command(text)
         if command in {"/questions", "/answer", "/close"}:
             from sanad.concierge.answer_command import doctor_command
@@ -566,7 +570,9 @@ class ScribeTurn:
         service.patient_identity_pending = True
         request = correction_request(correction, text) if correction else text
         prompt = scribe_prompt(
-            service.vocabulary.hint(), correction=correction is not None, language=doctor.language
+            service.vocabulary.hint(),
+            correction=correction is not None,
+            language=contest_language(doctor.language),
         )
         from sanad.scribe.merge import merge_candidates
         from sanad.scribe.resolver import context
@@ -599,7 +605,8 @@ class ScribeTurn:
                     )
                     result = await agent.propose(
                         EnglishDictationCandidate
-                        if doctor.language == "en" and not (correction and correction.photo)
+                        if contest_language(doctor.language) == "en"
+                        and not (correction and correction.photo)
                         else DictationCandidate,
                         request,
                         want_spans=False,
@@ -795,7 +802,7 @@ class ScribeTurn:
                 source_text,
                 service,
                 names,
-                language=doctor.language,
+                language=contest_language(doctor.language),
                 clarified_tests=clarified_tests,
             )
             verified_names = {}
@@ -1064,7 +1071,7 @@ class ScribeTurn:
             scope=doctor.scope,
             doctor_id=doctor.id,
             timezone=doctor.timezone,
-            language=doctor.language,
+            language=contest_language(doctor.language),
             selected_patient_id=selected.patient_id if selected else None,
             selected_display_name=selected.display_name if selected else None,
             creating_patient=creating,
@@ -1113,9 +1120,14 @@ class ScribeTurn:
             single_source=candidate._single_source,
             resolved_numbers=resolved_numbers,
         )
+        if not photo:
+            from sanad.scribe.grounding import seal
+            from sanad.scribe.resolver import context
+
+            proposal = seal(proposal, context(service), previous if correction else None)
         if any(
             len(part) > DRAFT_SCRIBE_POLICY.card_max_chars
-            for part in render_card(proposal, doctor.language)
+            for part in render_card(proposal, contest_language(doctor.language))
         ):
             proposal = Proposal.model_validate(
                 proposal.model_dump()
@@ -1177,7 +1189,7 @@ class ScribeTurn:
         doctor = self.claims.doctor(actor)
         from sanad.domain.language import default_language
 
-        language = doctor.language if doctor else default_language
+        language = contest_language(doctor.language) if doctor else default_language
         choices: list[tuple[str, str, str | None]] = []
         if proposal.pending_reply:
             choices.extend(
@@ -1431,6 +1443,11 @@ class ScribeTurn:
             issues=tuple(issues),
             intent="create_patient" if token.action == "new" else "update_record",
         )
+        if not changed.photo:
+            from sanad.scribe.grounding import seal
+            from sanad.scribe.resolver import context
+
+            changed = seal(changed, context(self.name_lookup(doctor, actor)))
         tokens, markup = self.buttons(changed, actor, nonce.secret.get_secret_value())
         intents = self.photos.card_intents(changed, doctor, markup)
         result = self.repo.commit(

@@ -30,6 +30,7 @@ from sanad.accounts.records import (
 )
 from sanad.domain import Principal, TenantScope, VersionRef
 from sanad.domain.language import default_language
+from sanad.domain.language import effective as contest_language
 from sanad.store import keys
 from sanad.store.keys import AccountScope
 from sanad.store.protocol import Store
@@ -96,7 +97,9 @@ class AccountService:
             if doctor_id and (not auth.binding or "patient" not in auth.binding.role_set)
             else None
         )
-        return doctor.language if doctor else default_language
+        # Every doctor-facing surface reads its language here, so the contest
+        # override belongs at this accessor rather than at each of its callers.
+        return contest_language(doctor.language) if doctor else default_language
 
     def _admin(self, actor: Principal) -> bool:
         return (

@@ -1,11 +1,12 @@
 """Checked Egyptian Arabic/English contact templates, pending owner review."""
 
-from string import Formatter
 from typing import Literal
 
 from sanad.domain import FollowUpTask, Mission, PatientScope
 from sanad.domain.deadlines import format_local
 from sanad.domain.language import default_language
+from sanad.domain.language import effective as contest_language
+from sanad.presentation.context import PresentationContext
 from sanad.safety import validate_patient_output
 from sanad.safety.models import OrderSummary, OutputContext
 from sanad.safety.policy import SAFETY_POLICY_V1_CARDIOLOGY_DRAFT
@@ -96,12 +97,17 @@ TEMPLATES = {
 }
 
 
-def render(key: str, language: str = default_language, **fields: str) -> str:
-    template = TEMPLATES[key][language == "en"]
-    expected = {field for _, field, _, _ in Formatter().parse(template) if field}
-    if expected != set(fields):
+def render(key: str, language: str | PresentationContext = default_language, **fields: str) -> str:
+    from sanad.presentation import contact
+    from sanad.presentation.catalog import opaque_fields
+    from sanad.presentation.catalog import render as catalog_render
+    from sanad.presentation.context import resolve
+
+    context = resolve(language, "patient" if key.startswith("patient_") else "doctor")
+    catalog_key = "contact." + key
+    if contact.FIELDS[catalog_key] != set(fields):
         raise ValueError("contact_template_fields")
-    return template.format(**fields)
+    return catalog_render(contact.CATALOG, catalog_key, context, **opaque_fields(fields))
 
 
 def patient_text(
@@ -141,7 +147,7 @@ def patient_text(
     if any(kind in {"dose", "count", "frequency"} for _, kind, _ in typed_numbers(text)):
         # Contact wording never repeats doses, even when a source title contains one.
         raise ValueError("contact_template_validation")
-    language: Literal["ar", "en"] = patient.language
+    language: Literal["ar", "en"] = contest_language(patient.language)
     verdict = validate_patient_output(
         text,
         context=OutputContext(

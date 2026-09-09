@@ -254,7 +254,7 @@ def test_patient_plan_uses_the_doctors_confirmed_spelling(world: ScribeWorld) ->
     assert world.store._atomic([Write(record_item(to_record(row, row.scope)), None)], [])
     patient = world.bound()
     p = world.dictate(
-        "Synthetic Patient كونكور 5",
+        "Synthetic Patient taking كونكور 5",
         {
             "patient": {"name_as_spoken": "Synthetic Patient"},
             "orders": [{"action": "continue", "drug": "كونكور", "dose": "5"}],

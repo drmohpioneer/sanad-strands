@@ -601,7 +601,13 @@ def test_actual_clinical_fragment_fails_output_validator(
         ContactPlan(w.clock(), "slot", w.clock() + timedelta(hours=2)),
         "patient_monitor_prompt",
     )
-    monkeypatch.setitem(templates.TEMPLATES, "title", ("كل حاجة طبيعية", "You are fine."))
+    from sanad.presentation.coordinator import CATALOG
+
+    monkeypatch.setitem(
+        CATALOG,
+        "coordinator.title",
+        {"ar": "كل حاجة طبيعية {value}", "en": "You are fine. {value}"},
+    )
     with pytest.raises(ValueError, match="output_validation"):
         templates.render(bundle, bundle.moves[-1].fact_ids, patient(w))
 

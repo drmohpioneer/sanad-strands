@@ -431,6 +431,8 @@ def extracted_numbers(candidate: DictationCandidate) -> tuple[str, ...]:
 
 class ProposalIssue(_BoundaryValue):
     item: str
+    occurrence: tuple[int, int] | None = None
+    grounding_issue: bool = False
     field: str | None = None
     code: Literal[
         "unsupported_number",

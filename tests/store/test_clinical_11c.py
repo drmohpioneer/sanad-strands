@@ -119,7 +119,7 @@ def test_disguised_current_medication_becomes_continue_question(world: ScribeWor
 
 def test_explicit_brand_correction_learns_edited_value(world: ScribeWorld) -> None:
     first = world.dictate(
-        "سامي اختبار إكسفورج 5/160/12.5",
+        "سامي اختبار taking إكسفورج 5/160/12.5",
         {
             "patient": {"name_as_spoken": "سامي اختبار"},
             "orders": [
@@ -194,7 +194,7 @@ def test_name_memory_cannot_be_removed_from_confirmation_batch(
     world: ScribeWorld, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     p = world.dictate(
-        "سامي اختبار كونكور 5",
+        "سامي اختبار taking كونكور 5",
         {
             "patient": {"name_as_spoken": "سامي اختبار"},
             "orders": [{"action": "continue", "drug": "كونكور", "dose": "5"}],

@@ -67,6 +67,7 @@ from sanad.store.records import (
     StoredRecord,
     SubjectBinding,
     TooLarge,
+    UploadStage,
     WorkerCapability,
     canonical_json,
     from_record,
@@ -205,6 +206,7 @@ class StoreBase(ABC):
             tenant = TenantScope(doctor_id=scope.doctor_id)
             return self._owned(tenant, keys.doctor(tenant))
         prefixes = {
+            "upload_stage": "UPLOAD",
             "evidence_head": "EVIDENCE_HEAD",
             "evidence_hash": "EVIDENCE_HASH",
             "evidence_action": "EVIDENCE_ACTION",
@@ -385,6 +387,7 @@ class StoreBase(ABC):
         self, scope: Scope, entity_type: str, cursor: Cursor | None = None, limit: int = 100
     ) -> RecordPage:
         prefixes = {
+            "upload_stage": "UPLOAD#",
             "evidence": "EVIDENCE#",
             "evidence_head": "EVIDENCE_HEAD#",
             "evidence_hash": "EVIDENCE_HASH#",
@@ -546,6 +549,8 @@ class StoreBase(ABC):
         identity: bool = False,
         scribe: bool = False,
     ) -> CommitResult:
+        if any(row.entity_type == "upload_stage" for row in request.puts):
+            return Forbidden()
         command = request.command
         concierge = command.payload.get("executor") == "concierge-v1"
         evidence = command.payload.get("executor") == "evidence-v1"
@@ -1187,13 +1192,39 @@ class StoreBase(ABC):
             pass
         return False
 
-    def accept_inbound(self, transport_key: str, receipt: StoredRecord) -> InboundAccept:
+    def upload_authorized(self, stage: UploadStage) -> bool:
+        from sanad.store.uploads import authority
+
+        checks = authority(self, stage)
+        return checks is not None and self._atomic([], checks)
+
+    def reserve_upload(self, stage: UploadStage) -> bool:
+        from sanad.store.uploads import reserve
+
+        return reserve(self, stage)
+
+    def discard_upload(self, scope: PatientScope, id: str, version: int) -> UploadStage | None:
+        from sanad.store.uploads import discard
+
+        return discard(self, scope, id, version)
+
+    def accept_inbound(
+        self, transport_key: str, receipt: StoredRecord, *, upload_id: str | None = None
+    ) -> InboundAccept:
+        if upload_id is not None:
+            from sanad.store.uploads import attach
+
+            return attach(self, transport_key, receipt, upload_id)
+
         try:
             model = from_record(receipt, InboundReceipt)
         except ValueError:
             return InboundAccept(status="forbidden")
         if model.transport_key != transport_key or model.version != 1 or model.state != "pending":
             return InboundAccept(status="conflict")
+        if (model.provider_media_handle or "").startswith("upload:"):
+            # Browser handles can attach only through the staging transaction above.
+            return InboundAccept(status="forbidden")
         canonical = to_record(model, model.scope)
         if size_failure([Write(record_item(canonical), None)], []):
             return InboundAccept(status="conflict")

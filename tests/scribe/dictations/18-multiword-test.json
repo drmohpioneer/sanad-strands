@@ -1,0 +1,24 @@
+{
+  "id": "18-multiword-test",
+  "source": "New patient Synthetic Person. I ordered lipid profile and CBC.",
+  "extraction": {
+    "patient": {
+      "name_as_spoken": "Synthetic Person"
+    },
+    "orders": [],
+    "facts": [],
+    "missions": [
+      {
+        "kind": "TEST",
+        "text": "lipid, profile, CBC"
+      }
+    ]
+  },
+  "required": [
+    "TEST: lipid profile, CBC"
+  ],
+  "forbidden": [
+    "TEST: lipid, profile"
+  ],
+  "questions": []
+}

@@ -3,6 +3,7 @@
 from sanad.agents.hygiene import patient_failure
 from sanad.concierge.answer import Bundle, ConciergeAnswer, gate
 from sanad.domain.entities import BarrierAttempt, BarrierPlace
+from sanad.presentation.context import PresentationContext
 from sanad.resolver.policy import POLICY
 from sanad.safety.models import OutputContext
 from sanad.safety.policy import SafetyPolicy
@@ -44,8 +45,18 @@ TEMPLATES = {
 }
 
 
-def render(key: str, language: str, **fields: str) -> str:
-    return TEMPLATES[key][language == "en"].format(**fields)
+def render(key: str, language: str | PresentationContext, **fields: str) -> str:
+    from sanad.presentation import resolver
+    from sanad.presentation.catalog import opaque_fields
+    from sanad.presentation.catalog import render as catalog_render
+    from sanad.presentation.context import resolve
+
+    context = resolve(language, "patient")
+    catalog_key = "resolver." + key
+    wanted = resolver.FIELDS[catalog_key]
+    return catalog_render(
+        resolver.CATALOG, catalog_key, context, **opaque_fields({k: fields[k] for k in wanted})
+    )
 
 
 def question_ok(text: str, fact: str, language: str, safety: SafetyPolicy) -> bool:

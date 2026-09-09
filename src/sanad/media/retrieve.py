@@ -23,8 +23,8 @@ from sanad.domain.operations import transition_operational_clock
 from sanad.media.audio import AudioConverter, ConversionFailure
 from sanad.media.images import normalize_document, source_image_mime
 from sanad.media.limits import MAX_AUDIO_BYTES, MediaInvalid, sniff
+from sanad.media.source import MediaFailure, MediaSource
 from sanad.media.storage import MediaScope, MediaStore
-from sanad.media.telegram import MediaFailure, TelegramFiles
 from sanad.steward.apply import make_intent
 from sanad.steward.service import Steward
 from sanad.steward.types import StewardPolicy
@@ -66,7 +66,7 @@ class StoredMedia(_BoundaryValue):
 class MediaRetriever:
     steward: Steward
     media_store: MediaStore
-    telegram: TelegramFiles
+    source: MediaSource
     converter: AudioConverter
     scope: MediaScope
     principal: Principal
@@ -76,6 +76,19 @@ class MediaRetriever:
     failure_template: str = "media:resend-v1"
     failure_text: str = RESEND_TEXT
     failure_renderer: Callable[[str], str] | None = None
+
+    # Protected tests still inspect and replace .telegram; no second byte path.
+    @property
+    def telegram(self) -> MediaSource:
+        return self.source
+
+    @telegram.setter
+    def telegram(self, source: MediaSource) -> None:
+        self.source = source
+
+    def fetch_telegram_file(self, handle: str, *, receipt_id: str) -> StoredMedia | MediaFailure:
+        """Deprecated spelling retained for protected callers."""
+        return self.fetch_media(handle, receipt_id=receipt_id)
 
     def _put_blob(self, data: bytes, mime: str) -> str:
         try:
@@ -346,7 +359,7 @@ class MediaRetriever:
         )
         return self._commit(changed, claim)
 
-    def fetch_telegram_file(self, handle: str, *, receipt_id: str) -> StoredMedia | MediaFailure:
+    def fetch_media(self, handle: str, *, receipt_id: str) -> StoredMedia | MediaFailure:
         if not self._valid():
             return MediaFailure(reason="scope_unavailable", request_resend=False)
         store, now = self.steward.store, self.steward.clock()
@@ -408,7 +421,7 @@ class MediaRetriever:
                 return self._failure(work, claim, "attempts_exhausted")
             try:
                 if work.stage == "fetch":
-                    download = self.telegram.fetch(handle)
+                    download = self.source.fetch(handle)
                     if isinstance(download, MediaFailure):
                         return self._failure(work, claim, download.reason)
                     self.checkpoint("downloaded")
@@ -516,7 +529,7 @@ class MediaRetriever:
             if work is None or work.work_clock is None or work.work_clock.next_action_at > now:
                 continue
             if work.stage in {"fetch", "normalize"} and work.state != "needs_attention":
-                self.fetch_telegram_file(work.provider_handle_ref, receipt_id=work.receipt_id)
+                self.fetch_media(work.provider_handle_ref, receipt_id=work.receipt_id)
             else:
                 policy = self.policy
                 claim = store.claim_work(
@@ -550,7 +563,11 @@ class MediaRetriever:
         return handled
 
 
-def fetch_telegram_file(
+def fetch_media(
     handle: str, *, retriever: MediaRetriever, receipt_id: str
 ) -> StoredMedia | MediaFailure:
-    return retriever.fetch_telegram_file(handle, receipt_id=receipt_id)
+    return retriever.fetch_media(handle, receipt_id=receipt_id)
+
+
+# Deprecated import used by protected evidence, Concierge and Scribe callers.
+fetch_telegram_file = fetch_media

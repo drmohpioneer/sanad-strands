@@ -1,0 +1,31 @@
+{
+  "id": "04-dose-swapped",
+  "source": "New patient Synthetic Person. Add Concor 5 mg and Forxiga 10 mg.",
+  "extraction": {
+    "patient": {
+      "name_as_spoken": "Synthetic Person"
+    },
+    "orders": [
+      {
+        "action": "start",
+        "drug": "Concor",
+        "dose": "10 mg"
+      },
+      {
+        "action": "start",
+        "drug": "Forxiga",
+        "dose": "5 mg"
+      }
+    ],
+    "facts": [],
+    "missions": []
+  },
+  "required": [],
+  "forbidden": [
+    "Concor 10 mg",
+    "Forxiga 5 mg"
+  ],
+  "questions": [
+    "dose"
+  ]
+}

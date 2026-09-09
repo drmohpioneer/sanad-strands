@@ -1,0 +1,28 @@
+{
+  "id": "16-stored-origin",
+  "source": "New patient Synthetic Person. Increase Concor to 10.",
+  "extraction": {
+    "patient": {
+      "name_as_spoken": "Synthetic Person"
+    },
+    "orders": [
+      {
+        "action": "change",
+        "drug": "Concor",
+        "dose": "10"
+      }
+    ],
+    "facts": [],
+    "missions": []
+  },
+  "required": [
+    "Concor 5 → Concor 10"
+  ],
+  "forbidden": [],
+  "questions": [],
+  "prior_order": {
+    "action": "continue",
+    "drug": "Concor",
+    "dose": "5"
+  }
+}

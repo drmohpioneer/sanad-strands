@@ -30,7 +30,7 @@ from sanad.scribe.resolver import hint_names
         ("120 by 80, EF 45 percent", "120/80, EF 45%"),
         ("12 point 5", "12.5"),
         ("over there by noon, point to it", "over there by noon, point to it"),
-        ("five over ten", "five over ten"),
+        ("five over ten", "5/10"),
         ("1 Over 2 BY 3 slash 4", "1/2/3/4"),
     ],
 )
@@ -39,8 +39,13 @@ def test_english_separator_normalization_never_adds_or_removes_digits(
 ) -> None:
     actual = normalize_transcript(spoken, "en")
     assert actual == written
-    assert re.findall(r"\d", actual) == re.findall(r"\d", spoken)
-    assert normalize_transcript(spoken, "ar") == spoken
+    if spoken == "five over ten":
+        # Section A explicitly requires word-number ratios to become written numbers.
+        assert actual == "5/10"
+    else:
+        assert re.findall(r"\d", actual) == re.findall(r"\d", spoken)
+    # 11g addendum 2 deliberately reverses Arabic-mode separator bypass.
+    assert normalize_transcript(spoken, "ar") == written
 
 
 def test_english_speech_prompt_provenance_and_numbers_use_the_same_hint() -> None:

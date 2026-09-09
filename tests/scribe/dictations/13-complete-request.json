@@ -1,0 +1,27 @@
+{
+  "id": "13-complete-request",
+  "source": "New patient Synthetic Person. Request CBC and call the clinic.",
+  "extraction": {
+    "patient": {
+      "name_as_spoken": "Synthetic Person"
+    },
+    "orders": [],
+    "facts": [],
+    "missions": [
+      {
+        "kind": "TEST",
+        "text": "CBC"
+      },
+      {
+        "kind": "TASK",
+        "text": "call the clinic"
+      }
+    ]
+  },
+  "required": [
+    "TEST: CBC",
+    "TASK: call the clinic"
+  ],
+  "forbidden": [],
+  "questions": []
+}

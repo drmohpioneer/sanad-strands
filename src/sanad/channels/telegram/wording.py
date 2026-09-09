@@ -5,6 +5,9 @@ import string
 import unicodedata
 from typing import Literal
 
+from sanad.domain.language import effective as contest_language
+from sanad.presentation.context import PresentationContext
+
 OWNER_REVIEW_PENDING = True
 
 type TemplateId = Literal[
@@ -239,7 +242,7 @@ def button(action: str, language: str) -> str:
 
 
 def label(key: str, language: str) -> str:
-    return LABELS[key][language == "en"]
+    return LABELS[key][contest_language(language) == "en"]
 
 
 FIELDS = {
@@ -316,18 +319,37 @@ def untrusted(value: str) -> str:
     return html.escape(value, quote=True).replace("{", "&#123;").replace("}", "&#125;")
 
 
-def render(template_id: str, language: str, **fields: str) -> str:
+def render(template_id: str, language: str | PresentationContext, **fields: str) -> str:
+    from sanad.presentation import doctor
+    from sanad.presentation.catalog import opaque_fields
+    from sanad.presentation.catalog import render as catalog_render
+    from sanad.presentation.context import resolve
+
+    context = resolve(
+        language,
+        "patient"
+        if template_id
+        in {
+            "consent_request",
+            "consent_recorded_wait_doctor",
+            "consent_declined_ack",
+            "claim_refused",
+            "claim_rejected",
+            "binding_confirmed",
+            "patient_login_link",
+        }
+        else "doctor",
+    )
     if template_id not in ALL_TEMPLATES or set(fields) != FIELDS[template_id]:
         raise ValueError("account template requires exactly its declared fields")
-    value = ALL_TEMPLATES[template_id]
-    text = value if isinstance(value, str) else value[language == "en"]
-    return text.format(
-        **{
-            k: v
-            if k == "link" or (k == "body" and template_id in {"scribe_card", "scribe_confirmed"})
-            else untrusted(v)
-            for k, v in fields.items()
-        }
+    sanitised = {
+        k: v
+        if k == "link" or (k == "body" and template_id in {"scribe_card", "scribe_confirmed"})
+        else untrusted(v)
+        for k, v in fields.items()
+    }
+    return catalog_render(
+        doctor.CATALOG, "doctor." + template_id, context, **opaque_fields(sanitised)
     )
 
 

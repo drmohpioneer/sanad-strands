@@ -1,0 +1,24 @@
+{
+  "id": "24-negated-finding",
+  "source": "New patient Synthetic Person. No angina.",
+  "extraction": {
+    "patient": {
+      "name_as_spoken": "Synthetic Person"
+    },
+    "orders": [],
+    "facts": [
+      {
+        "category": "complaint",
+        "text": "angina"
+      }
+    ],
+    "missions": []
+  },
+  "required": [],
+  "forbidden": [
+    "Complaint: angina"
+  ],
+  "questions": [
+    "No angina"
+  ]
+}

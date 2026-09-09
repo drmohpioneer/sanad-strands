@@ -1,0 +1,22 @@
+{
+  "id": "07-patient-experiencer",
+  "source": "New patient Synthetic Person. The patient has diabetes.",
+  "extraction": {
+    "patient": {
+      "name_as_spoken": "Synthetic Person"
+    },
+    "orders": [],
+    "facts": [
+      {
+        "category": "condition",
+        "text": "diabetes"
+      }
+    ],
+    "missions": []
+  },
+  "required": [
+    "Dx: diabetes"
+  ],
+  "forbidden": [],
+  "questions": []
+}

@@ -1,0 +1,35 @@
+{
+  "id": "27-reply-current-dose",
+  "source": "New patient Synthetic Person. Start Concor 5.",
+  "extraction": {
+    "patient": {
+      "name_as_spoken": "Synthetic Person"
+    },
+    "orders": [
+      {
+        "action": "start",
+        "drug": "Concor",
+        "dose": "5"
+      }
+    ],
+    "facts": [],
+    "missions": []
+  },
+  "required": [
+    "Concor 10"
+  ],
+  "forbidden": [
+    "Concor 5"
+  ],
+  "questions": [],
+  "reply": {
+    "text": "Concor dose 10",
+    "orders": [
+      {
+        "action": "start",
+        "drug": "Concor",
+        "dose": "10"
+      }
+    ]
+  }
+}

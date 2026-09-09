@@ -1,0 +1,30 @@
+{
+  "id": "23-unspoken-known-drug",
+  "source": "New patient Synthetic Person. Start Concor 5.",
+  "extraction": {
+    "patient": {
+      "name_as_spoken": "Synthetic Person"
+    },
+    "orders": [
+      {
+        "action": "start",
+        "drug": "Concor",
+        "dose": "5"
+      },
+      {
+        "action": "start",
+        "drug": "Forxiga",
+        "dose": "5"
+      }
+    ],
+    "facts": [],
+    "missions": []
+  },
+  "required": [
+    "Concor 5"
+  ],
+  "forbidden": [
+    "Forxiga"
+  ],
+  "questions": []
+}

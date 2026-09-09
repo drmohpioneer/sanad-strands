@@ -77,3 +77,35 @@ Separate synthetic development/judge environments from clinical deployment. No r
 The full build includes backup/restore verification, restore-time reconciliation, access revocation, retention/deletion behavior, monitored failed delivery, operational ownership and incident response. Before clinical use, confirm applicable privacy/medical duties, controller/operator responsibilities, provider terms and processing regions with qualified review, then approve consent and clinic response coverage. This is an operational acceptance gate within the required full build, not permission to stop at a synthetic demonstration or claim legal compliance.
 
 Language/accessibility checks include the actual Arabic/English mix used by the doctor and patients, drug names and numbers in voice notes, readable mobile consent, and safety messages understood by the intended patient. A live provider demonstration, hermetic tests and clinical review establish different evidence and must be reported separately.
+
+## Patient upload boundary (18b checkpoint 1)
+
+Browser image ingress requires exactly a live patient session, the existing
+same-origin/fetch-site checks and a session-bound matching CSRF header and cookie
+before consuming the body. No multipart parser or temporary file is used.
+The live doctor epoch, subject binding, patient binding, consent and both session
+expiry clocks are rechecked after transfer and at staging/attachment. Browser
+fields cannot select an owner, patient, subject, binding or receipt. Receipt
+`source_chat` comes from the verified current delivery binding; `channel` and
+`transport` retain browser provenance.
+
+Readable captions are screened before the body, ordinary locks or model work.
+A rejected or interrupted image preserves a dangerous caption as a durable text
+receipt and uses the existing urgent incident/Liaison gateway. Receipt processing
+and safety epochs retain the existing replay protection. Unsupported, mismatched,
+corrupt or over-limit images write no media bytes. Private staging occurs only
+after the accepted 8 MiB, 8,000-dimension and 20-million-pixel checks and a bounded
+decode; the upload limit does not enlarge the downstream limits.
+
+Staging and S3 are separate stores: a reservation precedes bytes, and one
+conditional transaction attaches the handle with its screened receipt. A handle
+is bound to one patient, subject and receipt; repeated worker fetches support
+retries. Unlinked stages retain operational recovery clocks. Disposal is fenced
+against attachment, targets only the upload's private object and retains a daily
+tombstone sweep for delayed S3 writes. Existing bucket-version retention remains
+an operational policy; a delete is not a claim of forensic erasure. Accepted
+receipt processing revalidates patient authority independently of browser idle
+expiry. Session or binding changes before attachment can require a fresh upload.
+
+Administrator sessions and their clinical-read boundary are not implemented by
+this checkpoint. The existing identity schema and authentication flow are unchanged.

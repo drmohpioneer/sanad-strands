@@ -110,7 +110,7 @@ def _source_brand(order: OrderCandidate, source: str, ctx: Context) -> OrderCand
         if not normalize(name).startswith(normalize(base.latin) + " "):
             continue
         target = re.search(
-            r"(?:increase|decrease|chang\w*|switch|زود\w*|قلل\w*|غير\w*)"
+            r"(?:increase|decrease|upgrade|chang\w*|switch|زود\w*|قلل\w*|غير\w*)"
             r"[^.;\n]{0,100}?(?:\bto\s+(?:be\s+)?|لـ?\s*)" + re.escape(name) + r"(?!\w)\s+\d",
             source,
             re.I,
@@ -130,7 +130,7 @@ def previous_instruction(order: OrderCandidate, source: str) -> OrderCandidate |
     if order.action != "change" or not order.previous_drug or not order.previous_dose:
         return None
     if not re.search(
-        r"(?:increase|decrease|chang\w*|switch|زود\w*|قلل\w*|غير\w*)[^.;\n]{0,100}\b"
+        r"(?:increase|decrease|upgrade|chang\w*|switch|زود\w*|قلل\w*|غير\w*)[^.;\n]{0,100}\b"
         + re.escape(split_drug_dose(order.drug)[0])
         + r"\b",
         source,

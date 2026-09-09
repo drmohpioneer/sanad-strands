@@ -21,6 +21,7 @@ from sanad.media.speech import (
     SpeechAdapter,
     Transcript,
     TranscriptFailure,
+    normalize_transcript,
     split_transcript,
 )
 from sanad.media.telegram import FileBytes, MediaFailure, TelegramFileClient
@@ -154,7 +155,7 @@ def test_speech_numbers_line_keeps_both_readings_and_disputes(
     assert isinstance(result, Transcript)
     assert result.numbers_line == ("parsed" if heard else "malformed")
     assert (result.text, result.numbers, result.heard_numbers, result.disputed_numbers) == (
-        text,
+        normalize_transcript(text, "ar"),
         numbers,
         heard,
         disputed,
@@ -182,7 +183,8 @@ def test_speech_missing_or_malformed_numbers_line_retains_uncertain_transcript(
         SpeechAdapter(caller, ScriptedConverter(), SOURCE).transcribe(b"OggS", "ogg")
     )
     assert isinstance(result, Transcript)
-    assert result.text == text and result.numbers_line == status
+    assert result.text == normalize_transcript(text, "ar") and result.numbers_line == status
+    assert result.raw_text == reply
     assert result.heard_numbers == ()
     assert result.numbers == result.disputed_numbers == numbers
     assert result.uncertainty == "unconfirmed_transcription"

@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from sanad.auth.commands import ConsentPolicy
     from sanad.channels.telegram.settings import TelegramSettings
     from sanad.channels.transport import Transport
+    from sanad.media.storage import UploadStorage
     from sanad.ops.nonce_store import TickVerifier
     from sanad.store.keys import ScopedKey
     from sanad.store.protocol import Store
@@ -30,6 +31,7 @@ def create_app(
     web_settings: WebSettings | None = None,
     consent_policy: Callable[[str], ConsentPolicy | None] | None = None,
     receipt_submit: Callable[[ScopedKey], None] | None = None,
+    upload_storage: UploadStorage | None = None,
     tick_verifier: TickVerifier | None = None,
     tick_sweep: Callable[[], dict[str, Any]] | None = None,
 ) -> FastAPI:
@@ -100,6 +102,14 @@ def create_app(
         app.include_router(scribe_router(claims))
         app.state.claim_lane = lambda row: claim_lane(claims, row)
         app.include_router(web_router(login, claims, web_settings))
+        if upload_storage is not None:
+            from sanad.media.upload import UploadIngress
+            from sanad.web.routes import upload_router
+
+            app.state.uploads = UploadIngress(
+                runtime, login, upload_storage, receipt_submit if process_receipts else None
+            )
+            app.include_router(upload_router(app.state.uploads, web_settings))
         install_redaction()
         app.add_middleware(BrowserSecurity)
 

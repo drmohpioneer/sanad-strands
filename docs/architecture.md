@@ -105,6 +105,52 @@ Approved deterministic patient safety guidance is delivered independently of the
 
 ## Doctor dictation and patient support
 
+### Presentation
+
+Contract 11i releases the catalog and context steps of the language adapter.
+The six template render boundaries (doctor wording, contact, Concierge, evidence,
+Resolver and Coordinator) resolve a frozen `PresentationContext` containing locale
+and audience. Doctor and patient preferences are supplied independently; Decision
+023's contest override applies to both. Below a migrated render boundary, catalog
+lookup and nested rendering consume that context without reading locale from a
+record, environment or global. Existing callers may still supply a language string.
+
+Each surface has an ordinary namespaced, locale-keyed Python catalog. Import-time
+validation requires both locales and identical named placeholder sets, and refuses
+format specifications, conversions and attribute/index access. Every placeholder
+is opaque: the adapter can position its exact text but cannot translate, normalize,
+truncate or substitute it, and rendering checks its exact presence. This invariant
+starts after accepted wrapper sanitisation, including `untrusted()`; those security
+controls and evidence-field rejection remain unchanged. It does not claim raw
+caller input always survives sanitisation. Clinical names, instructions, facts,
+numbers, instants, identity, provenance and machine vocabulary share this rule.
+
+For each fixed locale, migrated output must match the accepted tuple bytes. Locale
+selection is a separate policy. Existing fragments and their composition remain
+as released by addendum 1; only newly authored prose must be full sentences. No
+new prose is introduced in 11i. The old tuples remain as the equality oracle.
+The two dictation renderers, photo layout, legacy monitoring schedule strings,
+evidence fingerprints and delivery-time freshness rules are unchanged. Higher
+level card, reply, contact and delivery orchestration still takes bare language
+strings; a typed CardView and one dictation renderer belong to later contract 11j.
+
+### Grounding
+
+Contract 11g addendum 2 requires code-owned evidence for every printed clinical
+field. Evidence identifies the item, field, source, offsets and transformation;
+permitted origins are transcript spans, verified vocabulary aliases, authorized
+corrections, scoped stored prior orders and deterministic computations. Names
+alone do not authorize an action, dose, positive finding or patient experiencer.
+An instruction must retain clause scope, negation and change direction. Invalid
+or missing evidence becomes clarification and cannot commit through confirmation.
+The existing request-omission, numeric and fact-alignment checks remain independent
+requirements. Rendering and confirmation recheck evidence; corpus assertions cover
+field evidence, required content and forbidden content through confirmation.
+Speech normalization retains the raw provider text privately alongside canonical
+text and applies numeric separators independently of interface language, preserving
+measurement dimensions. This records the released design; acceptance remains with
+the architect after implementation verification.
+
 Decision 023 and contract 11e addenda 2–3 select English for new records through
 one draft language policy. `/lang en` and `/lang ar` change only the authenticated
 doctor's language in a guarded, replay-safe transaction. Speech, extraction and
@@ -387,3 +433,54 @@ Contracts 00–21 deliver the full product: typed foundation; state/deadlines; s
 A patient start report received after routine contact is stopped still records the report and the independent day-three anchor. The follow-up remains contact-suppressed, with its disposition review intact; anchoring does not renew contact consent. Start replies show the stored check-in time or acknowledge that reminders remain stopped. Ambiguous reported start dates require clarification before fulfillment.
 
 The shared proposal adapter uses answer-specific request framing for Concierge; extraction framing remains with extractor roles. The Concierge selects relevant permitted sentences for the current question, and conversation never authorizes repeated or unsupported patient guidance.
+
+## Web surface
+
+Contract 18 adds a same-origin vanilla browser surface under `web/`: `/a`,
+`/a/patients/{patient_id}`, `/a/inbox`, `/a/history`, `/a/preferences` and `/pp`.
+The browser consumes the existing session-scoped patient, record, evidence and
+patient-plan APIs. Additive record fields expose age, timezone and resolved
+reviews from records the accepted projection already loads. No clinical write
+or new store query family is introduced. The inbox uses the existing doctor-scoped `list_reviews` index through
+`GET /api/browser/reviews`, including unassigned intake reviews. Its history mode
+uses the existing doctor/intake-scoped review reads and the accepted owned-intake
+listing, since resolved reviews leave the active index. It is read-only pending
+slice 17's verbs; the patient browser uses only its two accepted read endpoints.
+
+Doctor language submissions enter as explicitly labelled `web-language` durable
+receipts after the existing session/CSRF guard, and invoke the same receipt
+router and `ScribeLanguage` command as `/lang`. Identity and the private reply
+destination come from the authenticated account. The browser does not dispatch
+a transport or call a model. Language resolution obeys Decision 023.
+
+The data-dense native table uses 26/6/34/17/17 percent columns and pages at 50
+rows, with search, stable sorting, explicit states and a labelled mobile stack.
+Light/dark tokens, interaction roles, self-hosted fonts and RTL rules are in
+[design-system.md](design-system.md). CSP adds only the exact same-origin
+resource directives released in contract 18 A.8. Theme choice is applied by a
+blocking external script before first paint; native controls follow color-scheme.
+The public `/demo` fetches only a separate synthetic static fixture and has no
+authenticated navigation or credential exchange.
+
+### Browser observation ingress (contract 18b checkpoint 1)
+
+The domain and Steward store are the source of truth; channels are adapters and
+browser views display that same truth. A patient upload enters at durable receipt
+acceptance, then follows routing, Concierge, durable MediaWork, the media sweep,
+EvidenceTurn and the existing readers and commands. Adapter composition selects
+MediaSource; clinical processing is unchanged. Receipt/channel provenance and
+transport-derived IDs remain distinct. Equivalence compares mapped business
+semantics in independently initialized stores, not raw generated IDs.
+
+Uploads use an authenticated, same-origin, header-CSRF-protected bounded image
+body, with a readable caption in a header. The server derives patient scope and
+private-chat delivery context from the live session/binding. A scoped staging
+ledger reserves an upload before private S3 persistence; attaching its handle and
+accepting the screened receipt is one conditional transaction. Fetch is repeatable
+for that receipt. Recovery completes staged bytes or disposes unlinked stages;
+disposal tombstones retain a cleanup clock to catch a delayed writer after a crash.
+Rejected images retain already screened dangerous captions as recoverable input.
+
+This does not remove Telegram: runtime construction, consent validation, private
+chat routing, outbound delivery, the legacy inbound fallback and its replay scope
+exception still depend on it. Administrator sessions are checkpoint 2, unreleased.

@@ -1,0 +1,25 @@
+{
+  "id": "26-unknown-name",
+  "source": "New patient Synthetic Person. Taking ريميبروتينيب 5.",
+  "extraction": {
+    "patient": {
+      "name_as_spoken": "Synthetic Person"
+    },
+    "orders": [
+      {
+        "action": "continue",
+        "drug": "ريميبروتينيب",
+        "dose": "5",
+        "name_latin": "Remibrutinib",
+        "generic": "remibrutinib"
+      }
+    ],
+    "facts": [],
+    "missions": []
+  },
+  "required": [
+    "Remibrutinib 5"
+  ],
+  "forbidden": [],
+  "questions": []
+}

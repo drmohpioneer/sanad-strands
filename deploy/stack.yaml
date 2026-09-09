@@ -766,6 +766,9 @@
             "SANAD_SSM_PREFIX": {
               "Fn::Sub": "/sanad/${Environment}/"
             },
+            "SANAD_OSM_USER_AGENT": {
+              "Fn::Sub": "Sanad/${Environment} (clinical follow-up assistant; https://github.com/sanad-strands)"
+            },
             "SANAD_CONFIG_REVISION": {
               "Ref": "ConfigRevision"
             }

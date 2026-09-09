@@ -1,8 +1,9 @@
 """Explicit private-bucket dependency, with scope-constrained content-addressed keys."""
 
+import re
 from dataclasses import dataclass, field
 from hashlib import sha256
-from typing import Any, Protocol
+from typing import Any, Protocol, cast
 from urllib.parse import quote
 
 from botocore.exceptions import ClientError  # type: ignore[import-untyped]
@@ -37,10 +38,65 @@ class S3Client(Protocol):
     def get_object(self, **kwargs: Any) -> dict[str, Any]: ...
 
 
+class UploadS3Client(S3Client, Protocol):
+    def delete_object(self, **kwargs: Any) -> dict[str, Any]: ...
+
+
 @dataclass
 class S3MediaStore:
     bucket: str
     client: S3Client = field(repr=False)
+
+    def _upload_key(self, scope: PatientScope, upload_id: str, digest: str) -> str:
+        if not re.fullmatch(r"[0-9a-f]{32}", upload_id) or not re.fullmatch(
+            r"[0-9a-f]{64}", digest
+        ):
+            raise ValueError("invalid_upload_reference")
+        return prefix(scope) + "uploads/" + upload_id + "/" + digest
+
+    def upload_reference(self, scope: PatientScope, upload_id: str, digest: str) -> str:
+        return f"s3://{self.bucket}/" + self._upload_key(scope, upload_id, digest)
+
+    def put_upload(
+        self, scope: PatientScope, upload_id: str, digest: str, data: bytes, mime: str
+    ) -> str:
+        if sha256(data).hexdigest() != digest:
+            raise ValueError("invalid_upload_digest")
+        self.client.put_object(
+            Bucket=self.bucket,
+            Key=self._upload_key(scope, upload_id, digest),
+            Body=data,
+            ContentType=mime,
+            ServerSideEncryption="AES256",
+        )
+        return self.upload_reference(scope, upload_id, digest)
+
+    def get_upload(
+        self, scope: PatientScope, upload_id: str, digest: str, limit: int
+    ) -> bytes | None:
+        try:
+            response = self.client.get_object(
+                Bucket=self.bucket, Key=self._upload_key(scope, upload_id, digest)
+            )
+        except ClientError as error:
+            if error.response.get("Error", {}).get("Code") in {"NoSuchKey", "404"}:
+                return None
+            raise
+        body = response["Body"]
+        try:
+            if response.get("ContentLength", 0) > limit:
+                raise ValueError("too_large")
+            data: bytes = body.read(limit + 1)
+            if len(data) > limit or sha256(data).hexdigest() != digest:
+                raise ValueError("invalid_upload_blob")
+            return data
+        finally:
+            body.close()
+
+    def delete_upload(self, scope: PatientScope, upload_id: str, digest: str) -> None:
+        cast(UploadS3Client, self.client).delete_object(
+            Bucket=self.bucket, Key=self._upload_key(scope, upload_id, digest)
+        )
 
     def _read_key(self, scope: MediaScope, receipt_id: str) -> str:
         return prefix(scope) + "evidence-reads/" + sha256(receipt_id.encode()).hexdigest()
@@ -109,3 +165,16 @@ class S3MediaStore:
             return data
         finally:
             body.close()
+
+
+class UploadStorage(Protocol):
+    """Separate staging IO; old MediaStore implementations remain compatible."""
+
+    def upload_reference(self, scope: PatientScope, upload_id: str, digest: str) -> str: ...
+    def put_upload(
+        self, scope: PatientScope, upload_id: str, digest: str, data: bytes, mime: str
+    ) -> str: ...
+    def get_upload(
+        self, scope: PatientScope, upload_id: str, digest: str, limit: int
+    ) -> bytes | None: ...
+    def delete_upload(self, scope: PatientScope, upload_id: str, digest: str) -> None: ...

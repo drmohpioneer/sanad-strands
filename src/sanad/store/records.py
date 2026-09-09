@@ -777,6 +777,52 @@ class InboundReceipt(_Metadata):
         return self
 
 
+class UploadStage(_Metadata):
+    """Private reservation; attachment is single-use, retrieval is repeatable."""
+
+    entity_type: Literal["upload_stage"] = "upload_stage"
+    id: Annotated[str, Field(pattern=r"^[0-9a-f]{32}$")]
+    scope: PatientScope
+    subject: NonblankStr
+    session_scope: AccountScope
+    session_id: NonblankStr
+    binding_id: NonblankStr
+    binding_epoch: NonnegativeInt
+    consent_version: PositiveVersion
+    auth_epoch: NonnegativeInt
+    content_digest: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+    content_type: NonblankStr
+    size: Annotated[int, Field(gt=0, le=8 * 1024 * 1024)]
+    object_ref: NonblankStr
+    receipt: InboundReceipt = Field(repr=False)
+    state: Literal["reserved", "attached", "discarded"] = "reserved"
+    recovery_deadline: UtcInstant
+    work_clock: OperationalClock | None
+
+    @model_validator(mode="after")
+    def staging(self) -> Self:
+        if (
+            self.receipt.scope != self.scope
+            or self.receipt.source_subject != self.subject
+            or self.receipt.provider_media_handle != "upload:" + self.id
+            or self.receipt.transport != "browser"
+            or self.receipt.channel != "browser"
+            or self.receipt.kind not in {"photo", "document"}
+            or self.receipt.safety_screen_state != "screened"
+            or self.receipt.safety_result is None
+            or self.receipt.principal is None
+            or self.receipt.principal.actor_kind != "patient"
+            or self.receipt.state != "pending"
+            or self.receipt.version != 1
+        ):
+            raise ValueError("invalid_upload_receipt")
+        if (self.state == "attached") != (self.work_clock is None):
+            raise ValueError("unlinked_upload_requires_recovery")
+        if self.work_clock and self.work_clock.work_lane != "operational":
+            raise ValueError("upload_requires_own_lane")
+        return self
+
+
 class PhotoAssociationWork(_Metadata):
     entity_type: Literal["photo_association_work"] = "photo_association_work"
     scope: TenantScope
@@ -1184,6 +1230,7 @@ type InboundReceiptRecord = StoredRecord
 
 
 MODELS: dict[str, type[BaseModel]] = {
+    "upload_stage": UploadStage,
     "evidence": Evidence,
     "evidence_head": EvidenceHead,
     "evidence_hash": EvidenceHash,
@@ -1240,6 +1287,8 @@ MODELS: dict[str, type[BaseModel]] = {
 
 
 def model_scope(model: BaseModel) -> Scope:
+    if isinstance(model, UploadStage):
+        return model.scope
     if isinstance(model, (Evidence, EvidenceHead, EvidenceHash, EvidenceAction)):
         return model.scope
     if isinstance(model, (NameMemory, NameCache)):
@@ -1323,6 +1372,8 @@ def scope_owns(scope: Scope, other: Scope) -> bool:
 
 
 def model_key(model: BaseModel, scope: Scope) -> Key:
+    if isinstance(model, UploadStage):
+        return Key(keys.partition(model.scope), f"UPLOAD#{keys.component(model.id)}")
     if isinstance(model, Evidence):
         return keys.evidence(model.scope, model.evidence_id, model.version)
     if isinstance(model, EvidenceHead):

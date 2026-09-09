@@ -1,0 +1,25 @@
+{
+  "id": "14-omitted-request",
+  "source": "New patient Synthetic Person. Request CBC and call the clinic.",
+  "extraction": {
+    "patient": {
+      "name_as_spoken": "Synthetic Person"
+    },
+    "orders": [],
+    "facts": [],
+    "missions": [
+      {
+        "kind": "TEST",
+        "text": "CBC"
+      }
+    ]
+  },
+  "required": [
+    "TEST: CBC"
+  ],
+  "forbidden": [],
+  "questions": [
+    "call the clinic"
+  ],
+  "blocked_all": true
+}

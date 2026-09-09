@@ -19,6 +19,7 @@ from sanad.domain import (
     transition_review,
 )
 from sanad.domain import events as ev
+from sanad.domain.language import default_language
 from sanad.domain.predicates import PredicateResult
 from sanad.evidence import associate, templates
 from sanad.evidence.evaluate import completing_set, evaluate
@@ -86,7 +87,7 @@ def emit(
         from sanad.store.records import Doctor
 
         row = builder.store.get(builder.scope, "doctor", builder.scope.doctor_id)
-        language = from_record(row, Doctor).language if row else "ar"
+        language = from_record(row, Doctor).language if row else default_language
     text = templates.render(key, language, **(fields or {}))
     if audience == "patient":
         from sanad.safety import validate_patient_output

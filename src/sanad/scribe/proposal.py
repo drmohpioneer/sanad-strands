@@ -12,6 +12,7 @@ from sanad.domain.operations import OperationalClock
 from sanad.scribe.amend import OrderChange
 from sanad.scribe.crosscheck import PhotoReview
 from sanad.scribe.extract import PROMPT_VERSION, DictationCandidate, ProposalIssue, ScribeIntent
+from sanad.scribe.grounding import FieldEvidence
 from sanad.scribe.names import NameReading
 from sanad.store import keys
 
@@ -83,6 +84,8 @@ class Proposal(ScribeRecord):
     resolved_numbers: tuple[str, ...] = ()
     single_source: tuple[str, ...] = ()
     pending_reply: PendingReply | None = Field(default=None, repr=False)
+    evidence: tuple[FieldEvidence, ...] = Field(default=(), repr=False)
+    evidence_fingerprint: str = ""
 
     @model_validator(mode="after")
     def lifecycle(self) -> Self:
@@ -101,6 +104,10 @@ class Proposal(ScribeRecord):
 
     def blocked(self, item: str) -> bool:
         from sanad.scribe.crosscheck import unreadable_read
+        from sanad.scribe.grounding import invalid_claims
+
+        if self.evidence_fingerprint and any(c.item in {"all", item} for c in invalid_claims(self)):
+            return True
 
         if self.photo and unreadable_read(self.photo.reads):
             return True

@@ -1,0 +1,25 @@
+{
+  "id": "25-age-is-not-dose",
+  "source": "New patient Synthetic Person. 55 years old. Add Concor 5.",
+  "extraction": {
+    "patient": {
+      "name_as_spoken": "Synthetic Person"
+    },
+    "orders": [
+      {
+        "action": "start",
+        "drug": "Concor",
+        "dose": "55"
+      }
+    ],
+    "facts": [],
+    "missions": []
+  },
+  "required": [],
+  "forbidden": [
+    "Concor 55"
+  ],
+  "questions": [
+    "dose"
+  ]
+}

@@ -55,7 +55,7 @@ def test_qr_same_events_call_and_inline_failure_recovers_once(
     world = ScribeWorld.create(store, clock)
     world.approve()
     world.dictate(
-        "مريض جديد آدم كونكور 5 مج",
+        "مريض جديد آدم taking كونكور 5 مج",
         {
             "patient": {"name_as_spoken": "آدم"},
             "orders": [{"action": "continue", "drug": "كونكور", "dose": "5 مج"}],

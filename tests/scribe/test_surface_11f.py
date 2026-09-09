@@ -139,10 +139,15 @@ def test_import_checker_rejects_missing_halves_and_unsafe_or_mismatched_fields(
 
 
 def test_checker_preserves_literal_braces(monkeypatch: pytest.MonkeyPatch) -> None:
+    from sanad.presentation.doctor import CATALOG
+
     monkeypatch.setitem(
         wording.ALL_TEMPLATES, "scribe_stale", ("نص {{حرفي}}", "Literal {{braces}}")
     )
     wording.check_templates()
+    monkeypatch.setitem(
+        CATALOG, "doctor.scribe_stale", {"ar": "نص {{حرفي}}", "en": "Literal {{braces}}"}
+    )
     assert wording.render("scribe_stale", "ar") == "نص {حرفي}"
     assert wording.render("scribe_stale", "en") == "Literal {braces}"
 
@@ -150,8 +155,11 @@ def test_checker_preserves_literal_braces(monkeypatch: pytest.MonkeyPatch) -> No
 def test_no_arabic_oracle_catches_an_accidentally_copied_translation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    from sanad.presentation.doctor import CATALOG
+
     arabic = wording.SCRIBE_TEMPLATES["scribe_expired"][0]
     monkeypatch.setitem(wording.ALL_TEMPLATES, "scribe_expired", (arabic, arabic))
+    monkeypatch.setitem(CATALOG, "doctor.scribe_expired", {"ar": arabic, "en": arabic})
     with pytest.raises(AssertionError):
         no_arabic(wording.render("scribe_expired", "en"))
 

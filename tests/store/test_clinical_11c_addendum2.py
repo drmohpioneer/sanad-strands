@@ -52,7 +52,11 @@ def test_required_terms_are_aligned_ordered_and_confirmed(world: ScribeWorld) ->
         ("تي أوف إنفرجين", "T wave inversion", "ECG"),
         ("في اللاترال", "lateral", "History"),
         ("الأكو فانكشن 45%", "EF 45%", "Echo"),
-        ("سيجمنتال إنفروبوسترو لاترال", "segmental hypokinesia inferoposterolateral", "Echo"),
+        (
+            "سيجمنتال هايبوقنيزيا إنفروبوسترو لاترال",
+            "segmental hypokinesia inferoposterolateral",
+            "Echo",
+        ),
         ("أنجينا", "angina", "Complaint"),
     ]
     p = propose(world, [fact(*p) for p in pairs])

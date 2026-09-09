@@ -1,6 +1,7 @@
 """Deterministic patient wording; operational dates never promise a doctor answer."""
 
 from sanad.domain.language import default_language
+from sanad.presentation.context import PresentationContext
 
 TEMPLATES = {
     "patient_photo_pending": (
@@ -298,9 +299,19 @@ TEMPLATES = {
 }
 
 
-def render(key: str, language: str = default_language, **fields: str) -> str:
+def render(key: str, language: str | PresentationContext = default_language, **fields: str) -> str:
+    from sanad.presentation import concierge
+    from sanad.presentation.catalog import opaque_fields
+    from sanad.presentation.catalog import render as catalog_render
+    from sanad.presentation.context import resolve
+
+    context = resolve(language, "doctor" if key.startswith("doctor_") else "patient")
     if key.startswith("patient_evidence_"):
         from sanad.evidence.templates import render as evidence_render
 
-        return evidence_render(key, language, **fields)
-    return TEMPLATES[key][1 if language == "en" else 0].format(**fields)
+        return evidence_render(key, context, **fields)
+    catalog_key = "concierge." + key
+    wanted = concierge.FIELDS[catalog_key]
+    return catalog_render(
+        concierge.CATALOG, catalog_key, context, **opaque_fields({k: fields[k] for k in wanted})
+    )

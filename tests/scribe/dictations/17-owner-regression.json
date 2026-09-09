@@ -1,0 +1,60 @@
+{
+  "id": "17-owner-regression",
+  "source": "New patient, Ahmed Saad, 55 years old, diabetic, hypertensive, on Exforge 5 over 160. I ordered hemolipid profile, CBC, creatinine, sodium, potassium. Upgrade the Exforge to Exforge HCT 5 over 160 over 12.5. Add Forxiga. Add Nebilet 5.",
+  "extraction": {
+    "patient": {
+      "name_as_spoken": "Ahmed Saad",
+      "age": "55"
+    },
+    "orders": [
+      {
+        "action": "continue",
+        "drug": "Exforge",
+        "dose": "5/160"
+      },
+      {
+        "action": "change",
+        "drug": "Exforge HCT",
+        "dose": "5/160/12.5",
+        "previous_drug": "Exforge",
+        "previous_dose": "5/160"
+      },
+      {
+        "action": "start",
+        "drug": "Forxiga"
+      },
+      {
+        "action": "start",
+        "drug": "Nebilet",
+        "dose": "5"
+      }
+    ],
+    "facts": [
+      {
+        "category": "condition",
+        "text": "diabetic, hypertensive"
+      }
+    ],
+    "missions": [
+      {
+        "kind": "TEST",
+        "text": "hemolipid, profile, CBC, creatinine, sodium, potassium"
+      }
+    ]
+  },
+  "required": [
+    "Exforge 5/160 → Exforge HCT 5/160/12.5 (change)",
+    "Forxiga (start)",
+    "Nebilet 5 (start)",
+    "TEST: CBC, creatinine, Na, K"
+  ],
+  "forbidden": [
+    "TEST: hemolipid",
+    "Exforge 5 over",
+    "Exforge ("
+  ],
+  "questions": [
+    "hemolipid profile",
+    "dose of Forxiga"
+  ]
+}

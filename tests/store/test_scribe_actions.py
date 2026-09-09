@@ -379,7 +379,7 @@ def test_qr_request_disambiguation_and_auto_creation_use_private_outbox(world: S
 
 
 def test_delayed_confirmation_preserves_shown_deadlines_and_provenance(world: ScribeWorld) -> None:
-    text = "أحمد رضا عمره 60 وعنده حساسية بنسلين، ابدأ أملوديبين 5 مج، تحليل سكر بعد 4 ساعات"
+    text = "أحمد رضا ذكر عمره 60 وعنده حساسية بنسلين، ابدأ أملوديبين 5 مج، تحليل سكر بعد 4 ساعات"
     value = {
         "intent": "update_record",
         "patient": {"name_as_spoken": "أحمد رضا", "age": "60", "sex": "male"},
@@ -528,7 +528,7 @@ def test_correction_checks_original_and_new_numbers_without_blocking_valid_order
     world: ScribeWorld,
 ) -> None:
     original = world.dictate(
-        "أحمد رضا أملوديبين 5 مج",
+        "أحمد رضا ابدأ أملوديبين 5 مج",
         {
             "patient": {"name_as_spoken": "أحمد رضا"},
             "orders": [{"action": "start", "drug": "أملوديبين", "dose": "5 مج"}],

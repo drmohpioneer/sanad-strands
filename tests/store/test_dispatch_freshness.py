@@ -120,7 +120,7 @@ def test_missing_variant_authority_fact_never_allows_routine(world: World, field
     assert freshness(world.store, missing, NOW) is not None
 
 
-def test_expired_slot_and_unreleased_correction_purpose_fail_closed(world: World) -> None:
+def test_expired_slot_and_unbacked_correction_purpose_fail_closed(world: World) -> None:
     world.confirm()
     prompt = world.prompt()
     assert freshness(world.store, prompt, NOW + timedelta(days=30)) == "expired"
@@ -135,4 +135,4 @@ def test_expired_slot_and_unreleased_correction_purpose_fail_closed(world: World
         world.doctor,
         world.profile,
     )
-    assert freshness(world.store, correction, NOW) == "correction_notice_not_released"
+    assert freshness(world.store, correction, NOW) == "correction_source_required"

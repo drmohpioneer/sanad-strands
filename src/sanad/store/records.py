@@ -14,6 +14,7 @@ from typing import Annotated, Any, Literal, Self
 from pydantic import BaseModel, Field, JsonValue, StrictBool, model_validator
 
 from sanad.concierge.records import PatientAction
+from sanad.corrections import Correction, CorrectionOffer, FactHead
 from sanad.domain import (
     FollowUpTask,
     Mission,
@@ -616,7 +617,7 @@ class Evidence(_Metadata):
     printed_identity: str | None = Field(default=None, repr=False)
     printed_date: date | None = None
     association_state: Literal[
-        "unmatched", "candidate", "accepted_pending_identity", "accepted", "rejected"
+        "unmatched", "candidate", "accepted_pending_identity", "accepted", "rejected", "detached"
     ]
     patient_match_provenance: (
         Literal["caption", "single_open_mission", "patient_choice", "doctor_choice"] | None
@@ -636,6 +637,7 @@ class Evidence(_Metadata):
     incident_ids: tuple[str, ...] = ()
     candidate_mission_ids: tuple[str, ...] = ()
     rejection_reason: str | None = None
+    correction_id: str | None = None
 
     @model_validator(mode="after")
     def evidence_identity(self) -> Self:
@@ -643,6 +645,10 @@ class Evidence(_Metadata):
             raise ValueError("immutable evidence identity must name its version")
         if self.observation_id != self.provenance.source_observation_id:
             raise ValueError("evidence receipt and provenance must agree")
+        if self.association_state == "detached" and not (
+            self.correction_id and self.rejection_reason and self.supersedes_evidence_version
+        ):
+            raise ValueError("detachment requires a correcting authority and predecessor")
         retained = self.association_state in {"accepted", "accepted_pending_identity"}
         if retained != bool(self.accepted_by and self.accepted_at):
             raise ValueError("accepted evidence requires attributable acceptance")
@@ -662,7 +668,9 @@ class EvidenceHead(_Metadata):
     scope: PatientScope
     evidence_id: NonblankStr
     current_version: PositiveVersion
-    status: Literal["candidate", "accepted_pending_identity", "accepted", "rejected", "superseded"]
+    status: Literal[
+        "candidate", "accepted_pending_identity", "accepted", "rejected", "superseded", "detached"
+    ]
     mission_id: str | None = None
 
     @model_validator(mode="after")
@@ -1233,6 +1241,9 @@ type InboundReceiptRecord = StoredRecord
 
 
 MODELS: dict[str, type[BaseModel]] = {
+    "correction": Correction,
+    "correction_offer": CorrectionOffer,
+    "fact_head": FactHead,
     "liaison_notice": Notice,
     "review_offer": ReviewOffer,
     "upload_stage": UploadStage,
@@ -1292,7 +1303,7 @@ MODELS: dict[str, type[BaseModel]] = {
 
 
 def model_scope(model: BaseModel) -> Scope:
-    if isinstance(model, (Notice, ReviewOffer, UploadStage)):
+    if isinstance(model, (Correction, CorrectionOffer, FactHead, Notice, ReviewOffer, UploadStage)):
         return model.scope
     if isinstance(model, (Evidence, EvidenceHead, EvidenceHash, EvidenceAction)):
         return model.scope
@@ -1377,7 +1388,7 @@ def scope_owns(scope: Scope, other: Scope) -> bool:
 
 
 def model_key(model: BaseModel, scope: Scope) -> Key:
-    if isinstance(model, (Notice, ReviewOffer)):
+    if isinstance(model, (Correction, CorrectionOffer, FactHead, Notice, ReviewOffer)):
         return Key(
             keys.partition(model.scope), f"{model.entity_type.upper()}#{keys.component(model.id)}"
         )

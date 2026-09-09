@@ -269,11 +269,13 @@ def test_stop_then_dispatch_reports_order_inactive(w: PatientWorld) -> None:
     assert task(w).state == "cancelled"
     assert (
         required(w.store.get(w.patient_scope, "outbound_intent", prompt.id)).body["status"]
-        == "queued"
+        == "suppressed"
     )
     calls = len(w.transport.calls)
     refused = dispatch(w, prompt)
-    assert refused.status == "suppressed" and refused.suppression_reason == "order_inactive"
+    assert (
+        refused.status == "suppressed" and refused.suppression_reason == "accepted_record_corrected"
+    )
     assert len(w.transport.calls) == calls
     assert dispatch(w, refused) == refused
 
@@ -418,14 +420,23 @@ def test_thirty_prompts_scope_and_restart_recovery(w: PatientWorld) -> None:
             w.seed(intent)
             intents.append(intent)
     unscoped = intents[0].model_copy(
-        update={"id": "synthetic-unscoped", "logical_key": "synthetic-unscoped", "order_refs": ()}
+        update={
+            "id": "synthetic-unscoped",
+            "logical_key": "synthetic-unscoped",
+            "order_refs": (),
+            "source_versions": (),
+        }
     )
     w.seed(unscoped)
     old = medication(w)
     old = next(m for m in snap.missions if m.title == "Atorvastatin")
     confirm(w, {"action": "stop", "drug": "Atorvastatin"})
     assert all(
-        required(w.store.get(w.patient_scope, "outbound_intent", i.id)).body["status"] == "queued"
+        (
+            required(w.store.get(w.patient_scope, "outbound_intent", i.id)).body["status"]
+            == "suppressed"
+        )
+        == bool(set(i.order_refs).intersection(old.order_refs))
         for i in intents
     )
     # Nothing ran between confirmation and reconstruction of the Steward.

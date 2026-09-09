@@ -158,6 +158,11 @@ class ScribeTurn:
         if task_result is not None:
             return task_result
 
+        from sanad.evidence.correction_doctor import route as correction_route
+
+        correction_result = correction_route(self, receipt, auth)
+        if correction_result is not None:
+            return correction_result
         evidence_result = evidence_route(self, receipt, auth)
         if evidence_result is not None:
             return evidence_result

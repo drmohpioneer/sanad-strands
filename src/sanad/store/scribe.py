@@ -129,8 +129,57 @@ def scribe_guards(
             != doctor.model_dump(exclude={"language", "version", "updated_at"})
         ):
             return None
+    compensation: dict[tuple[str, str], object] = {}
     if kind == "ScribeConfirm":
-        allowed |= {"name_memory"}
+        from sanad.domain.entities import DRAFT_POLICY_2026_09
+        from sanad.scribe.order_changes import compensation_models
+        from sanad.store.records import to_record
+
+        changed_proposal = next(
+            (from_record(r, Proposal) for r in request.puts if r.entity_type == "scribe_proposal"),
+            None,
+        )
+        if changed_proposal:
+            try:
+                compensation_values = compensation_models(
+                    store,
+                    tuple(
+                        from_record(r, MODELS[r.entity_type])
+                        for r in request.puts
+                        if r.entity_type == "care_order_version"
+                    ),
+                    actor,
+                    changed_proposal,
+                    now,
+                    DRAFT_POLICY_2026_09,
+                )
+                compensation = {
+                    (m.entity_type, m.id): to_record(m, model_scope(m))  # type: ignore[attr-defined]
+                    for m in compensation_values
+                }
+            except ValueError:
+                return None
+        actual_compensation = {
+            (r.entity_type, r.id): r
+            for r in (*request.puts, *request.intents)
+            if r.entity_type == "correction"
+            or (r.entity_type == "review" and r.body.get("source_type") == "correction")
+            or (r.entity_type == "outbound_intent" and r.body.get("scope_kind") == "patient")
+        }
+        if actual_compensation != compensation:
+            return None
+        from sanad.corrections import Correction
+
+        for output in request.puts:
+            if output.entity_type != "correction":
+                continue
+            correction_record = from_record(output, Correction)
+            for intent_id in correction_record.exposures:
+                exposed_row = store.get(correction_record.scope, "outbound_intent", intent_id)
+                if exposed_row is None:
+                    return None
+                checks.append(Check(exposed_row.key, exposed_row.version))
+        allowed |= {"name_memory", "correction", "outbound_intent"}
     if kind == "ScribeNameCache":
         allowed = {"name_cache"}
     if kind in {"IntakeCreate", "IntakeAction", "IntakeReview", "IntakeDanger", "ScribePropose"}:
@@ -192,6 +241,8 @@ def scribe_guards(
             if written.version != 1 or store.get(actual, written.entity_type, written.id):
                 return None
         if written.entity_type == "outbound_intent":
+            if (written.entity_type, written.id) in compensation:
+                continue
             if (
                 written.body.get("scope_kind") != "intake"
                 or written.body.get("audience") != "doctor"

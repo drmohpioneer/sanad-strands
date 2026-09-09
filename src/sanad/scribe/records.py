@@ -46,6 +46,9 @@ class ClinicalFact(ScribeRecord):
     payload: FactPayload | LabFactPayload | ReportFactPayload
     provenance: Provenance
     visibility: Literal["doctor_private", "patient_released"] = "doctor_private"
+    supersedes_fact_id: str | None = None
+    correction_id: str | None = None
+    root_fact_id: str | None = None
 
 
 class ValueAlert(_BoundaryValue):

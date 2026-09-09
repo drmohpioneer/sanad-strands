@@ -47,7 +47,7 @@ def process(world: World, accepted: Any) -> Any:
     )
 
 
-def test_confirm_contact_reply_fulfillment_and_correction(world: World) -> None:
+def test_fulfillment_refuses_legacy_unverified_correction(world: World) -> None:
     world.confirm()
     assert world.dispatch(world.prompt()).status == "provider_accepted"
     accepted = world.accept(
@@ -69,31 +69,28 @@ def test_confirm_contact_reply_fulfillment_and_correction(world: World) -> None:
             predicate_still_holds=False,
         )
     )
-    assert changed.status == "accepted"
-    assert world.mission().fulfillment_validity == "invalidated_pending_review"
+    assert changed.status in {"forbidden", "invalid_input"}
+    assert world.mission().fulfillment_validity == "valid"
     assert world.mission().state == "fulfilled"
-    assert len(list(records(world.store, SCOPE, "evidence_annotation"))) == 1
+    assert len(list(records(world.store, SCOPE, "evidence_annotation"))) == 0
     reviews = [from_record(r, ReviewObligation) for r in records(world.store, SCOPE, "review")]
-    assert {r.review_kind for r in reviews} == {"result_review", "correction_disposition"}
+    assert {r.review_kind for r in reviews} == {"result_review"}
 
 
-def test_queued_done_is_suppressed_after_correction(world: World) -> None:
+def test_legacy_unverified_correction_cannot_suppress_done(world: World) -> None:
     world.confirm()
     assert process(world, report(world)).status == "accepted"
     done = world.queued()[0]
-    assert (
-        world.steward.handle(
-            world.command(
-                "CorrectEvidence",
-                superseded_evidence_ref=EVIDENCE.model_dump(mode="json"),
-                correcting_evidence_ref=CORRECTION.model_dump(mode="json"),
-                predicate_still_holds=False,
-            )
-        ).status
-        == "accepted"
-    )
-    assert world.dispatch(done).status == "suppressed"
-    assert not world.transport.calls
+    assert world.steward.handle(
+        world.command(
+            "CorrectEvidence",
+            superseded_evidence_ref=EVIDENCE.model_dump(mode="json"),
+            correcting_evidence_ref=CORRECTION.model_dump(mode="json"),
+            predicate_still_holds=False,
+        )
+    ).status in {"forbidden", "invalid_input"}
+    assert world.dispatch(done).status == "provider_accepted"
+    assert len(world.transport.calls) == 1
 
 
 def test_deadlines_extend_rearms_once_and_preserves_current_consent(world: World) -> None:

@@ -520,3 +520,31 @@ Selected code sentences pass the existing output validator and safety kernel;
 every refusal retains the deterministic template. The dispatcher rechecks source,
 authority and the active lease after the model call before transport. Draft policy
 is OWNER_REVIEW_PENDING: six seconds, one turn, five inbox rows, three named items.
+
+
+## Accepted-record corrections (contract 19, addendum 1)
+
+Patient-scoped doctor corrections use a dedicated authenticated command and
+commit-time reconstruction guard. Immutable correcting records retain the exact
+predecessor, before/after values, reason and separate authorized_correction
+authority. Evidence heads can advance to an explicit detached version; clinical
+facts use a current-head reference while original facts and source provenance stay
+immutable. No unassigned intake correction or cross-patient re-filing is released.
+
+Dependency discovery follows exact evidence/fact links and medication START
+anchors. One final revision per dependent mission is composed before the atomic
+commit. Requests exceeding a conservative bounded transaction budget fail before
+any correction mutation, with no partially corrected current truth. Urgent
+screening still runs before the ordinary transaction bound. Corrections preserve
+fulfilment history and times; reviewed ValidateCorrection resolves the exact
+current correction review atomically with server-computed validity. Reopen is a
+separate version/epoch-bound preview and confirmation with an explicit deadline.
+
+Queued affected instructions are suppressed with a reason. Sending/uncertain
+instructions retain their uncertainty and create timed doctor decisions. A
+provider-accepted instruction cannot be unsent. Follow-up decisions are separately
+recorded actions; corrections never automatically send patient instructions.
+DONE:CORRECTION requires an actually provider-accepted earlier report and a current
+accepted correction. Earlier corrections get solicited confirmation and review.
+Correction reviews use their existing review deadline; after a provider-accepted
+DEADLINE they participate in the existing weekly bundles.

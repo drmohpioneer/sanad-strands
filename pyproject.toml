@@ -26,6 +26,7 @@ dev = [
     "arabic-reshaper==3.0.1",
     "hatchling==1.32.0",
     "mypy==1.20.2",
+    "playwright==1.60.0",
     "pytest==9.1.1",
     "pytest-socket==0.8.1",
     "python-bidi==0.6.11",

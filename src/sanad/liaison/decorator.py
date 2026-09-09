@@ -104,6 +104,10 @@ def decorate(
         or isinstance(intent.scope, AccountScope)
     ):
         return payload, None
+    from sanad.evidence.correction_doctor import correction_keyboard
+
+    original_payload = payload
+    payload = correction_keyboard(intent, payload)
     snapshots = displayed(store, intent, now, basis)
     if not snapshots:
         return payload, None
@@ -243,7 +247,7 @@ def decorate(
             "type": "_DecorateNotice",
             "notice_id": notice_id,
             "basis": [r.model_dump(mode="json") for r in basis],
-            "original": payload,
+            "original": original_payload,
         },
     )
     rows = tuple(to_record(r, tenant) for r in (notice, *offers))
@@ -364,8 +368,10 @@ def issuance_guards(
         k: v for k, v in original.items() if k not in {"text", "reply_markup"}
     }:
         return None
+    from sanad.evidence.correction_doctor import correction_keyboard
+
     old_markup, new_markup = (
-        original.get("reply_markup", {}),
+        correction_keyboard(intent, original).get("reply_markup", {}),
         notice.payload.get("reply_markup", {}),
     )
     if not isinstance(old_markup, dict) or not isinstance(new_markup, dict):

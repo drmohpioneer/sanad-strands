@@ -101,7 +101,8 @@ def current_details(store: Store, scope: PatientScope, mission: Mission) -> Moni
                 continue
             head = from_record(head_row, EvidenceHead)
             if (
-                head.status != "accepted"
+                head.current_version != evidence.version
+                or head.status != "accepted"
                 or head.mission_id != mission.id
                 or evidence.identity_pending
             ):
@@ -109,6 +110,14 @@ def current_details(store: Store, scope: PatientScope, mission: Mission) -> Moni
             values = photo_readings(evidence)
         elif row.entity_type == "clinical_fact":
             fact = from_record(row, ClinicalFact)
+            from sanad.corrections import FactHead
+
+            fact_head = store.get(scope, "fact_head", fact.root_fact_id or fact.id)
+            if fact_head and (
+                from_record(fact_head, FactHead).status != "accepted"
+                or from_record(fact_head, FactHead).current_ref != row.ref
+            ):
+                continue
             if (
                 isinstance(fact.payload, ReportFactPayload)
                 and fact.payload.report_kind == "reading"

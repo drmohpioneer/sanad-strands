@@ -138,6 +138,10 @@ def guards(store: "StoreBase", request: CommitRequest, now: datetime) -> list["C
             if not prior:
                 return None
             old = from_record(prior, Evidence)
+            # Only the separately authenticated correction workflow restores a
+            # detached accepted source. Ordinary association cannot bypass it.
+            if old.association_state == "detached" or evidence.association_state == "detached":
+                return None
             new_flags = (
                 (*old.flags, "doctor_accepted")
                 if actor.actor_kind == "doctor" and action == "accept"

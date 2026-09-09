@@ -9,3 +9,5 @@
 @media(max-width:480px){main,.rail{padding-inline:16px}h1{font-size:2rem}.toolbar{display:grid}.toolbar .search{min-inline-size:0}.toolbar label,.toolbar input,.toolbar select,.filter-summary,.refresh-bar,.pager span,.rail nav a,.rail-bottom,.account,small,caption,.eyebrow,td,td small,.status,.clinical .stack-label,.reading-table td,.reading-table th{font-size:1rem;line-height:1.5}.clinical th{font-size:1rem;min-inline-size:110px}.clinical th button{min-block-size:44px}.refresh-bar{align-items:start;flex-wrap:wrap}.pager{justify-content:start;flex-wrap:wrap}.identity{font-size:1.75rem}.provenance{font-size:1rem}body[data-audience=patient] h1{font-size:2rem}}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
 @media(forced-colors:active){:focus-visible{outline:3px solid Highlight}.status{forced-color-adjust:auto}.urgent{border-color:CanvasText}}
+
+.correction-notice{white-space:pre-wrap;overflow-wrap:anywhere}

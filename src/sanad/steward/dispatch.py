@@ -40,9 +40,10 @@ from sanad.store.records import (
 
 
 def order_freshness(store: Store, intent: OutboundIntent) -> str | None:
+    from sanad.scribe.order_changes import active_reference
+
     for ref in intent.order_refs:
-        row = store.get(intent.scope, "care_order", ref.id)
-        if row is None or row.version != ref.version or row.body.get("status") != "active":
+        if not active_reference(store, intent.scope, ref):
             return "order_inactive"
     return None
 
@@ -196,7 +197,22 @@ def freshness(
         if not valid:
             return "objective_not_current"
     if intent.notification_purpose == "DONE:CORRECTION":
-        return "correction_notice_not_released"
+        from sanad.corrections import Correction
+        from sanad.steward.corrections import correction_current
+
+        correction_rows = [r for r in sources if r.entity_type == "correction"]
+        if len(correction_rows) != 1:
+            return "correction_source_required"
+        correction = from_record(correction_rows[0], Correction)
+        if not correction_current(store, correction) or not correction.prior_report_ids:
+            return "correction_not_current"
+        if not all(
+            (prior := store.get(scope, "outbound_intent", id))
+            and prior.body.get("status") == "provider_accepted"
+            and prior.body.get("audience") == "doctor"
+            for id in correction.prior_report_ids
+        ):
+            return "prior_report_not_accepted"
     if safety and (
         intent.template_id is None or not any(row.entity_type == "incident" for row in sources)
     ):

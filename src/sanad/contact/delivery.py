@@ -129,8 +129,9 @@ def doctor_payload(store: Store, intent: OutboundIntent) -> dict[str, JsonValue]
             text = render("doctor_medication_done", language, title=title)
             from sanad.concierge.records import ReportFactPayload
             from sanad.scribe.records import ClinicalFact
+            from sanad.steward.corrections import current_facts
 
-            for report_row in records(store, intent.scope, "clinical_fact"):
+            for report_row in current_facts(store, intent.scope):
                 report = from_record(report_row, ClinicalFact).payload
                 if not isinstance(report, ReportFactPayload) or not report.target_ref:
                     continue

@@ -20,7 +20,7 @@ key is required and no personal contact address is hard-coded.
 
 ## Run and test
 
-Install [uv](https://docs.astral.sh/uv/) and Make, then run from the repository root:
+Install [uv](https://docs.astral.sh/uv/), Make and Node.js (24 LTS), then run from the repository root:
 
 ```sh
 make install
@@ -30,6 +30,20 @@ make run
 ```
 
 `make install` uses `uv sync --locked` to provision the Python version in `.python-version` (3.12.14) and install `uv.lock` into `.venv`. The system Python may be a different version. The Makefile keeps uv's downloaded interpreter and package cache in ignored `.uv-python/` and `.uv-cache/` directories. The first install needs internet access for Python and packages; after caching them, `UV_OFFLINE=1 make install` also works. Tests, lint, type checking and builds run offline with the installed dependencies. No cloud credentials, bot token or environment file is required.
+
+`make build` requires `make check-js`, which parses every `src/sanad/web/static/*.js`
+asset with `node --check`. Missing Node or a syntax error fails before packaging;
+the default tests also exercise both refusal cases.
+
+For real browser regression checks, install the pinned Playwright Chromium once
+with `uv run playwright install chromium`, then run `make test-browser`. This
+separate browser target requires Chromium, OpenSSL and permission to launch a
+browser and bind loopback HTTPS. It serves the accepted synthetic login fixture,
+uses device scale factor 2, and asserts current corrected readings and the
+correction controls through actual authenticated routes. Missing tools or launch
+failures are errors, never skips. The normal Python golden path is
+`make install test test-ddb lint typecheck build`; it includes JavaScript parsing
+but does not substitute for the required browser target.
 
 `make run` serves on `http://127.0.0.1:8000`. GET `/health` returns:
 
@@ -375,7 +389,7 @@ receipt time and creates its independent result review. A deadline notice identi
 an on-time file whose reading or identity confirmation is still pending. Confirming
 later preserves the original receipt time and deadline. Critical rows raise danger
 immediately, before the identity decision; confirming whose paper it is never
-approves a disputed clinical value. Post-fulfilment corrections remain in slice 19.
+approves a disputed clinical value. Post-fulfilment corrections use the patient-scoped contract-19 workflow described below.
 
 ## Grounded doctor cards
 
@@ -458,3 +472,24 @@ presentation resolver; the contest override continues to display English.
 Contract 17 is implemented locally pending architect review. Rich digest timing,
 packing, proposed replies, reusable answers and deferred question rings remain
 follow-on work. Intake review clocks are not rearmed by this slice.
+
+
+### Correcting an accepted patient record
+
+The owning doctor's record view offers **Correct or detach** for accepted evidence
+and facts, **Amend instruction** for active medication orders, and **Preview reopening**
+for completed/closed work. Every correction requires a reason and preserves the
+original. Detached facts remain accessible in retained history. A monitor correction
+updates the current value and coverage while retaining the actual observation time.
+
+Doctor notices expose **Correct record**, which opens current version-specific
+`/correct` guidance. `/corrections PATIENT_ID` lists examples. The browser correction
+section shows the before/after values, actor, reason, predicate and possible patient
+exposure. **Review and validate current evidence** restores invalidated reliance only
+after the server checks it. **Record doctor follow-up decision** records a separate
+response; it does not message the patient. Provider-accepted instructions cannot be
+unsent. Reopening always requires its separate preview and confirmation.
+
+This local contract-19 implementation is pending architect review and rendered
+browser verification; it is not accepted or clinically validated. Unassigned intake
+correction and re-filing onto another patient are outside this slice.

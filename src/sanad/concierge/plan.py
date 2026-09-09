@@ -86,6 +86,8 @@ class Snapshot:
 
 
 def load(store: Store, scope: PatientScope, now: datetime) -> Snapshot | None:
+    from sanad.steward.corrections import current_facts
+
     def get[T: BaseModel](kind: str, id: str, schema: type[T]) -> T | None:
         row = store.get(scope, kind, id)
         return schema.model_validate(row.body) if row else None
@@ -166,7 +168,7 @@ def load(store: Store, scope: PatientScope, now: datetime) -> Snapshot | None:
         tuple(from_record(r, FollowUpTask) for r in records(store, scope, "followup")),
         tuple(
             from_record(r, ClinicalFact)
-            for r in records(store, scope, "clinical_fact")
+            for r in current_facts(store, scope)
             if r.body.get("visibility") == "patient_released"
             and r.body.get("category") == "patient_report"
         ),

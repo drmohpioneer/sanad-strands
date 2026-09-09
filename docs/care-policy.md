@@ -206,3 +206,42 @@ A material-change marker compares the review with actual persisted notice histor
 The draft Liaison settings and bilingual wording remain OWNER_REVIEW_PENDING.
 The richer question digest and intake review-clock rearming require follow-on
 contracts; this surface does not resolve either gap.
+
+
+## Accepted-record correction policy (19, OWNER_REVIEW_PENDING)
+
+An owning doctor may correct an accepted patient-scoped Evidence read or ClinicalFact
+at any age, with a mandatory reason. The original source, readers, offsets, hash and
+provenance remain immutable. Detachment withdraws the source from current reliance
+on that chart; it does not delete it or re-file it onto another patient. Unassigned
+intake correction and cross-patient re-filing are outside this slice.
+
+Corrections retain the fulfilled event and all its clinical times. A corrected START date suspends reliance on its existing day-three
+anchor for doctor disposition without silently moving that clock. An incomplete
+current predicate marks reliance invalidated_pending_review. A later satisfying
+correction does not itself clear that flag: the doctor explicitly reviews and
+validates the current correction. All invalidated missions in that correction's
+bounded dependency inventory must satisfy their server-computed predicates before
+the review and validity updates commit together. Merely recording a response does
+not restore validity; validation remains available after that response. Reopening
+is a separate expiring preview and confirmation showing the deadline/escalation
+and contact consequences, preserving stopped contact and refusing superseded orders.
+
+A dose/frequency/duration/timing amendment saves a new order version through the
+shared supersession cleanup. Clinical meaning is conservatively treated as changed
+unless those fields are equivalent after whitespace/case normalization. Spelling-only
+revisions preserve execution states and clocks. A direct correction does not create
+a new patient instruction or restart a medication course. The doctor records any
+follow-up response separately; a new care request uses the existing confirmed-plan flow.
+
+Only source-dependent queued patient instructions are suppressed. Sending and
+uncertain instructions retain possible exposure and timed doctor decision work.
+A provider-accepted instruction cannot be unsent; neither its delivery record nor
+its acceptance is withdrawn. Old danger incidents remain recorded. Newly dangerous
+corrected observations use the existing safety service before the ordinary lease.
+
+A genuinely earlier provider-accepted doctor report permits DONE:CORRECTION for a
+current correcting version; otherwise confirmation is solicited with inbox review.
+The existing result-review interval governs correction review. Its first overdue
+DEADLINE must be provider-accepted before first_notice_at makes it eligible for the
+existing weekly bundle. There is no new notification class or immediate weekly entry.

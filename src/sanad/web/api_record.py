@@ -38,13 +38,25 @@ def record_router(claims: ClaimService) -> APIRouter:
         doctor_row = claims.store.get(scope, "doctor", session.doctor_id)
         assert doctor_row
         language = from_record(doctor_row, Doctor).language
+        from sanad.corrections import Correction
+        from sanad.steward.corrections import current_facts, notice_text
+
+        profile = claims.store.get_patient_profile(scope)
+        corrections = [
+            from_record(r, Correction) for r in records(claims.store, scope, "correction")
+        ]
         reviews = [r.body for r in records(claims.store, scope, "review")]
         missions = []
         for row in records(claims.store, scope, "mission"):
             related = [
                 r
                 for r in reviews
-                if r.get("source_mission_id") == row.id or r.get("source_id") == row.id
+                if r.get("source_mission_id") == row.id
+                or r.get("source_id") == row.id
+                or any(
+                    c.id == r.get("source_id") and row.id in c.affected_mission_ids
+                    for c in corrections
+                )
             ]
             status = (
                 "pending"
@@ -60,7 +72,19 @@ def record_router(claims: ClaimService) -> APIRouter:
                 for r in related
             ):
                 status = "correction_requested"
-            missions.append({**row.body, "review_status": status})
+            from sanad.domain import Mission
+            from sanad.domain.entities import MonitorDetails
+            from sanad.monitor.executor import current_details
+
+            mission_body = dict(row.body)
+            mission = from_record(row, Mission)
+            if isinstance(mission.details, MonitorDetails) and any(
+                mission.id in c.affected_mission_ids for c in corrections
+            ):
+                mission_body["details"] = current_details(claims.store, scope, mission).model_dump(
+                    mode="json"
+                )
+            missions.append({**mission_body, "review_status": status})
         orders = []
         versions = tuple(records(claims.store, scope, "care_order_version"))
         for head in records(claims.store, scope, "care_order_head"):
@@ -95,6 +119,25 @@ def record_router(claims: ClaimService) -> APIRouter:
         media = [
             from_record(r, PatientMedia) for r in records(claims.store, scope, "patient_media")
         ]
+        from sanad.store import keys
+
+        source_heads = {
+            keys.digest(r.id + ":readings"): r
+            for r in records(claims.store, scope, "evidence_head")
+        }
+        correctable_facts = []
+        for r in current_facts(claims.store, scope, include_detached=True):
+            fact_source_head = source_heads.get(str(r.body.get("root_fact_id") or r.id))
+            correctable_facts.append(
+                {
+                    **r.body,
+                    "correction_evidence_id": (
+                        f"{fact_source_head.id}:{fact_source_head.body['current_version']}"
+                    )
+                    if fact_source_head
+                    else None,
+                }
+            )
         return {
             # Browser fields from the already scoped patient/review reads.
             "age": patient.age,
@@ -115,7 +158,18 @@ def record_router(claims: ClaimService) -> APIRouter:
                 for e in owned(claims.store, session.doctor_id)
                 if e.scope == scope and e.category in {"prescription", "medication_list"}
             ],
-            "facts": [r.body for r in records(claims.store, scope, "clinical_fact")],
+            "facts": [r.body for r in current_facts(claims.store, scope)],
+            "correctable_facts": correctable_facts,
+            "fact_history": [r.body for r in records(claims.store, scope, "clinical_fact")],
+            "corrections": [
+                {**c.model_dump(mode="json"), "notice": notice_text(c)} for c in corrections
+            ],
+            "correction_authority": {
+                "binding_epoch": profile.binding_epoch,
+                "delivery_epoch": profile.delivery_epoch,
+            }
+            if profile
+            else None,
             "orders": orders,
             "order_heads": orders,
             "missions": missions,

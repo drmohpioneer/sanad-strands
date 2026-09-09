@@ -209,6 +209,9 @@ class StoreBase(ABC):
             "liaison_notice": "LIAISON_NOTICE",
             "review_offer": "REVIEW_OFFER",
             "upload_stage": "UPLOAD",
+            "correction": "CORRECTION",
+            "correction_offer": "CORRECTION_OFFER",
+            "fact_head": "FACT_HEAD",
             "evidence_head": "EVIDENCE_HEAD",
             "evidence_hash": "EVIDENCE_HASH",
             "evidence_action": "EVIDENCE_ACTION",
@@ -393,6 +396,9 @@ class StoreBase(ABC):
             "review_offer": "REVIEW_OFFER#",
             "upload_stage": "UPLOAD#",
             "evidence": "EVIDENCE#",
+            "correction": "CORRECTION#",
+            "correction_offer": "CORRECTION_OFFER#",
+            "fact_head": "FACT_HEAD#",
             "evidence_head": "EVIDENCE_HEAD#",
             "evidence_hash": "EVIDENCE_HASH#",
             "evidence_action": "EVIDENCE_ACTION#",
@@ -560,6 +566,9 @@ class StoreBase(ABC):
         notice_issue = command.payload.get("type") == "_DecorateNotice"
         concierge = command.payload.get("executor") == "concierge-v1"
         evidence = command.payload.get("executor") == "evidence-v1"
+        from sanad.steward.corrections import COMMANDS as CORRECTION_COMMANDS
+
+        correction = command.payload.get("type") in CORRECTION_COMMANDS
         scope = command.scope
         actor = command.principal
         if isinstance(scope, AccountScope) and not account:
@@ -694,6 +703,13 @@ class StoreBase(ABC):
             if guarded_patient is None:
                 return Forbidden()
             authority_checks.extend(guarded_patient)
+        if correction:
+            from sanad.store.corrections import guards as correction_guards
+
+            checked_correction = correction_guards(self, request, utc_instant(self._clock()))
+            if checked_correction is None:
+                return Forbidden()
+            authority_checks.extend(checked_correction)
         if evidence:
             from sanad.store.evidence import guards as evidence_guards
 
@@ -723,18 +739,24 @@ class StoreBase(ABC):
             )
         )
         for record in records:
+            if record.entity_type in {"correction", "correction_offer", "fact_head"} and not (
+                correction or scribe and record.entity_type == "correction"
+            ):
+                return Forbidden()
             if record.entity_type in {"review_offer", "liaison_notice"} and not (
                 review_action or notice_issue
             ):
                 return Forbidden()
-            if (
-                record.entity_type
-                in {"evidence", "evidence_head", "evidence_hash", "evidence_action"}
-                and not evidence
-            ):
+            if record.entity_type in {
+                "evidence",
+                "evidence_head",
+                "evidence_hash",
+                "evidence_action",
+            } and not (evidence or correction):
                 return Forbidden()
             if (
                 not scribe
+                and not correction
                 and not (concierge and record.entity_type == "clinical_fact")
                 and not (evidence and record.entity_type in {"clinical_fact", "patient_media"})
                 and record.entity_type

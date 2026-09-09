@@ -48,6 +48,12 @@ SUPPORTED = frozenset(
         "RecordPatientReply",
         "RecordObjectiveFulfilled",
         "CorrectEvidence",
+        "CorrectRecord",
+        "ValidateCorrection",
+        "PreviewReopen",
+        "ConfirmReopen",
+        "CorrectionResponse",
+        "AmendOrder",
         "SetContactPreference",
         "AssociateEvidence",
         "RejectEvidence",
@@ -243,9 +249,35 @@ class Steward:
 
             if doctor_checks(self.store, actor, scope.doctor_id) is None:
                 return CommandResult(status="forbidden", reason_code="doctor_authority_changed")
+        from sanad.steward.corrections import COMMANDS as CORRECTION_COMMANDS
+
+        if kind in CORRECTION_COMMANDS or kind == "CorrectEvidence":
+            from sanad.store.corrections import doctor_checks as correction_doctor_checks
+
+            if correction_doctor_checks(self.store, actor, scope, now) is None:
+                return CommandResult(status="forbidden", reason_code="doctor_authority_changed")
+        if kind == "CorrectEvidence":
+            return CommandResult(
+                status="invalid_input", reason_code="use_versioned_correction_workflow"
+            )
         prior = self.store.lookup_command(command)
         if prior is not None:
             return command_result(prior)
+        if kind in CORRECTION_COMMANDS:
+            if any(
+                getattr(command, field) is not None and getattr(command, field) != actual
+                for field, actual in (
+                    ("expected_binding_epoch", profile.binding_epoch),
+                    ("expected_delivery_epoch", profile.delivery_epoch),
+                )
+            ):
+                return CommandResult(status="stale_version", reason_code="authority_epoch")
+            from sanad.evidence.correction_screen import screen as screen_correction
+
+            try:
+                screen_correction(self, command)
+            except (ValidationError, EffectsRejected):
+                return CommandResult(status="invalid_input", reason_code="invalid_correction")
         policy = self.policy_provider(scope)
         # An explicitly supplied old fence is never replaced with a fresh authority token.
         lease = command.fence or self.store.acquire_patient(
@@ -303,6 +335,15 @@ class Steward:
             )
             if kind in {"AcknowledgeReview", "ResolveReview"}:
                 return review_handle(self, command)
+            if kind in CORRECTION_COMMANDS:
+                from sanad.steward.corrections import prepare as prepare_correction
+
+                builder = CommitBuilder(scope, command, now, policy, self.store)
+                try:
+                    request = prepare_correction(builder)
+                except ValidationError:
+                    raise InvalidCommandPayload("invalid_correction_payload") from None
+                return command_result(self.store.commit(request))
             if kind == "SetContactPreference":
                 return self._preference(command, profile)
             if kind in {"AnswerQuestion", "AcceptTask", "ReopenTask"}:
@@ -625,7 +666,9 @@ class Steward:
                 }
             )
         if kind == "CorrectEvidence":
-            return ev.CorrectAcceptedEvidence.model_validate(data)
+            raise InvalidCommandPayload("use_versioned_correction_workflow")
+        if kind == "ValidateCorrection":
+            raise InvalidCommandPayload("use_reviewed_validation_workflow")
         if kind == "_Deadline":
             return ev.DeadlineReached.model_validate(data)
         if kind == "_FollowupDeadline":

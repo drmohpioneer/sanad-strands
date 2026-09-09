@@ -327,7 +327,7 @@ def prepare(builder: CommitBuilder) -> None:
         and previous.identity_pending
         and action in {"patient_yes", "patient_no"}
     )
-    if (head.status in {"rejected", "superseded"} and not answering_rejection) or (
+    if (head.status in {"rejected", "superseded", "detached"} and not answering_rejection) or (
         head.status in {"accepted", "accepted_pending_identity"}
         and action not in {"associate", "reject", "accept", "confirm_identity"}
     ):

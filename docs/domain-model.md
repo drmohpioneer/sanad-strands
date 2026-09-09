@@ -529,3 +529,40 @@ one-hour expiry. A durable `LIAISON_MODEL_ATTEMPT` event/command reservation gra
 one bounded proposal attempt per logical intent, without granting action authority.
 The first accepted DEADLINE's metadata stamp and initial offer issuance share the
 same conditional transaction. Subsequent actions never refresh stale snapshots.
+
+
+## Accepted correcting versions (contract 19)
+
+`Correction` is immutable, patient-scoped, and separately attributed with origin
+`authorized_correction`, doctor Principal, reason, exact predecessor/successor refs,
+before/after values, server-computed predicate results, affected mission ids, retained
+monitor links, prior report ids and instruction exposure states. It does not reuse
+the proposal-only FieldEvidence correction validator.
+
+Evidence advances its existing head and appends a new Evidence version. Explicit
+`detached` versions have a matching detached head, correction id, predecessor link
+and reason; accepted_by/at are absent. The old mission id stays as provenance, not
+an active association. No detached version contributes to an evaluator. Original
+readers, observation/media ids, hashes, source regions and clinical received times
+are retained. Evidence-derived reading summaries advance their FactHead atomically.
+
+ClinicalFact corrections append a new id with root_fact_id, supersedes_fact_id and
+correction_id. FactHead selects its current ref and accepted/detached status. Current
+views use the head; history keeps all versions. Evidence-derived summaries direct
+correction to their canonical Evidence source, preventing divergent values.
+Monitoring links retain original observation/receipt times and recover removed slots
+when later corrected; the latest observation's ordering remains unchanged.
+
+One correction-disposition review covers a bounded dependency inventory. Reviewed
+ValidateCorrection checks the exact current correction/review, recomputes all its
+invalidated missions, and atomically restores validity and resolves review. An old
+correction/review cannot validate its successor. A separate CorrectionResponse
+records a doctor decision without changing fulfilment or sending a patient message.
+CorrectionOffer holds the actor, exact mission ref, patient epochs, explicit due_at,
+reason, preview, expiry and consumption time for confirmed reopening.
+
+Direct correction transactions allow at most 24 combined output records and
+expected-version references, and 512 KiB serialized outputs, before store overhead.
+The store additionally enforces 100 operations, 400 KiB per item and 4 MiB. Larger
+fan-out fails atomically without advancing current truth. Scribe amendments retain
+the same store limits and one final revision per record.

@@ -1,7 +1,7 @@
 export UV_CACHE_DIR ?= $(CURDIR)/.uv-cache
 export UV_PYTHON_INSTALL_DIR ?= $(CURDIR)/.uv-python
 
-.PHONY: install test test-ddb lint typecheck run build live-check live-check-09a live-check-09b live-check-10 live-check-11b live-check-11c live-check-11d live-check-11e live-check-12
+.PHONY: check-js test-browser install test test-ddb lint typecheck run build live-check live-check-09a live-check-09b live-check-10 live-check-11b live-check-11c live-check-11d live-check-11e live-check-12
 
 install:
 	uv sync --locked
@@ -22,7 +22,14 @@ typecheck:
 run:
 	uv run --offline --no-sync uvicorn sanad.api.app:create_app --factory --host 127.0.0.1 --port 8000
 
-build:
+check-js:
+	@command -v node >/dev/null 2>&1 || { echo "Node.js is required to parse browser JavaScript" >&2; exit 1; }
+	@set -e; for file in src/sanad/web/static/*.js; do echo "Checking $$file"; node --check "$$file"; done
+
+test-browser:
+	uv run --offline --no-sync pytest tests/browser/corrections19.py
+
+build: check-js
 	uv build --offline --no-build-isolation
 
 live-check:

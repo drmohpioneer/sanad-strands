@@ -75,7 +75,9 @@ def context(
                         "frequency": instruction.frequency,
                     }
                 )
-    for row in records(store, scope, "clinical_fact"):
+    from sanad.steward.corrections import current_facts
+
+    for row in current_facts(store, scope):
         fact = from_record(row, ClinicalFact)
         if fact.category == "condition" and isinstance(fact.payload, FactPayload):
             conditions.append(fact.payload.text)

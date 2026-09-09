@@ -25,6 +25,9 @@ class RejectionBody(BaseModel):
 
 def evidence_router(claims: ClaimService) -> APIRouter:
     router = APIRouter()
+    from sanad.web.api_corrections import correction_router
+
+    router.include_router(correction_router(claims))
     session_guard = require_session("doctor")
 
     def find(session: WebSession, id: str) -> Evidence:

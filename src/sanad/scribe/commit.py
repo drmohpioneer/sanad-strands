@@ -397,89 +397,23 @@ class ScribeCommit:
             ref = VersionRef(entity_type="care_order", id=id, version=authority.version)
             instruction_ref = VersionRef(entity_type="care_order_version", id=version_id, version=1)
             if old and order.action in {"stop", "change"}:
-                from sanad.domain import FollowUpTask, Mission, ReviewObligation
-                from sanad.domain import events as medication_events
-                from sanad.domain.entities import TERMINAL_STATES, ReviewAction
-                from sanad.domain.transitions import (
-                    transition_followup,
-                    transition_mission,
-                    transition_review,
-                )
-                from sanad.steward.types import records
-                from sanad.store.records import from_record
+                from sanad.scribe.order_changes import superseded_models
 
                 previous_ref = VersionRef(
                     entity_type="care_order", id=id, version=old.current_order_version
                 )
-                timing_policy = self.steward.policy_provider(scope).timing
-                superseded_ids = set()
-                for row in records(self.repo.store, scope, "mission"):
-                    previous_mission = from_record(row, Mission)
-                    if (
-                        previous_mission.kind != MissionKind.MEDICATION
-                        or previous_ref not in previous_mission.order_refs
-                        or previous_mission.state in TERMINAL_STATES
-                    ):
-                        continue
-                    outcome = transition_mission(
-                        previous_mission,
-                        medication_events.OrderSuperseded(
-                            event_id=f"supersede:{proposal.id}:{previous_mission.id}",
-                            successor_order_ref=instruction_ref,
-                        ),
+                models.extend(
+                    superseded_models(
+                        self.repo.store,
+                        scope,
+                        previous_ref,
+                        instruction_ref,
+                        actor,
+                        f"supersede:{proposal.id}",
                         now,
-                        timing_policy,
+                        self.steward.policy_provider(scope).timing,
                     )
-                    if isinstance(outcome, medication_events.TransitionRejected):
-                        raise EffectsRejected(outcome.reason_code)
-                    models.append(outcome.aggregate)
-                    superseded_ids.add(previous_mission.id)
-                for row in records(self.repo.store, scope, "followup"):
-                    task = from_record(row, FollowUpTask)
-                    if (
-                        task.kind != "MEDICATION_DAY3"
-                        or previous_ref not in task.order_refs
-                        or task.state in {"fulfilled", "cancelled"}
-                    ):
-                        continue
-                    outcome = transition_followup(
-                        task,
-                        medication_events.CancelFollowUp(
-                            event_id=f"supersede:{proposal.id}:{task.id}",
-                            reason="order_superseded",
-                        ),
-                        now,
-                        timing_policy,
-                    )
-                    if isinstance(outcome, medication_events.TransitionRejected):
-                        raise EffectsRejected(outcome.reason_code)
-                    models.append(outcome.aggregate)
-                for row in records(self.repo.store, scope, "review"):
-                    review = from_record(row, ReviewObligation)
-                    if (
-                        review.source_type != "mission"
-                        or review.source_id not in superseded_ids
-                        or review.review_kind != "unmet_objective"
-                        or review.state == "resolved"
-                    ):
-                        continue
-                    outcome = transition_review(
-                        review,
-                        medication_events.ResolveReview(
-                            event_id=f"supersede:{proposal.id}:{review.id}",
-                            action=ReviewAction.extend,
-                            expected_source_version=review.source_version,
-                            actor_id=actor.subject,
-                            reason="superseded",
-                        ),
-                        now,
-                        timing_policy,
-                    )
-                    if isinstance(outcome, medication_events.TransitionRejected):
-                        raise EffectsRejected(outcome.reason_code)
-                    models.append(outcome.aggregate)
-                # Confirmation writes clinical state atomically. The ordinary
-                # Steward/dispatch path owns queue suppression (addendum 2).
+                )
             order_refs.append(instruction_ref)
             accepted.append(
                 " ".join(v for v in (order.drug, order.dose, order.frequency, order.action) if v)
@@ -770,6 +704,16 @@ class ScribeCommit:
                             proposal, actor, command_id, reason="stale_version", claim=claim
                         )
             models, patient, accepted = self._compile(proposal, actor, doctor)
+            from sanad.scribe.order_changes import compensation_models
+
+            models += compensation_models(
+                self.repo.store,
+                models,
+                actor,
+                proposal,
+                now,
+                self.steward.policy_provider(patient.scope).timing,
+            )
             from sanad.concierge.answer_command import flag_amended_answers
 
             models += flag_amended_answers(self.repo.store, proposal, models, now)

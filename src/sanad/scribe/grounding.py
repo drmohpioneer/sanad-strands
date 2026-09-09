@@ -13,6 +13,13 @@ from pydantic import Field
 
 from sanad.domain.boundaries import _BoundaryValue
 from sanad.media.numbers import numbers_in
+from sanad.scribe.change_binding import (
+    bind_change,
+    complete_quantity,
+    mentions,
+    partition_for,
+    untouched,
+)
 from sanad.scribe.names import normalize
 
 if TYPE_CHECKING:
@@ -37,6 +44,8 @@ class FieldEvidence(_BoundaryValue):
     offsets: tuple[tuple[int, int], ...] = ()
     transformation: str
     value: str = Field(repr=False)
+    correction_version: int | None = None
+    correction_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -228,13 +237,20 @@ def _instruction_span(
 
 
 def _dose_span(
-    value: str, source: str, drug: tuple[int, int], all_drugs: tuple[tuple[int, int], ...]
+    value: str,
+    source: str,
+    drug: tuple[int, int],
+    all_drugs: tuple[tuple[int, int], ...],
+    *,
+    dose: bool = False,
 ) -> tuple[int, int] | None:
     left, right = clause(source, *drug)
     # A new instruction or another drug ends this drug's local value slot.
     next_drug = min((a for a, _ in all_drugs if a >= drug[1]), default=right)
     end = min(right, next_drug)
     for span in reversed(grounded(value, source)):
+        if dose and numbers_in(value) and not complete_quantity(value, source, span):
+            continue
         if drug[1] <= span[0] and span[1] <= end:
             between = normalize(source[drug[1] : span[0]])
             between = re.split(r"[,،]\s*(?:actually|sorry|rather)|(?:اقصد|قصدي)", between)[-1]
@@ -260,7 +276,9 @@ def _dose_span(
         at = left + match.start()
         for span in grounded(value, source[left:at]):
             global_span = (left + span[0], left + span[1])
-            if not source[global_span[1] : at].strip(" ,،"):
+            if not source[global_span[1] : at].strip(" ,،") and (
+                not dose or complete_quantity(value, source, global_span)
+            ):
                 return global_span
     return None
 
@@ -319,6 +337,9 @@ def _fingerprint(proposal: Proposal) -> str:
         "candidate": proposal.candidate.model_dump(mode="json"),
         "claims": [(c.item, c.field, c.value) for c in inventory(proposal)],
         "source": proposal.source_text,
+        "source_partition": proposal.source_partition.model_dump(mode="json")
+        if proposal.source_partition
+        else None,
         "receipt": proposal.source_receipt_id,
         "scope": proposal.scope.model_dump(mode="json"),
         "versions": [v.model_dump(mode="json") for v in proposal.base_versions],
@@ -393,7 +414,7 @@ def _record(
         previous
         and claim.item.startswith("order:")
         and not claim.field.startswith(("name:", "prior:"))
-        and claim.field != "deadline"
+        and claim.field not in {"deadline", "previous_drug", "previous_dose"}
     ):
         handled, correction = _correction_record(claim, proposal, previous, ctx)
         if handled:
@@ -414,12 +435,29 @@ def _record(
                 "scoped_order_version",
                 _prior_ref(proposal, claim.item),
             )
-        if span:
+        binding = bind_change(change.new, source, partition_for(proposal), ctx, claim.item)
+        if not binding:
+            return None
+        supplier = (
+            binding.previous_name
+            if field == "drug"
+            else binding.previous_dose
+            if field == "dose"
+            else None
+        )
+        if supplier:
             return _evidence(
-                claim, proposal, "transcript_span", (span[-1],), "explicit_previous_instruction"
+                claim,
+                proposal,
+                "vocabulary_alias" if field == "drug" else "transcript_span",
+                (supplier,),
+                "bound_previous_instruction",
+            ).model_copy(
+                update={
+                    "correction_id": binding.correction_id,
+                    "correction_version": binding.correction_version,
+                }
             )
-        if field == "drug" and (aliases := name_spans(claim.value, source, "drug", ctx)):
-            return _evidence(claim, proposal, "vocabulary_alias", (aliases[-1],), "previous_name")
         return None
     if claim.field.startswith("name:"):
         reading = proposal.names[int(claim.field.split(":")[1])]
@@ -496,7 +534,15 @@ def _record(
             "effective_expression",
             "checkin_expression",
         }:
-            if drug and (attached := _dose_span(claim.value, source, drug, all_drugs)):
+            if drug and (
+                attached := _dose_span(
+                    claim.value,
+                    source[: partition_for(proposal).original_end],
+                    drug,
+                    all_drugs,
+                    dose=claim.field == "dose",
+                )
+            ):
                 return _evidence(
                     claim, proposal, "transcript_span", (drug, attached), "instruction_attachment"
                 )
@@ -512,6 +558,7 @@ def _record(
                 old
                 and old.old
                 and claim.field in {"dose", "frequency", "route", "timing", "duration"}
+                and _unchanged_field(proposal, claim)
                 and getattr(old.old, claim.field) == claim.value
             ):
                 return _evidence(
@@ -523,50 +570,20 @@ def _record(
                     _prior_ref(proposal, claim.item),
                 )
         elif claim.field in {"previous_drug", "previous_dose"}:
-            prior = next((a for a in proposal.amendments if a.item == claim.item and a.old), None)
-            if (
-                prior
-                and prior.old
-                and getattr(prior.old, claim.field.removeprefix("previous_")) == claim.value
-            ):
+            binding = bind_change(order, source, partition_for(proposal), ctx, claim.item)
+            if binding and binding.previous_dose:
                 return _evidence(
-                    claim, proposal, "code_computed", (), "validated_previous_instruction"
+                    claim,
+                    proposal,
+                    "code_computed",
+                    binding.offsets,
+                    "validated_previous_instruction",
+                ).model_copy(
+                    update={
+                        "correction_id": binding.correction_id,
+                        "correction_version": binding.correction_version,
+                    }
                 )
-        # A reply's answer slot authorizes only fields actually supplied in it.
-        if previous and source.startswith(previous.source_text + "\n"):
-            from sanad.scribe.corrections import answer_slots
-
-            reply = source[len(previous.source_text) + 1 :]
-            answer = answer_slots(previous, reply).get(claim.item, "")
-            before = (
-                previous.candidate.orders[index] if index < len(previous.candidate.orders) else None
-            )
-            if before and getattr(before, claim.field, None) == claim.value:
-                prior_evidence = next(
-                    (
-                        e
-                        for e in previous.evidence
-                        if e.item == claim.item
-                        and e.field == claim.field
-                        and e.value == claim.value
-                    ),
-                    None,
-                )
-                if prior_evidence:
-                    return prior_evidence.model_copy(
-                        update={"source_ref": proposal.source_receipt_id}
-                    )
-            if answer and claim.field != "action" and grounded(claim.value, answer):
-                anchors = grounded(claim.value, reply)
-                if anchors:
-                    offset = len(previous.source_text) + 1
-                    return _evidence(
-                        claim,
-                        proposal,
-                        "authorized_correction",
-                        tuple((a + offset, b + offset) for a, b in anchors),
-                        "answer_slot:" + claim.item,
-                    )
         return None
     if claim.field in {"kind", "category"}:
         return _evidence(claim, proposal, "code_computed", (), "candidate_classification")
@@ -610,19 +627,21 @@ def _record(
 def _correction_record(
     claim: Claim, proposal: Proposal, previous: Proposal, ctx: Context
 ) -> tuple[bool, FieldEvidence | None]:
-    from sanad.scribe.corrections import answer_slots
-
-    if not proposal.source_text.startswith(previous.source_text + "\n"):
+    partition = partition_for(proposal)
+    if not partition.valid(proposal.source_text) or not partition.corrections:
         return False, None
+    extent = partition.corrections[-1]
+    if extent.proposal_id != previous.id or extent.proposal_version != previous.version:
+        return True, None
     index = int(claim.item.split(":")[1])
     if index >= len(previous.candidate.orders):
         return False, None
     prior_order = previous.candidate.orders[index]
     if not hasattr(prior_order, claim.field):
         return False, None
-    offset = len(previous.source_text) + 1
-    reply = proposal.source_text[offset:]
-    answer = answer_slots(previous, reply).get(claim.item, "")
+    offset = extent.start
+    reply = proposal.source_text[extent.start : extent.end]
+    answer = dict(extent.answers).get(claim.item, "")
     old_value = getattr(prior_order, claim.field)
     if claim.field == "action" and answer:
         actions = list(_ACTION.finditer(normalize(answer)))
@@ -641,6 +660,8 @@ def _correction_record(
             ):
                 return True, None
     if claim.field == "dose" and answer and numbers_in(answer):
+        if not _answer_dose(claim.value, answer, proposal.candidate.orders[index]):
+            return True, None
         # Frequency/timing-only answers do not retire a prescription dose.
         other_field = re.search(
             r"\b(?:times|daily|days?|hours?|tomorrow)\b|مرات|مرتين|يومي|ساعه|ساعات|بكره",
@@ -661,12 +682,8 @@ def _correction_record(
         )
         if not answer or not answer_anchors or not anchors:
             return True, None
-        return True, _evidence(
-            claim,
-            proposal,
-            "authorized_correction",
-            tuple((a + offset, b + offset) for a, b in anchors),
-            "answer_slot:" + claim.item,
+        return True, _correction_evidence(
+            claim, proposal, tuple((a + offset, b + offset) for a, b in anchors)
         )
     old_evidence = next(
         (
@@ -686,12 +703,8 @@ def _correction_record(
         )
     # An answer can supply support for a previously ungrounded value without changing it.
     if answer and claim.field != "action" and (anchors := grounded(claim.value, reply)):
-        return True, _evidence(
-            claim,
-            proposal,
-            "authorized_correction",
-            tuple((a + offset, b + offset) for a, b in anchors),
-            "answer_slot:" + claim.item,
+        return True, _correction_evidence(
+            claim, proposal, tuple((a + offset, b + offset) for a, b in anchors)
         )
     return False, None
 
@@ -705,7 +718,7 @@ def seal(proposal: Proposal, ctx: Context, previous: Proposal | None = None) -> 
     drugs = {
         f"order:{i}": _instruction_span(
             order,
-            proposal.source_text,
+            proposal.source_text[: partition_for(proposal).original_end],
             ctx,
             next(
                 (n.spoken for n in proposal.names if n.item == f"order:{i}" and n.kind == "drug"),
@@ -715,13 +728,7 @@ def seal(proposal: Proposal, ctx: Context, previous: Proposal | None = None) -> 
         for i, order in enumerate(proposal.candidate.orders)
     }
     all_drugs = tuple(
-        sorted(
-            {
-                s
-                for order in proposal.candidate.orders
-                for s in name_spans(order.drug, proposal.source_text, "drug", ctx)
-            }
-        )
+        m.span for m in mentions(proposal.source_text, ctx, partition_for(proposal).lexicon)
     )
     evidence: list[FieldEvidence] = []
     issues: list[ProposalIssue] = [i for i in proposal.issues if not i.grounding_issue]
@@ -992,11 +999,176 @@ def permitted_origins(claim: Claim) -> frozenset[Origin]:
     return frozenset()
 
 
+def _unchanged_field(proposal: Proposal, claim: Claim) -> bool:
+    from sanad.scribe.amend import order_key
+
+    change = next((a for a in proposal.amendments if a.item == claim.item and a.old), None)
+    order = proposal.candidate.orders[int(claim.item.split(":")[1])]
+    return bool(
+        change
+        and change.old
+        and order_key(change.old.drug) == order_key(order.drug)
+        and getattr(change.old, claim.field, None) == claim.value
+        and untouched(
+            order,
+            claim.field,
+            proposal.source_text,
+            partition_for(proposal),
+            item=claim.item,
+            prior_value=claim.value,
+        )
+    )
+
+
+def _correction_evidence(
+    claim: Claim, proposal: Proposal, offsets: tuple[tuple[int, int], ...]
+) -> FieldEvidence | None:
+    extent = partition_for(proposal).corrections[-1]
+    if claim.field in {"dose", "previous_dose"}:
+        offsets = tuple(
+            s for s in offsets if complete_quantity(claim.value, proposal.source_text, s)
+        )
+    record = _evidence(
+        claim, proposal, "authorized_correction", offsets, "answer_slot:" + claim.item
+    ).model_copy(
+        update={"correction_id": extent.proposal_id, "correction_version": extent.proposal_version}
+    )
+    return record if _valid_correction(record, claim, proposal) else None
+
+
+def _answer_dose(value: str, answer: str, order: OrderCandidate) -> bool:
+    # Timing-only replies leave a dose alone. A directional dose answer owns only TO.
+    if re.search(
+        r"\b(?:times|daily|days?|hours?|tomorrow)\b|مرات|مرتين|يومي|ساعه|ساعات|بكره",
+        normalize(answer),
+    ) and not re.search(r"\bdose\b|جرعه", normalize(answer)):
+        return True
+    bound = bind_change(
+        order.model_copy(update={"action": "change", "previous_drug": None, "previous_dose": None}),
+        answer,
+    )
+    if bound:
+        return bool(bound.new_dose and complete_quantity(value, answer, bound.new_dose))
+    return any(complete_quantity(value, answer, s) for s in grounded(value, answer))
+
+
+def _valid_correction(record: FieldEvidence, claim: Claim, proposal: Proposal) -> bool:
+    partition = partition_for(proposal)
+
+    def supported(text: str) -> bool:
+        if claim.field == "drug":
+            return any(
+                not m.ambiguous and normalize(m.name) == normalize(claim.value)
+                for m in mentions(text, lexicon=partition.lexicon)
+            )
+        return bool(grounded(claim.value, text))
+
+    for extent in partition.corrections:
+        if (record.correction_id, record.correction_version) != (
+            extent.proposal_id,
+            extent.proposal_version,
+        ):
+            continue
+        answer = dict(extent.answers).get(claim.item, "")
+        if claim.field in {"previous_drug", "previous_dose"}:
+            order = proposal.candidate.orders[int(claim.item.split(":")[1])]
+            binding = bind_change(order, proposal.source_text, partition, item=claim.item)
+            if not binding or (binding.correction_id, binding.correction_version) != (
+                record.correction_id,
+                record.correction_version,
+            ):
+                return False
+            expected = (
+                binding.previous_name if claim.field == "previous_drug" else binding.previous_dose
+            )
+            return bool(expected and record.offsets == (expected,))
+        if not answer or not supported(answer):
+            return False
+        if claim.field == "dose" and not _answer_dose(
+            claim.value, answer, proposal.candidate.orders[int(claim.item.split(":")[1])]
+        ):
+            return False
+        if claim.field in {"dose", "previous_dose"} and not any(
+            complete_quantity(claim.value, answer, s) for s in grounded(claim.value, answer)
+        ):
+            return False
+        return (
+            bool(record.offsets)
+            and record.source_ref == proposal.source_receipt_id
+            and record.transformation == "answer_slot:" + claim.item
+            and all(
+                extent.start <= a < b <= extent.end
+                and supported(proposal.source_text[a:b])
+                and (
+                    claim.field not in {"dose", "previous_dose"}
+                    or complete_quantity(claim.value, proposal.source_text, (a, b))
+                )
+                for a, b in record.offsets
+            )
+        )
+    return False
+
+
 def valid_record(record: FieldEvidence, claim: Claim, proposal: Proposal) -> bool:
     if (record.item, record.field, record.value) != (claim.item, claim.field, claim.value):
         return False
     if record.origin not in permitted_origins(claim):
         return False
+    if claim.item.startswith("order:"):
+        partition = partition_for(proposal)
+        if not partition.valid(proposal.source_text):
+            return False
+        index = int(claim.item.split(":")[1])
+        order = proposal.candidate.orders[index]
+        if record.origin == "authorized_correction":
+            return _valid_correction(record, claim, proposal)
+        if claim.field == "dose" and record.origin == "transcript_span":
+            if len(record.offsets) != 2:
+                return False
+            complete = complete_quantity(claim.value, proposal.source_text, record.offsets[1])
+            # Unresolved spoken words may remain visible only behind the existing numeric block.
+            observed_only = not numbers_in(claim.value) and any(
+                i.item == claim.item and i.code == "dose_missing" and i.blocked
+                for i in proposal.issues
+            )
+            if not complete and not observed_only:
+                return False
+            original = proposal.source_text[: partition.original_end]
+            if record.offsets[1][1] > partition.original_end:
+                return False
+            drug = record.offsets[0]
+            all_drugs = tuple(m.span for m in mentions(original, lexicon=partition.lexicon))
+            if _dose_span(claim.value, original, drug, all_drugs, dose=True) != record.offsets[1]:
+                return False
+            if order.action == "change":
+                binding = bind_change(order, proposal.source_text, partition, item=claim.item)
+                if binding and binding.new_dose != record.offsets[1]:
+                    return False
+        if claim.field in {"previous_drug", "previous_dose"} or (
+            claim.field.startswith("prior:") and record.origin != "stored_prior_order"
+        ):
+            binding = bind_change(order, proposal.source_text, partition, item=claim.item)
+            if not binding or not binding.previous_dose:
+                return False
+            if (record.correction_id, record.correction_version) != (
+                binding.correction_id,
+                binding.correction_version,
+            ):
+                return False
+            if claim.field.startswith("prior:"):
+                expected = (
+                    binding.previous_name
+                    if claim.field.endswith(":drug")
+                    else binding.previous_dose
+                )
+                if record.offsets != (expected,):
+                    return False
+                if claim.field.endswith(":dose") and not complete_quantity(
+                    claim.value, proposal.source_text, expected
+                ):
+                    return False
+            elif record.offsets != binding.offsets:
+                return False
     if record.origin == "vocabulary_alias" and not (
         claim.field.startswith("name:")
         or claim.field == "drug"
@@ -1066,7 +1238,11 @@ def valid_record(record: FieldEvidence, claim: Claim, proposal: Proposal) -> boo
             and bool(record.source_ref)
             and (
                 claim.field.startswith("prior:")
-                or claim.field in {"dose", "frequency", "route", "timing", "duration"}
+                or (
+                    claim.field in {"dose", "frequency", "route", "timing", "duration"}
+                    and record.transformation == "unchanged_prior_field"
+                    and _unchanged_field(proposal, claim)
+                )
             )
         )
     permitted_computation = {

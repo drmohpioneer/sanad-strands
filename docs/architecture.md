@@ -484,3 +484,39 @@ Rejected images retain already screened dangerous captions as recoverable input.
 This does not remove Telegram: runtime construction, consent validation, private
 chat routing, outbound delivery, the legacy inbound fallback and its replay scope
 exception still depend on it. Administrator sessions are checkpoint 2, unreleased.
+
+## Doctor accountability (contract 17)
+
+The doctor inbox keeps open and acknowledged reviews visible, five per page,
+overdue first and then oldest first. Each listing expires with its one-hour
+snapshot. Resolution records an explicit reason and
+permitted disposition; it performs no underlying executor operation. Patient
+review actions retain the ordinary patient fence. Exact tenant and intake review
+actions use conditional review, source and authority reads. All actions rederive
+the current approved doctor, configured bot, subject binding and authority epoch.
+
+The final normal doctor notice decorator preserves existing text and keyboards.
+It prepares random action offers bound to the recipient, exact displayed review,
+immutable source identity, live source revision and material version. The delivery
+completion transaction persists the notice and offers together only after an
+accepted or uncertain transport outcome. No generic command may issue offers.
+The first provider-accepted DEADLINE stamp joins that same transaction; initial
+offers bind the resulting bookkeeping revision without changing source/material.
+No action-time refresh is permitted. Consumption, review transition, actor audit
+and command replay commit atomically against freshly checked authority and source
+records. Offers carry no authority. Unknown delivery never asserts reading.
+
+Transport remains outside the database transaction. A crash or conflicting
+snapshot after transport can leave a delivered button without a persisted offer;
+that button refuses safely and the doctor must request a fresh inbox. Provably
+unsent or failed delivery never issues an offer. DANGER and photo crops bypass the
+decorator. Bundle timing, eligibility, text and first DEADLINE stamping retain
+their existing semantics. Action buttons cover at most three displayed bundle
+items; the inbox supplies five actionable rows per page.
+
+Liaison chooses identifiers for code-built facts in one bounded turn. A durable
+per-intent reservation prevents another model call after retries or a crash.
+Selected code sentences pass the existing output validator and safety kernel;
+every refusal retains the deterministic template. The dispatcher rechecks source,
+authority and the active lease after the model call before transport. Draft policy
+is OWNER_REVIEW_PENDING: six seconds, one turn, five inbox rows, three named items.

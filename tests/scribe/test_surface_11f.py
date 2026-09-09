@@ -32,7 +32,11 @@ def test_every_doctor_template_has_real_english_and_literal_arabic(key: str) -> 
     values = {field: "Synthetic" for field in wording.FIELDS[key]}
     pair = wording.ALL_TEMPLATES[key]
     assert isinstance(pair, tuple) and len(pair) == 2 and all(pair)
-    original = (BEFORE["TEMPLATES"] | BEFORE["SCRIBE_TEMPLATES"])[key]
+    original = (
+        BEFORE["TEMPLATES"]
+        | BEFORE["SCRIBE_TEMPLATES"]
+        | {"scribe_brand_change_line": "{old_drug} {old} ← {new_drug} {new}"}
+    )[key]
     assert pair[0].encode() == original.encode()
     assert wording.render(key, "ar", **values) == original.format(**values)
     no_arabic(wording.render(key, "en", **values))

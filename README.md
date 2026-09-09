@@ -439,3 +439,22 @@ Checkpoint 1 of 18b is implemented locally for review, with synthetic verificati
 Administrator browser sessions remain unreleased checkpoint 2. Telegram is still
 required by runtime setup, patient consent/binding and delivery; this change does
 not establish that Telegram can yet be removed from the application.
+
+
+### Doctor review inbox
+
+Use `/inbox` (or `/inbox 2`) to list open and acknowledged reviews, five at a time,
+with overdue work first. Acknowledge records receipt and leaves work unresolved.
+A disposition button requests an explicit reason through `/resolve`; it records
+only the review disposition. Answering a question, extending a mission, associating
+evidence or restoring coverage still uses its separate guarded operation.
+
+Inbox and normal doctor-notice buttons bind the displayed record. Changed source,
+review or doctor access refuses the old offer and asks for a fresh inbox. Liaison
+may order code-approved facts within a six-second, one-turn budget; a refusal uses
+the existing notice. DANGER retains its independent path. Both languages use the
+presentation resolver; the contest override continues to display English.
+
+Contract 17 is implemented locally pending architect review. Rich digest timing,
+packing, proposed replies, reusable answers and deferred question rings remain
+follow-on work. Intake review clocks are not rearmed by this slice.

@@ -256,6 +256,10 @@ CATALOG: Catalog = {
         "ar": "{drug}: {old} ← {new}",
         "en": "{drug}: {old} → {new}",
     },
+    "doctor.scribe_brand_change_line": {
+        "ar": "{old_drug} {old} ← {new_drug} {new}",
+        "en": "{old_drug} {old} → {new_drug} {new}",
+    },
     "doctor.scribe_card": {
         "ar": "{body}",
         "en": "{body}",

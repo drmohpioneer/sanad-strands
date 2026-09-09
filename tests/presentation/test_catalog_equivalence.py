@@ -94,3 +94,33 @@ def test_equality_oracle_detects_one_changed_byte(monkeypatch: pytest.MonkeyPatc
         test_every_accepted_key_and_locale_is_byte_identical(
             "contact", "doctor_medication_anchor_unknown", "en"
         )
+
+
+@pytest.mark.parametrize(
+    "locale,expected",
+    [
+        ("en", "Exforge 5/160 → Exforge HCT 5/160/12.5"),
+        ("ar", "Exforge 5/160 ← Exforge HCT 5/160/12.5"),
+    ],
+)
+def test_11k_brand_change_template_exact_bytes(
+    monkeypatch: pytest.MonkeyPatch, locale: str, expected: str
+) -> None:
+    from sanad.channels.telegram import wording
+
+    monkeypatch.setenv("SANAD_CONTEST_ENGLISH", "0")
+    assert (
+        wording.render(
+            "scribe_brand_change_line",
+            locale,
+            old_drug="Exforge",
+            old="5/160",
+            new_drug="Exforge HCT",
+            new="5/160/12.5",
+        )
+        == expected
+    )
+    with pytest.raises(ValueError):
+        wording.render(
+            "scribe_brand_change_line", locale, drug="Exforge HCT", old="5/160", new="5/160/12.5"
+        )

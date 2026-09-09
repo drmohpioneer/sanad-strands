@@ -206,6 +206,8 @@ class StoreBase(ABC):
             tenant = TenantScope(doctor_id=scope.doctor_id)
             return self._owned(tenant, keys.doctor(tenant))
         prefixes = {
+            "liaison_notice": "LIAISON_NOTICE",
+            "review_offer": "REVIEW_OFFER",
             "upload_stage": "UPLOAD",
             "evidence_head": "EVIDENCE_HEAD",
             "evidence_hash": "EVIDENCE_HASH",
@@ -387,6 +389,8 @@ class StoreBase(ABC):
         self, scope: Scope, entity_type: str, cursor: Cursor | None = None, limit: int = 100
     ) -> RecordPage:
         prefixes = {
+            "liaison_notice": "LIAISON_NOTICE#",
+            "review_offer": "REVIEW_OFFER#",
             "upload_stage": "UPLOAD#",
             "evidence": "EVIDENCE#",
             "evidence_head": "EVIDENCE_HEAD#",
@@ -552,6 +556,8 @@ class StoreBase(ABC):
         if any(row.entity_type == "upload_stage" for row in request.puts):
             return Forbidden()
         command = request.command
+        review_action = command.payload.get("type") in {"AcknowledgeReview", "ResolveReview"}
+        notice_issue = command.payload.get("type") == "_DecorateNotice"
         concierge = command.payload.get("executor") == "concierge-v1"
         evidence = command.payload.get("executor") == "evidence-v1"
         scope = command.scope
@@ -625,7 +631,34 @@ class StoreBase(ABC):
                 return Forbidden()
             authority_checks, identity_expiry = guarded
 
-        if any(getattr(command, field) is not None for field in epoch_fields):
+        if review_action:
+            from sanad.store.reviews import guards as review_guards
+
+            checked_reviews = review_guards(self, request, utc_instant(self._clock()))
+            if checked_reviews is None:
+                return Forbidden()
+            authority_checks.extend(checked_reviews)
+        if command.payload.get("type") == "_StartLiaison":
+            from sanad.liaison.attempt import guards as liaison_attempt_guards
+
+            checked_attempt = liaison_attempt_guards(self, request, utc_instant(self._clock()))
+            if checked_attempt is None:
+                return Forbidden()
+            authority_checks.extend(checked_attempt)
+        if notice_issue:
+            return Forbidden()  # Only delivery completion may issue notice action references.
+
+        review_tenant_epoch = review_action and type(scope) in {TenantScope, keys.IntakeScope}
+        if (
+            review_tenant_epoch
+            and command.expected_auth_epoch is not None
+            and command.expected_auth_epoch != actor.auth_epoch
+        ):
+            return StaleVersion(conflicts=("authority_epoch",))
+        if (
+            any(getattr(command, field) is not None for field in epoch_fields)
+            and not review_tenant_epoch
+        ):
             if not isinstance(scope, PatientScope):
                 return Forbidden()
             profile_record = self.get(scope, "patient_profile", scope.patient_id)
@@ -648,10 +681,12 @@ class StoreBase(ABC):
                 for field, actual in zip(epoch_fields, actual_epochs, strict=True)
             ):
                 return StaleVersion(conflicts=("authority_epoch",))
-            authority_checks = [
-                Check(profile_record.key, profile_record.version),
-                Check(doctor_record.key, doctor_record.version),
-            ]
+            authority_checks.extend(
+                [
+                    Check(profile_record.key, profile_record.version),
+                    Check(doctor_record.key, doctor_record.version),
+                ]
+            )
         if concierge:
             from sanad.store.concierge import guards as concierge_guards
 
@@ -688,6 +723,10 @@ class StoreBase(ABC):
             )
         )
         for record in records:
+            if record.entity_type in {"review_offer", "liaison_notice"} and not (
+                review_action or notice_issue
+            ):
+                return Forbidden()
             if (
                 record.entity_type
                 in {"evidence", "evidence_head", "evidence_hash", "evidence_action"}
@@ -884,7 +923,9 @@ class StoreBase(ABC):
                 return Forbidden()
             actual_scope = model_scope(model)
             if scope != actual_scope:
-                if scribe:
+                if review_action and record.entity_type == "review_offer":
+                    pass  # The review guard checked the exact tenant-owned offer consumption.
+                elif scribe:
                     pass  # The scribe guard checked every target, owner and patient fence.
                 elif not account or not isinstance(scope, AccountScope):
                     return Forbidden()
@@ -1758,7 +1799,19 @@ class StoreBase(ABC):
         }
         if new.model_dump(exclude=mutable) != old.model_dump(exclude=mutable):
             return None
-        writes = [Write(record_item(to_record(new, scope)), current.version)]
+        notice_writes: list[Write] = []
+        notice_checks: list[Check] = []
+        if resolution.notice is not None:
+            from sanad.liaison.decorator import issuance_guards, issued_records
+
+            if outcome not in {"provider_accepted", "uncertain"}:
+                return None
+            guarded_notice = issuance_guards(self, resolution.notice, now)
+            if guarded_notice is None:
+                return None
+            notice_checks = guarded_notice
+            notice_writes = [Write(record_item(r), None) for r in issued_records(resolution)]
+        writes = [Write(record_item(to_record(new, scope)), current.version), *notice_writes]
         if attempt.outcome == "started":
             ended = self._revision(
                 attempt_record,
@@ -1769,7 +1822,7 @@ class StoreBase(ABC):
                 redacted_error_code=new.last_error,
             )
             writes.append(Write(record_item(ended), attempt_record.version))
-        checks: list[Check] = []
+        checks: list[Check] = notice_checks
         for record in resolution.reviews:
             if isinstance(scope, AccountScope):
                 issue = from_record(record, OperationalIssue)
@@ -1784,10 +1837,22 @@ class StoreBase(ABC):
             review = from_record(record, ReviewObligation)
             if (
                 model_scope(review) != scope
-                or review.review_kind != "delivery_failure"
-                or review.source_type != "outbound_intent"
-                or review.source_id != new.id
+                or review.owner_doctor_id != scope.doctor_id
                 or review.source_version != new.version
+                or not (
+                    (
+                        review.review_kind == "delivery_failure"
+                        and review.source_type == "outbound_intent"
+                        and review.source_id == new.id
+                    )
+                    or (
+                        type(scope) is keys.IntakeScope
+                        and review.patient_id is None
+                        and review.review_kind == "delivery_failure"
+                        and review.source_type == "intake"
+                        and review.source_id == scope.intake_id
+                    )
+                )
             ):
                 return None
             existing = self.get(scope, "review", review.id)
@@ -1825,7 +1890,8 @@ class StoreBase(ABC):
         if extra is None:
             return None
         writes.extend(extra)
-        if self._atomic(writes, checks):
+        merged = self._merge_checks(writes, checks)
+        if merged is not None and self._atomic(writes, merged):
             return to_record(new, scope)
         return None
 

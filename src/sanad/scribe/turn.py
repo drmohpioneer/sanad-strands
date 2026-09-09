@@ -31,6 +31,7 @@ from sanad.models.registry import ModelRegistry, ModelRole
 from sanad.models.timeouts import EXTRACTION_TIMEOUT as EXTRACTION_TIMEOUT
 from sanad.safety import screen_text
 from sanad.scribe import amend
+from sanad.scribe.change_binding import SourcePartition, append_reply, partition_for
 from sanad.scribe.commit import ConfirmationResult, ScribeCommit
 from sanad.scribe.corrections import NEW_PATIENT, correction_request, merge_correction, reply_mode
 from sanad.scribe.crosscheck import PhotoReview, render_card, review_issues
@@ -98,6 +99,8 @@ def parse_command(text: str) -> tuple[str | None, str]:
         "/cancel",
         "/intake",
         "/lang",
+        "/inbox",
+        "/resolve",
         "/questions",
         "/answer",
         "/close",
@@ -340,7 +343,7 @@ class ScribeTurn:
 
         text = normalize_transcript(text, contest_language(doctor.language))
         command, argument = parse_command(text)
-        if command in {"/questions", "/answer", "/close"}:
+        if command in {"/questions", "/answer", "/close", "/inbox", "/resolve"}:
             from sanad.concierge.answer_command import doctor_command
 
             return doctor_command(self, receipt, principal, claim, doctor, command, argument)
@@ -493,6 +496,11 @@ class ScribeTurn:
                     for p in extracted.provenance
                 ),
             )
+        source_partition = (
+            append_reply(correction, text)
+            if correction
+            else SourcePartition(original_end=len(text))
+        )
         original = correction.source_text + "\n" + text if correction else text
         disputed = transcript.disputed_numbers if transcript else ()
         if correction:
@@ -527,6 +535,7 @@ class ScribeTurn:
             names_service=service,
             correction_issues=correction_issues,
             resolved_numbers=resolved_numbers,
+            source_partition=source_partition,
         )
 
     def name_lookup(
@@ -738,11 +747,13 @@ class ScribeTurn:
         names_service: DrugLookupService | None = None,
         correction_issues: tuple[ProposalIssue, ...] = (),
         resolved_numbers: tuple[str, ...] = (),
+        source_partition: SourcePartition | None = None,
     ) -> RouteResult:
         now = self.repo.clock()
         from sanad.scribe.crosscheck import grade_row, lab_text
         from sanad.scribe.names import NameReading, prepare_names
 
+        source_partition = source_partition or SourcePartition(original_end=len(source_text))
         name_issues: tuple[ProposalIssue, ...] = ()
         clinical_issues: tuple[ProposalIssue, ...] = ()
         names: list[NameReading] = []
@@ -797,6 +808,10 @@ class ScribeTurn:
                     ):
                         settled.add(item)
                 clarified_tests = frozenset(settled)
+            from sanad.scribe.change_binding import with_context
+            from sanad.scribe.resolver import context
+
+            source_partition = with_context(source_partition, source_text, context(service))
             candidate, clinical_issues = prepare_clinical(
                 candidate,
                 source_text,
@@ -804,6 +819,8 @@ class ScribeTurn:
                 names,
                 language=contest_language(doctor.language),
                 clarified_tests=clarified_tests,
+                partition=source_partition,
+                previous=previous if correction else None,
             )
             verified_names = {}
             if correction and previous:
@@ -990,7 +1007,13 @@ class ScribeTurn:
                 candidate, photo, receipt, actor, selected.patient_id if selected else None
             )
         candidate, amendments, amendment_issues = amend.prepare(
-            self.repo, target, candidate, creating=creating, source=source_text
+            self.repo,
+            target,
+            candidate,
+            creating=creating,
+            source=source_text,
+            partition=source_partition,
+            previous=previous if correction else None,
         )
         support = "\n".join(amend.instruction_line(a.old) for a in amendments if a.old)
         issues = [
@@ -1086,6 +1109,7 @@ class ScribeTurn:
             else receipt.id,
             source_transcript_ref=transcript_ref,
             source_text=source_text,
+            source_partition=source_partition,
             source_provenance=provenance,
             disputed_numbers=disputed,
             heard_numbers=heard,
@@ -1373,6 +1397,9 @@ class ScribeTurn:
             correction_issues=issues,
             resolved_numbers=resolved,
             extra_models=(revise(token, self.repo.clock(), consumed_at=self.repo.clock()),),
+            source_partition=append_reply(correction, text)
+            if correction
+            else SourcePartition(original_end=len(text)),
         )
         self.runtime.transport.answer_callback(
             str((receipt.payload or {}).get("callback_query_id", "")), ""
@@ -1414,7 +1441,12 @@ class ScribeTurn:
             i for i in proposal.issues if i.code not in {"patient_missing", "amendment_pending_09b"}
         ]
         candidate, amendments, amendment_issues = amend.prepare(
-            self.repo, scope if choice else None, proposal.candidate, creating=token.action == "new"
+            self.repo,
+            scope if choice else None,
+            proposal.candidate,
+            creating=token.action == "new",
+            source=proposal.source_text,
+            partition=partition_for(proposal),
         )
         issues = [i for i in issues if i.code != "order_missing"]
         issues.extend(amendment_issues)

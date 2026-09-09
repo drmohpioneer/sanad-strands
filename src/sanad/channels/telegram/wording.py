@@ -161,6 +161,10 @@ SCRIBE_TEMPLATES = {
         "Your image is saved. Choose a patient, New patient, or Not now.",
     ),
     "scribe_amendment_line": ("{drug}: {old} ← {new}", "{drug}: {old} → {new}"),
+    "scribe_brand_change_line": (
+        "{old_drug} {old} ← {new_drug} {new}",
+        "{old_drug} {old} → {new_drug} {new}",
+    ),
     "scribe_card": ("{body}", "{body}"),
     "scribe_confirmed": ("اتسجل:\n{body}", "Recorded:\n{body}"),
     "scribe_stale": (
@@ -281,6 +285,7 @@ FIELDS.update(
     {
         "doctor_photo_unreadable": frozenset({"reason"}),
         "scribe_amendment_line": frozenset({"drug", "old", "new"}),
+        "scribe_brand_change_line": frozenset({"old_drug", "old", "new_drug", "new"}),
     }
 )
 

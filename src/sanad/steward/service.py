@@ -173,6 +173,14 @@ class Steward:
         return mission, tuple(followups)
 
     def handle(self, command: CommandEnvelope) -> CommandResult:
+        from sanad.domain import TenantScope
+        from sanad.steward.reviews import handle as review_handle
+        from sanad.store.keys import IntakeScope
+
+        if command.payload.get("type") in {"AcknowledgeReview", "ResolveReview"} and type(
+            command.scope
+        ) in {TenantScope, IntakeScope}:
+            return review_handle(self, command)
         if not isinstance(command.scope, PatientScope):
             return CommandResult(status="unsupported", reason_code="patient_scope_required")
         scope = command.scope
@@ -230,6 +238,11 @@ class Steward:
                 return CommandResult(status="forbidden")
         else:
             return CommandResult(status="forbidden")
+        if kind in {"AcknowledgeReview", "ResolveReview"}:
+            from sanad.store.reviews import doctor_checks
+
+            if doctor_checks(self.store, actor, scope.doctor_id) is None:
+                return CommandResult(status="forbidden", reason_code="doctor_authority_changed")
         prior = self.store.lookup_command(command)
         if prior is not None:
             return command_result(prior)
@@ -288,6 +301,8 @@ class Steward:
                     ),
                 }
             )
+            if kind in {"AcknowledgeReview", "ResolveReview"}:
+                return review_handle(self, command)
             if kind == "SetContactPreference":
                 return self._preference(command, profile)
             if kind in {"AnswerQuestion", "AcceptTask", "ReopenTask"}:

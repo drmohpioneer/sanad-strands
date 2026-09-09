@@ -86,3 +86,31 @@ def coordinator_scripted_only(
 
 def _assert_no_coordinator_provider_calls(calls: list[bool]) -> None:
     assert calls == [], "zero real Coordinator provider calls required"
+
+
+@pytest.fixture(autouse=True)
+def liaison_scripted_only(request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Contract 17 has no live allowance; default notices exercise typed fallback."""
+    if request.config.getoption("--live"):
+        return
+    from providers.fixtures import ScriptedModel, response
+    from strands.models import Model
+
+    from sanad.liaison import agent
+
+    calls: list[bool] = []
+
+    def forbidden(*args: object, **kwargs: object) -> Model:
+        calls.append(True)
+        raise AssertionError("Contract 17 forbids real provider calls")
+
+    def scripted(*args: object, **kwargs: object) -> Model:
+        return ScriptedModel(response('{"refused": true}'))
+
+    monkeypatch.setattr(agent, "bedrock_model", forbidden)
+    monkeypatch.setattr(agent, "model_factory", scripted)
+    request.addfinalizer(lambda: _assert_no_liaison_provider_calls(calls))
+
+
+def _assert_no_liaison_provider_calls(calls: list[bool]) -> None:
+    assert calls == [], "zero real Liaison provider calls required"

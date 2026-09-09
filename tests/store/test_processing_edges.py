@@ -416,36 +416,36 @@ def test_doctor_disposition_and_explicit_reopen_use_current_consent(
 
 
 def test_review_commands_keep_acknowledgment_separate_from_resolution(world: World) -> None:
-    world.confirm()
-    assert process(world, report(world)).status == "accepted"
-    obligation = list(records(world.store, SCOPE, "review"))[0]
-    acknowledged = world.command("AcknowledgeReview", target="review_id", target_id=obligation.id)
-    first = world.steward.handle(acknowledged)
-    assert first.status == "accepted" and world.steward.handle(acknowledged) == first
-    current = world.store.get_review(SCOPE, obligation.id)
-    assert (
-        current is not None and current.state == "acknowledged" and current.work_clock is not None
+    # Contract 17 replaces caller-selected IDs with delivered, server-bound offers.
+    # Keep the lifecycle/forbidden-action oracle through the authenticated surface.
+    from sanad.liaison.records import ReviewOffer
+    from sanad.store.records import model_scope
+    from store.executors_15_fixtures import doctor
+    from store.test_inbox_17 import command, offered, setup_review
+
+    w, obligation = setup_review(world.store, world.clock)
+    _, _, offers = offered(w)
+    acknowledge = next(o for o in offers if o.action == "acknowledge")
+    acknowledged = command(w, acknowledge)
+    first = w.runtime.steward.handle(acknowledged)
+    assert first.status == "accepted" and w.runtime.steward.handle(acknowledged) == first
+    current = world.store.get_review(model_scope(obligation), obligation.id)
+    assert current and current.state == "acknowledged" and current.work_clock is not None
+    fresh = doctor(w, "/inbox", 3001)
+    w.dispatch(fresh)
+    rows, _ = world.store.list_records(w.doctor.scope, "review_offer")
+    resolve = next(
+        from_record(r, ReviewOffer)
+        for r in rows
+        if from_record(r, ReviewOffer).snapshot.review_ref.version == current.version
     )
-    wrong = world.command(
-        "ResolveReview",
-        target="review_id",
-        target_id=current.id,
-        action="cancel",
-        expected_source_version=current.source_version,
-        reason="synthetic",
-    )
-    assert world.steward.handle(wrong).status == "needs_confirmation"
-    right = world.command(
-        "ResolveReview",
-        target="review_id",
-        target_id=current.id,
-        action="review",
-        expected_source_version=current.source_version,
-        reason="Synthetic reviewed",
-    )
-    assert world.steward.handle(right).status == "accepted"
-    saved = world.store.get_review(SCOPE, current.id)
-    assert saved is not None and saved.state == "resolved" and saved.work_clock is None
+    right = command(w, resolve, "resolve-current", "Synthetic reviewed")
+    wrong = right.model_copy(update={"payload": right.payload | {"action": "cancel"}})
+    assert w.runtime.steward.handle(wrong).status != "accepted"
+    assert w.runtime.steward.handle(right).status == "accepted"
+    saved = world.store.get_review(model_scope(obligation), obligation.id)
+    assert saved and saved.state == "resolved" and saved.work_clock is None
+    assert saved.resolved_reason == "Synthetic reviewed"
 
 
 def test_open_incident_prevents_close_without_mission_projection(world: World) -> None:

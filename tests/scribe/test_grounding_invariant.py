@@ -235,7 +235,16 @@ def required_in_language(text: str, language: Language) -> tuple[str, ...]:
         text = text.replace(f"({action})", f"({label})")
     if " → " in text:
         previous, current = text.split(" → ")
-        return (previous.split(" ", 1)[-1], current)
+        from sanad.scribe.names import split_drug_dose
+
+        old_name, old_dose = split_drug_dose(previous)
+        new_name, new_dose = split_drug_dose(current.removesuffix(" (تغيير)"))
+        line = (
+            old_name + ": " + old_dose + " ← " + new_dose
+            if old_name == new_name
+            else previous + " ← " + current.removesuffix(" (تغيير)")
+        )
+        return (line, current)
     if text.startswith("MONITOR:"):
         return ("MONITOR:", "15")
     return (text,)

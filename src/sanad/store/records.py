@@ -33,6 +33,7 @@ from sanad.domain.events import RecordEvidenceAssociation, RetainObservation, Su
 from sanad.domain.language import default_language
 from sanad.domain.operations import OperationalClock as OperationalClock
 from sanad.domain.predicates import PredicateResult
+from sanad.liaison.records import Notice, ReviewOffer, ReviewSnapshot
 from sanad.media.vision import Disagreement, DocumentItem, DocumentRead, ReaderResult
 from sanad.scribe.extract import LabRowCandidate
 from sanad.scribe.proposal import InvitationWork, Proposal, ScribeCallback, ScribeState
@@ -1011,6 +1012,8 @@ class BundleSchedule(_Metadata):
 
 
 class OutboundIntent(_Metadata):
+    review_listing: tuple[ReviewSnapshot, ...] = ()
+    review_listing_expires_at: UtcInstant | None = None
     entity_type: Literal["outbound_intent"] = "outbound_intent"
     scope: Scope
     scope_kind: Literal["patient", "intake", "account", "doctor"]
@@ -1230,6 +1233,8 @@ type InboundReceiptRecord = StoredRecord
 
 
 MODELS: dict[str, type[BaseModel]] = {
+    "liaison_notice": Notice,
+    "review_offer": ReviewOffer,
     "upload_stage": UploadStage,
     "evidence": Evidence,
     "evidence_head": EvidenceHead,
@@ -1287,7 +1292,7 @@ MODELS: dict[str, type[BaseModel]] = {
 
 
 def model_scope(model: BaseModel) -> Scope:
-    if isinstance(model, UploadStage):
+    if isinstance(model, (Notice, ReviewOffer, UploadStage)):
         return model.scope
     if isinstance(model, (Evidence, EvidenceHead, EvidenceHash, EvidenceAction)):
         return model.scope
@@ -1372,6 +1377,10 @@ def scope_owns(scope: Scope, other: Scope) -> bool:
 
 
 def model_key(model: BaseModel, scope: Scope) -> Key:
+    if isinstance(model, (Notice, ReviewOffer)):
+        return Key(
+            keys.partition(model.scope), f"{model.entity_type.upper()}#{keys.component(model.id)}"
+        )
     if isinstance(model, UploadStage):
         return Key(keys.partition(model.scope), f"UPLOAD#{keys.component(model.id)}")
     if isinstance(model, Evidence):
@@ -1618,6 +1627,8 @@ class CommitRequest(_BoundaryValue):
 
 class DeliveryResolution(_BoundaryValue):
     """A dispatcher-selected outcome applied atomically with its attempt and review."""
+
+    notice: CommitRequest | None = None
 
     intent: StoredRecord
     reviews: tuple[StoredRecord, ...] = ()

@@ -2,6 +2,12 @@
 
 import logging
 import re
+from typing import TYPE_CHECKING
+
+from sanad.scribe.change_binding import SourcePartition
+
+if TYPE_CHECKING:
+    from sanad.scribe.proposal import Proposal
 
 from sanad.domain.language import default_language
 from sanad.media.numbers import numbers_in
@@ -136,6 +142,8 @@ def prepare_clinical(
     *,
     language: str = default_language,
     clarified_tests: frozenset[str] = frozenset(),
+    partition: SourcePartition | None = None,
+    previous: "Proposal | None" = None,
 ) -> tuple[DictationCandidate, tuple[ProposalIssue, ...]]:
     from sanad.scribe.alerts import prepare_alerts
 
@@ -322,7 +330,9 @@ def prepare_clinical(
     )
     from sanad.scribe.changes import drop_bare_continues
 
-    result, targets = drop_bare_continues(result, source, context(service))
+    result, targets = drop_bare_continues(
+        result, source, context(service), partition=partition, previous=previous
+    )
     issues = [
         issue.model_copy(update={"item": target})
         for issue in issues

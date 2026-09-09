@@ -2,10 +2,16 @@
 
 import logging
 import re
+from typing import TYPE_CHECKING
+
+from sanad.scribe.change_binding import SourcePartition, authority_matches, bind_change
+
+if TYPE_CHECKING:
+    from sanad.scribe.proposal import Proposal
 
 from sanad.media.numbers import numbers_in
 from sanad.scribe.extract import DictationCandidate, OrderCandidate
-from sanad.scribe.names import dictionary, heard_dose, normalize, split_drug_dose
+from sanad.scribe.names import dictionary, normalize, split_drug_dose
 from sanad.scribe.resolver import Context, generic_key, resolve_name
 
 logger = logging.getLogger(__name__)
@@ -62,7 +68,12 @@ def _without_orders(
 
 
 def drop_bare_continues(
-    candidate: DictationCandidate, source: str, ctx: Context
+    candidate: DictationCandidate,
+    source: str,
+    ctx: Context,
+    *,
+    partition: SourcePartition | None = None,
+    previous: "Proposal | None" = None,
 ) -> tuple[DictationCandidate, dict[str, tuple[str, ...]]]:
     """An existing instruction owns its drug line, including a verified prior brand."""
 
@@ -72,10 +83,17 @@ def drop_bare_continues(
         return normalize(resolved.latin or spoken)
 
     instructed = set()
-    for order in candidate.orders:
+    for index, order in enumerate(candidate.orders):
         if order.action in {"start", "change", "stop"}:
             instructed.add(identity(order))
-            prior = previous_instruction(order, source)
+            prior = previous_instruction(
+                order,
+                source,
+                partition=partition,
+                previous=previous,
+                ctx=ctx,
+                item=f"order:{index}",
+            )
             if prior:
                 instructed.add(identity(prior))
     removed = {
@@ -126,27 +144,25 @@ def _source_brand(order: OrderCandidate, source: str, ctx: Context) -> OrderCand
     )
 
 
-def previous_instruction(order: OrderCandidate, source: str) -> OrderCandidate | None:
+def previous_instruction(
+    order: OrderCandidate,
+    source: str,
+    *,
+    partition: SourcePartition | None = None,
+    previous: "Proposal | None" = None,
+    ctx: Context | None = None,
+    item: str | None = None,
+) -> OrderCandidate | None:
     if order.action != "change" or not order.previous_drug or not order.previous_dose:
         return None
-    if not re.search(
-        r"(?:increase|decrease|upgrade|chang\w*|switch|زود\w*|قلل\w*|غير\w*)[^.;\n]{0,100}\b"
-        + re.escape(split_drug_dose(order.drug)[0])
-        + r"\b",
-        source,
-        re.I,
-    ):
+    if not authority_matches(partition, source, previous):
         return None
-    old = resolve_name(order.previous_drug, "drug", source)
-    new = resolve_name(split_drug_dose(order.drug)[0], "drug", source, order.name_latin)
-    if not old.latin or not new.latin or not old.generic or not new.generic:
+    binding = bind_change(order, source, partition, ctx, item)
+    if binding is None or binding.previous_dose is None:
         return None
-    if not _same_family(old.generic, new.generic):
-        return None
-    heard = heard_dose(order.previous_drug, source)
-    if not heard or numbers_in(heard) != numbers_in(order.previous_dose):
-        return None
-    if normalize(order.drug) not in normalize(source):
+    old = resolve_name(order.previous_drug, "drug", source, ctx=ctx)
+    new = resolve_name(split_drug_dose(order.drug)[0], "drug", source, order.name_latin, ctx)
+    if not old.latin or not new.latin or not _same_family(old.generic, new.generic):
         return None
     return OrderCandidate(action="continue", drug=old.latin, dose=order.previous_dose)
 

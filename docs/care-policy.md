@@ -83,6 +83,21 @@ Every nonterminal mission, pending claim, open review obligation, outstanding ch
 
 ## Medication follow-up and changes to the active plan
 
+A medication brand change never inherits a missing dose, frequency, route,
+timing or duration from the previous medicine. A same-brand amendment may retain
+only fields the source leaves unchanged; a changed, retracted or ambiguous field
+must be clarified. In particular, an omitted extracted dose in “raise Concor to
+10” stays absent and blocks the order, even when the stored dose is 5. A generic
+unassigned-number question is not permission to commit that old dose.
+
+Change evidence binds specific FROM and TO occurrences. An affirmative earlier
+current-medication statement in the original dictation may supply FROM, including
+across an intervening lab request, but conflicting suppliers require clarification.
+The TO quantity can validate an extracted dose, never fill a missing one or supply
+FROM. Quantity evidence covers every component and explicit unit, with neither
+prefix nor suffix truncation. Corrections carry separate proposal-version-bound
+authority. The card shows both medication identities for a brand change.
+
 Medication acknowledgments are patient self-reports. A report of stopping or changing a medicine fulfills only the matching current doctor-approved STOP or CHANGE objective; it cannot change the order. Ambiguous drug matches use a patient choice, and a report without a matching instruction is relayed as a question. Doctor DONE notices and the patient plan identify these reports as self-reported.
 
 Start-date clarification is retained for 24 hours under the draft policy. A reply naming today, yesterday, the day before yesterday, a weekday, an ISO date or a number of days ago is interpreted in the patient's timezone; a weekday means its most recent occurrence, including today. Dates within seven days anchor the existing check-in. An older date retains the report with an unknown anchor and leaves the unmet-objective review unresolved. Future or ambiguous dates ask again. An expired date question cannot complete a start; a new start report begins again. Already prompted check-ins keep their original prompt time. These values remain `OWNER_REVIEW_PENDING`.
@@ -170,3 +185,24 @@ template with durable refusal accounting. Code alone owns the original slot,
 window, consent and send-time version checks. Medication/day-three prompts and
 pre-visit briefs retain their existing single-choice wording. Barrier handling
 belongs to 16a; no new pause, resume or clinical policy is introduced here.
+
+
+## Doctor review actions (contract 17)
+
+Delivery, acknowledgment and resolution are independent facts. Acknowledgment
+records the authenticated doctor's actor and time; the review stays unresolved
+and visible. Resolution requires a currently offered disposition and the doctor's
+explicit reason. It closes only that review. In particular, `answer`, `extend`,
+`associate`, `resolve_incident` and `restore_coverage` do not perform their named
+operations. Those operations retain their separate command guards and policy.
+Disposing a delivery failure does not recover the failed bundle.
+
+A notice offer binds what was displayed. A changed review, material, source or
+doctor authority refuses the old offer; the doctor opens a fresh inbox to inspect
+the current record. First notice means the first provider-accepted DEADLINE,
+stamped once. Unknown delivery establishes neither acknowledgment nor resolution.
+A material-change marker compares the review with actual persisted notice history.
+
+The draft Liaison settings and bilingual wording remain OWNER_REVIEW_PENDING.
+The richer question digest and intake review-clock rearming require follow-on
+contracts; this surface does not resolve either gap.

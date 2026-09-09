@@ -95,6 +95,24 @@ doctor's own language change, version and update time, atomically with receipt,
 audit and reply; it cannot change any authority field. Patient binding copies the
 owning doctor's language. Existing bound patients keep their saved language.
 
+Contract 11k adds `Proposal.source_partition`: the original canonical dictation's
+end offset, plus each correction reply's start/end offsets, authorising proposal
+ID/version and code-owned answer slots. All offsets are zero-based, end-exclusive
+Unicode code-point offsets into the retained `source_text`. Source-matching
+resolver aliases are snapshotted for later occurrence replay. The source partition
+is included in the evidence fingerprint; it is never reconstructed from punctuation
+or obtained by reading the live pending card. Legacy corrected proposals without
+this authority fail closed.
+
+`FieldEvidence` may additionally identify the correction's proposal ID/version.
+Preparation, evidence production and revalidation use the same occurrence binder
+for previous values. It represents missing target quantities and shared same-brand
+name occurrences explicitly. The old value shown in a diff and an unchanged field
+retained in a new instruction have separate evidence permissions. A missing target
+dose remains absent and blocks creation of its `CareOrderVersion` and CHANGE mission.
+Existing order versions and heads retain their accepted schema and atomic transition
+rules; no migration of clinical records is performed.
+
 An OrderCandidate may retain `previous_drug` and `previous_dose` for an explicitly
 spoken same-family brand change. Code verifies both the source and ingredient
 family before using them; unused previous numeric fields retain numeric clarification.
@@ -485,3 +503,29 @@ These are behavior checks to distribute through their owning contracts, not test
 - Full supported patient journey and every required mission/agent capability remain in integration acceptance; a contest date cannot turn a missing executor into accepted completion.
 
 Contract 10 permits an `AnchorConfirmed` on a contact-suppressed MEDICATION_DAY3 task to record the reported start and derive its original timing while retaining suppression and independent review. It cannot restart contact. Patient web reading projections expose the raw report rather than the stored policy grading metadata.
+
+
+## Review notice offers (contract 17)
+
+`liaison_notice` and `review_offer` live in the owning doctor partition under
+`LIAISON_NOTICE#id` and `REVIEW_OFFER#sha256` keys. A notice retains the actual
+payload, intent/attempt identity, recipient subject/bot/epoch and displayed review
+snapshots. An offer contains no clinical content: it binds one action to that
+notice, exact review scope/version, immutable source identity/version, material
+version and the source revision read for display. Random 256-bit callback values
+are hashed for lookup. Application expiry is enforced without relying on TTL.
+
+Only final-notice delivery completion issues these records together, conditioned
+on the active attempt, current doctor authority and displayed source reads.
+Definite failure and unsent outcomes cannot issue them. Accepted/uncertain delivery
+is separate from reading. A short review transaction consumes the offer with the
+permitted domain transition, audit and replay record; every authorization check
+runs again. Patient reviews retain patient leases. Exact tenant delivery failures
+and exact intake sources use their independently guarded patientless branch.
+No fabricated patient profile, patient lease or executor effect is admitted.
+
+`OutboundIntent.review_listing` retains the selected inbox snapshots and its
+one-hour expiry. A durable `LIAISON_MODEL_ATTEMPT` event/command reservation grants
+one bounded proposal attempt per logical intent, without granting action authority.
+The first accepted DEADLINE's metadata stamp and initial offer issuance share the
+same conditional transaction. Subsequent actions never refresh stale snapshots.

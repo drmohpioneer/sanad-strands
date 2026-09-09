@@ -24,6 +24,7 @@ from sanad.steward.types import StewardPolicy
 from sanad.store.keys import AccountScope, IntakeScope, ScopedKey
 from sanad.store.protocol import Store
 from sanad.store.records import (
+    CommitRequest,
     DeliveryOutcome,
     DeliveryResolution,
     Doctor,
@@ -561,6 +562,9 @@ class Dispatcher:
                 suppression=reason,
                 unsent=True,
             )
+        from sanad.domain import VersionRef
+
+        basis: tuple[VersionRef, ...] = ()
         if current.scope_kind == "doctor":
             from sanad.contact.bundle import eligible, payload_snapshot
             from sanad.store.records import model_scope
@@ -590,6 +594,85 @@ class Dispatcher:
                     self.steward.clock(),
                     unsent=True,
                 )
+        notice: CommitRequest | None = None
+        if (
+            current.audience == "doctor"
+            and current.notification_purpose != "DANGER"
+            and photo is None
+            and resolved is not None
+        ):
+            from sanad.liaison.decorator import NoticeChanged, decorate
+
+            try:
+                resolved, notice = decorate(
+                    self.store, current, resolved, self.steward.clock(), basis
+                )
+            except NoticeChanged:
+                return self._finish(
+                    current,
+                    SendOutcome(status="failed", retryable=True, code="notice_changed"),
+                    self.steward.clock(),
+                    unsent=True,
+                )
+            # A bounded model call can outlive a lease or race a source update.
+            # Re-read immediately before transport; completion still uses CAS.
+            latest_row = self.store.get(current.scope, "outbound_intent", current.id)
+            if latest_row is None:
+                return None
+            after_notice = from_record(latest_row, OutboundIntent)
+            if (
+                after_notice.version != current.version
+                or after_notice.status != "sending"
+                or after_notice.active_attempt_id != current.active_attempt_id
+                or after_notice.delivery_claim is None
+                or after_notice.delivery_claim.expires_at <= self.steward.clock()
+            ):
+                return after_notice
+            if notice is not None:
+                from sanad.liaison.decorator import reviews_for
+                from sanad.liaison.records import Notice
+                from sanad.store.reviews import doctor_checks
+
+                saved = next(r for r in notice.puts if r.entity_type == "liaison_notice")
+                offered_notice = from_record(saved, Notice)
+                actor = self.store.authorize(
+                    offered_notice.bot_id, offered_notice.doctor_subject
+                ).principal
+                if (
+                    actor.auth_epoch != offered_notice.auth_epoch
+                    or doctor_checks(self.store, actor, offered_notice.scope.doctor_id) is None
+                ):
+                    return self._finish(
+                        current,
+                        SendOutcome(status="uncertain"),
+                        self.steward.clock(),
+                        suppression="recipient_authority",
+                        unsent=True,
+                    )
+                try:
+                    reviews_for(self.store, offered_notice.snapshots)
+                except NoticeChanged:
+                    return self._finish(
+                        current,
+                        SendOutcome(status="failed", retryable=True, code="notice_changed"),
+                        self.steward.clock(),
+                        unsent=True,
+                    )
+            reason = self._freshness(current, self.steward.clock())
+            if reason:
+                return self._finish(
+                    current,
+                    SendOutcome(status="uncertain"),
+                    self.steward.clock(),
+                    suppression=reason,
+                    unsent=True,
+                )
+        # Authority/source reads above can themselves consume the remaining lease.
+        if notice is not None and (
+            current.delivery_claim is None
+            or current.delivery_claim.expires_at <= self.steward.clock()
+        ):
+            return current
         unsent = False
         try:
             outcome = (
@@ -619,7 +702,7 @@ class Dispatcher:
             )
         except TimeoutError:
             outcome = SendOutcome(status="uncertain")
-        return self._finish(current, outcome, self.steward.clock(), unsent=unsent)
+        return self._finish(current, outcome, self.steward.clock(), unsent=unsent, notice=notice)
 
     def _freshness(self, intent: OutboundIntent, now: datetime) -> str | None:
         return freshness(self.store, intent, now, settings=self.settings) or (
@@ -686,6 +769,7 @@ class Dispatcher:
         *,
         suppression: str | None = None,
         unsent: bool = False,
+        notice: CommitRequest | None = None,
     ) -> OutboundIntent | None:
         changed, reviews = transition_delivery(
             intent,
@@ -733,6 +817,11 @@ class Dispatcher:
                 scope=intent.scope,
                 resolution=DeliveryResolution.model_validate(
                     {
+                        "notice": notice
+                        if state in {"provider_accepted", "uncertain"}
+                        and not unsent
+                        and attempt == 0
+                        else None,
                         "intent": to_record(changed, intent.scope),
                         "reviews": reviews,
                         "release_reservation": unsent,

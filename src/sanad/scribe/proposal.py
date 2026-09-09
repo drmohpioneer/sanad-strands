@@ -10,6 +10,7 @@ from sanad.domain.deadlines import ResolvedTiming
 from sanad.domain.language import Language, default_language
 from sanad.domain.operations import OperationalClock
 from sanad.scribe.amend import OrderChange
+from sanad.scribe.change_binding import SourcePartition
 from sanad.scribe.crosscheck import PhotoReview
 from sanad.scribe.extract import PROMPT_VERSION, DictationCandidate, ProposalIssue, ScribeIntent
 from sanad.scribe.grounding import FieldEvidence
@@ -63,6 +64,7 @@ class Proposal(ScribeRecord):
     source_receipt_id: NonblankStr
     source_transcript_ref: NonblankStr | None = None
     source_text: str = Field(repr=False)
+    source_partition: SourcePartition | None = None
     source_provenance: tuple[Provenance, ...] = ()
     disputed_numbers: tuple[str, ...] = Field(default=(), repr=False)
     heard_numbers: tuple[str, ...] = Field(default=(), repr=False)

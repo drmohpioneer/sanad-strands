@@ -603,6 +603,10 @@ def doctor_command(
 ) -> "RouteResult":
     from sanad.channels.telegram.router import RouteResult
 
+    if command in {"/inbox", "/resolve"}:
+        from sanad.concierge.inbox import doctor_command as inbox_command
+
+        return inbox_command(turn, receipt, actor, claim, doctor, command, argument)
     scope = IntakeScope(doctor_id=doctor.id, intake_id="scribe")
     # The listing snapshot belongs to the doctor's private Scribe conversation.
     # Its token/targets travel atomically with that session's saved listing reply.
@@ -750,6 +754,11 @@ def doctor_command(
 def task_route(
     turn: "ScribeTurn", receipt: "InboundReceipt", auth: "Authorization"
 ) -> "RouteResult | None":
+    from sanad.concierge.inbox import callback as inbox_callback
+
+    inbox_result = inbox_callback(turn, receipt, auth)
+    if inbox_result is not None:
+        return inbox_result
     if receipt.kind != "callback" or auth.principal.actor_kind != "doctor":
         return None
     token = str((receipt.payload or {}).get("callback_token_hash", ""))

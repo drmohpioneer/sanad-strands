@@ -4,10 +4,12 @@ from typing import TYPE_CHECKING
 
 from sanad.domain import PatientScope
 from sanad.domain.boundaries import _BoundaryValue
+from sanad.scribe.change_binding import SourcePartition, authority_matches, untouched
 from sanad.scribe.extract import DictationCandidate, OrderCandidate, ProposalIssue
 from sanad.store import keys
 
 if TYPE_CHECKING:
+    from sanad.scribe.proposal import Proposal
     from sanad.scribe.records import CareOrderHead
     from sanad.scribe.repository import ScribeRepository
 
@@ -57,11 +59,16 @@ def prepare(
     *,
     creating: bool = False,
     source: str = "",
+    partition: SourcePartition | None = None,
+    previous: "Proposal | None" = None,
 ) -> tuple[DictationCandidate, tuple[OrderChange, ...], tuple[ProposalIssue, ...]]:
     from sanad.scribe.records import CareOrderVersion
 
     if scope is None and not creating:
         return candidate, (), ()
+
+    if not authority_matches(partition, source, previous):
+        return candidate, (), (ProposalIssue(item="all", code="clinical_unclear"),)
 
     orders, changes, issues = [], [], []
     dropped = list(candidate._dropped_numbers)
@@ -69,12 +76,16 @@ def prepare(
         from sanad.media.numbers import numbers_in
         from sanad.scribe.changes import previous_instruction
 
-        stated_previous = previous_instruction(supplied, source)
+        stated_previous = previous_instruction(
+            supplied, source, partition=partition, previous=previous, item=f"order:{i}"
+        )
         if not stated_previous and (supplied.previous_drug or supplied.previous_dose):
             dropped.extend(
                 numbers_in((supplied.previous_drug or "") + " " + (supplied.previous_dose or ""))
             )
-            supplied = supplied.model_copy(update={"previous_drug": None, "previous_dose": None})
+            issues.append(
+                ProposalIssue(item=f"order:{i}", code="clinical_unclear", field="previous_dose")
+            )
         head = (
             find_head(repo, scope, stated_previous.drug if stated_previous else supplied.drug)
             if scope
@@ -93,11 +104,32 @@ def prepare(
         order, note, noop = supplied, None, False
         if old and head:
             if supplied.action in {"change", "continue"}:
+                same_drug = order_key(supplied.drug) == order_key(old.drug)
                 values = {
-                    field: getattr(supplied, field) or getattr(old, field) for field in FIELDS
+                    field: getattr(supplied, field)
+                    or (
+                        getattr(old, field)
+                        if same_drug
+                        and untouched(
+                            supplied,
+                            field,
+                            source,
+                            partition,
+                            item=f"order:{i}",
+                            prior_value=getattr(old, field),
+                        )
+                        else None
+                    )
+                    for field in FIELDS
                 }
+                for field in FIELDS:
+                    if field != "dose" and getattr(old, field) and not values[field] and same_drug:
+                        issues.append(
+                            ProposalIssue(item=f"order:{i}", code="clinical_unclear", field=field)
+                        )
                 noop = (
-                    supplied.action == "continue"
+                    same_drug
+                    and supplied.action == "continue"
                     and head.status == "active"
                     and all(values[field] == getattr(old, field) for field in FIELDS)
                     and not supplied.effective_expression
@@ -148,6 +180,20 @@ def diff_lines(changes: tuple[OrderChange, ...], language: str = "ar") -> tuple[
                 if change.new.action == "stop"
                 else instruction_line(change.new)
             )
+            if change.new.action == "change" and order_key(change.old.drug) != order_key(
+                change.new.drug
+            ):
+                result.append(
+                    wording.render(
+                        "scribe_brand_change_line",
+                        language,
+                        old_drug=plain(change.old.drug),
+                        old=instruction_line(change.old),
+                        new_drug=name,
+                        new=new,
+                    )
+                )
+                continue
             result.append(
                 wording.render(
                     "scribe_amendment_line",

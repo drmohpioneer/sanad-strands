@@ -27,6 +27,7 @@ PARAMETERS = {
     "public-base-url": ("String", None),
     "bot-username": ("String", "SANAD_TELEGRAM_BOT_USERNAME"),
     "budget-email": ("String", "SANAD_BUDGET_EMAIL"),
+    "operator-name": ("String", None),
 }
 
 
@@ -100,9 +101,16 @@ def outputs(cfn: Any, env: str) -> dict[str, str]:
     return {x["OutputKey"]: x["OutputValue"] for x in result.get("Outputs", [])}
 
 
-def parameter_values(ssm: Any, env: str) -> tuple[dict[str, str], dict[str, int]]:
+def parameter_values(
+    ssm: Any, env: str, *, include_operator: bool = False
+) -> tuple[dict[str, str], dict[str, int]]:
     result = ssm.get_parameters(
-        Names=[f"/sanad/{env}/{name}" for name in PARAMETERS], WithDecryption=True
+        Names=[
+            f"/sanad/{env}/{name}"
+            for name in PARAMETERS
+            if include_operator or name != "operator-name"
+        ],
+        WithDecryption=True,
     )
     values = {x["Name"].rsplit("/", 1)[1]: x["Value"] for x in result["Parameters"]}
     versions = {x["Name"]: x["Version"] for x in result["Parameters"]}
@@ -112,7 +120,11 @@ def parameter_values(ssm: Any, env: str) -> tuple[dict[str, str], dict[str, int]
 def configuration_revision(ssm: Any, env: str) -> str:
     """Metadata fingerprint also detects parameters deleted and recreated at version 1."""
     result = ssm.get_parameters(
-        Names=[f"/sanad/{env}/{name}" for name in PARAMETERS if name != "public-base-url"],
+        Names=[
+            f"/sanad/{env}/{name}"
+            for name in PARAMETERS
+            if name not in {"public-base-url", "operator-name"}
+        ],
         WithDecryption=False,
     )
     metadata = sorted(
@@ -181,3 +193,56 @@ def wait_stack(cfn: Any, name: str, *, sleep: Callable[[float], None] = time.sle
             raise OperationError(f"Stack {state}; deployment stopped")
         sleep(5)
     raise OperationError("Stack wait timed out; inspect status before retrying")
+
+
+def dev_only(env: str) -> None:
+    if env != "dev":
+        raise OperationError("This command requires --env dev")
+
+
+def dev_outputs(aws: Any, env: str) -> dict[str, str]:
+    dev_only(env)
+    out = outputs(client(aws, "cloudformation"), env)
+    if out.get("TableName") != "sanad-dev-data":
+        raise OperationError("Expected stack TableName sanad-dev-data; operation refused")
+    return out
+
+
+def operator_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--env", required=True, choices=("dev", "judge"))
+    parser.add_argument("--yes", action="store_true", help="execute; default is dry-run")
+
+
+def parse_instant(value: str) -> datetime:
+    try:
+        at = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if at.tzinfo is None:
+            raise ValueError
+        return at.astimezone(UTC)
+    except ValueError:
+        raise OperationError("Expected a timezone-aware ISO instant") from None
+
+
+def oldest(values: list[str | None], now: datetime) -> dict[str, Any]:
+    times = [parse_instant(value) for value in values if value is not None]
+    at = min(times) if times else None
+    return {
+        "count": len(times),
+        "oldest_at": at.isoformat() if at else None,
+        "age_seconds": max(0.0, (now - at).total_seconds()) if at else None,
+    }
+
+
+def safe_public_text(value: str) -> str:
+    """Refuse credentials/contact data, never sanitize them into an apparent pass."""
+    phone = re.findall(r"(?<![\w])\+?\d[\d ()-]{7,}\d(?![\w])", value)
+    if (
+        any(len(re.sub(r"\D", "", match)) >= 9 for match in phone)
+        or re.search(r"[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}", value)
+        or re.search(r"\b\d+:[A-Za-z0-9_-]{12,}", value)
+        or re.search(r"(?i)\b(?:bearer\s+|sk-|AIza|AKIA|token[=: ]|secret[=: ])\S+", value)
+        or re.search(r"(?<![\w])[A-Za-z0-9_-]{28,}(?![\w])", value)
+        or any(ord(char) < 32 and char not in "\n\t" for char in value)
+    ):
+        raise OperationError("Sensitive value detected; public record refused")
+    return value

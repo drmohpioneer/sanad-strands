@@ -82,9 +82,9 @@ def create_app(
         from sanad.web.security import BrowserSecurity, install_redaction
 
         login = LoginService(runtime.accounts, web_settings.public_base_url)
-        claims = ClaimService(runtime.accounts, web_settings.public_base_url)
-        if consent_policy is not None:
-            claims.consent_policy = consent_policy
+        claims = ClaimService(
+            runtime.accounts, web_settings.public_base_url, consent_policy=consent_policy
+        )
         runtime.identity_route = IdentityRouting(runtime, login, claims)
         runtime.dispatcher.extra_freshness = lambda intent, now: credential_freshness(
             login, intent, now

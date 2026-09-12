@@ -18,6 +18,7 @@ from sanad.accounts.commands import (
     CallbackRefused,
     ReinstateDoctor,
     RejectDoctor,
+    SetDoctorName,
     SuspendDoctor,
 )
 from sanad.accounts.records import (
@@ -34,6 +35,9 @@ from sanad.domain.language import effective as contest_language
 from sanad.store import keys
 from sanad.store.keys import AccountScope
 from sanad.store.protocol import Store
+from sanad.store.records import (
+    AnyWebSession as WebSession,
+)
 from sanad.store.records import (
     AuditEvent,
     Claim,
@@ -110,6 +114,18 @@ class AccountService:
             in self.store.authorize(actor.bot_id, actor.subject).principal.verified_roles
         )
 
+    def _admin_command(self, command: AccountCommand) -> bool:
+        if not self._admin(command.actor):
+            return False
+        if command.session_role is None:
+            return command.actor.session_id is None
+        auth = self.store.authorize(self.scope.bot_id, command.actor.subject)
+        return (
+            command.session_role == "admin"
+            and command.admin_epoch is not None
+            and command.admin_epoch == auth.admin_epoch
+        )
+
     def _envelope(self, command: AccountCommand, claim: Claim | None = None) -> CommandEnvelope:
         now = self.clock()
         return CommandEnvelope(
@@ -117,7 +133,7 @@ class AccountService:
             principal=command.actor,
             scope=self.scope,
             requested_at=now,
-            payload=command.model_dump(mode="json"),
+            payload=command.model_dump(mode="json", exclude={"inbound_claim"}),
             expected_versions=command.expected_versions,
             work_claim=claim,
             worker=WorkerCapability(
@@ -142,6 +158,7 @@ class AccountService:
         result_code: str | None = None,
         complete_receipt: bool = True,
     ) -> CommitResult:
+        claim = claim or command.inbound_claim
         now = self.clock()
         rows = tuple(to_record(m, model_scope(m)) for m in models)
         outgoing = tuple(to_record(i, self.scope) for i in intents)
@@ -152,6 +169,7 @@ class AccountService:
             command_id=command.command_id,
             scope=self.scope,
             event_type=type(command).__name__,
+            channel="web-admin" if command.session_role is not None else None,
             actor=command.actor,
             accepted_at=now,
             created_at=now,
@@ -209,7 +227,9 @@ class AccountService:
         )
         if audience == "admin" and auth_epoch is None:
             admin = self.store.authorize(self.identity.bot_id, subject)
-            if "doctor" in admin.principal.verified_roles:
+            if admin.admin_epoch is not None:
+                auth_epoch = admin.admin_epoch
+            elif "doctor" in admin.principal.verified_roles:
                 auth_epoch = admin.auth_epoch
         logical = keys.digest(f"{source.id}:{template_id}:{ref.version}:{logical_suffix}")
         payload: dict[str, JsonValue] = {
@@ -277,6 +297,50 @@ class AccountService:
             "applicant",
             logical_suffix=f"ack:{ack.version}",
         )
+
+    def doctor_name(self, receipt: InboundReceipt, actor: Principal) -> bool:
+        """Prompt a legacy unnamed doctor once; accept only an explicit first name fill."""
+        doctor = self.doctor(actor.doctor_id or "")
+        if doctor is None or doctor.status != "approved" or doctor.name.strip():
+            return False
+        text = str((receipt.payload or {}).get("text", ""))
+        parts = text.strip().split(maxsplit=1)
+        if len(parts) == 2 and parts[0] == "/name" and 0 < len(parts[1]) <= 160:
+            claim = self.store.claim_work(
+                to_record(receipt, receipt.scope).scoped_key(receipt.scope),
+                receipt.version,
+                "doctor-name",
+                self.clock(),
+                self.policy.operations.claim_ttl,
+            )
+            if claim is None:
+                return True
+            updated = doctor.model_copy(
+                update={
+                    "name": parts[1],
+                    "version": doctor.version + 1,
+                    "updated_at": self.clock(),
+                }
+            )
+            result = self._commit(
+                SetDoctorName(command_id="name:" + receipt.id, actor=actor, name=parts[1]),
+                (updated,),
+                claim=claim,
+            )
+            return result.status in {"accepted", "duplicate"}
+        command = AccountCommand(command_id="ask-doctor-name:" + doctor.id, actor=actor)
+        if self._prior(command) is None:
+            intent = self.intent(
+                to_record(doctor, doctor.scope),
+                "doctor_name_needed",
+                actor.subject,
+                doctor.private_chat_id,
+                "doctor",
+                auth_epoch=doctor.auth_epoch,
+                text="Please tell me the name your patients should see: /name Your name",
+            )
+            self._commit(command, intents=(intent,))
+        return False
 
     def apply(self, command: ApplyAsDoctor) -> AccountResult:
         actor = command.actor
@@ -374,7 +438,7 @@ class AccountService:
     def approve(
         self, command: ApproveDoctor, *, token: CallbackToken | None = None
     ) -> AccountResult:
-        if not self._admin(command.actor):
+        if not self._admin_command(command):
             return Forbidden()
         prior = self._prior(command)
         if prior is not None:
@@ -452,6 +516,7 @@ class AccountService:
             application.private_chat_id,
             "doctor",
             auth_epoch=1,
+            fields={"name": doctor.name},
         )
         result = self._commit(command, models, (intent,))
         if result.status == "stale_version":
@@ -461,7 +526,7 @@ class AccountService:
         return result
 
     def reject(self, command: RejectDoctor, *, token: CallbackToken | None = None) -> AccountResult:
-        if not self._admin(command.actor):
+        if not self._admin_command(command):
             return Forbidden()
         prior = self._prior(command)
         if prior is not None:
@@ -502,7 +567,7 @@ class AccountService:
     def _coverage(
         self, command: SuspendDoctor | ReinstateDoctor, *, suspend: bool
     ) -> AccountResult:
-        if not self._admin(command.actor):
+        if not self._admin_command(command):
             return Forbidden()
         prior = self._prior(command)
         if prior is not None:
@@ -586,6 +651,148 @@ class AccountService:
             else ()
         )
         return self._commit(command, (changed, authority, bound, issue), intents)
+
+    def admin_applications(self, session: WebSession) -> list[dict[str, object]] | None:
+        auth = self.store.authorize(self.scope.bot_id, session.subject)
+        if (
+            session.role != "admin"
+            or "admin" not in auth.principal.verified_roles
+            or auth.admin_epoch != session.auth_epoch
+        ):
+            return None
+        result: list[dict[str, object]] = []
+        cursor = None
+        while True:
+            rows, cursor = self.store.list_records(self.scope, "application", cursor)
+            for row in rows:
+                application = from_record(row, Application)
+                doctor = self.doctor(application.doctor_id) if application.doctor_id else None
+                result.append(
+                    {
+                        "id": application.id,
+                        "version": application.version,
+                        "name": application.claimed_name,
+                        "specialty": application.claimed_specialty,
+                        "city": application.claimed_city,
+                        "applied_at": application.created_at.isoformat(),
+                        "status": doctor.status if doctor else application.status,
+                        "doctor_id": doctor.id if doctor else None,
+                        "doctor_version": doctor.version if doctor else None,
+                    }
+                )
+            if cursor is None:
+                return result
+
+    def browser_action(
+        self,
+        session: WebSession,
+        action: str,
+        target: str,
+        command_id: str,
+        expected_version: int,
+        reason_code: str | None,
+    ) -> AccountResult:
+        actor = Principal(
+            subject=session.subject,
+            user_id=session.subject,
+            bot_id=self.scope.bot_id,
+            actor_kind="admin",
+            verified_roles=frozenset({"admin"}),
+            session_id=session.id,
+            auth_epoch=session.auth_epoch,
+        )
+        basis = dict(
+            command_id="web-admin:" + session.subject + ":" + command_id,
+            actor=actor,
+            session_role=session.role,
+            admin_epoch=session.auth_epoch,
+        )
+        if not self._admin_command(AccountCommand.model_validate(basis)):
+            return Forbidden()
+        constructors: dict[
+            str,
+            type[ApproveDoctor] | type[RejectDoctor] | type[SuspendDoctor] | type[ReinstateDoctor],
+        ] = {
+            "approve": ApproveDoctor,
+            "reject": RejectDoctor,
+            "suspend": SuspendDoctor,
+            "reinstate": ReinstateDoctor,
+        }
+        if action not in constructors:
+            return Forbidden()
+        # Existing account reason vocabulary; no free text enters account audit reasons.
+        if action == "reject" and reason_code not in {"admin_rejected", "unverified"}:
+            return Forbidden()
+        if action == "suspend" and reason_code != "coverage":
+            return Forbidden()
+        fields = (
+            {"application_id": target, "expected_application_version": expected_version}
+            if action in {"approve", "reject"}
+            else {"doctor_id": target, "expected_doctor_version": expected_version}
+        )
+        if action in {"reject", "suspend"}:
+            fields["reason_code"] = reason_code
+        command = constructors[action].model_validate(basis | fields)
+        now = self.clock()
+        transport_key = keys.digest(str(basis["command_id"]))
+        receipt = InboundReceipt(
+            id=keys.inbound("web-admin", keys.digest(transport_key)).pk,
+            scope=self.scope,
+            transport="web-admin",
+            transport_key=transport_key,
+            source_subject=session.subject,
+            source_chat=session.subject,
+            channel="web-admin",
+            kind="text",
+            payload=command.model_dump(mode="json", exclude={"inbound_claim"}),
+            principal=actor,
+            received_at=now,
+            created_at=now,
+            updated_at=now,
+            safety_screen_state="screened",
+            work_clock=OperationalClock(next_action_at=now, work_lane="ingress"),
+        )
+        accepted = self.store.accept_inbound(transport_key, to_record(receipt, self.scope))
+        if accepted.record is None:
+            return Forbidden()
+        saved = from_record(accepted.record, InboundReceipt)
+        # Same id with altered action/version is refused; exact retries keep command semantics.
+        if saved.payload != receipt.payload:
+            return Forbidden()
+        prior = self._prior(command)
+        if prior is not None:
+            return prior
+        claim = self.store.claim_work(
+            accepted.record.scoped_key(self.scope),
+            saved.version,
+            "web-admin",
+            now,
+            self.policy.operations.claim_ttl,
+        )
+        if claim is None:
+            return Forbidden()
+        command = command.model_copy(update={"inbound_claim": claim})
+        if isinstance(command, ApproveDoctor):
+            result = self.approve(command)
+        elif isinstance(command, RejectDoctor):
+            result = self.reject(command)
+        elif isinstance(command, SuspendDoctor):
+            result = self.suspend(command)
+        else:
+            result = self.reinstate(command)
+        if result.status not in {"accepted", "duplicate"}:
+            # Refused/stale account requests are completed observations, not work to retry.
+            self._commit(
+                AccountCommand(
+                    command_id="web-admin-result:" + saved.id,
+                    actor=actor,
+                    session_role=session.role,
+                    admin_epoch=session.auth_epoch,
+                ),
+                claim=claim,
+                result_code=result.status,
+            )
+        return result
 
     def _consume(self, token: CallbackToken) -> CallbackToken:
         return CallbackToken.model_validate(

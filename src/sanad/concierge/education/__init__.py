@@ -10,6 +10,7 @@ from pydantic import TypeAdapter
 from sanad.concierge.policy import DRAFT_CONCIERGE_POLICY
 from sanad.concierge.text import normalized, sentences
 from sanad.domain.boundaries import NonblankStr, _BoundaryValue
+from sanad.domain.language import effective
 
 
 class EducationEntry(_BoundaryValue):
@@ -31,9 +32,11 @@ class EducationEntry(_BoundaryValue):
     content_kind: Literal["clinical", "product", "safety"] = "clinical"
 
     def label(self, language: str) -> str:
+        language = effective(language, audience="patient")
         return self.source_label_en if language == "en" else self.source_label
 
     def lines(self, language: str) -> tuple[str, ...]:
+        language = effective(language, audience="patient")
         prefix = "General information: " if language == "en" else "معلومة عامة: "
         label = "Source: " if language == "en" else "مصدر: "
         return tuple(

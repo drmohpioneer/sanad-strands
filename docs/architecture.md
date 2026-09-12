@@ -64,7 +64,7 @@ Unknown allergies are not “no allergies.” Old prescriptions do not replace a
 
 Only private Bot API messages establish a clinical Telegram identity. Verify transport secret, private chat type and numeric sender user ID; never trust usernames, claimed roles or group chat IDs. A stranger may apply. Configured admin identity approves/rejects with actor and timestamp. Enrollment powers do not grant unrestricted patient-content access.
 
-An approved doctor receives a random, hashed, ten-minute, single-use login exchange in the verified chat. GET `/d/<token>` displays a neutral Continue page; only a same-origin CSRF-protected POST consumes it and creates a rotated HttpOnly/Secure/SameSite session. Redirect to a clean URL. Redact exchange routes in platform/application logs, set no-referrer/no-store and load no third-party assets. A preview GET cannot consume the token.
+An approved doctor receives a random, hashed, ten-minute, single-use login exchange in the verified chat. GET `/d/<token>` displays a neutral Continue page; only a same-origin CSRF-protected POST consumes it and creates a rotated HttpOnly/Secure/SameSite session. Redirect to a clean URL. Redact exchange routes in platform/application logs, set a same-origin referrer policy (a no-referrer policy nulls the browser's Origin header on the continue form and the exchange refuses it), no-store, and load no third-party assets. A preview GET cannot consume the token.
 
 Every API, page, callback and media fetch rechecks role, approval, auth epoch and ownership. Mutations also check CSRF, expected version and command ID. Suspension increments auth epoch, revokes exchanges/sessions, invalidates unsent routine contact and creates coverage review. It never transfers patients automatically.
 
@@ -483,7 +483,7 @@ Rejected images retain already screened dangerous captions as recoverable input.
 
 This does not remove Telegram: runtime construction, consent validation, private
 chat routing, outbound delivery, the legacy inbound fallback and its replay scope
-exception still depend on it. Administrator sessions are checkpoint 2, unreleased.
+exception still depend on it. Administrator access is described below.
 
 ## Doctor accountability (contract 17)
 
@@ -548,3 +548,106 @@ DONE:CORRECTION requires an actually provider-accepted earlier report and a curr
 accepted correction. Earlier corrections get solicited confirmation and review.
 Correction reviews use their existing review deadline; after a provider-accepted
 DEADLINE they participate in the existing weekly bundles.
+
+
+## Doctor-scheduled question digests
+
+An overdue QUESTION arms a tenant-owned `QuestionDigestSchedule` atomically with
+its deadline transition and `QUESTION_DIGEST_ARMED` audit, without an individual
+ring. `/digest` and the authenticated preferences API share `ScribeDigest`, which
+changes only digest time and packing and re-clocks an armed schedule when no
+intent is pending. The durable `question_digest` lane uses the doctor's timezone,
+rounds DST gaps forward by minutes and selects the first repeated local instant.
+Each fire selects at most twenty overdue questions with open or acknowledged
+`question_answer` reviews, prioritizing those not shown in the previous fire.
+Packed delivery renders current scoped records with version checks and saves its
+one-hour listing (plus the delivery lease) before transport; numbered answers use
+the newest listing across digest and Scribe partitions. Long display fields are
+abbreviated to fit one transport message, retaining all selected numbers and
+`/questions` access. Provider acceptance atomically stamps the displayed answer
+reviews once, arms the unchanged seven-day weekly bundle and advances the digest
+schedule. Individual packing retains the existing DEADLINE path. Pending or
+uncertain deliveries retain durable ownership and block a new fire; empty due
+sets clear their clock. Danger, DONE and clinical transitions are unchanged.
+
+## Doctor-approved reusable answers (contract 17d)
+
+An accepted non-held question answer atomically issues a tenant-owned, one-hour
+reuse offer with its exact stripped text, source question/patient, resulting
+mission version and doctor authority epoch. The doctor's explicit reuse command
+consumes that offer and creates a versioned answer in the same transaction.
+Held treatment changes and closures issue no offer. The patient receipt path
+uses only exact normalized matches where an unanswered question would otherwise
+be relayed, retaining danger, explicit doctor requests and treatment-change
+precedence. Reuse has deterministic source attribution and is revalidated against
+the recipient's current orders, language, numbers, length and output hygiene.
+Current order and reusable source versions fence acceptance and delivery.
+
+Question listings and digest snapshots bind mission and proposed answer versions.
+Proposals prefer exact matches, then non-stopword Jaccard overlap of at least
+0.6 (OWNER_REVIEW_PENDING), with newest creation time and id breaking ties.
+`/send` validates the displayed binding and invokes the fresh answer path;
+`/defer` extends by 24 hours without shortening a later deadline and re-arms the
+answer review without changing weekly eligibility. Individual digest messages
+share the persisted fire's numbered selection, including when rotation has
+already advanced. Browser question actions use the same Steward commands with
+session and CSRF checks. Immutable private question-command audit payloads let
+receipt recovery replay the original action after a newer listing or expiry.
+
+
+### Administrator browser boundary (18b checkpoint 2)
+
+The configured administrator uses `/login admin` to obtain a ten-minute, single-use
+`/ad` exchange. `/login` retains its doctor/patient meaning. A separate versioned
+`AdminAccount` in bot AccountScope supplies the administrator epoch; no Doctor row
+is created or changed by admin identity operations. Admin exchanges and sessions
+carry no doctor, patient, binding or consent fields. A dual-role person switches
+roles by exchanging a new link into the single session cookie.
+
+`/admin` projects account applications and their current doctor account status.
+Approval, rejection, suspension and reinstatement invoke the existing account
+service with `web-admin` receipt/audit provenance and expected versions. Its
+transaction conditions include the selected admin role and AdminAccount version
+and epoch. Browser role guards and the central admin route allowlist deny clinical
+pages, APIs, uploads and documentation endpoints; the admin API has no clinical
+reader imports. Application metadata does not grant clinical access.
+
+Telegram `/logout` and browser Sign out everywhere increment only the admin epoch.
+The next guard refuses older sessions and exchanges. A configured identity change
+also refuses the former administrator. Changing A to B and back to A may revive
+A's old epoch within the absolute session TTL; an operator must revoke it when
+restoring A if that access must remain invalid. Doctor notification epochs and
+clinical care behavior remain independent.
+
+### Patient browser controls (contract 18d)
+
+The authenticated patient browser submits text and reminder preferences through
+screened durable receipts and the existing Concierge commands. A session-scoped
+conditional body-digest reservation refuses a command ID reused with different
+content. Resume consumes the existing single-use patient action. A preference
+transaction may advance only its originating live browser session's consent
+version; the identity guard verifies the saved receipt, command, session and new
+consent together. Other sessions retain the existing freshness refusal.
+
+The dispatch gateway selects store-and-show delivery for solicited replies and
+immediate safety responses from `web-message` and `web-preference` receipts,
+including recovery. Safety responses follow the incident source observation. Other delivery
+continues through the existing adapter. Patient delivery completion retains the
+exact rendered text once. Earlier deliveries without that field are shown as a
+dated sent-message placeholder; history never reconstructs their wording.
+
+Inbound receipts have global transport keys and no patient history index. To
+include existing receipts without a migration, the scoped store reader filters
+by patient, doctor and entity type, then rechecks ownership on each result.
+DynamoDB uses internally paginated, consistent Scan requests projecting only
+matching keys; the deployment template grants Scan on the app's own table.
+Memory applies the same ownership rules. This has table-wide read cost and is
+not a constant-cost history query: a dedicated index and historical backfill
+remain a scaling improvement. Neither a schema migration nor deployment occurs
+in this contract. APIs return at most 30 uploads and 50 conversation entries;
+a session-bound timestamp/ID cursor pages backward with stable tie ordering.
+
+Upload state is a read-only projection of receipt, media work and newest evidence
+version. Acceptance, doctor review, rejection and detachment remain separate;
+processing never implies acceptance. Pre-staging rejections return a redacted
+category synchronously, with dangerous captions preserved by the existing path.

@@ -1,11 +1,12 @@
 """Versioned medication diffs computed from the doctor's current scoped record."""
 
+import re
 from typing import TYPE_CHECKING
 
 from sanad.domain import PatientScope
 from sanad.domain.boundaries import _BoundaryValue
 from sanad.scribe.change_binding import SourcePartition, authority_matches, untouched
-from sanad.scribe.extract import DictationCandidate, OrderCandidate, ProposalIssue
+from sanad.scribe.extract import DictationCandidate, FactCandidate, OrderCandidate, ProposalIssue
 from sanad.store import keys
 
 if TYPE_CHECKING:
@@ -71,6 +72,7 @@ def prepare(
         return candidate, (), (ProposalIssue(item="all", code="clinical_unclear"),)
 
     orders, changes, issues = [], [], []
+    facts = list(candidate.facts)
     dropped = list(candidate._dropped_numbers)
     for i, supplied in enumerate(candidate.orders):
         from sanad.media.numbers import numbers_in
@@ -79,13 +81,6 @@ def prepare(
         stated_previous = previous_instruction(
             supplied, source, partition=partition, previous=previous, item=f"order:{i}"
         )
-        if not stated_previous and (supplied.previous_drug or supplied.previous_dose):
-            dropped.extend(
-                numbers_in((supplied.previous_drug or "") + " " + (supplied.previous_dose or ""))
-            )
-            issues.append(
-                ProposalIssue(item=f"order:{i}", code="clinical_unclear", field="previous_dose")
-            )
         head = (
             find_head(repo, scope, stated_previous.drug if stated_previous else supplied.drug)
             if scope
@@ -101,6 +96,25 @@ def prepare(
             if version and isinstance(version.structured_instruction, OrderCandidate)
             else None
         )
+        if (
+            old
+            and head
+            and head.status == "active"
+            and supplied.action == "change"
+            and not supplied.previous_dose
+            and supplied.previous_drug
+            and order_key(supplied.previous_drug) == order_key(old.drug)
+        ):
+            # The stored amendment carries the prior value and its version provenance.
+            # A model's duplicate name is not a spoken prior instruction.
+            supplied = supplied.model_copy(update={"previous_drug": None})
+        if not stated_previous and (supplied.previous_drug or supplied.previous_dose):
+            dropped.extend(
+                numbers_in((supplied.previous_drug or "") + " " + (supplied.previous_dose or ""))
+            )
+            issues.append(
+                ProposalIssue(item=f"order:{i}", code="clinical_unclear", field="previous_dose")
+            )
         order, note, noop = supplied, None, False
         if old and head:
             if supplied.action in {"change", "continue"}:
@@ -141,22 +155,87 @@ def prepare(
             elif supplied.action == "start" and head.status == "active":
                 order = supplied.model_copy(update={"action": "change"})
         elif supplied.action in {"stop", "change"} and not (creating and stated_previous):
-            issues.append(ProposalIssue(item=f"order:{i}", code="order_missing"))
+            note = (
+                "doctor instructed, not on file before"
+                if supplied.action == "stop"
+                else "previous dose not on file"
+            )
+            from sanad.scribe.grounding import _action_at, name_spans
+            from sanad.scribe.resolver import Context
+
+            quote = supplied.action_quote
+            if quote is None:
+                for span in name_spans(supplied.drug, source, "drug", Context()):
+                    action = _action_at(source, span)
+                    if action and action[0] == supplied.action and not action[2]:
+                        quote = source[action[1][0] : action[1][1]]
+            order = supplied.model_copy(
+                update={
+                    "action": "start" if supplied.action == "change" else "stop",
+                    "action_quote": quote,
+                }
+            )
+            history = home_history(order, note, source, partition)
+            if history and not any(f.text == history for f in facts):
+                facts.append(FactCandidate(category="medication_history", text=history))
         orders.append(order)
         if head or note or stated_previous or supplied.action in {"stop", "continue"}:
             changes.append(
                 OrderChange(
                     item=f"order:{i}",
-                    old=old or stated_previous,
+                    old=None if note and not head else old or stated_previous,
                     new=order,
                     head_version=head.version if head else None,
                     noop=noop,
                     note=note,
                 )
             )
-    result = candidate.model_copy(update={"orders": tuple(orders)})
+    result = candidate.model_copy(update={"orders": tuple(orders), "facts": tuple(facts)})
     result._dropped_numbers = tuple(dict.fromkeys(dropped))
     return result, tuple(changes), tuple(issues)
+
+
+def home_history(
+    order: OrderCandidate, note: str | None, source: str, partition: SourcePartition | None = None
+) -> str | None:
+    """A deterministic description of an instruction, never evidence of prior use."""
+    from sanad.scribe.grounding import _action_at, _cited_action, name_spans
+    from sanad.scribe.resolver import Context
+
+    if note not in {"doctor instructed, not on file before", "previous dose not on file"}:
+        return None
+    action = "stop" if note == "doctor instructed, not on file before" else "change"
+    from sanad.scribe.change_binding import mentions
+
+    spans = name_spans(order.drug, source, "drug", Context()) + tuple(
+        mention.span
+        for mention in mentions(source, lexicon=partition.lexicon if partition else ())
+        if not mention.ambiguous and order_key(mention.name) == order_key(order.drug)
+    )
+    for drug in dict.fromkeys(spans):
+        cited = _cited_action(order, source, drug) if order.action_quote else None
+        literal = _action_at(source, drug) if not order.action_quote else None
+        if (cited and not cited[1]) or (literal and not literal[2] and literal[0] == action):
+            quote = order.action_quote or (source[literal[1][0] : literal[1][1]] if literal else "")
+            verb = "hold" if action == "stop" and re.search(r"\bhold\b", quote, re.I) else action
+            return f"{order.drug}: doctor instructed {verb}; no prior order on file; dose unknown"
+    return None
+
+
+def history_source(proposal: "Proposal", text: str) -> OrderChange | None:
+    return next(
+        (
+            change
+            for change in proposal.amendments
+            if change.old is None
+            and change.head_version is None
+            and home_history(
+                change.new, change.note, proposal.source_text, proposal.source_partition
+            )
+            == text
+        ),
+        None,
+    )
 
 
 def instruction_line(order: OrderCandidate) -> str:

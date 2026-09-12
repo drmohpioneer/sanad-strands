@@ -36,7 +36,26 @@ def test_every_doctor_template_has_real_english_and_literal_arabic(key: str) -> 
         BEFORE["TEMPLATES"]
         | BEFORE["SCRIBE_TEMPLATES"]
         | {"scribe_brand_change_line": "{old_drug} {old} ← {new_drug} {new}"}
+        | {
+            "dashboard_signed_out": "تم تسجيل الخروج من لوحة المتابعة.",
+            "account_suspended": "حسابك موقوف. تواصل مع الإدارة.",
+            "patient_not_linked": "لسه مش مرتبط بدكتور. افتح رابط الدعوة اللي بعته الدكتور.",
+            "login_refused": "تعذر الدخول. تواصل مع الإدارة.",
+        }
     )[key]
+    # Addendum 6a supersedes bilingual account entries and long-dash prose.
+    original = original.replace(" — ", ": ").replace("–", ", ")
+    if key in wording.TEMPLATES:
+        original = re.split(r"\n(?=[A-Z])", original)[0]
+    if key == "doctor_welcome_back":
+        original = (
+            "أهلًا برجوعك. اكتب أو سجّل اللي عايز تعمله للمريض بكلامك، "
+            "أو ابعت صورة الروشتة. اكتب /help لعرض الأوامر."
+        )
+    if key == "doctor_approved":
+        original += " {name}"
+    if key == "scribe_invitation":
+        original += "\nأي /qr جديد بيلغي اللينك ده."
     assert pair[0].encode() == original.encode()
     assert wording.render(key, "ar", **values) == original.format(**values)
     no_arabic(wording.render(key, "en", **values))
@@ -109,15 +128,24 @@ def test_lab_unit_and_printed_flag_are_wording_but_arabic_data_is_preserved() ->
     assert crosscheck.lab_text(arabic_row, "en") == "اسم من الورقة 4.1 no unit; printed flag: علامة"
 
 
-def test_enrollment_catalog_and_patient_sentences_are_byte_identical() -> None:
-    assert wording.ENROLLMENT_TEMPLATES == BEFORE["ENROLLMENT_TEMPLATES"]
+def test_enrollment_sentences_are_split_without_losing_either_language() -> None:
     for key, original in BEFORE["ENROLLMENT_TEMPLATES"].items():
         fields = {field: "Synthetic" for field in wording.FIELDS[key]}
-        for language in ("ar", "en"):
-            assert (
-                wording.render(key, language, **fields).encode()
-                == original.format(**fields).encode()
+        ar, en = re.split(r"\n(?=[A-Z])", original, maxsplit=1)
+        if "{link}" in en:
+            ar += "\n{link}"
+        if key in {"doctor_login_link", "patient_login_link"}:
+            ar = (
+                "لينك دخولك لسند صالح لعشر دقايق ولمرة واحدة. انسخه والصقه في المتصفح، "
+                "ومتدوسش عليه جوه تيليجرام.\n{link}"
             )
+            en = (
+                "Your one-time sign-in link, valid for ten minutes. Copy it and paste it "
+                "into your browser. Do not tap it inside Telegram.\n{link}"
+            )
+        for language, expected in (("ar", ar), ("en", en)):
+            expected = expected.replace("–", ", ").replace(" — ", ": ")
+            assert wording.render(key, language, **fields) == expected.format(**fields)
 
 
 @pytest.mark.parametrize(

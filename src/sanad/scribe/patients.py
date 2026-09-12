@@ -10,7 +10,7 @@ from sanad.store.records import Patient, PatientProfile, from_record
 
 def normalized_name(name: str) -> str:
     """Reuse the accepted stub/index normalization without introducing fuzzy identity."""
-    return name.casefold()
+    return " ".join(name.casefold().split())
 
 
 def choice_of(patient: Patient) -> PatientChoice:
@@ -70,4 +70,26 @@ def lookup(
     ranked.sort(key=lambda pair: (pair[0], pair[1].updated_at, pair[1].id), reverse=True)
     if ranked and query:
         ranked = [pair for pair in ranked if pair[0] == ranked[0][0]]
-    return tuple(choice_of(p) for _, p in ranked[: DRAFT_SCRIBE_POLICY.max_candidates])
+    return tuple(
+        choice_of(p).model_copy(update={"score": score, "headline": headline(store, p)})
+        for score, p in ranked[: DRAFT_SCRIBE_POLICY.max_candidates]
+    )
+
+
+def headline(store: Store, patient: Patient) -> str:
+    from sanad.steward.types import records
+
+    active = sum(
+        row.body.get("status") == "active"
+        for row in records(store, patient.scope, "care_order_head")
+    )
+    opened = sum(
+        row.body.get("state")
+        not in {"fulfilled", "cancelled", "expired", "closed_unfulfilled", "superseded"}
+        for row in records(store, patient.scope, "mission")
+    )
+    return (
+        f"{active} active medications, {opened} open requests"
+        if active or opened
+        else "no plan yet"
+    )

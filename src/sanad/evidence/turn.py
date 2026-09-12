@@ -141,12 +141,21 @@ class EvidenceTurn:
                 source_kind="document_observation",
                 received_at=receipt.received_at,
             )
+            from sanad.evidence.context_names import active_drug_names
+            from sanad.scribe.memory import NameVocabulary
+
+            doctor = self.runtime.accounts.doctor(scope.doctor_id)
+            vocabulary = (
+                tuple(NameVocabulary(self.store, doctor).hint().split(", ")) if doctor else ()
+            )
+            names = (*active_drug_names(self.store, scope, 200), *vocabulary)
             result = asyncio.run(
                 read_document(
                     image,
                     info.format,
                     kind_hint=kind_hint(caption, associate.open_missions(missions)),
                     adapter=self.concierge.vision_factory(source),
+                    context_names=tuple(dict.fromkeys(names))[:200],
                 )
             )
             if isinstance(result, DocumentFailure):

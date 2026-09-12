@@ -296,7 +296,8 @@ def test_store_recomputes_exact_revision(
     assert outcomes == ["accepted" if case == "positive" else "forbidden"]
     assert bool(current(world).details.readings) == (case == "positive")  # type: ignore[union-attr]
     if case != "positive":
-        assert not world.rows("clinical_fact") and world.receipt(1100).state == "processing"
+        assert not world.rows("clinical_fact") and world.receipt(1100).state == "completed"
+        assert any(i.template_id == "patient_safety_ack" for i in world.patient_intents())
 
 
 def test_crash_before_commit_is_atomic_and_recovers(
@@ -659,7 +660,7 @@ def test_five_day_fixture_card_prompt_reply_and_done(world: PatientWorld, tmp_pa
         if r.body.get("notification_purpose") == "DONE:FULFILLMENT"
     )
     done = str(doctor_payload(world.store, notice)["text"])
-    assert "Extra readings: 1" in done and "range 120–134 mmHg" in done
+    assert "Extra readings: 1" in done and "range 120, 134 mmHg" in done
     assert "14 readings left" in replies[0] and "0 readings left" in replies[-1]
     (tmp_path / "monitor-example.json").write_text(
         json.dumps(
@@ -733,7 +734,7 @@ def test_maximum_schedule_record_and_full_notice(world: PatientWorld, language: 
     )
     text = str(doctor_payload(world.store, notice)["text"])
     assert len(text) < 4096 and sum(" | " in line for line in text.splitlines()) == 120
-    assert "130/85" in text and "120–130 mmHg" in text
+    assert "130/85" in text and "120, 130 mmHg" in text
 
 
 @pytest.mark.parametrize("case", ["midnight", "timezone", "explicit_past"])

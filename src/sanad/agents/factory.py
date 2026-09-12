@@ -83,6 +83,7 @@ class Classification(_BoundaryValue):
 def bedrock_model(
     registry: ModelRegistry, role: ModelRole, *, timeout: float = CALL_TIMEOUT
 ) -> Model:
+    assert not registry.model_id(role).startswith("gemini-"), "Gemini is media-only"
     return BedrockModel(
         model_id=registry.model_id(role),
         region_name=registry.region,

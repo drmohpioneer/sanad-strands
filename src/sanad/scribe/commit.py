@@ -21,6 +21,7 @@ from sanad.domain.entities import (
     VisitDetails,
 )
 from sanad.domain.events import ProposalCreated
+from sanad.domain.language import effective
 from sanad.domain.predicates import EvidencePredicate, PatientReportPredicate
 from sanad.scribe.amend import find_head
 from sanad.scribe.amend import order_key as order_key
@@ -232,7 +233,7 @@ class ScribeCommit:
                         **metadata,
                     )
                 )
-                if doctor.language == "en":
+                if effective(doctor.language, audience="doctor") == "en":
                     accepted.extend(
                         v
                         for v in (
@@ -251,7 +252,11 @@ class ScribeCommit:
         if proposal.creating_patient:
             models.append(profile)
             accepted.append(
-                ("New patient: " if doctor.language == "en" else "مريض جديد: ")
+                (
+                    "New patient: "
+                    if effective(doctor.language, audience="doctor") == "en"
+                    else "مريض جديد: "
+                )
                 + patient.display_name
             )
         for i, fact in enumerate(candidate.facts):
@@ -278,7 +283,7 @@ class ScribeCommit:
             accepted.append(
                 plain(
                     lab_text(fact.lab, doctor.language)
-                    if fact.lab and doctor.language == "en"
+                    if fact.lab and effective(doctor.language, audience="doctor") == "en"
                     else fact.text
                 )
             )
@@ -600,7 +605,12 @@ class ScribeCommit:
                     )
                 )
             accepted.append(
-                ("Notify me if: " if doctor.language == "en" else "بلّغني لو: ") + plain(text)
+                (
+                    "Notify me if: "
+                    if effective(doctor.language, audience="doctor") == "en"
+                    else "بلّغني لو: "
+                )
+                + plain(text)
             )
         if (
             not accepted
@@ -743,13 +753,13 @@ class ScribeCommit:
                 for line in accepted
             ) or (
                 "No items could be recorded."
-                if doctor.language == "en"
+                if effective(doctor.language, audience="doctor") == "en"
                 else "مفيش بنود صالحة للتسجيل."
             )
             from sanad.scribe.english import REASONS as ENGLISH_REASONS
             from sanad.scribe.english import render_wording
 
-            english = doctor.language == "en"
+            english = effective(doctor.language, audience="doctor") == "en"
             if any(i.blocked for i in proposal.issues):
                 body += ("\nNot recorded:\n" if english else "\nمش هيتسجل:\n") + "\n".join(
                     "• " + (ENGLISH_REASONS if english else REASONS)[code]
@@ -880,7 +890,9 @@ class ScribeCommit:
             and len(proposal.candidate.facts) > DRAFT_SCRIBE_POLICY.history_lines_max
         ):
             text += "\n" + (
-                "Full history:\n" if doctor.language == "en" else "التاريخ المرضي كامل:\n"
+                "Full history:\n"
+                if effective(doctor.language, audience="doctor") == "en"
+                else "التاريخ المرضي كامل:\n"
             )
             text += "\n".join(
                 clinical_line(

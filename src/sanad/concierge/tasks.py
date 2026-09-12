@@ -12,6 +12,7 @@ from sanad.concierge.text import contains, is_question
 from sanad.concierge.visits import matches, original_time
 from sanad.domain import Mission, Provenance, transition_mission
 from sanad.domain import events as ev
+from sanad.domain.language import effective
 from sanad.domain.predicates import PredicateResult
 from sanad.steward.patient import PatientTurnCommit
 from sanad.store import keys
@@ -33,7 +34,7 @@ def marker(text: str, language: str) -> str:
         return ""
     return (
         " (not supported: recorded as a request only)"
-        if language == "en"
+        if effective(language, audience="patient") == "en"
         else " (مش مدعوم: هيتسجل كطلب بس)"
     )
 

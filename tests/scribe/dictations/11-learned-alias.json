@@ -20,7 +20,7 @@
     "missions": []
   },
   "required": [
-    "Norvasc (stop)",
+    "Norvasc (stop; doctor instructed, not on file before)",
     "Amlor 5 (start)"
   ],
   "forbidden": [],

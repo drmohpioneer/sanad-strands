@@ -94,7 +94,12 @@ def telegram_router(
                     scope = candidate
             elif "doctor" in principal.verified_roles and principal.doctor_id:
                 scope = TenantScope(doctor_id=principal.doctor_id)
-            payload: dict[str, JsonValue] = {"kind": message.kind if message else "callback"}
+            payload: dict[str, JsonValue] = {
+                "kind": message.kind if message else "callback",
+                "sender_name": " ".join(
+                    p.strip() for p in (sender.first_name, sender.last_name) if p.strip()
+                )[:160],
+            }
             handle = None
             if message:
                 payload.update(text=text, message_id=message.message_id)

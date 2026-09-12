@@ -94,6 +94,18 @@ def route(
     patient = next((p for p in patients if len(args) > 1 and p.id == args[1]), None)
     message = "Use /corrections PATIENT_ID to inspect current correctable versions."
     status = "invalid_input"
+    if args == ["/corrections"]:
+        lines = []
+        for p in patients:
+            count = len(current_facts(turn.repo.store, p.scope, include_detached=True))
+            count += sum(
+                r.body.get("status") in {"accepted", "detached"}
+                for r in records(turn.repo.store, p.scope, "evidence_head")
+            )
+            count += sum(1 for _ in records(turn.repo.store, p.scope, "care_order_head"))
+            lines.append(f"{p.display_name}: {p.id}, {count} correctable records")
+        message = "\n".join(lines) or "No patients yet"
+        status = "listed"
     if patient:
         scope = patient.scope
         if args[0] == "/corrections":

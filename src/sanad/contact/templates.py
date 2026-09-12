@@ -69,7 +69,7 @@ TEMPLATES = {
         "The start date is uncertain.",
     ),
     "doctor_medication_barrier": (
-        "عائق: {type} — «{text}»",
+        "عائق: {type}: «{text}»",
         'Barrier: {type} - "{text}"',
     ),
     "doctor_barrier_attempt": (

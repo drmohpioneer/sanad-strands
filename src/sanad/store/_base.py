@@ -59,6 +59,7 @@ from sanad.store.records import (
     OutboundIntent,
     PatientProfile,
     ProcessingClaim,
+    QuestionDigestSchedule,
     ReconcileReport,
     RecordPage,
     ReviewCreation,
@@ -68,6 +69,7 @@ from sanad.store.records import (
     SubjectBinding,
     TooLarge,
     UploadStage,
+    WebSession,
     WorkerCapability,
     canonical_json,
     from_record,
@@ -175,6 +177,8 @@ class StoreBase(ABC):
         return record if scope_owns(scope, model_scope(model)) else None
 
     def get(self, scope: Scope, entity_type: str, id: str) -> StoredRecord | None:
+        if entity_type == "reusable_answer" and isinstance(scope, PatientScope):
+            return self.get(TenantScope(doctor_id=scope.doctor_id), entity_type, id)
         if entity_type == "evidence":
             if not isinstance(scope, PatientScope):
                 return None
@@ -190,6 +194,10 @@ class StoreBase(ABC):
             "scribe_callback",
         }:
             return self.get(TenantScope(doctor_id=scope.doctor_id), entity_type, id)
+        if entity_type == "question_digest_schedule":
+            if type(scope) is not TenantScope or id != scope.doctor_id:
+                return None
+            return self._owned(scope, keys.doctor(scope, "QUESTION_DIGEST"))
         if entity_type == "bundle_schedule":
             if type(scope) is not TenantScope or id != scope.doctor_id:
                 return None
@@ -208,6 +216,8 @@ class StoreBase(ABC):
         prefixes = {
             "liaison_notice": "LIAISON_NOTICE",
             "review_offer": "REVIEW_OFFER",
+            "reuse_offer": "REUSE_OFFER",
+            "reusable_answer": "REUSABLE_ANSWER",
             "upload_stage": "UPLOAD",
             "correction": "CORRECTION",
             "correction_offer": "CORRECTION_OFFER",
@@ -236,6 +246,7 @@ class StoreBase(ABC):
             "patient_binding": "PATIENT_BINDING",
             "token_head": "TOKEN_HEAD",
             "patient_claim": "PATIENT_CLAIM",
+            "admin_account": "ADMIN_ACCOUNT",
             "application": "APPLICATION",
             "account_ack": "ACK",
             "mission": "MISSION",
@@ -265,6 +276,7 @@ class StoreBase(ABC):
                 return None
             key = keys.subject(scope.bot_id, id.removeprefix(prefix))
         elif entity_type in {
+            "admin_login",
             "doctor_login",
             "patient_login",
             "invitation",
@@ -388,12 +400,17 @@ class StoreBase(ABC):
             return None
         return record
 
+    def patient_receipts(self, scope: PatientScope) -> tuple[StoredRecord, ...]:
+        raise NotImplementedError
+
     def list_records(
         self, scope: Scope, entity_type: str, cursor: Cursor | None = None, limit: int = 100
     ) -> RecordPage:
         prefixes = {
             "liaison_notice": "LIAISON_NOTICE#",
             "review_offer": "REVIEW_OFFER#",
+            "reuse_offer": "REUSE_OFFER#",
+            "reusable_answer": "REUSABLE_ANSWER#",
             "upload_stage": "UPLOAD#",
             "evidence": "EVIDENCE#",
             "correction": "CORRECTION#",
@@ -593,6 +610,7 @@ class StoreBase(ABC):
                     "urgent",
                     "scribe",
                     "bundle",
+                    "question_digest",
                     "delivery",
                 }
             )
@@ -623,6 +641,22 @@ class StoreBase(ABC):
         )
         authority_checks: list[Check] = []
         identity_expiry = None
+        if (
+            account
+            and not identity
+            and (actor.session_id is not None or command.payload.get("session_role") is not None)
+        ):
+            admin_row = self.get(scope, "admin_account", actor.subject)
+            if (
+                command.payload.get("session_role") != "admin"
+                or self._identity is None
+                or actor.subject != self._identity.admin_user_id
+                or "admin" not in actor.verified_roles
+                or admin_row is None
+                or command.payload.get("admin_epoch") != admin_row.body.get("auth_epoch")
+            ):
+                return Forbidden()
+            authority_checks.append(Check(admin_row.key, admin_row.version))
         if request.identity_reads and not (identity or scribe):
             return Forbidden()
         if scribe:
@@ -654,6 +688,37 @@ class StoreBase(ABC):
             if checked_attempt is None:
                 return Forbidden()
             authority_checks.extend(checked_attempt)
+        digest_wake = command.payload.get("type") == "_QuestionDigestWake"
+        if digest_wake:
+            from sanad.contact.question_digest import load, prepare
+
+            if not system or type(scope) is not TenantScope:
+                return Forbidden()
+            digest_schedule = load(self, scope)
+            digest_doctor = self.get(scope, "doctor", scope.doctor_id)
+            if digest_schedule is None or digest_doctor is None:
+                return Forbidden()
+            rebuilt = prepare(
+                self, digest_schedule, from_record(digest_doctor, Doctor), command.requested_at
+            )
+            if rebuilt != request:
+                return Forbidden()
+            authority_checks.append(Check(digest_doctor.key, digest_doctor.version))
+            # Every selected source is fenced by a conditional read, including patient partitions.
+            for outgoing in request.intents:
+                value = from_record(outgoing, OutboundIntent)
+                if value.scope_kind != "doctor":
+                    for ref in value.source_versions:
+                        source = self.get(value.scope, ref.entity_type, ref.id)
+                        if source is None or source.ref != ref:
+                            return Forbidden()
+                        authority_checks.append(Check(source.key, source.version))
+        from sanad.concierge.reuse import guards as reuse_guards
+
+        reuse_checks = reuse_guards(self, request, utc_instant(self._clock()))
+        if reuse_checks is None:
+            return Forbidden()
+        authority_checks.extend(reuse_checks)
         if notice_issue:
             return Forbidden()  # Only delivery completion may issue notice action references.
 
@@ -915,7 +980,9 @@ class StoreBase(ABC):
                 "patient",
                 "consent",
                 "patient_binding",
+                "admin_account",
                 "token_head",
+                "admin_login",
                 "doctor_login",
                 "patient_login",
                 "invitation",
@@ -927,7 +994,7 @@ class StoreBase(ABC):
                 return Forbidden()
             language_only = (
                 scribe
-                and command.payload.get("type") == "ScribeLanguage"
+                and command.payload.get("type") in {"ScribeLanguage", "ScribeDigest"}
                 and record.entity_type == "doctor"
             )  # scribe_guards already compared every other Doctor field.
             if not (account or language_only) and record.entity_type in {
@@ -943,10 +1010,45 @@ class StoreBase(ABC):
                 model = from_record(record, MODELS[record.entity_type])
             except (KeyError, ValueError, ValidationError):
                 return Forbidden()
+            if isinstance(model, QuestionDigestSchedule) and not (
+                digest_wake
+                or (scribe and command.payload.get("type") == "ScribeDigest")
+                or (
+                    isinstance(scope, PatientScope)
+                    and any(
+                        e.body.get("event_type") == "QUESTION_DIGEST_ARMED" for e in request.events
+                    )
+                )
+            ):
+                return Forbidden()
             actual_scope = model_scope(model)
             if scope != actual_scope:
-                if review_action and record.entity_type == "review_offer":
+                if record.entity_type in {"reuse_offer", "reusable_answer"}:
+                    pass  # Exact tenant writes reconstructed by reuse_guards.
+                elif review_action and record.entity_type == "review_offer":
                     pass  # The review guard checked the exact tenant-owned offer consumption.
+                elif isinstance(model, QuestionDigestSchedule) and isinstance(scope, PatientScope):
+                    from sanad.contact.question_digest import arm
+
+                    d = self.get(model.scope, "doctor", scope.doctor_id)
+                    if d is None or model.scope.doctor_id != scope.doctor_id:
+                        return Forbidden()
+                    if (
+                        not model.updated_at <= command.requested_at <= now
+                        or model != arm(self, from_record(d, Doctor), model.updated_at)
+                        or not any(
+                            r.entity_type == "mission"
+                            and r.body.get("kind") == "QUESTION"
+                            and r.body.get("state") == "overdue"
+                            for r in request.puts
+                        )
+                    ):
+                        return Forbidden()
+                    checks.append(Check(d.key, d.version))
+                elif digest_wake and isinstance(model, OutboundIntent):
+                    pass  # Reconstructed against the doctor's due set above.
+                elif concierge and record.entity_type == "web_session":
+                    pass  # identity.preference_session checks this exact session revision.
                 elif scribe:
                     pass  # The scribe guard checked every target, owner and patient fence.
                 elif not account or not isinstance(scope, AccountScope):
@@ -1105,7 +1207,13 @@ class StoreBase(ABC):
             current = (
                 self.get_account_source(scope, ref)
                 if isinstance(scope, AccountScope)
-                else self.get(scope, ref.entity_type, ref.id)
+                else self.get(
+                    TenantScope(doctor_id=scope.doctor_id)
+                    if ref.entity_type in {"reuse_offer", "reusable_answer"}
+                    else scope,
+                    ref.entity_type,
+                    ref.id,
+                )
             )
             if current is None or current.version != ref.version:
                 return StaleVersion(conflicts=("source_version",))
@@ -1254,6 +1362,11 @@ class StoreBase(ABC):
         except ValueError:
             pass
         return False
+
+    def reserve_browser_command(self, session: WebSession, command_id: str, digest: str) -> str:
+        from sanad.store.browser_commands import reserve
+
+        return reserve(self, session, command_id, digest)
 
     def upload_authorized(self, stage: UploadStage) -> bool:
         from sanad.store.uploads import authority
@@ -1556,6 +1669,71 @@ class StoreBase(ABC):
         )
         return "reserved" if accepted else "already_taken"
 
+    def save_question_listing(
+        self, intent: OutboundIntent, basis: tuple[VersionRef, ...], now: datetime
+    ) -> StoredRecord | None:
+        from secrets import token_urlsafe
+
+        from sanad.concierge.reuse import binding
+        from sanad.contact.question_digest import capture, individual
+        from sanad.liaison.records import ReusableAnswer
+        from sanad.liaison.snapshot import snapshot
+
+        row = self.get(intent.scope, "outbound_intent", intent.id)
+        if (
+            row is None
+            or from_record(row, OutboundIntent) != intent
+            or (intent.template_id != "doctor_question_digest" and not individual(intent))
+            or intent.status != "sending"
+            or not intent.delivery_claim
+            or intent.delivery_claim.expires_at <= now
+        ):
+            return None
+        _, selected, _, sources, _ = capture(self, intent)
+        if tuple(r.ref for r in sources) != basis:
+            return None
+        answers = tuple(
+            from_record(r, ReusableAnswer) for r in sources if r.entity_type == "reusable_answer"
+        )
+        targets = tuple((p.id, m.id) for p, m, _ in selected)
+        if not targets:
+            return None
+        changed = intent.model_copy(
+            update={
+                "version": intent.version + 1,
+                "updated_at": now,
+                "question_listing_token": keys.digest(token_urlsafe(32)),
+                "question_listing_targets": targets,
+                "question_bindings": tuple(binding(self, m, answers) for _, m, _ in selected),
+                "review_listing": tuple(snapshot(self, r) for _, _, r in selected),
+                "review_listing_expires_at": now
+                + timedelta(hours=1, seconds=intent.delivery_lease_seconds),
+                "question_listing_expires_at": now
+                + timedelta(hours=1, seconds=intent.delivery_lease_seconds),
+            }
+        )
+        written = to_record(changed, intent.scope)
+        # Patient/question/review identities are saved atomically. Plan source refs
+        # remain in the full snapshot and are re-read after decoration, before send.
+        # This keeps twenty patients with plans within DynamoDB's transaction bound.
+        checks = [
+            Check(r.key, r.version)
+            for r in sources
+            if r.entity_type
+            in {
+                "doctor",
+                "question_digest_schedule",
+                "patient",
+                "mission",
+                "review",
+                "reusable_answer",
+            }
+        ]
+        merged = self._merge_checks([], checks)
+        if merged is not None and self._atomic([Write(record_item(written), row.version)], merged):
+            return written
+        return None
+
     def start_delivery(
         self,
         intent_id: str,
@@ -1621,7 +1799,13 @@ class StoreBase(ABC):
             current = (
                 self.get_account_source(scope, ref)
                 if isinstance(scope, AccountScope)
-                else self.get(scope, ref.entity_type, ref.id)
+                else self.get(
+                    TenantScope(doctor_id=scope.doctor_id)
+                    if ref.entity_type in {"reuse_offer", "reusable_answer"}
+                    else scope,
+                    ref.entity_type,
+                    ref.id,
+                )
             )
             if current is None or current.version != ref.version:
                 return None
@@ -1784,7 +1968,9 @@ class StoreBase(ABC):
         ):
             return None
         if outcome == "provider_accepted" and (
-            new.status != "provider_accepted" or new.accepted_at != now
+            new.status != "provider_accepted"
+            or new.accepted_at != new.updated_at
+            or not old.updated_at <= new.updated_at <= now
         ):
             return None
         if outcome == "suppressed" and (
@@ -1804,7 +1990,14 @@ class StoreBase(ABC):
             new.status not in {"queued", "failed"} or new.retry_count != old.retry_count + 1
         ):
             return None
+        if new.delivered_text != old.delivered_text and (
+            old.delivered_text is not None
+            or outcome != "provider_accepted"
+            or old.audience != "patient"
+        ):
+            return None
         mutable = {
+            "delivered_text",
             "version",
             "updated_at",
             "status",
@@ -1908,6 +2101,13 @@ class StoreBase(ABC):
                         "state": "consumed" if outcome == "provider_accepted" else "released",
                     }
                     writes.append(Write(changed, reservation["version"]))
+        if resolution.question_schedule:
+            if type(new.scope) is not TenantScope:
+                return None
+            doctor_row = self.get(new.scope, "doctor", new.scope.doctor_id)
+            if doctor_row is None:
+                return None
+            checks.append(Check(doctor_row.key, doctor_row.version))
         extra = self._notice_writes(old, new, resolution)
         if extra is None:
             return None
@@ -1921,6 +2121,32 @@ class StoreBase(ABC):
         self, old: OutboundIntent, new: OutboundIntent, resolution: DeliveryResolution
     ) -> list[Write] | None:
         writes: list[Write] = []
+        if resolution.question_stamps or resolution.question_schedule:
+            from sanad.contact.question_digest import accepted
+
+            if new.template_id != "doctor_question_digest" or new.status != "provider_accepted":
+                return None
+            expected = accepted(self, new, new.updated_at)
+            if any(
+                getattr(resolution, name) != expected.get(name, default)
+                for name, default in (
+                    ("question_stamps", ()),
+                    ("question_schedule", None),
+                    ("question_schedule_expected_version", None),
+                    ("bundle_schedule", None),
+                    ("bundle_expected_version", None),
+                )
+            ):
+                return None
+            for stamp_row in resolution.question_stamps:
+                writes.append(Write(record_item(stamp_row), stamp_row.version - 1))
+            if resolution.question_schedule:
+                writes.append(
+                    Write(
+                        record_item(resolution.question_schedule),
+                        resolution.question_schedule_expected_version,
+                    )
+                )
         if resolution.obligation_stamp:
             if new.status != "provider_accepted" or new.notification_purpose != "DEADLINE":
                 return None
@@ -1956,7 +2182,7 @@ class StoreBase(ABC):
                 row.version + 1 if row else 1
             ):
                 return None
-            if new.scope_kind == "doctor":
+            if new.template_id == "doctor_weekly_bundle":
                 current_schedule = from_record(row, BundleSchedule) if row else None
                 if (
                     not current_schedule
@@ -1965,7 +2191,7 @@ class StoreBase(ABC):
                     or schedule.last_provider_accepted_at != new.accepted_at
                 ):
                     return None
-            elif not resolution.obligation_stamp:
+            elif not (resolution.obligation_stamp or resolution.question_stamps):
                 return None
             writes.append(
                 Write(record_item(resolution.bundle_schedule), row.version if row else None)
@@ -1989,12 +2215,20 @@ class StoreBase(ABC):
             or old.model_dump(exclude=mutable) != new.model_dump(exclude=mutable)
         ):
             return None
+        checks = []
+        if resolution.question_schedule:
+            if type(new.scope) is not TenantScope:
+                return None
+            doctor_row = self.get(new.scope, "doctor", new.scope.doctor_id)
+            if doctor_row is None:
+                return None
+            checks.append(Check(doctor_row.key, doctor_row.version))
         extra = self._notice_writes(old, new, resolution)
         if extra is None:
             return None
         return (
             resolution.intent
-            if self._atomic([Write(record_item(resolution.intent), row.version), *extra], [])
+            if self._atomic([Write(record_item(resolution.intent), row.version), *extra], checks)
             else None
         )
 
@@ -2145,7 +2379,19 @@ class StoreBase(ABC):
                         doctor = from_record(item_record(row), Doctor)
                         if doctor.telegram_bot_id != bot_id:
                             doctor = None
-            # Validate a single consistent version cut across the two strong reads.
+            admin_row = None
+            if (
+                self._identity
+                and self._identity.bot_id == bot_id
+                and self._identity.admin_user_id == telegram_user_id
+            ):
+                admin_key = Key(
+                    keys.partition(AccountScope(bot_id=bot_id)),
+                    f"ADMIN_ACCOUNT#{keys.component(telegram_user_id)}",
+                )
+                admin_row = self._read(admin_key)
+                checks.append(Check(admin_key, admin_row.get("version") if admin_row else None))
+            # Validate a single consistent version cut across the authority reads.
             if not self._atomic([], checks):
                 continue
             roles: set[Literal["admin", "doctor", "patient"]] = set()
@@ -2190,6 +2436,9 @@ class StoreBase(ABC):
                 binding=binding,
                 doctor_status=doctor.status if doctor else None,
                 auth_epoch=doctor.auth_epoch if doctor else None,
+                admin_epoch=int(str(item_record(admin_row).body["auth_epoch"]))
+                if admin_row
+                else None,
                 private_chat_id=binding.private_chat_id
                 if binding
                 else (telegram_user_id if configured_admin else None),
@@ -2253,6 +2502,24 @@ class StoreBase(ABC):
                 binding = from_record(row, SubjectBinding)
                 if binding.role_set != frozenset({"doctor"}) or not is_admin:
                     return Forbidden()
+            if row.entity_type == "doctor" and command.payload.get("type") == "SetDoctorName":
+                old = self.get(TenantScope(doctor_id=row.id), "doctor", row.id)
+                mutable = {"name", "updated_at", "version"}
+                if (
+                    old is None
+                    or old.body.get("name")
+                    or old.body.get("status") != "approved"
+                    or admin.actor_kind != "doctor"
+                    or admin.doctor_id != row.id
+                    or actor.auth_epoch != admin.auth_epoch
+                    or row.body.get("name") != command.payload.get("name")
+                    or not str(row.body.get("name", "")).strip()
+                    or row.version != old.version + 1
+                    or {k: v for k, v in row.body.items() if k not in mutable}
+                    != {k: v for k, v in old.body.items() if k not in mutable}
+                ):
+                    return Forbidden()
+                continue
             if row.entity_type in {"doctor", "doctor_authority", "callback_token"} and not is_admin:
                 # Applicants may create only admin-bound action tokens for their own application.
                 if row.entity_type != "callback_token" or row.version != 1:

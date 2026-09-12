@@ -3,12 +3,17 @@
 import logging
 import re
 
+from starlette.requests import Request
+from starlette.responses import HTMLResponse, JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-_PATH = re.compile(r"/(d|pl|p)/[^\s?\#\"'<>]+")
+_PATH = re.compile(r"/(ad|d|pl|p)/[^\s?\#\"'<>]+")
 _START = re.compile(r"([?&]start=)[^\s&#\"'<>]+")
 HEADERS = {
-    "Referrer-Policy": "no-referrer",
+    # "no-referrer" makes browsers send "Origin: null" on same-origin form posts
+    # (Fetch standard), which the exchange's same-origin check refuses; "same-origin"
+    # still sends nothing to other sites, so exchange paths never leave this host.
+    "Referrer-Policy": "same-origin",
     "Cache-Control": "no-store",
     "Content-Security-Policy": (
         "default-src 'none'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'; "
@@ -52,6 +57,40 @@ class BrowserSecurity:
             await self.app(scope, receive, send)
             return
         path = str(scope.get("path", ""))
+        request = Request(scope)
+        login = getattr(request.app.state, "login", None)
+        if login is not None:
+            session = login.session(request.cookies.get("sanad_session", ""))
+            if session is not None and session.role == "admin":
+                method = request.method
+                public = (
+                    method == "GET"
+                    and (path in {"/health", "/demo"} or re.fullmatch(r"/(?:assets|p)/[^/]+", path))
+                    or method in {"GET", "POST"}
+                    and re.fullmatch(r"/(?:ad|d|pl)/[^/]+", path)
+                )
+                administrator = (
+                    method == "GET"
+                    and path in {"/admin", "/api/admin/applications"}
+                    or method == "POST"
+                    and (
+                        path == "/api/admin/logout"
+                        or re.fullmatch(r"/api/admin/applications/[^/]+/(?:approve|reject)", path)
+                        or re.fullmatch(r"/api/admin/doctors/[^/]+/(?:suspend|reinstate)", path)
+                    )
+                )
+                if not public and not administrator:
+                    login.revoke(session, reason="admin_wrong_role", path=redact(path))
+                    from sanad.web.pages import admin_denied_page
+
+                    message = "Not available from an administrator session."
+                    response = (
+                        JSONResponse({"detail": message}, status_code=403, headers=HEADERS)
+                        if path.startswith("/api/")
+                        else HTMLResponse(admin_denied_page(), status_code=403, headers=HEADERS)
+                    )
+                    await response(scope, receive, send)
+                    return
         browser = path not in {"/health", "/tg"}
 
         async def guarded_send(message: Message) -> None:

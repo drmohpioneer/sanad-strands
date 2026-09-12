@@ -147,7 +147,9 @@ class IdentityService:
             events=events,
             identity_reads=tuple(conditions.values()),
             expected=tuple(r.ref for r in (*rows, *events, *outgoing)),
-            receipt_completion=ReceiptCompletion(claim=claim, result_event_ids=(event_id,))
+            receipt_completion=ReceiptCompletion(
+                claim=claim, result_event_ids=tuple(e.id for e in events)
+            )
             if claim
             else None,
         )
@@ -164,7 +166,7 @@ class IdentityService:
         source: BaseModel,
         template: str,
         subject: str,
-        audience: Literal["applicant", "doctor"],
+        audience: Literal["applicant", "doctor", "admin"],
         *,
         fields: dict[str, str] | None = None,
         markup: JsonValue = None,
@@ -244,7 +246,7 @@ class IdentityService:
 
     def token_head(
         self,
-        purpose: Literal["doctor_login", "patient_login", "invitation"],
+        purpose: Literal["doctor_login", "patient_login", "admin_login", "invitation"],
         owner_key: str,
         token_hash: str,
     ) -> tuple[TokenHead, TokenHead | None, IdentityRead]:
@@ -275,6 +277,7 @@ class IdentityService:
 
 class InternalCommand(AccountCommand):
     type: Literal[
+        "RevokeAdminSessions",
         "ExchangeLogin",
         "CreatePreSession",
         "TouchWebSession",

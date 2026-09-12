@@ -8,6 +8,7 @@ from typing import Any
 from boto3.dynamodb.types import TypeDeserializer, TypeSerializer  # type: ignore[import-untyped]
 from botocore.exceptions import ClientError  # type: ignore[import-untyped]
 
+from sanad.domain import PatientScope
 from sanad.store._base import (
     INDEX_FIELDS,
     Check,
@@ -19,7 +20,7 @@ from sanad.store._base import (
     utc_now,
 )
 from sanad.store.keys import Key
-from sanad.store.records import PROJECTION_FIELDS, Cursor
+from sanad.store.records import PROJECTION_FIELDS, Cursor, StoredRecord
 
 _SERIALIZER = TypeSerializer()
 _DESERIALIZER = TypeDeserializer()
@@ -87,6 +88,37 @@ class DynamoStore(StoreBase):
         super().__init__(clock=clock)
         self._client = client
         self._table = table_name
+
+    def patient_receipts(self, scope: PatientScope) -> tuple[StoredRecord, ...]:
+        """Read pre-index receipts too; no migration or eventually consistent history."""
+        if not isinstance(scope, PatientScope):
+            return ()
+        args: dict[str, Any] = {
+            "TableName": self._table,
+            "ConsistentRead": True,
+            "Limit": 1000,
+            "FilterExpression": "#kind = :kind AND doctor_id = :doctor AND patient_id = :patient",
+            "ProjectionExpression": "PK, SK",
+            "ExpressionAttributeNames": {"#kind": "entity_type"},
+            "ExpressionAttributeValues": _encode(
+                {
+                    ":kind": "inbound_receipt",
+                    ":doctor": scope.doctor_id,
+                    ":patient": scope.patient_id,
+                }
+            ),
+        }
+        rows: list[StoredRecord] = []
+        while True:
+            result = self._client.scan(**args)
+            for item in result.get("Items", []):
+                key = _decode(item)
+                row = self._owned(scope, Key(key["PK"], key["SK"]))
+                if row is not None and row.entity_type == "inbound_receipt":
+                    rows.append(row)
+            if not result.get("LastEvaluatedKey"):
+                return tuple(rows)
+            args["ExclusiveStartKey"] = result["LastEvaluatedKey"]
 
     def _read(self, key: Key) -> Item | None:
         result = self._client.get_item(

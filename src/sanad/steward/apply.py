@@ -123,7 +123,8 @@ class CommitBuilder:
         policy: StewardPolicy,
         store: Store,
     ):
-        self.scope, self.command, self.now = scope, command, now
+        self.scope, self.now = scope, now
+        self.command = command.model_copy(update={"requested_at": max(command.requested_at, now)})
         self.policy, self.store = policy, store
         self.puts: dict[tuple[str, str], StoredRecord] = {}
         self.events: dict[str, StoredRecord] = {}
@@ -301,6 +302,28 @@ class CommitBuilder:
                     )
         elif isinstance(effect, ev.EmitIntent):
             assert aggregate is not None
+            if (
+                effect.purpose == "DEADLINE"
+                and isinstance(aggregate, Mission)
+                and aggregate.kind == "QUESTION"
+            ):
+                from sanad.contact.question_digest import arm
+                from sanad.domain import TenantScope
+                from sanad.store.records import Doctor
+
+                tenant = TenantScope(doctor_id=self.scope.doctor_id)
+                digest_doctor_row = self.store.get(tenant, "doctor", tenant.doctor_id)
+                if digest_doctor_row is None:
+                    raise EffectsRejected("recipient_authority_missing")
+                schedule = arm(self.store, from_record(digest_doctor_row, Doctor), self.now)
+                if schedule:
+                    self.put(to_record(schedule, tenant))
+                self.audit(
+                    "QUESTION_DIGEST_ARMED",
+                    keys.digest(effect.source_event_id + ":question-digest"),
+                    (to_record(aggregate, self.scope).ref,),
+                )
+                return
             doctor_record = self.store.get(self.scope, "doctor_authority", self.scope.doctor_id)
             profile = self.store.get_patient_profile(self.scope)
             if doctor_record is None or profile is None:

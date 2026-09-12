@@ -4,6 +4,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
+from pydantic import JsonValue
 
 from sanad.auth.claim import ClaimService
 from sanad.domain import PatientScope, TenantScope
@@ -24,6 +25,20 @@ from sanad.store.records import (
 from sanad.web.routes import SESSION_COOKIE, require_session
 
 
+def displayed_order(body: dict[str, JsonValue]) -> dict[str, JsonValue]:
+    instruction = body.get("structured_instruction")
+    if not isinstance(instruction, dict):
+        return body
+    frequency, timing = instruction.get("frequency"), instruction.get("timing")
+    if (
+        isinstance(frequency, str)
+        and isinstance(timing, str)
+        and frequency.strip().casefold() == timing.strip().casefold()
+    ):
+        return {**body, "structured_instruction": {**instruction, "timing": None}}
+    return body
+
+
 def record_router(claims: ClaimService) -> APIRouter:
     router = APIRouter()
 
@@ -37,9 +52,11 @@ def record_router(claims: ClaimService) -> APIRouter:
         scope, tenant = patient.scope, TenantScope(doctor_id=session.doctor_id)
         doctor_row = claims.store.get(scope, "doctor", session.doctor_id)
         assert doctor_row
-        language = from_record(doctor_row, Doctor).language
+        from sanad.domain.language import effective
+
+        language = effective(from_record(doctor_row, Doctor).language)
         from sanad.corrections import Correction
-        from sanad.steward.corrections import current_facts, notice_text
+        from sanad.steward.corrections import current_facts, rendered_notice
 
         profile = claims.store.get_patient_profile(scope)
         corrections = [
@@ -88,7 +105,9 @@ def record_router(claims: ClaimService) -> APIRouter:
         orders = []
         versions = tuple(records(claims.store, scope, "care_order_version"))
         for head in records(claims.store, scope, "care_order_head"):
-            history = [r.body for r in versions if r.body.get("order_id") == head.id]
+            history = [
+                displayed_order(r.body) for r in versions if r.body.get("order_id") == head.id
+            ]
             history.sort(key=lambda r: int(str(r["order_version"])))
             orders.append(
                 {
@@ -119,6 +138,13 @@ def record_router(claims: ClaimService) -> APIRouter:
         media = [
             from_record(r, PatientMedia) for r in records(claims.store, scope, "patient_media")
         ]
+        media_sources = {
+            m.id: (
+                claims.store.get(m.media_scope, "inbound_receipt", m.source_receipt_id)
+                or claims.store.get(tenant, "inbound_receipt", m.source_receipt_id)
+            )
+            for m in media
+        }
         from sanad.store import keys
 
         source_heads = {
@@ -140,6 +166,23 @@ def record_router(claims: ClaimService) -> APIRouter:
             )
         return {
             # Browser fields from the already scoped patient/review reads.
+            "last_activity_at": max(
+                (str(r.body["accepted_at"]) for r in records(claims.store, scope, "audit_event")),
+                default=None,
+            ),
+            "consents": [
+                {
+                    "version": r.version,
+                    "policy_text_version": r.body["policy_text_version"],
+                    "accepted_at": r.body["accepted_at"],
+                    "withdrawn_at": r.body.get("withdrawn_at"),
+                }
+                for r in records(claims.store, scope, "consent")
+            ],
+            "bindings": [
+                {"status": r.body["status"], "confirmed_at": r.body["doctor_confirmed_at"]}
+                for r in records(claims.store, scope, "patient_binding")
+            ],
             "age": patient.age,
             "timezone": patient.timezone,
             "review_history": [r for r in reviews if r.get("state") == "resolved"],
@@ -162,7 +205,11 @@ def record_router(claims: ClaimService) -> APIRouter:
             "correctable_facts": correctable_facts,
             "fact_history": [r.body for r in records(claims.store, scope, "clinical_fact")],
             "corrections": [
-                {**c.model_dump(mode="json"), "notice": notice_text(c)} for c in corrections
+                {
+                    **c.model_dump(mode="json"),
+                    "notice": rendered_notice(claims.store, c, session.doctor_id),
+                }
+                for c in corrections
             ],
             "correction_authority": {
                 "binding_epoch": profile.binding_epoch,
@@ -178,7 +225,17 @@ def record_router(claims: ClaimService) -> APIRouter:
             "proposals": pending,
             "pending_proposal": pending[-1] if pending else None,
             "media": [
-                {"media_id": m.id, "kind": m.kind, "date": m.created_at.isoformat(), "mime": m.mime}
+                {
+                    "media_id": m.id,
+                    "kind": m.kind,
+                    "date": source.body["received_at"]
+                    if (source := media_sources[m.id]) is not None
+                    else m.created_at.isoformat(),
+                    "mime": m.mime,
+                    "uploaded_by_you": bool(
+                        source and source.body.get("source_subject") == session.subject
+                    ),
+                }
                 for m in media
             ],
         }

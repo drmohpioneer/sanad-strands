@@ -229,6 +229,33 @@ def merge_candidates(
             other = right[j]
             a, b = _fields(item, source, ctx), _fields(other, source, ctx)
             chosen = _preferred(item, other, source)
+            if (
+                isinstance(chosen, OrderCandidate)
+                and isinstance(item, OrderCandidate)
+                and isinstance(other, OrderCandidate)
+                and item.action == other.action
+                and chosen.action_quote is None
+            ):
+                chosen = chosen.model_copy(
+                    update={"action_quote": item.action_quote or other.action_quote}
+                )
+            if (
+                isinstance(chosen, OrderCandidate)
+                and isinstance(item, OrderCandidate)
+                and isinstance(other, OrderCandidate)
+            ):
+                from sanad.scribe.grounding import grounded
+
+                present = {}
+                for field in a:
+                    left_value = OrderCandidate.absent_field(getattr(item, field))
+                    right_value = OrderCandidate.absent_field(getattr(other, field))
+                    value = left_value or right_value
+                    if not left_value or not right_value:
+                        a[field] = b[field] = ()
+                        if isinstance(value, str) and grounded(value, source):
+                            present[field] = value
+                chosen = chosen.model_copy(update=present)
             differing = tuple(
                 _conflict(item, other, field, chosen, source, ctx)
                 for field in a
@@ -292,13 +319,16 @@ def merge_candidates(
                         item="patient",
                         field=field,
                         code="extraction_conflict",
+                        alternatives=(str(left_value), str(right_value)),
                         question='سمعت بيانات المريض بقراءتين مختلفتين؛ تؤكد "'
                         + str(getattr(first.patient, field) or getattr(second.patient, field))
                         + '"؟',
                     )
                 )
     values["patient"] = PatientCandidate.model_validate(patient)
-    values["ambiguities"] = first.ambiguities
+    values["ambiguities"] = tuple(
+        dict.fromkeys((*first.ambiguities, *(second.ambiguities if second else ())))
+    )
     values["correction_edits"] = tuple(
         edit.model_copy(
             update={"proposal_index": order_indices.get(edit.proposal_index, edit.proposal_index)}
@@ -334,7 +364,7 @@ def merge_candidates(
         )
     )
     result._single_source = tuple(single)
-    result._malformed_items = first._malformed_items
+    result._malformed_items = first._malformed_items or bool(second and second._malformed_items)
     result._merge_issues = tuple(issues)
     result = fold_facts(result, source, ctx)
     from sanad.scribe.grounding import deduplicate_instructions

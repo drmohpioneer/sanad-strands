@@ -37,6 +37,7 @@ COMMANDS = frozenset(
         "ScribeExpire",
         "ScribeReply",
         "ScribeLanguage",
+        "ScribeDigest",
         "ScribeInvalidate",
         "ScribeWork",
     }
@@ -117,17 +118,29 @@ def scribe_guards(
             return None
         checks.append(Check(bound.key, bound.version))
     allowed = PROPOSAL_TYPES | (CLINICAL_TYPES if kind == "ScribeConfirm" else set())
-    if kind == "ScribeLanguage":
-        allowed = {"doctor"}
-        if len(request.puts) != 1 or command.work_claim is None:
+    if kind in {"ScribeLanguage", "ScribeDigest"}:
+        allowed = {"doctor"} if kind == "ScribeLanguage" else {"doctor", "question_digest_schedule"}
+        doctors = [r for r in request.puts if r.entity_type == "doctor"]
+        if len(doctors) != 1 or command.work_claim is None:
             return None
-        updated = from_record(request.puts[0], Doctor)
+        updated = from_record(doctors[0], Doctor)
+        mutable = {"version", "updated_at"} | (
+            {"language"} if kind == "ScribeLanguage" else {"digest_time", "digest_packing"}
+        )
         if (
             updated.version != doctor.version + 1
-            or updated.updated_at != now
-            or updated.model_dump(exclude={"language", "version", "updated_at"})
-            != doctor.model_dump(exclude={"language", "version", "updated_at"})
+            or not doctor.updated_at <= updated.updated_at <= command.requested_at <= now
+            or updated.model_dump(exclude=mutable) != doctor.model_dump(exclude=mutable)
         ):
+            return None
+        from sanad.contact.question_digest import setting_schedule
+        from sanad.store.records import to_record
+
+        schedule = (
+            setting_schedule(store, updated, updated.updated_at) if kind == "ScribeDigest" else None
+        )
+        expected = (doctors[0],) + ((to_record(schedule, doctor.scope),) if schedule else ())
+        if request.puts != expected:
             return None
     compensation: dict[tuple[str, str], object] = {}
     if kind == "ScribeConfirm":

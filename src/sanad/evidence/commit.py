@@ -717,7 +717,7 @@ def doctor_card(builder: CommitBuilder, head: EvidenceHead, evidence: Evidence) 
             "title": evidence.category,
             "details": " · ".join(
                 (
-                    str(evidence.printed_date or "—"),
+                    str(evidence.printed_date or "Not recorded"),
                     evidence.association_state,
                     *evidence.flags,
                     *(m for p in evidence.required_predicate_results for m in p.missing),

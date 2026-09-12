@@ -148,6 +148,9 @@ class PatientTurnCommit:
                             ),
                             self.snapshot.scope,
                         )
+        from sanad.steward.browser_session import advance_preference_session
+
+        advance_preference_session(self)
         self.builder.audit(
             str(self.builder.command.payload["type"]),
             keys.digest(self.id),
@@ -160,7 +163,11 @@ class PatientTurnCommit:
             intent = make_intent(
                 self.snapshot.scope,
                 self.id,
-                (),
+                tuple(
+                    r
+                    for r in self.builder.command.expected_versions
+                    if r.entity_type == "reusable_answer"
+                ),
                 "solicited_reply",
                 self.id,
                 self.now,
@@ -180,4 +187,54 @@ class PatientTurnCommit:
                 }
             )
             self.builder.intents[intent.id] = to_record(intent, self.snapshot.scope)
-        return command_result(self.store.commit(self.builder.finish()))
+        committed = command_result(self.store.commit(self.builder.finish()))
+        if committed.status != "forbidden":
+            return committed
+        from sanad.safety import render_urgent
+        from sanad.safety.policy import SAFETY_POLICY_V1_CARDIOLOGY_DRAFT
+        from sanad.steward.service import system_command
+
+        now = self.steward.clock()
+        command = system_command(
+            self.snapshot.scope,
+            self.id + ":refused",
+            {"type": "_InboundRefused"},
+            now,
+            lane="ingress",
+        ).model_copy(update={"fence": self.lease, "work_claim": self.claim})
+        neutral = CommitBuilder(self.snapshot.scope, command, now, self.builder.policy, self.store)
+        neutral.audit("patient_turn_refused", keys.digest(command.command_id), ())
+        intent = make_intent(
+            self.snapshot.scope,
+            command.command_id,
+            (),
+            "solicited_reply",
+            command.command_id,
+            now,
+            self.builder.policy,
+            self.snapshot.authority,
+            self.snapshot.profile,
+            audience="patient",
+            order_refs=(),
+            template_id="patient_safety_ack",
+        )
+        payload = {
+            "text": render_urgent(
+                "patient_safety_ack",
+                language=self.snapshot.patient.language,
+                gender="u",
+                policy=SAFETY_POLICY_V1_CARDIOLOGY_DRAFT,
+            )
+        }
+        intent = intent.model_copy(
+            update={
+                "payload": payload,
+                "payload_digest": keys.digest(canonical_json(payload).decode()),
+                "source_event_ids": (self.id,),
+                "recipient_subject": self.principal.subject,
+                "bot_id": self.snapshot.binding.bot_id,
+            }
+        )
+        neutral.intents[intent.id] = to_record(intent, self.snapshot.scope)
+        completed = command_result(self.store.commit(neutral.finish()))
+        return committed if completed.status in {"accepted", "duplicate"} else completed

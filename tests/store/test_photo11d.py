@@ -484,7 +484,9 @@ def test_invented_name_blocks_affected_row_despite_a_shared_item(world: ScribeWo
     )
     providers(world, first, second, data=paper())
     world.post(photo())
-    assert world.proposal.photo and world.proposal.blocked("order:1")
+    assert world.proposal.photo and world.proposal.blocked("fact:0")
+    assert len(world.proposal.candidate.orders) == 1
+    assert world.proposal.photo.row_targets[1] == "fact:0"
     assert not world.proposal.blocked("order:0")
     assert not world.proposal.photo.reads.single_reader
 

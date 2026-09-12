@@ -39,6 +39,7 @@ def garbled_value() -> dict[str, Any]:
 
 
 @pytest.mark.parametrize("language", ["en", "ar"])
+@pytest.mark.usefixtures("legacy_dictation_schema")
 def test_unheard_analyte_is_quoted_once_and_never_committed_or_learned(
     store: StoreBase, clock: FakeClock, language: Language
 ) -> None:
@@ -67,6 +68,7 @@ def test_unheard_analyte_is_quoted_once_and_never_committed_or_learned(
     assert not any("creatinine" in str(row.body) for row in memory)
 
 
+@pytest.mark.usefixtures("legacy_dictation_schema")
 def test_quoted_test_correction_updates_same_card_and_unrelated_reply_keeps_block(
     store: StoreBase, clock: FakeClock
 ) -> None:
@@ -106,6 +108,7 @@ def test_quoted_test_correction_updates_same_card_and_unrelated_reply_keeps_bloc
 
 
 @pytest.mark.parametrize("rewritten", [False, True])
+@pytest.mark.usefixtures("legacy_dictation_schema")
 def test_test_deadline_reply_does_not_resolve_its_analyte(
     store: StoreBase, clock: FakeClock, rewritten: bool
 ) -> None:
@@ -125,6 +128,7 @@ def test_test_deadline_reply_does_not_resolve_its_analyte(
 
 
 @pytest.mark.parametrize("previous_dose,conflict", [(None, False), ("10/160", True)])
+@pytest.mark.usefixtures("legacy_dictation_schema")
 def test_verified_previous_values_remove_only_absent_peer_doubts(
     store: StoreBase, clock: FakeClock, previous_dose: str | None, conflict: bool
 ) -> None:
@@ -142,6 +146,7 @@ def test_verified_previous_values_remove_only_absent_peer_doubts(
     assert p.blocked("order:0") == conflict
 
 
+@pytest.mark.usefixtures("legacy_dictation_schema")
 def test_generic_wording_cleanup_preserves_blocked_alert_refusal(
     store: StoreBase, clock: FakeClock
 ) -> None:
@@ -168,6 +173,7 @@ def test_generic_wording_cleanup_preserves_blocked_alert_refusal(
     assert "Please confirm the clinical wording as heard." not in questions
 
 
+@pytest.mark.usefixtures("legacy_dictation_schema")
 def test_representations_merge_but_real_dose_disagreement_still_blocks(
     store: StoreBase, clock: FakeClock
 ) -> None:
@@ -187,6 +193,7 @@ def test_representations_merge_but_real_dose_disagreement_still_blocks(
     assert p.blocked("order:0") and QUESTION in text
 
 
+@pytest.mark.usefixtures("legacy_dictation_schema")
 def test_mission_word_counts_remove_only_global_questions(
     store: StoreBase, clock: FakeClock
 ) -> None:

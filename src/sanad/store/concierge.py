@@ -25,6 +25,7 @@ KINDS = frozenset(
 )
 ALLOWED = frozenset(
     {
+        "web_session",
         "patient_action",
         "clinical_fact",
         "mission",
@@ -45,6 +46,23 @@ def guards(store: "StoreBase", request: CommitRequest, now: datetime) -> list["C
     from sanad.store._base import Check
 
     command = request.command
+    at = command.requested_at
+    if at > now:
+        return None
+    # All patient effects are stamped by the same PatientTurnCommit, including
+    # Resolver checkpoints. Re-read predecessors to reject backdated revisions.
+    from sanad.store.records import MODELS, model_scope
+
+    try:
+        for stamped_row in request.puts:
+            model = from_record(stamped_row, MODELS[stamped_row.entity_type])
+            previous = store.get(model_scope(model), stamped_row.entity_type, stamped_row.id)
+            stamp = datetime.fromisoformat(str(stamped_row.body["updated_at"]))
+            before = datetime.fromisoformat(str(previous.body["updated_at"])) if previous else stamp
+            if not before <= stamp <= at:
+                return None
+    except (KeyError, ValueError, TypeError):
+        return None
     if request.receipt_completion is None and command.payload.get("resolver_action"):
         from sanad.resolver.guard import checkpoint_guards
 
@@ -95,7 +113,7 @@ def guards(store: "StoreBase", request: CommitRequest, now: datetime) -> list["C
         if r.entity_type in {"patient", "consent", "patient_binding", "patient_profile"}
     }
     if changed and command.payload.get("type") == "RecordPatientReply":
-        if not _start_clarification_revision(snap, changed, now):
+        if not _start_clarification_revision(snap, changed, at):
             return None
         changed = {}
     if changed:
@@ -172,16 +190,22 @@ def guards(store: "StoreBase", request: CommitRequest, now: datetime) -> list["C
                 for r in request.puts
             ):
                 return None
+    from sanad.store.identity import preference_session
+
+    session_checks = preference_session(store, request, receipt, now)
+    if session_checks is None:
+        return None
+    checks.extend(session_checks)
     for row in request.puts:
         if row.entity_type == "outbound_intent" and command.payload.get("resolver_action"):
             from sanad.resolver.guard import suppression as resolver_suppression
 
-            if resolver_suppression(store, snap, request, row, now, checks):
+            if resolver_suppression(store, snap, request, row, at, checks):
                 continue
         if (
             row.entity_type == "outbound_intent"
             and command.payload.get("type") == "RecordPatientReply"
-            and _medication_suppression(store, snap, request, row, now, checks)
+            and _medication_suppression(store, snap, request, row, at, checks)
         ):
             continue
         if row.entity_type == "outbound_intent":
@@ -240,12 +264,12 @@ def guards(store: "StoreBase", request: CommitRequest, now: datetime) -> list["C
 
             original_barrier = next((m for m in snap.missions if m.id == row.id), None)
             if original_barrier and (
-                hold(original_barrier, row, now) or resolver_permits(snap, request, row, now)
+                hold(original_barrier, row, at) or resolver_permits(snap, request, row, at)
             ):
                 continue
             if command.payload.get(
                 "type"
-            ) == "RecordPatientReply" and _medication_barrier_projection(snap, request, row, now):
+            ) == "RecordPatientReply" and _medication_barrier_projection(snap, request, row, at):
                 continue
             if row.version > 1:
                 from sanad.contact.scheduler import prime
@@ -262,13 +286,13 @@ def guards(store: "StoreBase", request: CommitRequest, now: datetime) -> list["C
                     reply = transition_mission(
                         original,
                         PatientReplied(event_id=command.command_id + ":reply:" + row.id),
-                        now,
+                        at,
                         DRAFT_POLICY_2026_09,
                     )
                     if (
                         isinstance(reply, TransitionResult)
                         and isinstance(reply.aggregate, Mission)
-                        and prime(reply.aggregate, now).model_dump(mode="json") == row.body
+                        and prime(reply.aggregate, at).model_dump(mode="json") == row.body
                     ):
                         continue
                 if (
@@ -303,7 +327,7 @@ def guards(store: "StoreBase", request: CommitRequest, now: datetime) -> list["C
                         ):
                             return None
                         revised_mission = from_record(row, Mission)
-                        at = from_record(receipt, InboundReceipt).received_at
+                        received_at = from_record(receipt, InboundReceipt).received_at
                         if report.original_receipt_id:
                             source_row = store.get(
                                 snap.scope, "inbound_receipt", report.original_receipt_id
@@ -313,7 +337,7 @@ def guards(store: "StoreBase", request: CommitRequest, now: datetime) -> list["C
                                 or source_row.body.get("source_subject") != actor.subject
                             ):
                                 return None
-                            at = from_record(source_row, InboundReceipt).received_at
+                            received_at = from_record(source_row, InboundReceipt).received_at
                             checks.append(Check(source_row.key, source_row.version))
                         base = original
                         if isinstance(original.details, VisitDetails):
@@ -331,7 +355,7 @@ def guards(store: "StoreBase", request: CommitRequest, now: datetime) -> list["C
                                 and revised_mission
                                 == Mission.model_validate(
                                     base.model_dump()
-                                    | {"version": original.version + 1, "updated_at": now}
+                                    | {"version": original.version + 1, "updated_at": at}
                                 )
                             ):
                                 continue
@@ -348,15 +372,15 @@ def guards(store: "StoreBase", request: CommitRequest, now: datetime) -> list["C
                                 event_id=command.command_id,
                                 fulfillment_event_id=command.command_id,
                                 actor_kind="patient",
-                                objective_received_at=at,
+                                objective_received_at=received_at,
                                 danger_flag=False,
                                 predicate_result=PredicateResult(
                                     satisfied=True,
-                                    evaluated_at=now,
+                                    evaluated_at=at,
                                     detail="Explicit patient report.",
                                 ),
                             ),
-                            now,
+                            at,
                             DRAFT_POLICY_2026_09,
                         )
                         if (
@@ -372,7 +396,7 @@ def guards(store: "StoreBase", request: CommitRequest, now: datetime) -> list["C
             if row.body.get("kind") == "MONITOR":
                 from sanad.monitor.guard import permits as monitor_permits
 
-                if monitor_permits(store, snap, request, row, now):
+                if monitor_permits(store, snap, request, row, at):
                     continue
             if row.version > 1 and (
                 row.body.get("kind") != "MEDICATION"

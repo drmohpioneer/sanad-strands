@@ -114,3 +114,25 @@ def liaison_scripted_only(request: pytest.FixtureRequest, monkeypatch: pytest.Mo
 
 def _assert_no_liaison_provider_calls(calls: list[bool]) -> None:
     assert calls == [], "zero real Liaison provider calls required"
+
+
+@pytest.fixture
+def legacy_dictation_schema(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep pre-11N scripted replies on their original optional-citation schema.
+
+    Opt-in only for historical regression cases; new English extraction and live
+    11N tests must use the production EnglishDictationCandidate. The actual
+    Strands boundary, retry loop, grounding and confirmation still run.
+    """
+    from sanad.scribe import turn
+    from sanad.scribe.extract import (
+        DictationCandidate,
+        EnglishFactCandidate,
+        EnglishMissionCandidate,
+    )
+
+    class LegacyEnglishDictationCandidate(DictationCandidate):
+        facts: tuple[EnglishFactCandidate, ...] = ()
+        missions: tuple[EnglishMissionCandidate, ...] = ()
+
+    monkeypatch.setattr(turn, "EnglishDictationCandidate", LegacyEnglishDictationCandidate)

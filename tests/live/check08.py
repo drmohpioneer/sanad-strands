@@ -39,9 +39,13 @@ REGISTRY = ModelRegistry()
 # $0.006/minute from experiments.md. Source: https://aws.amazon.com/bedrock/pricing/
 RATES = {
     REGISTRY.worker: (0.06, 0.24),
-    REGISTRY.cross_check: (0.80, 3.20),
+    "us.amazon.nova-pro-v1:0": (0.80, 3.20),
     REGISTRY.classifier: (0.035, 0.14),
-    REGISTRY.speech: (0.10, 0.30),
+    "mistral.voxtral-small-24b-2507": (0.10, 0.30),
+    # https://ai.google.dev/gemini-api/docs/pricing (2026-09-10).
+    # 3.8 introductory rates through 2026-12-31; includes audio input.
+    "gemini-3.8-flash": (0.75, 3.75),
+    "gemini-3.5-flash-lite": (0.30, 2.50),
 }
 
 

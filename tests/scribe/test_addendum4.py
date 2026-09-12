@@ -38,6 +38,7 @@ def test_production_composition_uses_speech_budget_and_preserves_vision(
     from sanad.api import lambda_entry
 
     values = {
+        "gemini_api_key": "synthetic-not-a-credential",
         "bot-token": "123456:synthetic-token",
         "webhook-secret": "synthetic-webhook",
         "tick-secret": "synthetic-tick",
@@ -74,6 +75,15 @@ def test_production_composition_uses_speech_budget_and_preserves_vision(
     vision = app.state.scribe.vision_factory(SOURCE)
     assert doctor.caller.timeout == patient.caller.timeout == TRANSCRIPTION_TIMEOUT == 30
     assert vision.caller.timeout == CALL_TIMEOUT == 25
+    from sanad.models.gemini import GeminiCaller
+
+    assert all(isinstance(a.caller, GeminiCaller) for a in (doctor, patient, vision))
+    assert configs == []
+    for read_timeout, timeout in ((28, 30), (28, 30), (22, 25)):
+        caller = lambda_entry.media_caller(
+            "us.amazon.nova-lite-v1:0", "synthetic", "", read_timeout=read_timeout, timeout=timeout
+        )
+        assert isinstance(caller, BedrockCaller) and caller.timeout == timeout
     assert [c.read_timeout for c in configs] == [28, 28, 22]
     assert all(c.connect_timeout == PROVIDER_CONNECT_TIMEOUT == 2 for c in configs)
     assert all(c.retries["total_max_attempts"] == 1 for c in configs)

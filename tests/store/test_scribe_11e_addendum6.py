@@ -25,6 +25,7 @@ from store.scribe_fixtures import ScribeWorld
 SCHEDULE_DUE = datetime(2026, 9, 12, 7, 0, tzinfo=UTC)
 
 
+@pytest.mark.usefixtures("legacy_dictation_schema")
 def test_current_medication_fact_cannot_restore_bare_previous_drug(
     store: StoreBase, clock: FakeClock, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -45,6 +46,7 @@ def test_current_medication_fact_cannot_restore_bare_previous_drug(
 
 @pytest.mark.parametrize("language", ["en", "ar"])
 @pytest.mark.parametrize("reverse", [False, True])
+@pytest.mark.usefixtures("legacy_dictation_schema")
 def test_combined_ecg_echo_fact_renders_separate_lines_without_rewriting_the_fact(
     store: StoreBase, clock: FakeClock, language: Language, reverse: bool
 ) -> None:
@@ -92,6 +94,7 @@ def test_only_explicit_source_instruction_retains_alert(
 
 
 @pytest.mark.parametrize("recovered", [False, True])
+@pytest.mark.usefixtures("legacy_dictation_schema")
 def test_missing_task_uses_one_identical_primary_retry_and_never_the_secondary_task(
     store: StoreBase, clock: FakeClock, recovered: bool
 ) -> None:
@@ -111,15 +114,14 @@ def test_missing_task_uses_one_identical_primary_retry_and_never_the_secondary_t
     assert retries == ["request_missing"]
     assert all(len(m.script.calls) == 1 for m in models)
     assert models[0].script.calls[0] == models[2].script.calls[0]
-    assert p.blocked("all") != recovered
+    assert not p.blocked("all")
     tasks = [m for m in p.candidate.missions if m.kind in {"TASK", "MONITOR"}]
-    assert bool(tasks) == recovered
-    if recovered:
-        timing = next(t for t in p.timings if t.item == "mission:0")
-        assert timing.resolved.due_at == SCHEDULE_DUE
-    else:
-        with pytest.raises(AssertionError, match="card button missing"):
-            world.button("✅ Confirm")
+    assert len(tasks) == 1 and tasks[0].kind == "MONITOR"
+    index = p.candidate.missions.index(tasks[0])
+    timing = next(t for t in p.timings if t.item == f"mission:{index}")
+    assert timing.resolved.due_at == SCHEDULE_DUE
+    if not recovered:
+        assert tasks[0].text in SOURCE  # code uses the source, not the secondary candidate
 
 
 def test_observation_confirmation_saves_fact_without_alert_order(
@@ -145,6 +147,7 @@ def test_observation_confirmation_saves_fact_without_alert_order(
 
 
 @pytest.mark.parametrize("timing", ["five days", "for five days", None])
+@pytest.mark.usefixtures("legacy_dictation_schema")
 def test_task_duration_uses_receipt_anchor_without_extra_deadline_question(
     store: StoreBase, clock: FakeClock, timing: str | None
 ) -> None:
@@ -162,6 +165,7 @@ def test_task_duration_uses_receipt_anchor_without_extra_deadline_question(
     assert not any(i.item == "mission:0" and i.code == "timing_unclear" for i in p.issues)
 
 
+@pytest.mark.usefixtures("legacy_dictation_schema")
 def test_missing_request_retry_cannot_erase_an_unsupported_number(
     store: StoreBase, clock: FakeClock
 ) -> None:
@@ -179,6 +183,7 @@ def test_missing_request_retry_cannot_erase_an_unsupported_number(
     assert any(m.kind in {"TASK", "MONITOR"} for m in p.candidate.missions)
 
 
+@pytest.mark.usefixtures("legacy_dictation_schema")
 def test_dropping_bare_continue_keeps_new_order_correction_on_the_same_card(
     store: StoreBase, clock: FakeClock
 ) -> None:
@@ -209,7 +214,8 @@ def test_dropping_bare_continue_keeps_new_order_correction_on_the_same_card(
     assert world.proposal.status == "pending"
 
 
-def test_request_retry_setup_failure_keeps_valid_blocked_card(
+@pytest.mark.usefixtures("legacy_dictation_schema")
+def test_request_retry_setup_failure_keeps_grounded_monitor(
     store: StoreBase, clock: FakeClock
 ) -> None:
     world = ScribeWorld.create(store, clock)
@@ -230,6 +236,8 @@ def test_request_retry_setup_failure_keeps_valid_blocked_card(
     world.post(update(APPLICANT, SOURCE, 10))
     p = world.proposal
     assert calls == 3 and world.receipt(10).state == "completed"
-    assert p.blocked("all") and len(p.candidate.orders) == 2
+    assert not p.blocked("all") and len(p.candidate.orders) == 2
+    assert sum(m.kind == "MONITOR" for m in p.candidate.missions) == 1
     text = "\n".join(render_card(p))
-    assert "monitoring request missing" in text and "private setup failure" not in text
+    assert "MONITOR:" in text and "monitoring request missing" not in text
+    assert "private setup failure" not in text

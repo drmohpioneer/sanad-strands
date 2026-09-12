@@ -55,7 +55,8 @@ def incident_context(
             lines.append(
                 templates.render("alert_prefix", language)
                 + " · ".join(
-                    str(hit.get(k) or "—") for k in ("metric", "comparator", "threshold", "unit")
+                    str(hit.get(k) or "Not recorded")
+                    for k in ("metric", "comparator", "threshold", "unit")
                 )
             )
     for row in records(store, scope, "evidence_head"):

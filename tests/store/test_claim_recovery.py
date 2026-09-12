@@ -223,7 +223,7 @@ def test_expiry_at_store_clock_after_service_read_is_atomic(
         world.login.exchange(
             "doctor", raw, pre.cookie.get_secret_value(), pre.csrf.get_secret_value()
         ).status
-        == "forbidden"
+        == "commit_failed"
     )
     exchange = world.login.load(world.login.scope, "doctor_login", keys.digest(raw), LoginExchange)
     assert exchange and exchange.state == "issued"

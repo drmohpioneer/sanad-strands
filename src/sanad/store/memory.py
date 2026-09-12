@@ -5,6 +5,7 @@ from copy import deepcopy
 from datetime import datetime
 from threading import RLock
 
+from sanad.domain import PatientScope
 from sanad.store._base import (
     INDEX_FIELDS,
     Check,
@@ -16,7 +17,7 @@ from sanad.store._base import (
     utc_now,
 )
 from sanad.store.keys import Key
-from sanad.store.records import Cursor
+from sanad.store.records import Cursor, StoredRecord
 
 
 class MemoryStore(StoreBase):
@@ -24,6 +25,19 @@ class MemoryStore(StoreBase):
         super().__init__(clock=clock)
         self._items: dict[Key, Item] = {}
         self._lock = RLock()
+
+    def patient_receipts(self, scope: PatientScope) -> tuple[StoredRecord, ...]:
+        if not isinstance(scope, PatientScope):
+            return ()
+        with self._lock:
+            keys = [
+                key
+                for key, item in self._items.items()
+                if item.get("entity_type") == "inbound_receipt"
+                and item.get("doctor_id") == scope.doctor_id
+                and item.get("patient_id") == scope.patient_id
+            ]
+            return tuple(row for key in keys if (row := self._owned(scope, key)) is not None)
 
     def _read(self, key: Key) -> Item | None:
         with self._lock:

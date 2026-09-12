@@ -1,14 +1,18 @@
 """One claimed invocation, five full notes, bounded providers and private raw failures."""
 
+import inspect
 import json
 import os
 import re
 import tempfile
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
+from unittest.mock import patch
 
 import boto3  # type: ignore[import-untyped]
 import httpx
@@ -25,6 +29,7 @@ from store.scribe_fixtures import ScribeWorld
 from store.test_scribe_voice_web import voice
 from strands.models import BedrockModel, Model
 
+from sanad.agents.factory import Proposal as ModelProposal
 from sanad.domain import DRAFT_POLICY_2026_09, Principal, Provenance
 from sanad.media.audio import AudioConverter, ConversionFailure, ConvertedAudio, FFmpegConverter
 from sanad.media.retrieve import MediaRetriever
@@ -38,7 +43,7 @@ from sanad.models.timeouts import (
     TRANSCRIPTION_TIMEOUT,
 )
 from sanad.scribe.card import render_card
-from sanad.scribe.extract import PROMPT_VERSION
+from sanad.scribe.extract import PROMPT_VERSION, DictationCandidate
 from sanad.scribe.proposal import Proposal
 from sanad.steward.types import StewardPolicy
 from sanad.store import keys
@@ -51,7 +56,7 @@ from .check11b import DictationClients, DictationSpend
 from .check11c import displayed_numbers_supported
 
 ROOT = Path(__file__).resolve().parents[2]
-EVIDENCE = ROOT / "docs/evidence/live-11e-2026-09-08b.json"
+EVIDENCE = ROOT / "docs/evidence/live-11e-2026-09-10.json"
 INVENTED = re.compile(
     r"\b(?:J wave|ST depression|LVH|RBBB|grade|New disease|null|none|daily)\b", re.I
 )
@@ -230,7 +235,7 @@ def card_parts(p: Proposal) -> dict[str, Any]:
             sections.setdefault(current, []).append(line)
     drugs = sections.get("Medications:", [])
     requested = sections.get("Requested:", [])
-    tests = [line.split(" — due ")[0] for line in requested if line.startswith("TEST:")]
+    tests = [line.split(": due ")[0] for line in requested if line.startswith("TEST:")]
     tasks = [line for line in requested if line.startswith("TASK:")]
     monitors = [line for line in requested if line.startswith("MONITOR:")]
     history = sections.get("History:", [])
@@ -344,6 +349,90 @@ def agreement(runs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ]
 
 
+@contextmanager
+def record_stages(private: Path, run: int, details: dict[str, Any]) -> Iterator[None]:
+    """Observe the existing reader indices without changing the runtime interface."""
+    from sanad.scribe import merge, turn
+
+    original_agent = turn.make_agent  # type: ignore[attr-defined]
+    original_merge = merge.merge_candidates
+    stages: list[dict[str, Any]] = []
+    details["extraction_stages"] = stages
+
+    def save(stage: str, value: DictationCandidate | None, **labels: Any) -> None:
+        record: dict[str, Any] = {"stage": stage, **labels}
+        if value is not None:
+            record["candidate"] = value.model_dump(mode="json")
+            record["private_metadata"] = {
+                "_merge_issues": [i.model_dump(mode="json") for i in value._merge_issues],
+                "_single_source": value._single_source,
+                "_dropped_numbers": value._dropped_numbers,
+                "_malformed_items": value._malformed_items,
+            }
+        number = len(stages) + 1
+        filename = f"run-{run}-stage-{number}.json"
+        (private / filename).write_text(json.dumps(record, ensure_ascii=False, indent=2) + "\n")
+        stages.append(
+            {
+                "stage": stage,
+                **labels,
+                "private_file": filename,
+                "candidate_returned": value is not None,
+                "forxiga_present": bool(
+                    value and any(o.drug.casefold() == "forxiga" for o in value.orders)
+                ),
+                "forxiga_start": bool(
+                    value
+                    and any(
+                        o.drug.casefold() == "forxiga" and o.action == "start" for o in value.orders
+                    )
+                ),
+            }
+        )
+
+    def make_recording_agent(*args: Any, **kwargs: Any) -> Any:
+        # Creation order/completion order cannot identify a concurrent reader's retry.
+        # Capture the lexical reading(index, ...) call's own index and attempt instead.
+        frame = inspect.currentframe()
+        caller = frame.f_back if frame else None
+        try:
+            if caller is None or caller.f_code.co_name != "reading":
+                raise RuntimeError("11L_reader_instrumentation_boundary")
+            reader, attempt = caller.f_locals["index"] + 1, caller.f_locals["attempt"] + 1
+        finally:
+            del frame, caller
+        agent = original_agent(*args, **kwargs)
+
+        async def propose(*args: Any, **kwargs: Any) -> Any:
+            stage = "reading" if attempt == 1 else "retry"
+            try:
+                result = await agent.propose(*args, **kwargs)
+            except Exception as error:
+                save(stage, None, reader=reader, attempt=attempt, failure_type=type(error).__name__)
+                raise
+            save(
+                stage,
+                result.value if isinstance(result, ModelProposal) else None,
+                reader=reader,
+                attempt=attempt,
+                result_type=type(result).__name__,
+            )
+            return result
+
+        return SimpleNamespace(propose=propose)
+
+    def recording_merge(*args: Any, **kwargs: Any) -> Any:
+        result = original_merge(*args, **kwargs)
+        save("merge_before_sealing", result.candidate if result else None)
+        return result
+
+    with (
+        patch.object(turn, "make_agent", make_recording_agent),
+        patch.object(merge, "merge_candidates", recording_merge),
+    ):
+        yield
+
+
 def run_check(
     destination: Path = EVIDENCE,
     *,
@@ -361,16 +450,16 @@ def run_check(
         raise ValueError("inject every provider or none")
     destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.exists() or any(
-        json.loads(path.read_text()).get("implementation_attempt") == 7
+        json.loads(path.read_text()).get("implementation_attempt") == 8
         for path in destination.parent.glob("live-11e-*.json")
     ):
         raise RuntimeError("11e allowance already recorded; do not rerun")
     started = datetime.now(UTC)
     report: dict[str, Any] = {
         "contract": "11e",
-        "attempt": 7,
-        "implementation_attempt": 7,
-        "allowance": "Binding addendum 6, English five-run check",
+        "attempt": 8,
+        "implementation_attempt": 8,
+        "allowance": "Contract 11L A.1, attempt 8 English five-run diagnosis",
         "language": "en",
         "state": "started",
         "run_count": 5,
@@ -489,7 +578,8 @@ def run_check(
                     return SpeechAdapter(speech_caller, audio, source)
 
                 world.scribe.media_factory, world.scribe.speech_factory = media, speech
-                world.post(voice())
+                with record_stages(private, run, details):
+                    world.post(voice())
                 p = world.scribe.repo.pending(world.doctor.scope)
                 details["checks"]["card_created"] = p is not None
                 if p:

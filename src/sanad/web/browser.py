@@ -11,6 +11,7 @@ from sanad.auth.claim import ClaimService
 from sanad.auth.login import LoginService
 from sanad.domain.language import Audience, effective
 from sanad.store.records import WebSession
+from sanad.web.patient_controls import controls
 from sanad.web.routes import require_session
 
 ASSETS = Path(__file__).with_name("static")
@@ -86,7 +87,7 @@ def patient_content(data: dict[str, object], locale: str) -> str:
             + reminder
             + "</p><p>"
             + ("Quiet hours: " if en else "ساعات الهدوء: ")
-            + " – ".join(text(v) for v in quiet)
+            + ", ".join(text(v) for v in quiet)
             + " · "
             + text(prefs.get("timezone"))
             + "</p>",
@@ -151,10 +152,12 @@ def surface(
 </script>
 </head>
 <body {data}>
+<svg class="icon-sprite" aria-hidden="true"><symbol id="status-icon" viewBox="0 0 16 16">
+<circle cx="8" cy="8" r="6"/><path d="M8 4v5m0 2v1"/></symbol></svg>
 <a class="skip" href="#workspace">{"انتقل للمحتوى" if locale == "ar" else "Skip to content"}</a>
 <div class="app">
 <aside class="rail">
-<a class="identity" href="{home}">Sanad<span>سند</span>
+<a class="identity" href="{home}">{"سند" if locale == "ar" else "Sanad"}
 </a>
 <p class="account">
 <bdi>{escape(name)}</bdi>
@@ -190,6 +193,7 @@ def surface(
 <div id="content" aria-busy="true">
 {initial}
 </div>
+{controls(locale) if audience == "patient" else ""}
 <noscript>
 <p>{noscript}</p>
 </noscript>
@@ -243,7 +247,11 @@ def browser_router(login: LoginService, claims: ClaimService) -> APIRouter:
         # Reuse the same scoped service the record API uses, before returning a shell.
         patient = claims.patient(session.doctor_id, patient_id)
         if patient is None:
-            raise HTTPException(404)
+            from sanad.web.pages import shell
+
+            return HTMLResponse(
+                shell("Sanad", "<p>Patient not found.</p>", "en", interactive=True), status_code=404
+            )
         doctor = login.accounts.doctor(session.doctor_id)
         if doctor is None:
             raise HTTPException(401)

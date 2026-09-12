@@ -247,7 +247,7 @@ def test_continue_without_head_commits_without_day_three(world: ScribeWorld) -> 
 
 
 @pytest.mark.parametrize("action", ["stop", "change"])
-def test_unknown_stop_change_keeps_missing_head_question(world: ScribeWorld, action: str) -> None:
+def test_unknown_stop_change_still_requires_spoken_action(world: ScribeWorld, action: str) -> None:
     patient = world.named_stub("مريض اختبار")
     p = world.dictate(
         "مريض اختبار كونكور 5",
@@ -256,7 +256,8 @@ def test_unknown_stop_change_keeps_missing_head_question(world: ScribeWorld, act
             "orders": [{"action": action, "drug": "كونكور", "dose": "5"}],
         },
     )
-    assert any(i.code == "order_missing" for i in p.issues)
+    assert not any(i.code == "order_missing" for i in p.issues)
+    assert p.blocked("order:0")
     world.tap()
     assert not world.store.list_records(patient.scope, "care_order_head")[0]
 

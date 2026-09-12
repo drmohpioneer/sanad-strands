@@ -9,9 +9,10 @@ from __future__ import annotations
 
 import json
 from datetime import date
-from typing import Annotated, Any, Literal, Self
+from typing import Annotated, Any, Generic, Literal, Self
 
 from pydantic import BaseModel, Field, JsonValue, StrictBool, model_validator
+from typing_extensions import TypeVar
 
 from sanad.concierge.records import PatientAction
 from sanad.corrections import Correction, CorrectionOffer, FactHead
@@ -34,7 +35,14 @@ from sanad.domain.events import RecordEvidenceAssociation, RetainObservation, Su
 from sanad.domain.language import default_language
 from sanad.domain.operations import OperationalClock as OperationalClock
 from sanad.domain.predicates import PredicateResult
-from sanad.liaison.records import Notice, ReviewOffer, ReviewSnapshot
+from sanad.liaison.records import (
+    Notice,
+    QuestionBinding,
+    ReusableAnswer,
+    ReuseOffer,
+    ReviewOffer,
+    ReviewSnapshot,
+)
 from sanad.media.vision import Disagreement, DocumentItem, DocumentRead, ReaderResult
 from sanad.scribe.extract import LabRowCandidate
 from sanad.scribe.proposal import InvitationWork, Proposal, ScribeCallback, ScribeState
@@ -167,6 +175,10 @@ class Doctor(_Metadata):
     specialty: Annotated[str, Field(strict=True, max_length=160)] = ""
     city: Annotated[str, Field(strict=True, max_length=160)] = ""
     language: Literal["ar", "en"] = default_language
+    digest_time: Annotated[
+        str, Field(strict=True, pattern=r"^(?:[01][0-9]|2[0-3]):[0-5][0-9]$")
+    ] = "20:00"
+    digest_packing: Literal["one", "each"] = "one"
     timezone: IanaZone = "Africa/Cairo"
     status: Literal["pending", "approved", "rejected", "suspended", "revoked"]
     approved_by: NonblankStr | None = None
@@ -210,11 +222,23 @@ class SubjectBinding(_Metadata):
         return self
 
 
+class AdminAccount(_Metadata):
+    entity_type: Literal["admin_account"] = "admin_account"
+    scope: AccountScope
+    auth_epoch: NonnegativeInt = 1
+
+    @model_validator(mode="after")
+    def admin_identity(self) -> Self:
+        keys.subject(self.scope.bot_id, self.id)
+        return self
+
+
 class Authorization(_BoundaryValue):
     principal: Principal
     binding: SubjectBinding | None = None
     doctor_status: Literal["pending", "approved", "rejected", "suspended", "revoked"] | None = None
     auth_epoch: NonnegativeInt | None = None
+    admin_epoch: NonnegativeInt | None = None
     private_chat_id: NonblankStr | None = None
 
 
@@ -380,7 +404,7 @@ class TokenHead(_Metadata):
 
     entity_type: Literal["token_head"] = "token_head"
     scope: AccountScope
-    purpose: Literal["doctor_login", "patient_login", "invitation"]
+    purpose: Literal["doctor_login", "patient_login", "admin_login", "invitation"]
     owner_key: NonblankStr
     token_hash: NonblankStr
 
@@ -393,11 +417,11 @@ class TokenHead(_Metadata):
 
 
 class LoginExchange(_Metadata):
-    entity_type: Literal["doctor_login", "patient_login"]
+    entity_type: Literal["doctor_login", "patient_login", "admin_login"]
     scope: AccountScope
-    intended_role: Literal["doctor", "patient"]
+    intended_role: Literal["doctor", "patient", "admin"]
     subject: NonblankStr
-    doctor_id: NonblankStr
+    doctor_id: NonblankStr | None
     patient_id: NonblankStr | None = None
     binding_id: NonblankStr | None = None
     binding_epoch: NonnegativeInt | None = None
@@ -414,6 +438,8 @@ class LoginExchange(_Metadata):
         keys.token(self.entity_type, self.id)
         if self.entity_type != self.intended_role + "_login":
             raise ValueError("exchange role mismatch")
+        if (self.intended_role == "admin") != (self.doctor_id is None):
+            raise ValueError("role/doctor mismatch")
         patient_fields = (
             self.patient_id,
             self.binding_id,
@@ -421,7 +447,7 @@ class LoginExchange(_Metadata):
             self.consent_version,
         )
         if (self.intended_role == "patient" and any(x is None for x in patient_fields)) or (
-            self.intended_role == "doctor" and any(x is not None for x in patient_fields)
+            self.intended_role != "patient" and any(x is not None for x in patient_fields)
         ):
             raise ValueError("exchange binding mismatch")
         if (self.state == "consumed") != (self.consumed_at is not None):
@@ -534,12 +560,15 @@ class PreSession(_Metadata):
         return self
 
 
-class WebSession(_Metadata):
+SessionDoctor = TypeVar("SessionDoctor", bound=str | None, default=str, covariant=True)
+
+
+class WebSession(_Metadata, Generic[SessionDoctor]):
     entity_type: Literal["web_session"] = "web_session"
     scope: AccountScope
-    role: Literal["doctor", "patient"]
+    role: Literal["doctor", "patient", "admin"]
     subject: NonblankStr
-    doctor_id: NonblankStr
+    doctor_id: SessionDoctor
     patient_id: NonblankStr | None = None
     binding_id: NonblankStr | None = None
     auth_epoch: NonnegativeInt
@@ -556,6 +585,10 @@ class WebSession(_Metadata):
     def hashed(self) -> Self:
         keys.web_session(self.id)
         keys.token("csrf", self.csrf_secret_ref)
+        if self.doctor_id is not None and not self.doctor_id.strip():
+            raise ValueError("doctor ID requires a nonblank string")
+        if (self.role == "admin") != (self.doctor_id is None):
+            raise ValueError("role/doctor mismatch")
         patient_fields = (
             self.patient_id,
             self.binding_id,
@@ -563,12 +596,15 @@ class WebSession(_Metadata):
             self.consent_version,
         )
         if (self.role == "patient" and any(x is None for x in patient_fields)) or (
-            self.role == "doctor" and any(x is not None for x in patient_fields)
+            self.role != "patient" and any(x is not None for x in patient_fields)
         ):
             raise ValueError("session role/binding mismatch")
         if not self.issued_at <= self.last_seen_at < self.absolute_expires_at:
             raise ValueError("session time mismatch")
         return self
+
+
+AnyWebSession = WebSession[str | None]
 
 
 class DoctorAuthority(_Metadata):
@@ -727,6 +763,8 @@ class Incident(_Metadata):
 
 
 class AuditEvent(_Metadata):
+    channel: NonblankStr | None = Field(default=None, exclude_if=lambda value: value is None)
+    question_command: dict[str, JsonValue] | None = Field(default=None, repr=False)
     entity_type: Literal["audit_event"] = "audit_event"
     event_id: NonblankStr
     command_id: NonblankStr
@@ -1019,6 +1057,40 @@ class BundleSchedule(_Metadata):
         return self
 
 
+class QuestionDigestSchedule(_Metadata):
+    entity_type: Literal["question_digest_schedule"] = "question_digest_schedule"
+    scope: TenantScope
+    doctor_id: NonblankStr
+    last_shown_ids: Annotated[tuple[str, ...], Field(max_length=20)] = ()
+    pending_each: Annotated[tuple[tuple[str, str], ...], Field(max_length=20)] = ()
+    generation: PositiveVersion = 1
+    next_action_at: UtcInstant | None
+    last_provider_accepted_at: UtcInstant | None = None
+    pending_intent_id: NonblankStr | None = None
+    work_clock: OperationalClock | None
+
+    @model_validator(mode="after")
+    def shape(self) -> Self:
+        if (
+            type(self.scope) is not TenantScope
+            or self.id != self.doctor_id
+            or self.scope.doctor_id != self.doctor_id
+        ):
+            raise ValueError("question digest requires its doctor's tenant scope")
+        if self.pending_intent_id and self.pending_each:
+            raise ValueError("only one packing mode may have pending delivery")
+        if (self.pending_intent_id or self.pending_each) and self.next_action_at is None:
+            raise ValueError("pending delivery requires a durable clock")
+        if (self.next_action_at is None) != (self.work_clock is None):
+            raise ValueError("question digest time and clock must agree")
+        if self.work_clock and (
+            self.work_clock.work_lane != "question_digest"
+            or self.work_clock.next_action_at != self.next_action_at
+        ):
+            raise ValueError("question digest clock mismatch")
+        return self
+
+
 class OutboundIntent(_Metadata):
     review_listing: tuple[ReviewSnapshot, ...] = ()
     review_listing_expires_at: UtcInstant | None = None
@@ -1051,6 +1123,9 @@ class OutboundIntent(_Metadata):
     status: Literal["queued", "sending", "provider_accepted", "uncertain", "failed", "suppressed"]
     delivery_claim: ProcessingClaim | None = None
     delivery_lease_seconds: PositiveVersion
+    delivered_text: str | None = Field(
+        default=None, repr=False, exclude_if=lambda value: value is None
+    )
     accepted_message_id: NonblankStr | None = None
     accepted_at: UtcInstant | None = None
     retry_count: NonnegativeInt = 0
@@ -1076,19 +1151,24 @@ class OutboundIntent(_Metadata):
     task_accept_token_hash: str | None = Field(default=None, repr=False)
     task_reopen_token_hash: str | None = Field(default=None, repr=False)
     task_action_expires_at: UtcInstant | None = None
+    question_bindings: tuple[QuestionBinding, ...] = Field(default=(), repr=False)
     question_listing_token: str | None = Field(default=None, repr=False)
     question_listing_targets: tuple[tuple[str, str], ...] = Field(default=(), repr=False)
     question_listing_expires_at: UtcInstant | None = None
 
     @model_validator(mode="after")
     def shape(self) -> Self:
+        if self.delivered_text is not None and (
+            self.status != "provider_accepted" or self.audience != "patient"
+        ):
+            raise ValueError("delivered text requires patient delivery acceptance")
         if self.scope_kind == "doctor" and (
             type(self.scope) is not TenantScope
             or self.audience != "doctor"
             or self.notification_purpose != "DEADLINE"
             or self.eligibility_class != "bundle"
             or self.payload is not None
-            or self.template_id != "doctor_weekly_bundle"
+            or self.template_id not in {"doctor_weekly_bundle", "doctor_question_digest"}
             or self.recipient_auth_epoch_seen is None
             or self.bot_id is None
             or any(
@@ -1246,6 +1326,8 @@ MODELS: dict[str, type[BaseModel]] = {
     "fact_head": FactHead,
     "liaison_notice": Notice,
     "review_offer": ReviewOffer,
+    "reuse_offer": ReuseOffer,
+    "reusable_answer": ReusableAnswer,
     "upload_stage": UploadStage,
     "evidence": Evidence,
     "evidence_head": EvidenceHead,
@@ -1254,6 +1336,7 @@ MODELS: dict[str, type[BaseModel]] = {
     "name_memory": NameMemory,
     "name_cache": NameCache,
     "bundle_schedule": BundleSchedule,
+    "question_digest_schedule": QuestionDigestSchedule,
     "patient_action": PatientAction,
     "photo_association_work": PhotoAssociationWork,
     "intake_draft": IntakeDraft,
@@ -1272,13 +1355,15 @@ MODELS: dict[str, type[BaseModel]] = {
     "consent": Consent,
     "patient_binding": PatientBinding,
     "token_head": TokenHead,
+    "admin_account": AdminAccount,
+    "admin_login": LoginExchange,
     "doctor_login": LoginExchange,
     "patient_login": LoginExchange,
     "invitation": Invitation,
     "patient_claim": PatientClaim,
     "claim_callback": ClaimCallback,
     "pre_session": PreSession,
-    "web_session": WebSession,
+    "web_session": AnyWebSession,
     "application": Application,
     "doctor": Doctor,
     "subject_binding": SubjectBinding,
@@ -1303,13 +1388,25 @@ MODELS: dict[str, type[BaseModel]] = {
 
 
 def model_scope(model: BaseModel) -> Scope:
-    if isinstance(model, (Correction, CorrectionOffer, FactHead, Notice, ReviewOffer, UploadStage)):
+    if isinstance(
+        model,
+        (
+            Correction,
+            CorrectionOffer,
+            FactHead,
+            Notice,
+            ReviewOffer,
+            ReuseOffer,
+            ReusableAnswer,
+            UploadStage,
+        ),
+    ):
         return model.scope
     if isinstance(model, (Evidence, EvidenceHead, EvidenceHash, EvidenceAction)):
         return model.scope
     if isinstance(model, (NameMemory, NameCache)):
         return model.scope
-    if isinstance(model, BundleSchedule):
+    if isinstance(model, (BundleSchedule, QuestionDigestSchedule)):
         return model.scope
     if isinstance(model, PatientAction):
         return model.scope
@@ -1339,6 +1436,7 @@ def model_scope(model: BaseModel) -> Scope:
             Patient,
             Consent,
             PatientBinding,
+            AdminAccount,
             TokenHead,
             LoginExchange,
             Invitation,
@@ -1388,7 +1486,10 @@ def scope_owns(scope: Scope, other: Scope) -> bool:
 
 
 def model_key(model: BaseModel, scope: Scope) -> Key:
-    if isinstance(model, (Correction, CorrectionOffer, FactHead, Notice, ReviewOffer)):
+    if isinstance(
+        model,
+        (Correction, CorrectionOffer, FactHead, Notice, ReviewOffer, ReuseOffer, ReusableAnswer),
+    ):
         return Key(
             keys.partition(model.scope), f"{model.entity_type.upper()}#{keys.component(model.id)}"
         )
@@ -1408,6 +1509,8 @@ def model_key(model: BaseModel, scope: Scope) -> Key:
         return Key(keys.partition(model.scope), f"NAME#{keys.component(model.id)}")
     if isinstance(model, NameCache):
         return Key(keys.partition(model.scope), f"NAME_CACHE#{keys.component(model.id)}")
+    if isinstance(model, QuestionDigestSchedule):
+        return keys.doctor(model.scope, "QUESTION_DIGEST")
     if isinstance(model, BundleSchedule):
         return keys.doctor(model.scope, "BUNDLE")
     if isinstance(model, PatientAction):
@@ -1436,7 +1539,7 @@ def model_key(model: BaseModel, scope: Scope) -> Key:
         return Key(
             keys.partition(model.scope), f"{model.entity_type.upper()}#{keys.component(model.id)}"
         )
-    if isinstance(model, (Patient, Consent, PatientBinding, TokenHead, PatientClaim)):
+    if isinstance(model, (AdminAccount, Patient, Consent, PatientBinding, TokenHead, PatientClaim)):
         return Key(keys.partition(model.scope), f"{model.entity_type.upper()}#{model.id}")
     if isinstance(model, (LoginExchange, Invitation, ClaimCallback, PreSession)):
         return keys.token(model.entity_type, model.id)
@@ -1542,7 +1645,8 @@ def to_record(model: BaseModel, scope: Scope) -> StoredRecord:
 
 
 def from_record[T: BaseModel](record: StoredRecord, model_type: type[T]) -> T:
-    if MODELS.get(record.entity_type) is not model_type:
+    session_decoder = record.entity_type == "web_session" and issubclass(model_type, WebSession)
+    if not session_decoder and MODELS.get(record.entity_type) is not model_type:
         raise ValueError("record type does not match decoder")
     model = model_type.model_validate(record.body)
     expected = to_record(model, model_scope(model))
@@ -1644,6 +1748,9 @@ class DeliveryResolution(_BoundaryValue):
     intent: StoredRecord
     reviews: tuple[StoredRecord, ...] = ()
     release_reservation: StrictBool = False
+    question_stamps: tuple[StoredRecord, ...] = ()
+    question_schedule: StoredRecord | None = None
+    question_schedule_expected_version: PositiveVersion | None = None
     obligation_stamp: StoredRecord | None = None
     obligation_expected_version: PositiveVersion | None = None
     bundle_schedule: StoredRecord | None = None

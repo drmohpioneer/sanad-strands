@@ -27,6 +27,8 @@ class TelegramValue(_BoundaryValue):
 class TelegramUser(TelegramValue):
     id: DecimalId | None = None
     is_bot: StrictBool = False
+    first_name: Annotated[str, Field(strict=True, max_length=160)] = Field(default="", repr=False)
+    last_name: Annotated[str, Field(strict=True, max_length=160)] = Field(default="", repr=False)
 
 
 class TelegramChat(TelegramValue):

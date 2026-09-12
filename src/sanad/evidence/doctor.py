@@ -72,6 +72,9 @@ def route(
     actor = auth.principal
     if actor.actor_kind != "doctor":
         return None
+    inbox = (
+        receipt.kind == "text" and str((receipt.payload or {}).get("text", "")).strip() == "/inbox"
+    )
     listing = (
         receipt.kind == "text"
         and str((receipt.payload or {}).get("text", "")).strip() == "/evidence"
@@ -81,9 +84,22 @@ def route(
         if receipt.kind == "callback"
         else ""
     )
-    if not listing and not token_hash:
+    if not listing and not inbox and not token_hash:
         return None
     evidence = owned(turn.repo.store, actor.doctor_id or "")
+    if inbox:
+        # Solicited evidence decisions accompany the existing Liaison inbox;
+        # its ordinary handler still owns the receipt and all other reviews.
+        for value in evidence:
+            if value.association_state == "candidate" and value.mission_id:
+                decide(
+                    turn.runtime.steward,
+                    actor,
+                    value,
+                    "doctor_card",
+                    f"evidence-card:{receipt.id}:{value.evidence_id}",
+                )
+        return None
     match = (
         next(
             (
@@ -160,6 +176,8 @@ def route(
         key = (
             "doctor_evidence_action_recorded"
             if status in {"accepted", "duplicate"}
+            else "doctor_evidence_already_handled"
+            if token.consumed_at
             else "doctor_evidence_stale"
         )
     if receipt.kind == "callback":

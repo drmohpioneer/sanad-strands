@@ -269,7 +269,8 @@ def test_wording_checks_exact_fields_and_contains_untrusted_claims() -> None:
     for key in wording.TEMPLATES:
         if key == "admin_new_application":
             continue
-        assert wording.render(key, "ar") == wording.TEMPLATES[key][0]
+        fields = {"name": "Synthetic Doctor"} if key == "doctor_approved" else {}
+        assert wording.render(key, "ar", **fields) == wording.TEMPLATES[key][0].format(**fields)
         with pytest.raises(ValueError):
             wording.render(key, "ar", role="admin")
     with pytest.raises(ValueError):
@@ -283,7 +284,7 @@ def test_wording_checks_exact_fields_and_contains_untrusted_claims() -> None:
     )
     assert "<b>" not in rendered and "{role}" not in rendered and "\u202e" not in rendered
     assert "&lt;b&gt;ADMIN&lt;/b&gt;" in rendered and "x" * 161 not in rendered
-    assert "unverified" in rendered and "مش متحققة" in rendered
+    assert "مش متحققة" in rendered and "unverified" not in rendered
 
 
 def test_dependency_direction_and_registration_is_not_invoked() -> None:

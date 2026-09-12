@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 
 from sanad.domain import Mission, PatientScope, VersionRef
 from sanad.domain.entities import MonitorDetails
+from sanad.domain.language import effective
 from sanad.monitor import policy
 from sanad.monitor.slots import filled
 from sanad.store.protocol import Store
@@ -38,8 +39,8 @@ TEMPLATES = {
     "missing": ("ناقص", "missing"),
     "extras": ("قراءات إضافية: {count}", "Extra readings: {count}"),
     "trend": (
-        "من أول لآخر قراءة، {component}: {direction}؛ المدى {low}–{high} {unit}.",
-        "First to last, {component}: {direction}; range {low}–{high} {unit}.",
+        "من أول لآخر قراءة، {component}: {direction}؛ المدى {low}, {high} {unit}.",
+        "First to last, {component}: {direction}; range {low}, {high} {unit}.",
     ),
     "up": ("زيادة", "increase"),
     "down": ("انخفاض", "decrease"),
@@ -55,6 +56,7 @@ _AR_METRIC = {
 
 
 def render(key: str, language: str, **fields: str) -> str:
+    language = effective(language, audience="doctor")
     template = TEMPLATES[key][language == "en"]
     if {name for _, name, _, _ in Formatter().parse(template) if name} != set(fields):
         raise ValueError("monitor_template_fields")
@@ -64,6 +66,7 @@ def render(key: str, language: str, **fields: str) -> str:
 
 
 def patient_reply(details: MonitorDetails, source: VersionRef, language: str, timezone: str) -> str:
+    language = effective(language, audience="patient")
     from sanad.safety import validate_patient_output
     from sanad.safety.models import OutputContext
     from sanad.safety.policy import SAFETY_POLICY_V1_CARDIOLOGY_DRAFT
@@ -94,6 +97,7 @@ def patient_reply(details: MonitorDetails, source: VersionRef, language: str, ti
 
 
 def table(details: MonitorDetails, timezone: str, language: str) -> str:
+    language = effective(language, audience="doctor")
     readings = filled(details)
     zone = ZoneInfo(timezone)
     years = sorted({str(at.astimezone(zone).year) for at in details.slots})

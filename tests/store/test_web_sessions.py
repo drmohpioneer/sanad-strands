@@ -7,14 +7,16 @@ from uuid import uuid4
 import pytest
 from pydantic import BaseModel
 
-from sanad.accounts.commands import SuspendDoctor
+from sanad.accounts.commands import AccountCommand, SuspendDoctor
 from sanad.auth.commands import IssueDoctorLogin, RevokeBinding
 from sanad.auth.service import revise
 from sanad.auth.tokens import issue_token
 from sanad.store import keys
 from sanad.store._base import Write
 from sanad.store.records import (
+    CommitResult,
     Consent,
+    Forbidden,
     LoginExchange,
     PatientBinding,
     record_item,
@@ -226,7 +228,9 @@ def test_unknown_expired_get_is_same_neutral_page(enrollment: LoginWorld) -> Non
     assert len({neutral(r.text) for r in responses}) == 1
     for response in responses:
         assert response.status_code == 200
-        assert response.headers["referrer-policy"] == "no-referrer"
+        # Not "no-referrer": that policy nulls the Origin header browsers send on the
+        # continue form, and the exchange then refuses every real browser (2026-09-11).
+        assert response.headers["referrer-policy"] == "same-origin"
         assert response.headers["cache-control"] == "no-store"
         assert "script" not in response.text and "src=" not in response.text
         assert response.headers["set-cookie"].endswith(
@@ -262,7 +266,12 @@ def test_two_concurrent_consumptions_have_one_winner(enrollment: LoginWorld) -> 
         ).status
 
     with ThreadPoolExecutor(max_workers=2) as pool:
-        assert sorted(pool.map(post, (0, 1))) == ["already_used", "consumed"]
+        outcomes = list(pool.map(post, (0, 1)))
+        assert outcomes.count("consumed") == 1
+        assert next(status for status in outcomes if status != "consumed") in {
+            "already_used",
+            "commit_failed",
+        }
 
 
 def test_suspension_between_issue_and_exchange(enrollment: LoginWorld) -> None:
@@ -316,3 +325,42 @@ def test_token_generator_random_256_bits_and_hashed() -> None:
         assert len(base64.urlsafe_b64decode(raw + "=")) == 32
         assert token.hash == keys.digest(raw)
         assert raw not in repr(token) and raw not in token.model_dump_json()
+
+
+def _doctor_cookie(world: LoginWorld) -> str:
+    with world.client() as client:
+        assert browser_login(client, world.login_path()).status_code == 303
+        return str(client.cookies["sanad_session"])
+
+
+def test_parallel_requests_from_one_tab_keep_the_session(enrollment: LoginWorld) -> None:
+    # A dashboard load fans out several API calls at once; the touch that loses the
+    # version race is a peer's touch, never grounds for revoking the whole session.
+    world = enrollment
+    cookie = _doctor_cookie(world)
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        results = list(pool.map(lambda _: world.login.require(cookie, "doctor"), range(6)))
+    assert all(r is not None for r in results), [r is None for r in results]
+    live = world.login.session(cookie)
+    assert live is not None and live.revoked_at is None
+    assert world.login.require(cookie, "doctor") is not None
+
+
+def test_touch_conflict_without_a_peer_write_keeps_live_authority(enrollment: LoginWorld) -> None:
+    # Other checked rows can conflict without advancing the session row.
+    world = enrollment
+    cookie = _doctor_cookie(world)
+    original = world.login.commit
+
+    def refusing_commit(command: AccountCommand, writes: tuple[BaseModel, ...]) -> CommitResult:
+        if getattr(command, "type", "") == "TouchWebSession":
+            return Forbidden()
+        return original(command, writes)
+
+    world.login.commit = refusing_commit  # type: ignore[method-assign, assignment]
+    try:
+        assert world.login.require(cookie, "doctor") is not None
+    finally:
+        world.login.commit = original  # type: ignore[method-assign]
+    live = world.login.session(cookie)
+    assert live is not None and live.revoked_at is None

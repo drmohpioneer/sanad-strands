@@ -34,7 +34,6 @@ from sanad.scribe.records import CareOrderVersion
 from sanad.steward.apply import CommitBuilder, EffectsRejected, make_intent
 from sanad.steward.types import records
 from sanad.store import keys
-from sanad.store.keys import IntakeScope
 from sanad.store.records import (
     CommandEnvelope,
     Doctor,
@@ -49,6 +48,7 @@ from sanad.store.records import (
 
 if TYPE_CHECKING:
     from sanad.channels.telegram.router import RouteResult
+    from sanad.liaison.records import ReusableAnswer, ReuseOffer
     from sanad.scribe.proposal import Proposal
     from sanad.scribe.turn import ScribeTurn
     from sanad.store.protocol import Store
@@ -59,6 +59,8 @@ class AnswerQuestion(_BoundaryValue):
     mission_id: NonblankStr
     answer_text: str = ""
     close_only: StrictBool = False
+    listing_token: str = ""
+    expected_version: int | None = None
 
 
 def active_orders(store: "Store", scope: PatientScope) -> tuple[CareOrderVersion, ...]:
@@ -194,10 +196,14 @@ def patient_intent(
 
 
 def prepare_answer(
-    builder: CommitBuilder, profile: PatientProfile, *, release: bool = False
+    builder: CommitBuilder,
+    profile: PatientProfile,
+    *,
+    release: bool = False,
+    args: AnswerQuestion | None = None,
 ) -> str:
     try:
-        args = AnswerQuestion.model_validate(
+        args = args or AnswerQuestion.model_validate(
             {k: v for k, v in builder.command.payload.items() if k != "type"}
         )
     except ValidationError as error:
@@ -209,6 +215,8 @@ def prepare_answer(
     mission, patient = from_record(row, Mission), from_record(patient_row, Patient)
     if not isinstance(mission.details, QuestionDetails) or mission.state in TERMINAL_STATES:
         raise EffectsRejected("question_not_open")
+    if args.expected_version is not None and args.expected_version != mission.version:
+        raise EffectsRejected("question_stale")
     obligations = reviews(builder, mission)
     if not obligations:
         raise EffectsRejected("question_review_missing")
@@ -258,6 +266,19 @@ def prepare_answer(
         if len(answer) > POLICY.reply_max_chars:
             raise EffectsRejected(f"reply_cap_{POLICY.reply_max_chars}")
         context = output_context(builder.store, builder.scope, patient)
+        order_sources = (
+            *records(builder.store, builder.scope, "care_order_head"),
+            *records(builder.store, builder.scope, "care_order"),
+        )
+        builder.command = builder.command.model_copy(
+            update={
+                "expected_versions": tuple(
+                    dict.fromkeys(
+                        (*builder.command.expected_versions, *(r.ref for r in order_sources))
+                    )
+                )
+            }
+        )
         if treatment_change(answer, context):
             held = mission.details.model_copy(
                 update={
@@ -355,6 +376,10 @@ def prepare_answer(
                 builder.policy.timing,
             )
         )
+    if not release and not args.close_only:
+        from sanad.concierge.reuse import issue
+
+        issue(builder, mission, result.aggregate, args.answer_text.strip(), args.listing_token)
     pending = patient_intent(builder, result.aggregate, profile, key, body)
     return "doctor_question_delivery_pending" if pending else "doctor_question_recorded"
 
@@ -558,7 +583,11 @@ def listing_text(
     at: datetime,
     page: int,
     pages: int,
+    answers: tuple["ReusableAnswer", ...] | None = None,
 ) -> str:
+    from sanad.concierge.reuse import answer_set
+
+    answers = answer_set(store, doctor.id) if answers is None else answers
     lines = [
         templates.render("doctor_questions_page", doctor.language, page=str(page), pages=str(pages))
     ]
@@ -575,15 +604,20 @@ def listing_text(
         age = max(0, int((at - mission.created_at).total_seconds() // 3600))
         age_text = templates.render("doctor_questions_age", doctor.language, hours=str(age))
         lines.append(
-            f"{i}. {patient.display_name[:60]} · {age_text}\n{plan[:100]}\n"
-            f"{mission.details.question_text[:170]}"
+            f"{i}. {patient.display_name[:40]} · {age_text}\n{plan[:55]}\n"
+            f"{mission.details.question_text[:95]}"
+        )
+        from sanad.concierge.reuse import proposal_line
+
+        lines.append(
+            proposal_line(store, mission, i, answers=answers) + f" · /defer {i} · /close {i}"
         )
         if mission.details.held_answer:
             lines.append(
                 templates.render(
                     "doctor_questions_held",
                     doctor.language,
-                    answer=mission.details.held_answer[:100],
+                    answer=mission.details.held_answer[:80],
                 )
             )
     if not selected:
@@ -607,14 +641,45 @@ def doctor_command(
         from sanad.concierge.inbox import doctor_command as inbox_command
 
         return inbox_command(turn, receipt, actor, claim, doctor, command, argument)
-    scope = IntakeScope(doctor_id=doctor.id, intake_id="scribe")
     # The listing snapshot belongs to the doctor's private Scribe conversation.
     # Its token/targets travel atomically with that session's saved listing reply.
-    listings = [
-        from_record(r, OutboundIntent)
-        for r in records(turn.repo.store, scope, "outbound_intent")
-        if r.body.get("question_listing_token")
-    ]
+    from sanad.concierge import reuse
+
+    listings = reuse.listings(turn.repo.store, doctor.id)
+    if command == "/reuse":
+        from sanad.liaison.records import ReuseOffer
+
+        offer = next(
+            (
+                from_record(r, ReuseOffer)
+                for r in records(turn.repo.store, doctor.scope, "reuse_offer")
+                if r.body.get("consumed_by") == "question-reuse:" + receipt.id
+            ),
+            None,
+        )
+        offer = offer or reuse.newest_offer(
+            turn.repo.store, doctor.id, turn.repo.clock(), actor.auth_epoch
+        )
+        if argument or offer is None:
+            return turn._reply(
+                receipt,
+                actor,
+                claim,
+                "doctor_question_list_stale",
+                "invalid_input",
+                text="No available answer to reuse. Answer a question first.",
+            )
+        reuse_result = turn.runtime.steward.handle(
+            CommandEnvelope(
+                command_id="question-reuse:" + receipt.id,
+                scope=PatientScope(doctor_id=doctor.id, patient_id=offer.patient_id),
+                principal=actor,
+                requested_at=turn.repo.clock(),
+                payload={"type": "ReuseAnswer", "offer_id": offer.id},
+            )
+        )
+        turn.checkpoint("doctor_clinical_committed")
+        return reuse_reply(turn, receipt, actor, claim, offer, reuse_result.status)
     if command == "/questions":
         if argument and (not argument.isdigit() or int(argument) < 1):
             return turn._reply(
@@ -639,12 +704,13 @@ def doctor_command(
                 text=templates.render("doctor_questions_usage", doctor.language),
             )
         selected = values[(page - 1) * page_size : page * page_size]
+        answers = reuse.answer_set(turn.repo.store, doctor.id)
         intent = turn.repo.intent(
             doctor,
             "doctor_questions",
             {
                 "text": listing_text(
-                    turn.repo.store, selected, doctor, turn.repo.clock(), page, pages
+                    turn.repo.store, selected, doctor, turn.repo.clock(), page, pages, answers
                 ),
             },
             "questions:" + receipt.id,
@@ -654,6 +720,9 @@ def doctor_command(
             update={
                 "question_listing_token": keys.digest(token_urlsafe(32)),
                 "question_listing_targets": tuple((p.id, m.id) for p, m in selected),
+                "question_bindings": tuple(
+                    reuse.binding(turn.repo.store, m, answers) for _, m in selected
+                ),
                 "question_listing_expires_at": turn.repo.clock() + POLICY.question_list_ttl,
             }
         )
@@ -666,7 +735,12 @@ def doctor_command(
         not parts
         or not parts[0].isdigit()
         or int(parts[0]) < 1
-        or (command == "/answer" and len(parts) != 2 or command == "/close" and len(parts) != 1)
+        or (
+            command == "/answer"
+            and len(parts) != 2
+            or command in {"/close", "/send", "/defer"}
+            and len(parts) != 1
+        )
     ):
         return turn._reply(
             receipt,
@@ -697,8 +771,13 @@ def doctor_command(
                         break
         if target:
             break
+    latest = (
+        max(listings, key=lambda i: (i.created_at, i.conversation_sequence, i.id))
+        if listings
+        else None
+    )
     if target is None and listings:
-        latest = max(listings, key=lambda i: (i.conversation_sequence, i.created_at, i.id))
+        latest = max(listings, key=lambda i: (i.created_at, i.conversation_sequence, i.id))
         n = int(parts[0]) - 1
         if (
             latest.question_listing_expires_at
@@ -722,14 +801,45 @@ def doctor_command(
         mission_id=target[1],
         answer_text=parts[1] if len(parts) > 1 else "",
         close_only=command == "/close",
+        listing_token=latest.question_listing_token or "" if latest else "",
     )
+    payload = {"type": "AnswerQuestion", **args.model_dump(mode="json")}
+    if command in {"/send", "/defer"}:
+        bound = (
+            latest.question_bindings[int(parts[0]) - 1]
+            if latest and int(parts[0]) <= len(latest.question_bindings)
+            else None
+        )
+        payload = {
+            "type": "DeferQuestion",
+            "mission_id": target[1],
+            "expected_version": bound.mission_version if bound else 0,
+        }
+        if command == "/send":
+            payload = {
+                "type": "SendQuestion",
+                "mission_id": target[1],
+                "listing_token": latest.question_listing_token if latest else "",
+                "n": int(parts[0]),
+                "mission_version": bound.mission_version if bound else 0,
+                "reusable_id": bound.reusable_id if bound else None,
+                "reusable_version": bound.reusable_version if bound else None,
+            }
+        # Recover the immutable committed payload, not a newly rendered proposal.
+    for event in records(
+        turn.repo.store, PatientScope(doctor_id=doctor.id, patient_id=target[0]), "audit_event"
+    ):
+        saved_payload = event.body.get("question_command")
+        if event.body.get("command_id") == command_id and isinstance(saved_payload, dict):
+            payload = saved_payload
+            break
     result_command = turn.runtime.steward.handle(
         CommandEnvelope(
             command_id=command_id,
             scope=PatientScope(doctor_id=doctor.id, patient_id=target[0]),
             principal=actor,
             requested_at=turn.repo.clock(),
-            payload={"type": "AnswerQuestion", **args.model_dump(mode="json")},
+            payload=payload,
         )
     )
     turn.checkpoint("doctor_clinical_committed")
@@ -748,6 +858,43 @@ def doctor_command(
             else {}
         ),
     )
+    offer_ref = next(
+        (r for r in result_command.resulting_versions if r.entity_type == "reuse_offer"), None
+    )
+    if offer_ref:
+        from sanad.liaison.records import ReuseOffer
+
+        offer_row = turn.repo.store.get(doctor.scope, "reuse_offer", offer_ref.id)
+        if offer_row:
+            offer = from_record(offer_row, ReuseOffer)
+            body += "\n/reuse saves this answer for: " + offer.question_text[:160]
+            intent = turn.repo.intent(
+                doctor,
+                key,
+                {
+                    "text": body,
+                    "reply_markup": {
+                        "inline_keyboard": [
+                            [
+                                {
+                                    "text": "Reuse this answer for similar questions",
+                                    "callback_data": offer.id,
+                                }
+                            ]
+                        ]
+                    },
+                },
+                "reply:" + receipt.id,
+            )
+            result = turn.repo.commit(
+                actor,
+                "ScribeReply",
+                "reply:" + receipt.id,
+                intents=(intent,),
+                claim=claim,
+                reason=result_command.status,
+            )
+            return RouteResult(route="doctor", status=result.status, template_id=key)
     return turn._reply(receipt, actor, claim, key, result_command.status, text=body)
 
 
@@ -762,6 +909,11 @@ def task_route(
     if receipt.kind != "callback" or auth.principal.actor_kind != "doctor":
         return None
     token = str((receipt.payload or {}).get("callback_token_hash", ""))
+    from sanad.concierge.reuse import reuse_callback
+
+    reused = reuse_callback(turn, receipt, auth, token)
+    if reused is not None:
+        return reused
     match = next(
         (
             (p, from_record(r, OutboundIntent))
@@ -810,4 +962,33 @@ def task_route(
     )
     return turn._reply(
         receipt, actor, claim, key, result.status, text=templates.render(key, doctor.language)
+    )
+
+
+def reuse_reply(
+    turn: "ScribeTurn",
+    receipt: "InboundReceipt",
+    actor: Principal,
+    claim: "Claim",
+    offer: "ReuseOffer",
+    status: str,
+) -> "RouteResult":
+    patient = turn.repo.store.get(
+        PatientScope(doctor_id=offer.doctor_id, patient_id=offer.patient_id),
+        "patient",
+        offer.patient_id,
+    )
+    name = str(patient.body.get("display_name", "")) if patient else ""
+    body = (
+        "Saved for similar questions"
+        if status == "accepted"
+        else "This reuse offer is no longer available"
+    ) + f": {name} · {offer.question_text[:160]}"
+    return turn._reply(
+        receipt,
+        actor,
+        claim,
+        "doctor_answer_reused" if status == "accepted" else "doctor_question_refused",
+        status,
+        text=body,
     )

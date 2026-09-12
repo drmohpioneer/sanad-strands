@@ -158,7 +158,9 @@ def guards(store: "StoreBase", request: CommitRequest, now: datetime) -> list["C
             ):
                 return None
             if evidence.association_state in {"accepted", "accepted_pending_identity"} and (
-                evidence.accepted_by != actor.subject or evidence.accepted_at != now
+                evidence.accepted_by != actor.subject
+                or evidence.accepted_at != evidence.updated_at
+                or not old.updated_at <= evidence.updated_at <= command.requested_at <= now
             ):
                 return None
             mutable = {

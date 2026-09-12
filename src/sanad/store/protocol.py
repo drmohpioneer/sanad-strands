@@ -34,6 +34,7 @@ from sanad.store.records import (
     InboundAccept,
     InboundReceiptRecord,
     Lease,
+    OutboundIntent,
     PatientProfile,
     ReconcileReport,
     RecordPage,
@@ -41,11 +42,20 @@ from sanad.store.records import (
     SessionSnapshot,
     StoredRecord,
     UploadStage,
+    WebSession,
     WorkerCapability,
 )
 
 
 class Store(Protocol):
+    def patient_receipts(self, scope: PatientScope) -> tuple[StoredRecord, ...]: ...
+
+    def reserve_browser_command(self, session: WebSession, command_id: str, digest: str) -> str: ...
+
+    def save_question_listing(
+        self, intent: OutboundIntent, basis: tuple[VersionRef, ...], now: datetime
+    ) -> StoredRecord | None: ...
+
     def lookup_command(self, command: CommandEnvelope) -> CommitResult | None: ...
     def list_records(
         self, scope: Scope, entity_type: str, cursor: Cursor | None = None, limit: int = 100

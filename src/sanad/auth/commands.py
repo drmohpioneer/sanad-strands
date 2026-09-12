@@ -43,6 +43,10 @@ class IssueDoctorLogin(AccountCommand):
     type: Literal["IssueDoctorLogin"] = "IssueDoctorLogin"
 
 
+class IssueAdminLogin(AccountCommand):
+    type: Literal["IssueAdminLogin"] = "IssueAdminLogin"
+
+
 class IssuePatientLogin(AccountCommand):
     type: Literal["IssuePatientLogin"] = "IssuePatientLogin"
 
@@ -97,4 +101,14 @@ class IssuedInvitation(_BoundaryValue):
 
 
 class ExchangeRefused(_BoundaryValue):
-    status: Literal["forbidden", "already_used"] = "forbidden"
+    status: Literal[
+        "malformed",
+        "no_pre_session",
+        "bad_csrf",
+        "unknown_link",
+        "already_used",
+        "expired",
+        "wrong_account",
+        "commit_failed",
+        "origin",
+    ]

@@ -11,10 +11,9 @@ from starlette.exceptions import StarletteDeprecationWarning
 
 from sanad.api.app import create_app
 from sanad.api.internal import process_event
-from sanad.auth.claim import ClaimService
+from sanad.auth.claim import ClaimService, consent_policy
 from sanad.auth.commands import (
     ConfirmPatientClaim,
-    ConsentPolicy,
     CreatePatientStub,
     IssuedInvitation,
     IssueInvitation,
@@ -54,7 +53,7 @@ with warnings.catch_warnings():
     from fastapi.testclient import TestClient
 
 ORIGIN = "https://sanad.example"
-CONSENT_POLICY = ConsentPolicy(
+CONSENT_POLICY = consent_policy(
     quiet_hours=("22:00", "08:00"),
     clinic_contact="Synthetic clinic contact",
     retention="Synthetic test data only; clinic retention review pending",

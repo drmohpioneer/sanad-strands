@@ -267,3 +267,45 @@ class UploadIngress:
 
 def new_upload_id() -> str:
     return uuid4().hex
+
+
+def rejection_category(reason: str | None) -> str:
+    if reason in {"too_large", "dimensions_exceeded"}:
+        return "too_large"
+    if reason in {"not_a_document", "not_document"}:
+        return "not_a_document"
+    if reason in {
+        "unsupported",
+        "unsupported_type",
+        "unsupported_parameter",
+        "content_type_mismatch",
+    }:
+        return "unsupported"
+    return "unreadable"
+
+
+def upload_state(
+    receipt: InboundReceipt, media: StoredRecord | None, evidence: StoredRecord | None
+) -> dict[str, str]:
+    """Newest evidence decision wins; extraction alone is never acceptance."""
+    if evidence:
+        state = str(evidence.body.get("association_state"))
+        if state == "rejected":
+            return {
+                "state": "rejected",
+                "category": rejection_category(str(evidence.body.get("rejection_reason", ""))),
+            }
+        if state == "detached":
+            return {"state": "not_used"}
+        if state == "accepted":
+            return {"state": "accepted"}
+        if state in {"unmatched", "candidate", "accepted_pending_identity"}:
+            return {"state": "needs_doctor_review"}
+    if media and media.body.get("state") == "needs_attention":
+        return {
+            "state": "rejected",
+            "category": rejection_category(str(media.body.get("last_error", ""))),
+        }
+    if media or receipt.state != "pending":
+        return {"state": "processing"}
+    return {"state": "received"}

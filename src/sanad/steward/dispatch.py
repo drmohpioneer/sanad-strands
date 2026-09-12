@@ -19,6 +19,7 @@ from sanad.domain import (
 )
 from sanad.domain.operations import transition_operational_clock
 from sanad.media.storage import MediaStore
+from sanad.steward.credential_message import is_credential_message
 from sanad.steward.service import Steward
 from sanad.steward.types import StewardPolicy
 from sanad.store.keys import AccountScope, IntakeScope, ScopedKey
@@ -582,8 +583,7 @@ class Dispatcher:
 
         basis: tuple[VersionRef, ...] = ()
         if current.scope_kind == "doctor":
-            from sanad.contact.bundle import eligible, payload_snapshot
-            from sanad.store.records import model_scope
+            from sanad.contact.bundle import payload_snapshot
 
             assert type(current.scope) is TenantScope
             for _ in range(2):
@@ -597,10 +597,7 @@ class Dispatcher:
                         suppression=reason,
                         unsent=True,
                     )
-                latest_refs = tuple(
-                    to_record(r, model_scope(r)).ref
-                    for r in eligible(self.store, current.scope, self.steward.clock())
-                )
+                latest_refs = payload_snapshot(self.store, current, self.steward.clock())[1]
                 if basis == latest_refs:
                     break
             else:
@@ -610,6 +607,21 @@ class Dispatcher:
                     self.steward.clock(),
                     unsent=True,
                 )
+        from sanad.contact.question_digest import individual
+        from sanad.contact.question_digest import payload_snapshot as question_snapshot
+
+        if individual(current):
+            resolved, basis = question_snapshot(self.store, current, self.steward.clock())
+        if current.template_id == "doctor_question_digest" or individual(current):
+            saved_listing = self.store.save_question_listing(current, basis, self.steward.clock())
+            if saved_listing is None:
+                return self._finish(
+                    current,
+                    SendOutcome(status="failed", retryable=True, code="bundle_changed"),
+                    self.steward.clock(),
+                    unsent=True,
+                )
+            current = from_record(saved_listing, OutboundIntent)
         notice: CommitRequest | None = None
         if (
             current.audience == "doctor"
@@ -674,6 +686,16 @@ class Dispatcher:
                         self.steward.clock(),
                         unsent=True,
                     )
+            if current.template_id == "doctor_question_digest" or individual(current):
+                from sanad.contact.question_digest import payload_snapshot as digest_snapshot
+
+                if digest_snapshot(self.store, current, self.steward.clock())[1] != basis:
+                    return self._finish(
+                        current,
+                        SendOutcome(status="failed", retryable=True, code="bundle_changed"),
+                        self.steward.clock(),
+                        unsent=True,
+                    )
             reason = self._freshness(current, self.steward.clock())
             if reason:
                 return self._finish(
@@ -689,10 +711,15 @@ class Dispatcher:
             or current.delivery_claim.expires_at <= self.steward.clock()
         ):
             return current
+        from sanad.concierge.web import stored_reply
+
+        web_reply = self.web_reply(current)
         unsent = False
         try:
             outcome = (
-                self.transport.send_photo(
+                stored_reply(current, resolved)
+                if web_reply
+                else self.transport.send_photo(
                     current.recipient_ref, photo, str((resolved or {}).get("text", ""))
                 )
                 if photo is not None
@@ -718,7 +745,41 @@ class Dispatcher:
             )
         except TimeoutError:
             outcome = SendOutcome(status="uncertain")
-        return self._finish(current, outcome, self.steward.clock(), unsent=unsent, notice=notice)
+        return self._finish(
+            current,
+            outcome,
+            self.steward.clock(),
+            unsent=unsent,
+            notice=notice,
+            delivered_text=str(resolved["text"])
+            if resolved and isinstance(resolved.get("text"), str)
+            else None,
+        )
+
+    def origin_receipt_id(self, intent: OutboundIntent) -> str | None:
+        if intent.audience != "patient":
+            return None
+        if intent.notification_purpose == "solicited_reply":
+            for source in intent.source_event_ids:
+                if source.startswith("patient-turn:"):
+                    return source.removeprefix("patient-turn:")
+        if intent.notification_purpose == "patient_safety_response":
+            for ref in intent.source_versions:
+                if ref.entity_type == "incident":
+                    incident = self.store.get(intent.scope, "incident", ref.id)
+                    facts = incident.body.get("facts") if incident else None
+                    source_fact = facts.get("source") if isinstance(facts, dict) else None
+                    id = (
+                        source_fact.get("observation_id") if isinstance(source_fact, dict) else None
+                    )
+                    if isinstance(id, str):
+                        return id
+        return None
+
+    def web_reply(self, intent: OutboundIntent) -> bool:
+        id = self.origin_receipt_id(intent)
+        row = self.store.get(intent.scope, "inbound_receipt", id) if id else None
+        return row is not None and row.body.get("transport") in {"web-message", "web-preference"}
 
     def _freshness(self, intent: OutboundIntent, now: datetime) -> str | None:
         return freshness(self.store, intent, now, settings=self.settings) or (
@@ -786,6 +847,7 @@ class Dispatcher:
         suppression: str | None = None,
         unsent: bool = False,
         notice: CommitRequest | None = None,
+        delivered_text: str | None = None,
     ) -> OutboundIntent | None:
         changed, reviews = transition_delivery(
             intent,
@@ -795,6 +857,19 @@ class Dispatcher:
             suppression=suppression,
             settings=self.settings,
         )
+        if (
+            outcome.status == "accepted"
+            and suppression is None
+            and intent.audience == "patient"
+            and not is_credential_message(intent.template_id, delivered_text)
+        ):
+            changed = changed.model_copy(
+                update={
+                    "delivered_text": intent.delivered_text
+                    if intent.delivered_text is not None
+                    else delivered_text
+                }
+            )
         outcomes: dict[str, DeliveryOutcome] = {
             "accepted": "provider_accepted",
             "uncertain": "uncertain",

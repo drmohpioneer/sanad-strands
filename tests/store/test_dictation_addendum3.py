@@ -38,7 +38,7 @@ def test_voice_asr_spelling_and_compound_question_cannot_commit_an_invented_dose
     world.scribe.model_factory = lambda registry, role: model
     world.post(voice())
     proposed = world.proposal
-    assert proposed.prompt_version == "scribe-v8" and proposed.disputed_numbers == ()
+    assert proposed.prompt_version == "scribe-v10" and proposed.disputed_numbers == ()
     assert [o.drug for o in proposed.candidate.orders] == ["Exforge HCT", "Concor", "Forxiga"]
     assert proposed.candidate.missions[0].text == "Bano Creatine, Na, K"
     assert proposed.candidate.missions[0].clinical_en == "BUN, creatinine, Na, K"

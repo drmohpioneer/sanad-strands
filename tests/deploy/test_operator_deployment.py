@@ -354,6 +354,7 @@ def test_secret_bootstrap_preserves_generated_secrets_and_never_prints_values(
     fake.ssm.values.clear()
     fake.cfn.exists = True
     local = {
+        "GEMINI_API_KEY": "synthetic-gemini",
         "TELEGRAM_BOT_TOKEN_SANAD_STRANDS": "4242:synthetic-secret-token",
         "SANAD_ADMIN_TELEGRAM_USER_ID": "10001",
         "SANAD_TELEGRAM_BOT_USERNAME": "synthetic_bot",
@@ -363,7 +364,7 @@ def test_secret_bootstrap_preserves_generated_secrets_and_never_prints_values(
     ops.secrets_set(fake, "dev")
     first = dict(fake.ssm.values)
     ops.secrets_set(fake, "dev")
-    assert first == fake.ssm.values and len(fake.ssm.puts) == 7
+    assert first == fake.ssm.values and len(fake.ssm.puts) == 8
     assert len(first["/sanad/dev/tick-secret"]) == len(first["/sanad/dev/webhook-secret"]) == 64
     printed = capsys.readouterr().out
     assert all(value not in printed for value in first.values())

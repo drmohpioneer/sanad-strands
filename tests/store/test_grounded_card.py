@@ -13,6 +13,7 @@ from store.scribe_fixtures import ScribeWorld
 
 @pytest.mark.parametrize("row", CORPUS, ids=lambda row: row["id"])
 @pytest.mark.parametrize("language", ["en", "ar"])
+@pytest.mark.usefixtures("legacy_dictation_schema")
 def test_grounded_corpus_survives_store_and_confirmation(
     store: StoreBase, clock: FakeClock, row: dict[str, Any], language: Language
 ) -> None:

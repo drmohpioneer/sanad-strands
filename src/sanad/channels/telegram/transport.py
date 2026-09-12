@@ -192,6 +192,9 @@ class TelegramTransport:
         )
 
     def answer_callback(self, callback_query_id: str, text: str) -> CallbackOutcome:
+        if not callback_query_id:
+            # Browser confirmation consumes the same action without a Telegram tap.
+            return CallbackOutcome(status="accepted")
         try:
             outcome = self._call(
                 "answerCallbackQuery",

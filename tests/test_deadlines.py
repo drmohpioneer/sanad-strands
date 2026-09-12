@@ -154,7 +154,7 @@ def test_rejected_proposal_falls_back_with_visible_reason(offset: timedelta) -> 
     assert isinstance(result, ResolvedTiming)
     assert result.due_at == datetime(2026, 9, 20, 7, tzinfo=UTC)
     assert result.due_source == DueSource.default
-    assert "Rejected proposal" in result.due_reason and "1–180" in result.due_reason
+    assert "Rejected proposal" in result.due_reason and "1, 180" in result.due_reason
     assert POLICY.policy_version in result.due_reason
 
 

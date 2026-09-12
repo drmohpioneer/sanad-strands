@@ -60,3 +60,45 @@ class ReviewOffer(_BoundaryValue):
     expires_at: UtcInstant
     consumed_by: str | None = None
     consumed_at: UtcInstant | None = None
+
+
+class ReuseOffer(_BoundaryValue):
+    entity_type: Literal["reuse_offer"] = "reuse_offer"
+    id: NonblankStr
+    scope: TenantScope
+    version: PositiveVersion = 1
+    created_at: UtcInstant
+    updated_at: UtcInstant
+    doctor_id: NonblankStr
+    auth_epoch: int
+    question_text: NonblankStr = Field(repr=False)
+    answer_text: NonblankStr = Field(repr=False)
+    mission_id: NonblankStr
+    mission_version: PositiveVersion
+    patient_id: NonblankStr
+    listing_token: str = Field(default="", repr=False)
+    expires_at: UtcInstant
+    consumed_by: str | None = None
+    consumed_at: UtcInstant | None = None
+
+
+class ReusableAnswer(_BoundaryValue):
+    entity_type: Literal["reusable_answer"] = "reusable_answer"
+    id: NonblankStr
+    scope: TenantScope
+    version: PositiveVersion = 1
+    created_at: UtcInstant
+    updated_at: UtcInstant
+    question_text: NonblankStr = Field(repr=False)
+    normalized_question: NonblankStr = Field(repr=False)
+    answer_text: NonblankStr = Field(repr=False)
+    source_mission_id: NonblankStr
+    source_patient_id: NonblankStr
+
+
+class QuestionBinding(_BoundaryValue):
+    patient_id: NonblankStr
+    mission_id: NonblankStr
+    mission_version: PositiveVersion
+    reusable_id: str | None = None
+    reusable_version: PositiveVersion | None = None

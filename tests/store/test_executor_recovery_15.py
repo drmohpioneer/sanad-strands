@@ -228,7 +228,13 @@ def test_held_answer_is_private_until_real_amendment_then_release_once(world: Pa
         {
             "patient": {"name_as_spoken": "Synthetic Patient"},
             "orders": [
-                {"action": "start", "drug": "Atorvastatin", "dose": "20 mg", "timing": "at night"}
+                {
+                    "action": "start",
+                    "drug": "Atorvastatin",
+                    "dose": "20 mg",
+                    "timing": "at night",
+                    "action_quote": "start",
+                }
             ],
         },
         id=400,
@@ -274,7 +280,13 @@ def test_held_answer_is_private_until_real_amendment_then_release_once(world: Pa
         {
             "patient": {"name_as_spoken": "Synthetic Patient"},
             "orders": [
-                {"action": "change", "drug": "Atorvastatin", "dose": "40 mg", "timing": "at night"}
+                {
+                    "action": "change",
+                    "drug": "Atorvastatin",
+                    "dose": "40 mg",
+                    "timing": "at night",
+                    "action_quote": "change",
+                }
             ],
         },
         id=402,

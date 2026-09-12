@@ -153,8 +153,13 @@ def checkpoint_guards(
     if not old_row or len(rows) != 1 or not request.command.payload.get("resolver_action"):
         return None
     old, new = from_record(old_row, InboundReceipt), from_record(rows[0], InboundReceipt)
-    if new != InboundReceipt.model_validate(
-        old.model_dump() | {"version": old.version + 1, "updated_at": now}
+    if (
+        not old.updated_at <= new.updated_at == request.command.requested_at <= now
+        or new
+        != InboundReceipt.model_validate(
+            old.model_dump()
+            | {"version": old.version + 1, "updated_at": request.command.requested_at}
+        )
     ):
         return None
     try:

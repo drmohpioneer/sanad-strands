@@ -1,26 +1,36 @@
 """Short-lived Telegram login exchange and revocable, rotated browser sessions."""
 
 import hmac
-from typing import Literal
+from typing import Literal, overload
 from uuid import uuid4
 
 from pydantic import BaseModel, SecretStr
 
-from sanad.auth.commands import ExchangeRefused, IssueDoctorLogin, IssuePatientLogin
+from sanad.auth.commands import (
+    ExchangeRefused,
+    IssueAdminLogin,
+    IssueDoctorLogin,
+    IssuePatientLogin,
+)
 from sanad.auth.service import IdentityService, InternalCommand, internal_actor, revise
 from sanad.auth.tokens import issue_token, token_hash
-from sanad.domain import PatientScope
+from sanad.domain import PatientScope, Principal
 from sanad.domain.boundaries import _BoundaryValue
 from sanad.store import keys
 from sanad.store.records import (
+    AdminAccount,
     Claim,
     CommitResult,
     Forbidden,
+    IdentityRead,
     LoginExchange,
     PatientBinding,
     PreSession,
-    WebSession,
 )
+from sanad.store.records import (
+    AnyWebSession as WebSession,
+)
+from sanad.store.records import WebSession as ClinicalWebSession
 
 
 class PreSessionIssued(_BoundaryValue):
@@ -35,10 +45,27 @@ class SessionIssued(_BoundaryValue):
     session: WebSession
 
 
+def log_revocation(reason: str, path: str) -> None:
+    import logging
+    import re
+
+    safe_path = re.sub(
+        r"/(ad|d|pl|p|patients|evidence|claims|applications|doctors|questions|media)/[^/]+",
+        r"/\1/<redacted>",
+        path.split("?", 1)[0],
+    )
+    logging.getLogger("sanad.web").info("session revoked reason=%s path=%s", reason, safe_path)
+
+
 class LoginService(IdentityService):
     def issue(
-        self, command: IssueDoctorLogin | IssuePatientLogin, *, claim: Claim | None = None
+        self,
+        command: IssueDoctorLogin | IssuePatientLogin | IssueAdminLogin,
+        *,
+        claim: Claim | None = None,
     ) -> CommitResult:
+        if isinstance(command, IssueAdminLogin):
+            return self.issue_admin(command, claim=claim)
         role: Literal["doctor", "patient"] = (
             "doctor" if isinstance(command, IssueDoctorLogin) else "patient"
         )
@@ -136,6 +163,144 @@ class LoginService(IdentityService):
             return Forbidden()
         return self.commit(command, tuple(models), (intent,), reads=(condition,), claim=claim)
 
+    def admin_actor(self, subject: str, epoch: int | None) -> Principal:
+        return Principal(
+            subject=subject,
+            user_id=subject,
+            bot_id=self.scope.bot_id,
+            actor_kind="admin",
+            verified_roles=frozenset({"admin"}),
+            auth_epoch=epoch,
+        )
+
+    def issue_admin(self, command: IssueAdminLogin, *, claim: Claim | None = None) -> CommitResult:
+        actor = command.actor
+        auth = self.store.authorize(self.scope.bot_id, actor.subject)
+        if (
+            actor.bot_id != self.scope.bot_id
+            or "admin" not in actor.verified_roles
+            or "admin" not in auth.principal.verified_roles
+        ):
+            return Forbidden()
+        prior = self.store.lookup_command(self.envelope(command, claim))
+        if prior is not None:
+            return prior
+        now, token = self.clock(), issue_token()
+        account = self.load(self.scope, "admin_account", actor.subject, AdminAccount)
+        models: list[BaseModel] = []
+        if account is None:
+            account = AdminAccount(
+                id=actor.subject, scope=self.scope, created_at=now, updated_at=now
+            )
+            models.append(account)
+        exchange = LoginExchange(
+            id=token.hash,
+            entity_type="admin_login",
+            scope=self.scope,
+            intended_role="admin",
+            subject=actor.subject,
+            doctor_id=None,
+            auth_epoch=account.auth_epoch,
+            issued_at=now,
+            expires_at=now + self.policy.login_ttl,
+            policy_version=self.policy.version,
+            created_at=now,
+            updated_at=now,
+        )
+        head, old_head, condition = self.token_head("admin_login", actor.subject, token.hash)
+        models.extend([exchange, head])
+        if old_head:
+            old = self.load(self.scope, "admin_login", old_head.token_hash, LoginExchange)
+            if old and old.state == "issued":
+                models.append(revise(old, now, state="revoked"))
+        intent = self.account_intent(
+            exchange,
+            "admin_login_link",
+            actor.subject,
+            "admin",
+            fields={"link": f"{self.public_base_url}/ad/{token.secret.get_secret_value()}"},
+            auth_epoch=account.auth_epoch,
+            expires_at=exchange.expires_at,
+        )
+        return self.commit(
+            command,
+            tuple(models),
+            (intent,),
+            reads=(
+                condition,
+                IdentityRead(
+                    scope=self.scope,
+                    entity_type="admin_account",
+                    id=actor.subject,
+                    version=None if account in models else account.version,
+                ),
+            ),
+            claim=claim,
+        )
+
+    def revoke_admin(
+        self, subject: str, command_id: str, *, epoch: int | None = None, claim: Claim | None = None
+    ) -> CommitResult:
+        auth = self.store.authorize(self.scope.bot_id, subject)
+        account = self.load(self.scope, "admin_account", subject, AdminAccount)
+        if (
+            "admin" not in auth.principal.verified_roles
+            or account is None
+            or (epoch is not None and epoch != account.auth_epoch)
+        ):
+            return Forbidden()
+        return self.commit(
+            InternalCommand(
+                type="RevokeAdminSessions",
+                target_id=subject,
+                command_id=command_id,
+                actor=self.admin_actor(subject, account.auth_epoch),
+            ),
+            (revise(account, self.clock(), auth_epoch=account.auth_epoch + 1),),
+            claim=claim,
+        )
+
+    def revoke_roles(
+        self, subject: str, command_id: str, *, claim: Claim | None = None
+    ) -> CommitResult:
+        """Revoke only the sender's doctor/admin sessions, discovered from login audits."""
+        from sanad.steward.types import records
+        from sanad.store.records import AuditEvent
+
+        auth = self.store.authorize(self.scope.bot_id, subject)
+        roles = auth.principal.verified_roles & {"doctor", "admin"}
+        if not roles:
+            return Forbidden()
+        command = InternalCommand(
+            type="FinishIdentityReceipt",
+            target_id=subject,
+            command_id=command_id,
+            actor=auth.principal,
+        )
+        prior = self.store.lookup_command(self.envelope(command, claim))
+        if prior is not None:
+            return prior
+        session_ids = {
+            ref.id
+            for row in records(self.store, self.scope, "audit_event")
+            for ref in AuditEvent.model_validate(row.body).aggregate_refs
+            if ref.entity_type == "web_session"
+        }
+        for id in session_ids:
+            session = self.load(self.scope, "web_session", id, WebSession)
+            if session and session.subject == subject and session.role in roles:
+                self.revoke(session, reason="logout", path="telegram/logout")
+                current = self.load(self.scope, "web_session", id, WebSession)
+                if current and current.revoked_at is None:
+                    return Forbidden()
+        # Preserve the administrator's epoch invalidation of pending exchanges.
+        if "admin" in roles and auth.admin_epoch is not None:
+            result = self.revoke_admin(subject, command_id + ":admin")
+            if result.status not in {"accepted", "duplicate"}:
+                return result
+        # Receipt completion and the solicited acknowledgement are committed by routing.
+        return self.commit(command)
+
     def pre_session(self) -> PreSessionIssued | None:
         cookie, csrf, now = issue_token(), issue_token(), self.clock()
         pre = PreSession(
@@ -163,7 +328,7 @@ class LoginService(IdentityService):
 
     def exchange(
         self,
-        role: Literal["doctor", "patient"],
+        role: Literal["doctor", "patient", "admin"],
         raw: str,
         pre_cookie: str,
         csrf: str,
@@ -172,31 +337,37 @@ class LoginService(IdentityService):
     ) -> SessionIssued | ExchangeRefused:
         digest, pre_hash = token_hash(raw), token_hash(pre_cookie)
         if digest is None or pre_hash is None:
-            return ExchangeRefused()
+            return ExchangeRefused(status="malformed")
         pre = self.load(self.scope, "pre_session", pre_hash, PreSession)
         now = self.clock()
-        if (
-            pre is None
-            or pre.consumed_at
-            or pre.expires_at <= now
-            or not hmac.compare_digest(keys.digest(csrf), pre.csrf_secret_ref)
-        ):
-            return ExchangeRefused()
-        purpose = "doctor_login" if role == "doctor" else "patient_login"
+        if pre is None or pre.consumed_at or pre.expires_at <= now:
+            return ExchangeRefused(status="no_pre_session")
+        if not hmac.compare_digest(keys.digest(csrf), pre.csrf_secret_ref):
+            return ExchangeRefused(status="bad_csrf")
+        purpose = role + "_login"
         exchange = self.load(self.scope, purpose, digest, LoginExchange)
         if exchange is None:
-            return ExchangeRefused()
+            return ExchangeRefused(status="unknown_link")
         if exchange.state == "consumed":
             return ExchangeRefused(status="already_used")
         if exchange.state != "issued" or exchange.expires_at <= now:
-            return ExchangeRefused()
+            return ExchangeRefused(status="expired")
         auth = self.store.authorize(self.scope.bot_id, exchange.subject)
         if (
-            auth.principal.actor_kind != role
-            or auth.auth_epoch != exchange.auth_epoch
-            or auth.doctor_status != "approved"
+            role == "admin"
+            and (
+                "admin" not in auth.principal.verified_roles
+                or auth.admin_epoch != exchange.auth_epoch
+            )
+        ) or (
+            role != "admin"
+            and (
+                auth.principal.actor_kind != role
+                or auth.auth_epoch != exchange.auth_epoch
+                or auth.doctor_status != "approved"
+            )
         ):
-            return ExchangeRefused()
+            return ExchangeRefused(status="wrong_account")
         cookie, secret = issue_token(), issue_token()
         session = WebSession(
             id=cookie.hash,
@@ -230,22 +401,23 @@ class LoginService(IdentityService):
                 type="ExchangeLogin",
                 target_id=digest,
                 command_id=uuid4().hex,
-                actor=auth.principal,
+                actor=self.admin_actor(auth.principal.subject, auth.admin_epoch)
+                if role == "admin"
+                else auth.principal,
             ),
             tuple(models),
         )
         if result.status != "accepted":
-            current = self.load(self.scope, purpose, digest, LoginExchange)
-            return ExchangeRefused(
-                status="already_used" if current and current.state == "consumed" else "forbidden"
-            )
+            return ExchangeRefused(status="commit_failed")
+        if previous and previous.revoked_at is None:
+            log_revocation("session_replaced", "auth/exchange")
         return SessionIssued(cookie=cookie.secret, csrf=secret.secret, session=session)
 
     def session(self, raw_cookie: str) -> WebSession | None:
         digest = token_hash(raw_cookie)
         return self.load(self.scope, "web_session", digest, WebSession) if digest else None
 
-    def revoke(self, session: WebSession) -> None:
+    def revoke(self, session: WebSession, *, reason: str = "explicit", path: str = "auth") -> None:
         for _ in range(3):
             current = self.load(self.scope, "web_session", session.id, WebSession)
             if current is None or current.revoked_at is not None:
@@ -260,9 +432,22 @@ class LoginService(IdentityService):
                 (revise(current, self.clock(), revoked_at=self.clock()),),
             )
             if result.status == "accepted":
+                log_revocation(reason, path)
                 return
 
-    def require(self, raw_cookie: str, role: Literal["doctor", "patient"]) -> WebSession | None:
+    @overload
+    def require(
+        self, raw_cookie: str, role: Literal["doctor", "patient"], *, path: str = "auth"
+    ) -> ClinicalWebSession | None: ...
+
+    @overload
+    def require(
+        self, raw_cookie: str, role: Literal["doctor", "patient", "admin"], *, path: str = "auth"
+    ) -> WebSession | None: ...
+
+    def require(
+        self, raw_cookie: str, role: Literal["doctor", "patient", "admin"], *, path: str = "auth"
+    ) -> WebSession | None:
         session = self.session(raw_cookie)
         if session is None:
             return None
@@ -273,32 +458,64 @@ class LoginService(IdentityService):
             or session.idle_expires_at <= now
             or session.absolute_expires_at <= now
         ):
-            self.revoke(session)
+            self.revoke(session, reason="role_or_expiry", path=path)
             return None
         auth = self.store.authorize(self.scope.bot_id, session.subject)
         if (
-            auth.principal.actor_kind != role
-            or auth.auth_epoch != session.auth_epoch
-            or auth.doctor_status != "approved"
+            role == "admin"
+            and (
+                "admin" not in auth.principal.verified_roles
+                or auth.admin_epoch != session.auth_epoch
+            )
+        ) or (
+            role != "admin"
+            and (
+                auth.principal.actor_kind != role
+                or auth.auth_epoch != session.auth_epoch
+                or auth.doctor_status != "approved"
+            )
         ):
-            self.revoke(session)
+            self.revoke(session, reason="suspension_or_auth_epoch", path=path)
             return None
-        changed = revise(
-            session,
-            now,
-            last_seen_at=now,
-            idle_expires_at=min(now + self.policy.idle_ttl, session.absolute_expires_at),
-        )
-        result = self.commit(
-            InternalCommand(
-                type="TouchWebSession",
-                target_id=session.id,
-                command_id=uuid4().hex,
-                actor=auth.principal,
-            ),
-            (changed,),
-        )
-        if result.status != "accepted":
-            self.revoke(session)
-            return None
-        return changed
+        from sanad.store.identity import live_snapshot
+
+        for _ in range(2):
+            # Touch conflicts can involve any authority row, not just this session.
+            # Revalidate the complete live snapshot before retrying or skipping.
+            if not live_snapshot(self.store, self.scope, session, []):
+                self.revoke(session, reason="binding_consent_or_authority", path=path)
+                return None
+            changed = revise(
+                session,
+                now,
+                last_seen_at=now,
+                idle_expires_at=min(now + self.policy.idle_ttl, session.absolute_expires_at),
+            )
+            result = self.commit(
+                InternalCommand(
+                    type="TouchWebSession",
+                    target_id=session.id,
+                    command_id=uuid4().hex,
+                    actor=self.admin_actor(auth.principal.subject, auth.admin_epoch)
+                    if role == "admin"
+                    else auth.principal,
+                ),
+                (changed,),
+            )
+            if result.status == "accepted":
+                return changed
+            current = self.session(raw_cookie)
+            now = self.clock()
+            if current is None or current.revoked_at:
+                return None
+            if (
+                current.role != role
+                or min(current.idle_expires_at, current.absolute_expires_at) <= now
+            ):
+                self.revoke(current, reason="role_or_expiry", path=path)
+                return None
+            if not live_snapshot(self.store, self.scope, current, []):
+                self.revoke(current, reason="binding_consent_or_authority", path=path)
+                return None
+            session = current
+        return session

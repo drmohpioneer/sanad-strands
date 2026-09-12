@@ -80,11 +80,14 @@ def test_half_rows_gate_boundaries_and_unequal_lengths(
     review = PhotoReview(reads=read, kind="prescription", intake_id="test", media_work_ids=())
     candidate = candidate_from(read, "prescription", POLICY)
     if editable:
-        assert len(candidate.orders) == max(first_count, second_count)
-        # Crossing the gate does not clear disagreements in the remaining rows.
-        assert any(
-            issue.code == "reader_disagreement" for issue in review_issues(review, candidate)
-        )
+        assert not candidate.orders  # Unrecognized names are unresolved rows, never starts.
+        assert len(candidate.facts) == first_count + second_count - agreed
+        # 6d: absent counterparts are single-reader rows. Unknown names
+        # remain facts, never medication starts (the row-classification route
+        # supplies their clarification separately).
+        issues = review_issues(review, candidate)
+        assert not any(issue.code == "reader_disagreement" for issue in issues)
+        assert not issues
     else:
         assert not candidate.orders and not candidate.facts
         assert unreadable_reply(read) == HANDWRITING_REPLY + "\n" + AGREEMENT_WARNING

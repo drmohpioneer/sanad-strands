@@ -20,6 +20,7 @@ from sanad.domain import (
     Provenance,
     TenantScope,
 )
+from sanad.domain.language import effective
 from sanad.media.images import instruction_column
 from sanad.media.limits import MediaInvalid, image_info
 from sanad.media.retrieve import MediaRetriever, fetch_telegram_file
@@ -28,6 +29,7 @@ from sanad.media.vision import (
     VISION_PROMPT_VERSION,
     DocumentCrop,
     DocumentFailure,
+    DocumentItem,
     DocumentRead,
     read_document,
 )
@@ -112,7 +114,9 @@ def unreadable(reason: str, language: str = "ar") -> str:
     return wording.render(
         "doctor_photo_unreadable",
         language,
-        reason=_REASONS.get(reason, _UNKNOWN_REASON)[language == "en"],
+        reason=_REASONS.get(reason, _UNKNOWN_REASON)[
+            effective(language, audience="doctor") == "en"
+        ],
     )
 
 
@@ -235,12 +239,41 @@ class PhotoTurn:
             except Exception:
                 return RouteResult(route="busy", status="storage_unavailable")
             else:
+                from sanad.evidence.context_names import active_drug_names
+                from sanad.scribe.memory import NameVocabulary
+
+                # Only an already selected patient supplies clinical spelling hints.
+                # A caption lookup later in this method still owns selection.
+                prior = self.repo.pending(doctor.scope)
+                known = (
+                    prior.selected_patient_id
+                    if prior
+                    and prior.status == "pending"
+                    and prior.expires_at > self.repo.clock()
+                    and not caption_patient(caption).name_as_spoken
+                    else None
+                )
+                names = (
+                    active_drug_names(
+                        self.repo.store,
+                        PatientScope(doctor_id=doctor.scope.doctor_id, patient_id=known),
+                        200,
+                    )
+                    if known
+                    else ()
+                )
+                names = tuple(
+                    dict.fromkeys(
+                        (*names, *NameVocabulary(self.repo.store, doctor).hint().split(", "))
+                    )
+                )[:200]
                 result = asyncio.run(
                     read_document(
                         data,
                         info.format,
                         kind_hint=kind_hint(caption),
                         adapter=self.turn.vision_factory(source),
+                        context_names=names,
                     )
                 )
         if isinstance(result, DocumentFailure):
@@ -634,12 +667,25 @@ class PhotoTurn:
     ) -> RouteResult:
         if unreadable_read(draft.reads):
             return self.unreadable_card(receipt, actor, claim, doctor, draft, selected)
-        candidate = candidate_from(
-            draft.reads, draft.kind, self.turn.runtime.safety_policy
-        ).model_copy(update={"patient": patient})
+        from sanad.scribe.crosscheck import prescription_projection, projected_items
+
+        items, resolved, single = projected_items(draft.reads)
+        targets: tuple[str, ...] = ()
+        unresolved: tuple[int, ...] = ()
+        if draft.kind == "prescription":
+            service = self.turn.name_lookup(doctor, actor)
+            candidate, targets, unresolved = prescription_projection(items, service.lookup_drug)
+        else:
+            candidate = candidate_from(draft.reads, draft.kind, self.turn.runtime.safety_policy)
+        candidate = candidate.model_copy(update={"patient": patient})
         photo = PhotoReview(
             reads=draft.reads,
             kind=draft.kind,
+            row_targets=targets,
+            row_items=items if draft.kind == "prescription" else (),
+            unresolved_rows=unresolved,
+            single_rows=single if draft.kind == "prescription" else (),
+            resolved_fields=resolved if draft.kind == "prescription" else (),
             intake_id=draft.id,
             media_work_ids=draft.media_work_ids,
             shift_detected=DRAFT_SCRIBE_POLICY.shift_guard_enabled
@@ -896,9 +942,9 @@ class PhotoTurn:
         if edit is None or proposal.photo is None:
             return None
         index, fields = edit
-        candidate = proposal.candidate
+        candidate, review = proposal.candidate, proposal.photo
         for field, value in fields.items():
-            candidate = self.set_field(candidate, proposal.photo, index, field, value)
+            candidate, review = self.set_field(candidate, review, index, field, value)
         return candidate
 
     def corrected_review(
@@ -910,18 +956,37 @@ class PhotoTurn:
         explicit = self.edits(text)
         if explicit:
             index, fields = explicit
-            count = len(candidate.orders) if photo.kind == "prescription" else len(candidate.facts)
+            edited_candidate = proposal.candidate
+            for field, value in fields.items():
+                edited_candidate, photo = self.set_field(
+                    edited_candidate, photo, index, field, value
+                )
+            count = (
+                len(photo.row_targets)
+                if photo.row_targets
+                else (
+                    len(candidate.orders) if photo.kind == "prescription" else len(candidate.facts)
+                )
+            )
             if 0 <= index < count:
                 resolved.update(f"items.{index}.{f}" for f in fields)
                 if {"name", "dose" if photo.kind == "prescription" else "value"} <= fields.keys():
                     edited.add(index)
         else:
+            from sanad.scribe.crosscheck import first_items, source_row
+
+            rows = list(photo.row_items or first_items(photo.reads))
             before, after = (
                 (proposal.candidate.orders, candidate.orders)
                 if photo.kind == "prescription"
                 else (proposal.candidate.facts, candidate.facts)
             )
             for i, (old, new) in enumerate(zip(before, after, strict=False)):
+                row_index = source_row(
+                    photo, f"{'order' if photo.kind == 'prescription' else 'fact'}:{i}"
+                )
+                if row_index is None:
+                    continue
                 old_fields = old.model_dump()
                 new_fields = new.model_dump()
                 if photo.kind == "lab":
@@ -936,13 +1001,18 @@ class PhotoTurn:
                         and isinstance(value, str)
                         and plain(value) in plain(text)
                     ):
-                        resolved.add(f"items.{i}.{mapping.get(field, field)}")
+                        key = mapping.get(field, field)
+                        resolved.add(f"items.{row_index}.{key}")
+                        if photo.kind == "prescription" and key in DocumentItem.model_fields:
+                            rows[row_index] = rows[row_index].model_copy(update={key: value})
                 if (
-                    f"items.{i}.name" in resolved
-                    and f"items.{i}.{'dose' if photo.kind == 'prescription' else 'value'}"
+                    f"items.{row_index}.name" in resolved
+                    and f"items.{row_index}.{'dose' if photo.kind == 'prescription' else 'value'}"
                     in resolved
                 ):
-                    edited.add(i)
+                    edited.add(row_index)
+            if photo.kind == "prescription":
+                photo = photo.model_copy(update={"row_items": tuple(rows)})
         return photo.model_copy(
             update={
                 "resolved_fields": tuple(sorted(resolved)),
@@ -955,6 +1025,8 @@ class PhotoTurn:
     ) -> tuple[tuple[ScribeCallback, ...], list[JsonValue]]:
         if not proposal.photo or unreadable_read(proposal.photo.reads):
             return (), []
+        from sanad.scribe.crosscheck import reading_text
+
         tokens: list[ScribeCallback] = []
         buttons: list[JsonValue] = []
         for d in proposal.photo.reads.disagreements:
@@ -984,7 +1056,10 @@ class PhotoTurn:
                     [
                         {
                             "text": wording.label("reading", language).format(number=reading + 1)
-                            + plain(value or wording.label("unreadable", language))[:60],
+                            + plain(
+                                reading_text(value, d.field)
+                                or wording.label("unreadable", language)
+                            )[:60],
                             "callback_data": token.secret.get_secret_value(),
                         }
                     ]
@@ -1012,17 +1087,58 @@ class PhotoTurn:
             selected_value = d.first if token.reading == 0 else d.second
             # An empty reading is not a doctor's replacement for a missing name.
             # Keep its row blocked until a real name is chosen or explicitly edited.
-            if field == "name" and not selected_value:
+            if field in {"name", "row"} and not selected_value:
                 return self.refresh(receipt, actor, claim, proposal, token, candidate, photo)
-            candidate = self.set_field(candidate, photo, int(index), field, selected_value)
+            candidate, photo = self.set_field(candidate, photo, int(index), field, selected_value)
+            if field == "row":
+                photo = photo.model_copy(
+                    update={
+                        "resolved_fields": (
+                            *photo.resolved_fields,
+                            *(
+                                f"items.{index}.{key}"
+                                for key in ("name", "dose", "frequency", "route", "timing")
+                            ),
+                        )
+                    }
+                )
         elif token.field == "document_type":
             chosen = photo.reads.first if token.reading == 0 else photo.reads.second
             kind = chosen.document_type
             if kind in {"prescription", "lab", "other"}:
-                photo = PhotoReview.model_validate(photo.model_dump() | {"kind": kind})
-                candidate = candidate_from(
-                    photo.reads, kind, self.turn.runtime.safety_policy
-                ).model_copy(update={"patient": candidate.patient})
+                from sanad.scribe.crosscheck import first_items, prescription_projection
+
+                patient = candidate.patient
+                if kind == "prescription":
+                    doctor = self.turn.claims.doctor(actor)
+                    assert doctor is not None
+                    items = first_items(photo.reads)
+                    candidate, targets, unresolved = prescription_projection(
+                        items, self.turn.name_lookup(doctor, actor).lookup_drug
+                    )
+                    photo = PhotoReview.model_validate(
+                        photo.model_dump()
+                        | {
+                            "kind": kind,
+                            "row_items": items,
+                            "row_targets": targets,
+                            "unresolved_rows": unresolved,
+                            "single_rows": (),
+                        }
+                    )
+                else:
+                    candidate = candidate_from(photo.reads, kind, self.turn.runtime.safety_policy)
+                    photo = PhotoReview.model_validate(
+                        photo.model_dump()
+                        | {
+                            "kind": kind,
+                            "row_items": (),
+                            "row_targets": (),
+                            "unresolved_rows": (),
+                            "single_rows": (),
+                        }
+                    )
+                candidate = candidate.model_copy(update={"patient": patient})
         photo = photo.model_copy(update={"resolved_fields": (*photo.resolved_fields, token.field)})
         return self.refresh(receipt, actor, claim, proposal, token, candidate, photo)
 
@@ -1033,31 +1149,11 @@ class PhotoTurn:
         index: int,
         field: str,
         value: str | None,
-    ) -> DictationCandidate:
+    ) -> tuple[DictationCandidate, PhotoReview]:
         if photo.kind == "prescription":
-            orders = list(candidate.orders)
-            mapping = {
-                "name": "drug",
-                "dose": "dose",
-                "unit": "dose",
-                "frequency": "frequency",
-                "route": "route",
-                "timing": "timing",
-                "action": "action",
-                "duration": "duration",
-            }
-            if 0 <= index < len(orders) and field in mapping:
-                if field == "dose" and value and re.fullmatch(r"[0-9.]+", value):
-                    unit = re.sub(r"^[0-9.]+\s*", "", orders[index].dose or "")
-                    value = value + (" " + unit if unit else "")
-                if field == "unit":
-                    dose = re.sub(r"[^0-9.]+.*$", "", orders[index].dose or "")
-                    value = " ".join(v for v in (dose, value) if v) or None
-                orders[index] = type(orders[index]).model_validate(
-                    orders[index].model_dump()
-                    | {mapping[field]: value or ("" if field == "name" else None)}
-                )
-            return candidate.model_copy(update={"orders": tuple(orders)})
+            from sanad.scribe.crosscheck import edit_prescription
+
+            return edit_prescription(candidate, photo, index, field, value)
         facts = list(candidate.facts)
         if 0 <= index < len(facts) and facts[index].lab:
             row = facts[index].lab
@@ -1071,7 +1167,7 @@ class PhotoTurn:
                     self.turn.runtime.safety_policy,
                 )
                 facts[index] = facts[index].model_copy(update={"lab": row, "text": lab_text(row)})
-        return candidate.model_copy(update={"facts": tuple(facts)})
+        return candidate.model_copy(update={"facts": tuple(facts)}), photo
 
     def refresh(
         self,

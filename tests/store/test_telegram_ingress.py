@@ -92,7 +92,7 @@ def test_lossless_big_sender_and_metadata_cannot_grant_a_role(accounts: AccountW
     assert receipt.source_subject == subject and isinstance(receipt.scope, AccountScope)
     assert receipt.principal and receipt.principal.actor_kind == "unknown"
     assert (
-        "ADMIN DISPLAY" not in receipt.model_dump_json()
+        "ADMIN DISPLAY" in receipt.model_dump_json()
         and "the_admin" not in receipt.model_dump_json()
     )
     assert accounts.actor(subject).verified_roles == frozenset()

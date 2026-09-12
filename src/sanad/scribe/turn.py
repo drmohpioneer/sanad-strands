@@ -99,9 +99,13 @@ def parse_command(text: str) -> tuple[str | None, str]:
         "/cancel",
         "/intake",
         "/lang",
+        "/digest",
         "/inbox",
         "/resolve",
         "/questions",
+        "/send",
+        "/defer",
+        "/reuse",
         "/answer",
         "/close",
     }:
@@ -222,6 +226,31 @@ class ScribeTurn:
             status=status if result.status in {"accepted", "duplicate"} else result.status,
             template_id=template,
         )
+
+    def _preference_refused(
+        self, receipt: InboundReceipt, claim: Claim, setting: str
+    ) -> RouteResult:
+        # A refused preference is a completed observation, even if authority changed.
+        # Account delivery revalidates the recipient and latest doctor epoch.
+        doctor = self.runtime.accounts.doctor(
+            receipt.principal.doctor_id or "" if receipt.principal else ""
+        )
+        template = (
+            "doctor_suspended_notice"
+            if doctor and doctor.status == "suspended"
+            else "scribe_" + setting
+            if doctor
+            else "claim_refused"
+        )
+        result = self.runtime.accounts.finish_receipt(
+            receipt,
+            claim,
+            result_code="forbidden",
+            template_id=template,
+            text=f"The {setting} setting was refused because your account authority "
+            "or setting changed. Refresh and try again.",
+        )
+        return RouteResult(route="doctor", status=result.status, template_id=template)
 
     @staticmethod
     def wording(template: str, doctor: Doctor) -> str:
@@ -348,10 +377,92 @@ class ScribeTurn:
 
         text = normalize_transcript(text, contest_language(doctor.language))
         command, argument = parse_command(text)
-        if command in {"/questions", "/answer", "/close", "/inbox", "/resolve"}:
+        if command in {
+            "/questions",
+            "/answer",
+            "/close",
+            "/send",
+            "/defer",
+            "/reuse",
+            "/inbox",
+            "/resolve",
+        }:
             from sanad.concierge.answer_command import doctor_command
 
             return doctor_command(self, receipt, principal, claim, doctor, command, argument)
+        if command == "/digest":
+            from sanad.contact.question_digest import (
+                LIMIT,
+                due,
+                next_instant,
+                parse_setting,
+                setting_schedule,
+            )
+
+            values = parse_setting(argument, doctor)
+            if values is None:
+                return self._reply(
+                    receipt,
+                    principal,
+                    claim,
+                    "scribe_digest_usage",
+                    "invalid_input",
+                    text=wording.render("scribe_digest_usage", doctor.language),
+                )
+            now = self.repo.clock()
+            changed = revise(doctor, now, **values) if argument else doctor
+            from zoneinfo import ZoneInfo
+
+            zone = ZoneInfo("Africa/Cairo")
+            count = len(due(self.repo.store, doctor.scope)[:LIMIT])
+            english = contest_language(doctor.language) == "en"
+            waiting = (
+                (f"{count} questions are waiting." if count else "Nothing is waiting right now.")
+                if english
+                else (f"{count} أسئلة في الانتظار." if count else "مفيش أسئلة في الانتظار دلوقتي.")
+            )
+            if argument:
+                next_at = next_instant(changed, now).astimezone(zone)
+                today = next_at.date() == now.astimezone(zone).date()
+                when = (
+                    ("today" if today else "tomorrow")
+                    if english
+                    else ("النهارده" if today else "بكرة")
+                )
+                text = (
+                    f"Next digest: {when} at {next_at:%H:%M} Cairo. {waiting}"
+                    if english
+                    else f"الملخص الجاي: {when} الساعة {next_at:%H:%M} بتوقيت القاهرة. {waiting}"
+                )
+            else:
+                text = wording.render(
+                    "scribe_digest",
+                    contest_language(doctor.language),
+                    time=next_instant(changed, now).astimezone(zone).strftime("%H:%M"),
+                    packing=("one message" if changed.digest_packing == "one" else "each question")
+                    if english
+                    else ("رسالة واحدة" if changed.digest_packing == "one" else "كل سؤال لوحده"),
+                    waiting=waiting,
+                )
+            if not argument:
+                return self._reply(receipt, principal, claim, "scribe_digest", "setting", text=text)
+            schedule = setting_schedule(self.repo.store, changed, now)
+            intent = self.repo.intent(
+                changed, "scribe_digest", {"text": text}, "digest:" + receipt.id
+            )
+            digest_result = self.repo.commit(
+                principal,
+                "ScribeDigest",
+                "digest:" + receipt.id,
+                (changed,) + ((schedule,) if schedule else ()),
+                (intent,),
+                claim=claim,
+            )
+            if digest_result.status == "forbidden":
+                return self._preference_refused(receipt, claim, "digest")
+            return RouteResult(
+                route="doctor", status=digest_result.status, template_id="scribe_digest"
+            )
         if command == "/lang":
             if argument not in {"en", "ar"}:
                 return self._reply(
@@ -366,7 +477,16 @@ class ScribeTurn:
             intent = self.repo.intent(
                 changed,
                 "scribe_language",
-                {"text": "Language set to English." if argument == "en" else "تم اختيار العربية."},
+                {
+                    "text": (
+                        "The app currently shows English. "
+                        "Your Arabic preference is saved for later."
+                        if argument == "ar" and contest_language(changed.language) == "en"
+                        else "Language set to English."
+                        if contest_language(changed.language) == "en"
+                        else "تم اختيار العربية."
+                    )
+                },
                 "language:" + receipt.id,
             )
             language_result = self.repo.commit(
@@ -377,6 +497,8 @@ class ScribeTurn:
                 (intent,),
                 claim=claim,
             )
+            if language_result.status == "forbidden":
+                return self._preference_refused(receipt, claim, "language")
             return RouteResult(
                 route="doctor", status=language_result.status, template_id="scribe_language"
             )
@@ -421,7 +543,7 @@ class ScribeTurn:
             choices = lookup(
                 self.repo.store, doctor.scope, PatientCandidate(name_as_spoken=argument or None)
             )
-            if len(choices) == 1 and argument:
+            if len(choices) == 1 and argument and choices[0].score == 3:
                 qr_result = issue_qr(
                     self.claims, principal, choices[0].patient_id, "qr:" + receipt.id
                 )
@@ -914,15 +1036,40 @@ class ScribeTurn:
             # generic placeholder is never promoted into a doctor question.
             issues.append(ProposalIssue(item="all", code="clarification"))
         if not photo and command is None and missing_request(candidate, source_text):
-            from sanad.scribe.monitoring import task_request
-
-            issues.append(
-                ProposalIssue(
-                    item="all",
-                    code="request_missing",
-                    field="task" if task_request(source_text) else None,
-                )
+            from sanad.scribe.extract import MissionCandidate
+            from sanad.scribe.monitoring import (
+                compile_schedule,
+                duration_expression,
+                spoken_clause,
+                task_request,
             )
+
+            schedule = compile_schedule(source_text)
+            if schedule and not any(m.kind == "MONITOR" for m in candidate.missions):
+                instruction = spoken_clause(source_text)
+                candidate = candidate.model_copy(
+                    update={
+                        "missions": (
+                            *candidate.missions,
+                            MissionCandidate(
+                                kind="MONITOR",
+                                text=instruction,
+                                timing_expression=duration_expression(instruction),
+                            ),
+                        )
+                    }
+                )
+                intent = derive_intent(candidate, has_match=bool(choices))
+                if force_new:
+                    intent = "create_patient"
+            else:
+                issues.append(
+                    ProposalIssue(
+                        item="all",
+                        code="request_missing",
+                        field="task" if task_request(source_text) else None,
+                    )
+                )
         lookup_only = intent == "find_patient" and (command in {"/find", "/qr"} or not issues)
         if lookup_only and not choices:
             return self._reply(receipt, actor, claim, "doctor_patient_not_found", "not_found")
@@ -930,6 +1077,7 @@ class ScribeTurn:
             choices[0]
             if len(choices) == 1
             and (candidate.patient.name_as_spoken or candidate.patient.identifiers)
+            and (command != "/qr" or choices[0].score == 3)
             else None
         )
         if (

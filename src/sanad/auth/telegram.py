@@ -1,7 +1,12 @@
 """Injected Telegram enrollment commands; the channel never imports auth."""
 
 from sanad.auth.claim import ClaimService
-from sanad.auth.commands import ClaimInvitation, IssueDoctorLogin, IssuePatientLogin
+from sanad.auth.commands import (
+    ClaimInvitation,
+    IssueAdminLogin,
+    IssueDoctorLogin,
+    IssuePatientLogin,
+)
 from sanad.auth.login import LoginService
 from sanad.auth.service import InternalCommand, revise
 from sanad.channels.telegram import wording
@@ -30,7 +35,7 @@ class IdentityRouting:
             callback_hash
             and self.claims.store.get(self.claims.scope, "claim_callback", callback_hash)
         )
-        login = text in {"/login", "login"}
+        login = text in {"/login", "login", "/login admin", "/logout"}
         if not (hash or known_callback or login):
             return None
         runtime, store, now = self.runtime, self.runtime.store, self.runtime.clock()
@@ -60,6 +65,24 @@ class IdentityRouting:
                 ),
                 claim=work,
             )
+        elif text == "/login admin":
+            result = self.login.issue(
+                IssueAdminLogin(command_id=command_id, actor=auth.principal), claim=work
+            )
+        elif text == "/logout":
+            result = self.login.revoke_roles(auth.principal.subject, command_id)
+            if result.status in {"accepted", "duplicate"}:
+                result = runtime.accounts.finish_receipt(
+                    receipt,
+                    work,
+                    result_code="signed_out",
+                    template_id="dashboard_signed_out"
+                    if auth.principal.actor_kind == "doctor"
+                    else "admin_no_sessions",
+                    text=wording.render(
+                        "dashboard_signed_out", runtime.accounts.language(receipt.source_subject)
+                    ),
+                )
         elif auth.principal.actor_kind == "doctor":
             result = self.login.issue(
                 IssueDoctorLogin(command_id=command_id, actor=auth.principal), claim=work
@@ -69,7 +92,21 @@ class IdentityRouting:
                 IssuePatientLogin(command_id=command_id, actor=auth.principal), claim=work
             )
         accepted = result is not None and result.status in {"accepted", "duplicate"}
-        template = None if accepted else "claim_refused"
+        template = (
+            None
+            if accepted
+            else "admin_no_sessions"
+            if text == "/logout"
+            and "admin" in auth.principal.verified_roles
+            and auth.admin_epoch is None
+            else "claim_refused"
+            if hash or known_callback
+            else "account_suspended"
+            if auth.doctor_status == "suspended"
+            else "patient_not_linked"
+            if text in {"login", "/login"} and not auth.binding
+            else "login_refused"
+        )
         if known_callback:
             runtime.transport.answer_callback(
                 str(payload.get("callback_query_id", "")),
@@ -91,15 +128,25 @@ class IdentityRouting:
             intents: tuple[OutboundIntent, ...] = ()
             if not known_callback:
                 intents = (
-                    self.claims.account_intent(
-                        source,
-                        "claim_refused",
+                    runtime.accounts.intent(
+                        to_record(
+                            source,
+                            receipt.scope
+                            if isinstance(source, InboundReceipt)
+                            else self.claims.scope,
+                        ),
+                        "admin_no_sessions" if template == "admin_no_sessions" else "claim_refused",
                         receipt.source_subject,
+                        receipt.source_chat,
                         "doctor" if auth.principal.actor_kind == "doctor" else "applicant",
+                        text=wording.render(
+                            template or "claim_refused",
+                            runtime.accounts.language(receipt.source_subject),
+                        ),
                         auth_epoch=auth.auth_epoch
                         if auth.principal.actor_kind == "doctor"
                         else None,
-                        suffix=receipt.id,
+                        logical_suffix=receipt.id,
                     ),
                 )
             self.claims.commit(

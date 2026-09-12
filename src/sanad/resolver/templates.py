@@ -3,6 +3,7 @@
 from sanad.agents.hygiene import patient_failure
 from sanad.concierge.answer import Bundle, ConciergeAnswer, gate
 from sanad.domain.entities import BarrierAttempt, BarrierPlace
+from sanad.domain.language import effective
 from sanad.presentation.context import PresentationContext
 from sanad.resolver.policy import POLICY
 from sanad.safety.models import OutputContext
@@ -41,7 +42,7 @@ TEMPLATES = {
         "Your report that the barrier is resolved is recorded. This does not report "
         "completing your doctor's request.",
     ),
-    "place": ("{name} — {distance} م{details}", "{name} — {distance} m{details}"),
+    "place": ("{name}: {distance} م{details}", "{name}: {distance} m{details}"),
 }
 
 
@@ -60,8 +61,9 @@ def render(key: str, language: str | PresentationContext, **fields: str) -> str:
 
 
 def question_ok(text: str, fact: str, language: str, safety: SafetyPolicy) -> bool:
+    language = effective(language, audience="patient")
     permitted = render(fact, language)
-    context = OutputContext(language=language, mode="plan_explanation")  # type: ignore[arg-type]
+    context = OutputContext(language=language, mode="plan_explanation")
     bundle = Bundle("", context, (permitted,), (), (), (), True)
     return (
         gate(ConciergeAnswer(reply=text, kind="plan", needs_doctor=False), bundle, safety) is None
@@ -80,6 +82,7 @@ def place_line(place: BarrierPlace, language: str) -> str:
 
 
 def patient_reply(attempt: BarrierAttempt, language: str, safety: SafetyPolicy) -> str:
+    language = effective(language, audience="patient")
     if attempt.outcome == "asked" and attempt.question:
         return attempt.question
     key = (
@@ -99,14 +102,14 @@ def patient_reply(attempt: BarrierAttempt, language: str, safety: SafetyPolicy) 
             + "\n".join(place_line(p, language) for p in attempt.places[: POLICY.shown_results])
         )
     # Values are supplied by the adapter, never by the model or patient words.
-    context = OutputContext(language=language, mode="plan_explanation", allowed_numbers=(text,))  # type: ignore[arg-type]
+    context = OutputContext(language=language, mode="plan_explanation", allowed_numbers=(text,))
     if patient_failure(text, context, safety):
         return render("unavailable", language)
     return text
 
 
 def doctor_summary(attempt: BarrierAttempt, language: str) -> str:
-    en = language == "en"
+    en = effective(language, audience="doctor") == "en"
     asked = any(s.outcome == "asked" for s in attempt.steps)
     parts = []
     if asked or attempt.answered:

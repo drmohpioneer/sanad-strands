@@ -3,6 +3,14 @@
 from sanad.presentation.catalog import Catalog, validate_catalog
 
 CATALOG: Catalog = {
+    "concierge.doctor_question_deferred": {
+        "en": "The question is deferred and its review is re-armed.",
+        "ar": "The question is deferred and its review is re-armed.",
+    },
+    "concierge.doctor_answer_reused": {
+        "en": "The answer is saved for similar questions.",
+        "ar": "The answer is saved for similar questions.",
+    },
     "concierge.patient_photo_pending": {
         "ar": "الصورة محفوظة ومستنية مراجعة المحتوى، لسه مفيش نتيجة اتأكدت منها.",
         "en": "Your image is saved for content review; no result has been verified.",
@@ -315,8 +323,8 @@ CATALOG: Catalog = {
         "en": "This choice has already been used or is no longer valid.",
     },
     "concierge.doctor_questions_page": {
-        "ar": "الأسئلة — صفحة {page}/{pages}",
-        "en": "Questions — page {page}/{pages}",
+        "ar": "الأسئلة: صفحة {page}/{pages}",
+        "en": "Questions: page {page}/{pages}",
     },
     "concierge.doctor_questions_no_plan": {
         "ar": "مفيش أمر دوا نشط.",

@@ -5,9 +5,13 @@ from sanad.presentation.catalog import render as interpolate
 from sanad.presentation.context import PresentationContext, resolve
 
 CATALOG: Catalog = {
+    "liaison.invalid_action": {
+        "en": "That button is not valid any more. Open /inbox for the current list.",
+        "ar": "الزر ده مش صالح دلوقتي. افتح /inbox للقائمة الحالية.",
+    },
     "liaison.page": {
-        "en": "Review inbox — page {page} of {pages}.",
-        "ar": "قائمة المراجعات — صفحة {page} من {pages}.",
+        "en": "Review inbox: page {page} of {pages}.",
+        "ar": "قائمة المراجعات: صفحة {page} من {pages}.",
     },
     "liaison.empty": {
         "en": "There are no open or acknowledged reviews.",

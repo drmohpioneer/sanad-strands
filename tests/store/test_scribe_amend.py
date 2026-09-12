@@ -96,7 +96,14 @@ def test_identical_continue_has_no_clinical_writes(world: ScribeWorld, source: s
         world.tap("✏️ تعديل", id=21)
         world.post(update(APPLICANT, "صف 1: الإجراء=continue؛ الجرعة=20 مج؛ التوقيت=بالليل", 12))
         p = world.proposal
-    assert p.amendments[0].noop and "زي ما هو" in "\n".join(render_card(p))
+    assert p.amendments[0].noop
+    if source == "dictation":
+        # This fixture says 40 but extracts 20. 6d must not display it as
+        # an unchanged accepted instruction while grounding blocks the row.
+        assert p.blocked("order:0")
+        assert "زي ما هو" not in "\n".join(render_card(p))
+    else:
+        assert "زي ما هو" in "\n".join(render_card(p))
     patient = world.claims.patient(world.doctor.id, p.selected_patient_id or "")
     assert patient is not None
     snapshot = {
@@ -181,6 +188,7 @@ def test_amendment_transaction_crash_writes_nothing(
         ("Concor", "Concor", "5 مج", "10"),
     ],
 )
+@pytest.mark.usefixtures("legacy_dictation_schema")
 def test_11k_stored_change_instruction(
     store: StoreBase,
     clock: FakeClock,
@@ -266,6 +274,7 @@ def test_11k_stored_change_instruction(
     "old,new",
     [("Atacand", "Atacand Plus"), ("Micardis", "Micardis Plus"), ("Galvus", "Galvus Met")],
 )
+@pytest.mark.usefixtures("legacy_dictation_schema")
 def test_11k_family_policy_still_refuses_switch(
     store: StoreBase, clock: FakeClock, old: str, new: str
 ) -> None:
@@ -312,6 +321,7 @@ def test_11k_family_policy_still_refuses_switch(
 
 @pytest.mark.parametrize("language", ["en", "ar"])
 @pytest.mark.parametrize("dose", ["5/160/12.5", "5/160"])
+@pytest.mark.usefixtures("legacy_dictation_schema")
 def test_11k_correction_cannot_authorize_partial_quantity(
     store: StoreBase, clock: FakeClock, language: str, dose: str
 ) -> None:
@@ -383,6 +393,7 @@ def test_11k_correction_cannot_authorize_partial_quantity(
 @pytest.mark.parametrize(
     "origin", ["transcript_span", "authorized_correction", "stored_prior_order", "code_computed"]
 )
+@pytest.mark.usefixtures("legacy_dictation_schema")
 def test_11k_reloaded_defective_evidence_cannot_commit(
     store: StoreBase, clock: FakeClock, origin: str
 ) -> None:
@@ -590,9 +601,8 @@ EXFORGE_COMPLETE_CARDS = {
 CONCOR_BLOCKED_CARDS = {
     "en": (
         "Patient: Synthetic Person\n"
-        "Medications:\n"
-        "Concor 5 مج → Concor (change)\n"
         "Needs confirmation:\n"
+        "Concor 5 مج → Concor (change)\n"
         "What dose of Concor did you intend?\n"
         'I heard "10"; which item does it belong to?\n'
         "✅ Confirm | ✏️ Edit | ❌ Cancel\n"
@@ -600,10 +610,8 @@ CONCOR_BLOCKED_CARDS = {
     ),
     "ar": (
         "المريض: Synthetic Person\n"
-        "الأدوية:\n"
-        "Concor (تغيير)\n"
-        "Concor: 5 مج ← \n"
         "محتاج تأكيد:\n"
+        "Concor (تغيير)\n"
         'جرعة "Concor" إيه؟\n'
         'سمعت "10"، ده يخص إيه؟\n'
         "✅ تمام | ✏️ تعديل | ❌ إلغاء\n"
@@ -612,6 +620,7 @@ CONCOR_BLOCKED_CARDS = {
 }
 
 
+@pytest.mark.usefixtures("legacy_dictation_schema")
 def test_11k_multiline_original_and_two_correction_versions(
     store: StoreBase, clock: FakeClock
 ) -> None:
@@ -682,6 +691,7 @@ def test_11k_multiline_original_and_two_correction_versions(
 
 
 @pytest.mark.parametrize("dose", [None, "10/160/25"])
+@pytest.mark.usefixtures("legacy_dictation_schema")
 def test_11k_cross_clause_non_dictionary_strength_stored_exactly(
     store: StoreBase, clock: FakeClock, dose: str | None
 ) -> None:

@@ -441,7 +441,7 @@ def test_review_commands_keep_acknowledgment_separate_from_resolution(world: Wor
     )
     right = command(w, resolve, "resolve-current", "Synthetic reviewed")
     wrong = right.model_copy(update={"payload": right.payload | {"action": "cancel"}})
-    assert w.runtime.steward.handle(wrong).status != "accepted"
+    assert w.runtime.steward.handle(wrong).status == "invalid_action"
     assert w.runtime.steward.handle(right).status == "accepted"
     saved = world.store.get_review(model_scope(obligation), obligation.id)
     assert saved and saved.state == "resolved" and saved.work_clock is None

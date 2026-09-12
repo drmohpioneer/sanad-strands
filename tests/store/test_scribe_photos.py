@@ -68,17 +68,19 @@ def test_photo_table(world: ScribeWorld, example: PhotoExample) -> None:
 def test_reading_tap_unblocks_only_chosen_field_and_replay_is_inert(world: ScribeWorld) -> None:
     import json
 
-    first, second = json.loads(prescription()), json.loads(prescription("50 mg", "Atorvastatin"))
+    first, second = json.loads(prescription()), json.loads(prescription("50 mg"))
+    first["items"][0]["frequency"] = "daily"
+    second["items"][0]["frequency"] = "twice daily"
     shared = {"name": "Concor", "dose": "5 mg", "frequency": "1x1"}
     first["items"].append(shared)
     second["items"].append(shared)
     providers(world, json.dumps(first), json.dumps(second))
     world.post(photo())
     assert world.proposal.blocked("order:0")
-    raw = world.button("قراءة 2: Atorvastatin")
+    raw = world.button("قراءة 2: 50 mg")
     world.tap(raw=raw)
     assert world.proposal.blocked("order:0")
-    world.tap("قراءة 2: 50 mg", id=21)
+    world.tap("قراءة 2: twice daily", id=21)
     assert not world.proposal.blocked("order:0")
     assert world.proposal.candidate.orders[0].dose == "50 mg"
     version = world.proposal.version

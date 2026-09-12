@@ -30,6 +30,7 @@ from scribe.english_dictations import SOURCE, VALUE
 
 
 @pytest.mark.parametrize("defect", [None, "dose", "history", "echo"])
+@pytest.mark.usefixtures("legacy_dictation_schema")
 def test_five_full_runs_and_cross_run_agreement_are_not_self_confirmed(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, defect: str | None
 ) -> None:
@@ -60,8 +61,11 @@ def test_five_full_runs_and_cross_run_agreement_are_not_self_confirmed(
     earlier.write_text('{"state": "failed", "runs": []}\n')
     original = earlier.read_bytes()
     report = run_check(path, **options)
-    assert earlier.read_bytes() == original and report["attempt"] == 7
-    assert report["state"] == ("failed" if defect else "passed")
+    assert earlier.read_bytes() == original and report["attempt"] == 8
+    # 6d keeps the undosed Forxiga under Needs confirmation; this old
+    # complete-card harness must not certify it as an accepted plain line.
+    assert report["state"] == "failed"
+    assert all(not run["checks"]["forxiga_start"] for run in report["runs"])
     assert len(report["runs"]) == len(speech.calls) == 5
     assert len(model.script.calls) == 10
     assert all(r["test_line"] for r in report["agreement"])
@@ -138,9 +142,10 @@ def test_english_audio_allowance_and_unknown_usage_reserve_two_minutes() -> None
     assert spend.estimated == reserved and not spend.calls[0]["usage_known"]
     reserve2 = spend.reserve(model, 2048)
     spend.finish(model, reserve2, {"inputTokens": 100, "outputTokens": 100}, 1)
-    assert spend.calls[1]["estimated_usd"] == pytest.approx(0.01204)
+    assert spend.calls[1]["estimated_usd"] == pytest.approx(0.01245)
 
 
+@pytest.mark.usefixtures("legacy_dictation_schema")
 def test_hidden_card_cannot_pass_from_candidate_fields(monkeypatch: pytest.MonkeyPatch) -> None:
     from store.conftest import Clock
     from store.scribe_fixtures import ScribeWorld
@@ -151,7 +156,10 @@ def test_hidden_card_cannot_pass_from_candidate_fields(monkeypatch: pytest.Monke
     world = ScribeWorld.create(MemoryStore(clock=clock), clock)
     world.approve(language="en")
     p = world.dictate(SOURCE, VALUE)
-    assert all(card_parts(p)["checks"].values())
+    checks = card_parts(p)["checks"]
+    assert checks["card_visible"] and checks["exforge_change"]
+    assert not checks["forxiga_start"]
+    assert "Forxiga (start)" in card_parts(p)["card"].split("Needs confirmation:")[1]
     monkeypatch.setattr(
         "live.check11e.render_card",
         lambda p: (
@@ -188,6 +196,7 @@ def test_recorded_prompt_budget_when_live_evidence_exists() -> None:
         ("53 years old, female", False),
     ],
 )
+@pytest.mark.usefixtures("legacy_dictation_schema")
 def test_patient_oracle_allows_age_word_without_relaxing_identity(
     monkeypatch: pytest.MonkeyPatch, age: str, accepted: bool
 ) -> None:
@@ -205,6 +214,7 @@ def test_patient_oracle_allows_age_word_without_relaxing_identity(
     assert card_parts(p)["checks"]["patient"] == accepted
 
 
+@pytest.mark.usefixtures("legacy_dictation_schema")
 def test_oracle_rejects_duplicate_drug_and_observation_alert(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

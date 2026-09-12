@@ -19,6 +19,7 @@ from botocore.exceptions import ClientError  # type: ignore[import-untyped]
 
 ROOT = Path(__file__).resolve().parents[1]
 PARAMETERS = {
+    "gemini_api_key": ("SecureString", "GEMINI_API_KEY"),
     "bot-token": ("SecureString", "TELEGRAM_BOT_TOKEN_SANAD_STRANDS"),
     "webhook-secret": ("SecureString", None),
     "tick-secret": ("SecureString", None),
@@ -62,7 +63,14 @@ def session() -> Any:
 
 
 def client(aws: Any, service: str) -> Any:
-    return aws.client(service, config=Config(connect_timeout=3, read_timeout=30))
+    # A 3-second connect budget failed four deploys on 2026-09-11 from an ordinary home
+    # connection while every endpoint answered within seconds once connected.
+    return aws.client(
+        service,
+        config=Config(
+            connect_timeout=10, read_timeout=60, retries={"max_attempts": 3, "mode": "standard"}
+        ),
+    )
 
 
 def env_values(names: set[str], path: Path = ROOT / ".env") -> dict[str, str]:

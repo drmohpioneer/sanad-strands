@@ -8,7 +8,7 @@ from pydantic import JsonValue
 from sanad.contact.policy import DRAFT_CONTACT_POLICY as POLICY
 from sanad.contact.templates import patient_text
 from sanad.domain import FollowUpTask, Mission, PatientScope
-from sanad.domain.language import default_language
+from sanad.domain.language import default_language, effective
 from sanad.steward.types import records
 from sanad.store.protocol import Store
 from sanad.store.records import OutboundIntent, Patient, from_record
@@ -105,7 +105,7 @@ def doctor_payload(store: Store, intent: OutboundIntent) -> dict[str, JsonValue]
     doctor_row = store.get(intent.scope, "doctor", intent.scope.doctor_id)
     assert row
     doctor = from_record(doctor_row, Doctor) if doctor_row else None
-    language = doctor.language if doctor else default_language
+    language = effective(doctor.language if doctor else default_language, audience="doctor")
     zone = doctor.timezone if doctor else "Africa/Cairo"
     source = (
         from_record(row, Mission)

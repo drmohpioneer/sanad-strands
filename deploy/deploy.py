@@ -108,7 +108,7 @@ def deploy(
         values, _ = parameter_values(ssm, env)
         config_revision = configuration_revision(ssm, env)
         required = set(values) - {"public-base-url"}
-        if len(required) != 6 or not all(values[k] for k in required):
+        if len(required) != 7 or not all(values[k] for k in required):
             raise OperationError(
                 "Missing SSM configuration; run ops.py secrets set before the app pass"
             )

@@ -11,6 +11,7 @@ from sanad.store import keys
 from sanad.store.keys import AccountScope, Key
 from sanad.store.records import (
     MODELS,
+    AdminAccount,
     ClaimCallback,
     CommitRequest,
     Consent,
@@ -25,13 +26,16 @@ from sanad.store.records import (
     StoredRecord,
     SubjectBinding,
     TokenHead,
-    WebSession,
     from_record,
     model_scope,
+)
+from sanad.store.records import (
+    AnyWebSession as WebSession,
 )
 
 if TYPE_CHECKING:
     from sanad.store._base import Check, StoreBase
+    from sanad.store.protocol import Store
 
 DOCTOR_COMMANDS = {
     "CreatePatientStub",
@@ -60,9 +64,11 @@ WRITE_SETS = {
     },
     "RejectClaim": {"invitation", "patient_claim", "claim_callback"},
     "RevokeBinding": {"patient", "patient_profile", "patient_binding", "subject_binding"},
+    "IssueAdminLogin": {"admin_account", "admin_login", "token_head"},
+    "RevokeAdminSessions": {"admin_account"},
     "IssueDoctorLogin": {"doctor_login", "token_head"},
     "IssuePatientLogin": {"patient_login", "token_head"},
-    "ExchangeLogin": {"doctor_login", "patient_login", "pre_session", "web_session"},
+    "ExchangeLogin": {"admin_login", "doctor_login", "patient_login", "pre_session", "web_session"},
     "CreatePreSession": {"pre_session"},
     "TouchWebSession": {"web_session"},
     "RevokeWebSession": {"web_session"},
@@ -87,6 +93,8 @@ def identity_guards(
     if kind not in DOCTOR_COMMANDS | {
         "ClaimInvitation",
         "RecordConsent",
+        "IssueAdminLogin",
+        "RevokeAdminSessions",
         "IssuePatientLogin",
         "ExchangeLogin",
         "CreatePreSession",
@@ -113,6 +121,8 @@ def identity_guards(
             key = row.key
         elif read.entity_type == "subject_binding" and read.scope == scope:
             key = keys.subject(scope.bot_id, read.id.removeprefix(f"SUBJECT#{scope.bot_id}#"))
+        elif read.entity_type == "admin_account" and read.scope == scope:
+            key = Key(keys.partition(scope), f"ADMIN_ACCOUNT#{keys.component(read.id)}")
         elif read.entity_type == "token_head" and read.scope == scope:
             key = Key(keys.partition(scope), f"TOKEN_HEAD#{read.id}")
         else:
@@ -126,6 +136,20 @@ def identity_guards(
             if prior_row is None or prior_row.version != row.version - 1:
                 return None
     auth = store.authorize(scope.bot_id, actor.subject)
+    if kind in {"IssueAdminLogin", "RevokeAdminSessions"}:
+        if actor.subject != store._identity.admin_user_id or "admin" not in actor.verified_roles:
+            return None
+        admin_row = store.get(scope, "admin_account", actor.subject)
+        checks.append(
+            Check(
+                Key(keys.partition(scope), f"ADMIN_ACCOUNT#{keys.component(actor.subject)}"),
+                admin_row.version if admin_row else None,
+            )
+        )
+        if kind == "RevokeAdminSessions" and (
+            admin_row is None or actor.auth_epoch != admin_row.body["auth_epoch"]
+        ):
+            return None
     if kind in DOCTOR_COMMANDS:
         if (
             actor.actor_kind != "doctor"
@@ -147,8 +171,16 @@ def identity_guards(
             or auth.principal.verified_roles
         ):
             return None
-    doctor_ids = {str(r.body["doctor_id"]) for r in request.puts if r.body.get("doctor_id")} | {
-        r.doctor_id for r in request.puts if r.doctor_id
+    admin_exchange = kind == "ExchangeLogin" and any(
+        r.entity_type == "admin_login" and r.body.get("state") == "consumed" for r in request.puts
+    )
+    clinical_rows = [
+        r
+        for r in request.puts
+        if not (admin_exchange and r.entity_type == "web_session" and r.body.get("revoked_at"))
+    ]
+    doctor_ids = {str(r.body["doctor_id"]) for r in clinical_rows if r.body.get("doctor_id")} | {
+        r.doctor_id for r in clinical_rows if r.doctor_id
     }
     if kind in DOCTOR_COMMANDS and doctor_ids - {actor.doctor_id}:
         return None
@@ -170,13 +202,35 @@ def identity_guards(
         actual_scope = model_scope(from_record(row, MODELS[row.entity_type]))
         if isinstance(actual_scope, AccountScope) and actual_scope != scope:
             return None
+        if row.entity_type == "admin_account":
+            admin = from_record(row, AdminAccount)
+            if admin.id != actor.subject or admin.id != store._identity.admin_user_id:
+                return None
+            if kind == "IssueAdminLogin":
+                if old or admin.version != 1 or admin.auth_epoch != 1:
+                    return None
+            elif kind == "RevokeAdminSessions":
+                if (
+                    not old
+                    or admin.auth_epoch != int(str(old["auth_epoch"])) + 1
+                    or admin.created_at != datetime.fromisoformat(str(old["created_at"]))
+                ):
+                    return None
+            else:
+                return None
         if row.entity_type == "mission":
             from sanad.contact.binding import valid_binding_mission
 
             if (
                 kind != "ConfirmPatientClaim"
                 or not old_row
-                or not valid_binding_mission(old_row, row, now)
+                or not datetime.fromisoformat(str(old_row.body["updated_at"]))
+                <= datetime.fromisoformat(str(row.body["updated_at"]))
+                <= command.requested_at
+                <= now
+                or not valid_binding_mission(
+                    old_row, row, datetime.fromisoformat(str(row.body["updated_at"]))
+                )
             ):
                 return None
         if row.entity_type == "token_head":
@@ -234,7 +288,7 @@ def identity_guards(
                     return None
             else:
                 return None
-        if row.entity_type in {"doctor_login", "patient_login"}:
+        if row.entity_type in {"doctor_login", "patient_login", "admin_login"}:
             exchange = from_record(row, LoginExchange)
             if row.version == 1:
                 if (
@@ -242,6 +296,8 @@ def identity_guards(
                     != (
                         "IssueDoctorLogin"
                         if exchange.intended_role == "doctor"
+                        else "IssueAdminLogin"
+                        if exchange.intended_role == "admin"
                         else "IssuePatientLogin"
                     )
                     or exchange.subject != actor.subject
@@ -255,6 +311,16 @@ def identity_guards(
                 expiries.append(exchange.expires_at)
             elif exchange.state not in {"revoked", "expired"} or old.get("state") != "issued":
                 return None
+            if exchange.intended_role == "admin" and row.version == 1:
+                admin_source = next(
+                    (r for r in request.puts if r.entity_type == "admin_account"), None
+                ) or store.get(scope, "admin_account", actor.subject)
+                if (
+                    admin_source is None
+                    or exchange.auth_epoch != admin_source.body["auth_epoch"]
+                    or actor.subject != store._identity.admin_user_id
+                ):
+                    return None
             if old and any(
                 body.get(k) != v
                 for k, v in old.items()
@@ -413,7 +479,7 @@ def identity_guards(
         snapshots = [
             r
             for r in request.puts
-            if r.entity_type in {"doctor_login", "patient_login", "web_session"}
+            if r.entity_type in {"doctor_login", "patient_login", "admin_login", "web_session"}
             and (r.version == 1 or kind == "TouchWebSession")
         ]
         for row in snapshots:
@@ -432,7 +498,7 @@ def identity_guards(
 
 
 def live_snapshot(
-    store: "StoreBase",
+    store: "Store",
     scope: AccountScope,
     snapshot: LoginExchange | WebSession,
     checks: list["Check"],
@@ -440,7 +506,20 @@ def live_snapshot(
     from sanad.store._base import Check
 
     auth = store.authorize(scope.bot_id, snapshot.subject)
-    role = snapshot.role if isinstance(snapshot, WebSession) else snapshot.intended_role
+    role = snapshot.role if snapshot.entity_type == "web_session" else snapshot.intended_role
+    if role == "admin":
+        row = store.get(scope, "admin_account", snapshot.subject)
+        if (
+            "admin" not in auth.principal.verified_roles
+            or row is None
+            or auth.admin_epoch != snapshot.auth_epoch
+            or row.body.get("auth_epoch") != snapshot.auth_epoch
+        ):
+            return False
+        checks.append(Check(row.key, row.version))
+        return True
+    if snapshot.doctor_id is None:
+        return False
     if (
         auth.binding is None
         or auth.binding.status != "active"
@@ -580,3 +659,54 @@ def _confirmation(
         and profile_row.body["recipient_subject"] == binding.subject
         and profile_row.body["recipient_ref"] == binding.private_chat_id
     )
+
+
+def preference_session(
+    store: "StoreBase", request: CommitRequest, receipt: StoredRecord, now: datetime
+) -> list["Check"] | None:
+    """Only a receipt-bound preference may advance its own live consent snapshot."""
+    from sanad.store._base import Check
+
+    rows = [r for r in request.puts if r.entity_type == "web_session"]
+    payload = receipt.body.get("payload")
+    session_id = payload.get("web_session_id") if isinstance(payload, dict) else None
+    preference = request.command.payload.get("type") == "SetContactPreference"
+    browser = receipt.body.get("transport") in {"web-message", "web-preference"}
+    if not browser:
+        return None if rows else []
+    if not isinstance(session_id, str):
+        return None
+    actor = request.command.principal
+    scope = AccountScope(bot_id=actor.bot_id or "")
+    old_row = store.get(scope, "web_session", session_id)
+    if old_row is None:
+        return None
+    old = from_record(old_row, WebSession)
+    checks: list[Check] = []
+    if (
+        old.role != "patient"
+        or old.subject != actor.subject
+        or old.doctor_id != actor.doctor_id
+        or old.patient_id != actor.patient_id
+        or old.revoked_at
+        or min(old.idle_expires_at, old.absolute_expires_at) <= now
+        or not live_snapshot(store, scope, old, checks)
+    ):
+        return None
+    checks.append(Check(old_row.key, old_row.version))
+    if not preference:
+        return None if rows else checks
+    if len(rows) != 1 or request.command.payload.get("web_session_id") != session_id:
+        return None
+    new = from_record(rows[0], WebSession)
+    consent = next((r for r in request.puts if r.entity_type == "consent"), None)
+    if (
+        consent is None
+        or new.consent_version != consent.version
+        or new.version != old.version + 1
+        or not old.updated_at <= new.updated_at == request.command.requested_at <= now
+        or old.model_dump(exclude={"version", "updated_at", "consent_version"})
+        != new.model_dump(exclude={"version", "updated_at", "consent_version"})
+    ):
+        return None
+    return checks

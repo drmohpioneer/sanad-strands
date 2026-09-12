@@ -63,7 +63,7 @@ def redact_log(text: str) -> str:
     text = re.sub(r"bot[0-9]+:[A-Za-z0-9_-]+", "bot<redacted>", text)
     text = re.sub(r"/(?:d|p|pl)/[^\s?\"'<>]+", "/exchange/<redacted>", text)
     return re.sub(
-        r"(?i)(?:x-sanad-sig|secret_token|authorization|password)[=:]\s*[^\s,]+",
+        r"(?i)(?:x-goog-api-key|GEMINI_API_KEY|key|x-sanad-sig|secret_token|authorization|password)[\"']?\s*[=:]\s*[\"']?[^\s,\"'&]+",
         "credential=<redacted>",
         text,
     )

@@ -76,7 +76,7 @@ def prepare(store: "Store", command: CommandEnvelope, now: datetime) -> CommitRe
     if kind not in {"AcknowledgeReview", "ResolveReview"}:
         raise ReviewRefused("unsupported_review_command")
     if set(command.payload) - {"type", "offer_id", "expected_source_version", "reason"}:
-        raise ReviewRefused("invalid_review_payload")
+        raise ReviewRefused("invalid_action")
     if (
         type(command.payload.get("expected_source_version")) is not int
         or command.payload.get("expected_source_version") != offer.snapshot.source_version
@@ -169,4 +169,7 @@ def handle(steward: "Steward", command: CommandEnvelope) -> CommandResult:
             steward.store.commit(prepare(steward.store, command, steward.clock()))
         )
     except ReviewRefused as error:
-        return CommandResult(status="stale_version", reason_code=str(error))
+        return CommandResult(
+            status="invalid_action" if str(error) == "invalid_action" else "stale_version",
+            reason_code=str(error),
+        )

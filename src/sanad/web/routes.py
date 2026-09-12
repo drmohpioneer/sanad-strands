@@ -1,6 +1,7 @@
 """Minimal authenticated pages and same-origin credential exchanges."""
 
 import hmac
+import logging
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Annotated, Literal
 from urllib.parse import parse_qs
@@ -10,12 +11,14 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 from pydantic import Field, ValidationError
 
 from sanad.auth.claim import ClaimService
-from sanad.auth.commands import ConfirmPatientClaim
-from sanad.auth.login import LoginService, SessionIssued
+from sanad.auth.commands import ConfirmPatientClaim, ExchangeRefused
+from sanad.auth.login import LoginService as LoginService
+from sanad.auth.login import SessionIssued
 from sanad.auth.tokens import token_hash
 from sanad.domain import VersionRef
 from sanad.domain.boundaries import _BoundaryValue
 from sanad.store import keys
+from sanad.store.records import AnyWebSession as AnyWebSession
 from sanad.store.records import InboundReceipt, Patient, WebSession
 from sanad.web import pages
 from sanad.web.settings import WebSettings
@@ -72,12 +75,14 @@ def clear_cookies(response: Response) -> None:
 
 
 def require_session(
-    role: Literal["doctor", "patient"],
-) -> Callable[[Request], Awaitable[WebSession]]:
-    async def guard(request: Request) -> WebSession:
+    role: Literal["doctor", "patient", "admin"],
+) -> Callable[[Request], Awaitable[AnyWebSession]]:
+    async def guard(request: Request) -> AnyWebSession:
         login: LoginService = request.app.state.login
         settings: WebSettings = request.app.state.web_settings
-        session = login.require(request.cookies.get(SESSION_COOKIE, ""), role)
+        session = login.require(
+            request.cookies.get(SESSION_COOKIE, ""), role, path=request.url.path
+        )
         if session is None:
             raise HTTPException(401)
         if request.method != "GET":
@@ -91,7 +96,7 @@ def require_session(
                 or not hmac.compare_digest(supplied.encode(), cookie.encode())
                 or not hmac.compare_digest(keys.digest(supplied), session.csrf_secret_ref)
             ):
-                login.revoke(session)
+                login.revoke(session, reason="csrf", path=request.url.path)
                 raise HTTPException(403)
         return session
 
@@ -109,7 +114,7 @@ def web_router(login: LoginService, claims: ClaimService, settings: WebSettings)
     async def show_continue(request: Request, token: str) -> Response:
         pre = login.pre_session()
         if pre is None:
-            return HTMLResponse(pages.refused_page(), status_code=503)
+            return HTMLResponse(pages.refused_page("unavailable"), status_code=503)
         response = HTMLResponse(pages.continue_page(request.url.path, pre.csrf.get_secret_value()))
         set_cookie(
             response,
@@ -120,7 +125,7 @@ def web_router(login: LoginService, claims: ClaimService, settings: WebSettings)
         return response
 
     async def exchange(
-        request: Request, token: str, role: Literal["doctor", "patient"]
+        request: Request, token: str, role: Literal["doctor", "patient", "admin"]
     ) -> Response:
         fields = await form_fields(request)
         result = (
@@ -132,16 +137,19 @@ def web_router(login: LoginService, claims: ClaimService, settings: WebSettings)
                 previous_cookie=request.cookies.get(SESSION_COOKIE, ""),
             )
             if same_origin(request, settings)
-            else None
+            else ExchangeRefused(status="origin")
         )
         if not isinstance(result, SessionIssued):
-            response: Response = HTMLResponse(pages.refused_page(), status_code=403)
+            logging.getLogger(__name__).info("login_refused role=%s reason=%s", role, result.status)
+            response: Response = HTMLResponse(pages.refused_page(result.status), status_code=403)
             prior = login.session(request.cookies.get(SESSION_COOKIE, ""))
             if prior:
-                login.revoke(prior)
+                login.revoke(prior, reason="exchange_refused", path="auth/exchange")
             clear_cookies(response)
             return response
-        response = RedirectResponse("/a" if role == "doctor" else "/pp", status_code=303)
+        response = RedirectResponse(
+            "/admin" if role == "admin" else "/a" if role == "doctor" else "/pp", status_code=303
+        )
         seconds = int(login.policy.absolute_ttl.total_seconds())
         set_cookie(response, SESSION_COOKIE, result.cookie.get_secret_value(), seconds)
         set_cookie(response, CSRF_COOKIE, result.csrf.get_secret_value(), seconds, httponly=False)
@@ -150,6 +158,12 @@ def web_router(login: LoginService, claims: ClaimService, settings: WebSettings)
 
     router.add_api_route("/d/{token}", show_continue, methods=["GET"], response_class=HTMLResponse)
     router.add_api_route("/pl/{token}", show_continue, methods=["GET"], response_class=HTMLResponse)
+
+    router.add_api_route("/ad/{token}", show_continue, methods=["GET"], response_class=HTMLResponse)
+
+    @router.post("/ad/{token}")
+    async def admin_exchange(request: Request, token: str) -> Response:
+        return await exchange(request, token, "admin")
 
     @router.post("/d/{token}")
     async def doctor_exchange(request: Request, token: str) -> Response:
@@ -277,13 +291,21 @@ def web_router(login: LoginService, claims: ClaimService, settings: WebSettings)
         return JSONResponse({"status": "accepted"})
 
     # Contract 18: additive route registration, independent of inbox/correction verbs.
+    from sanad.web.api_admin import admin_router
     from sanad.web.browser import browser_router
     from sanad.web.preferences import preference_router
     from sanad.web.reviews import review_router
 
+    router.include_router(admin_router(login))
     router.include_router(browser_router(login, claims))
     router.include_router(preference_router(login))
+    from sanad.web.api_patient import patient_router
+
+    router.include_router(patient_router(login))
     router.include_router(review_router(claims))
+    from sanad.web.api_questions import question_router
+
+    router.include_router(question_router(claims))
     return router
 
 
@@ -375,7 +397,12 @@ def upload_router(ingress: "UploadIngress", settings: WebSettings) -> APIRouter:
                 if str(error) == "too_large"
                 else 400
             )
-            return JSONResponse({"status": "not_received"}, status_code=status)
+            from sanad.media.upload import rejection_category
+
+            return JSONResponse(
+                {"status": "not_received", "category": rejection_category(str(error))},
+                status_code=status,
+            )
         except Exception:
             # Reserved stages retain their clock; outages never receive a saved ACK.
             return JSONResponse({"status": "unavailable"}, status_code=503)

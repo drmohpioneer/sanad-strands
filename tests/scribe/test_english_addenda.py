@@ -97,7 +97,7 @@ def test_secondary_history_missions_categories_and_questions_cannot_add_content(
     result = merge_candidates(primary, secondary, "diabetes, tests CBC")
     assert result and result.candidate.facts == primary.facts
     assert result.candidate.missions == primary.missions
-    assert not result.issues and not result.candidate.ambiguities
+    assert not result.issues and result.candidate.ambiguities == ("Which new disease?",)
     assert not result.candidate._dropped_numbers
 
 

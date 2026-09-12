@@ -2,6 +2,7 @@
 
 import asyncio
 from collections.abc import Callable
+from dataclasses import replace
 from typing import TYPE_CHECKING
 from uuid import uuid4
 from zoneinfo import ZoneInfo
@@ -16,6 +17,7 @@ from sanad.concierge.policy import DRAFT_CONCIERGE_POLICY as POLICY
 from sanad.concierge.records import PatientAction
 from sanad.concierge.text import asks_doctor, asks_history, contains, is_question, plan_command
 from sanad.domain import FollowUpTask, ObservationRef, PatientScope, Principal, Provenance
+from sanad.domain.language import effective
 from sanad.media.retrieve import MediaRetriever, fetch_telegram_file
 from sanad.media.speech import SpeechAdapter, Transcript, transcribe
 from sanad.media.telegram import MediaFailure
@@ -356,7 +358,7 @@ class ConciergeTurn:
         source: Provenance,
         session: FencedSessionManager,
     ) -> tuple[str, str, str]:
-        language = tx.snapshot.patient.language
+        language = effective(tx.snapshot.patient.language, audience="patient")
         from sanad.resolver.turn import recover
 
         if recover(tx):
@@ -502,13 +504,35 @@ class ConciergeTurn:
                 )
             if preference.action == "quiet" and preference.quiet:
                 lines = [templates.render(template, language)]
+                followup_titles = {
+                    f.consent_slot_id or f.id: (
+                        "Day-three follow-up" if f.kind == "MEDICATION_DAY3" else "Doctor follow-up"
+                    )
+                    for f in tx.snapshot.followups
+                }
                 for slot, title, instant in preferences.scheduled_slots(tx):
+                    if language == "en":
+                        title = followup_titles.get(slot, title)
                     time = instant[11:16]
                     start, end = preference.quiet
                     inside = start <= time < end if start < end else time >= start or time < end
                     if inside:
-                        tx.button("quiet_slot", "أوافق على التذكير: " + title, slot=slot)
-                        lines.append(title + " — " + instant + "؛ التذكير ده محتاج موافقتك لوحده.")
+                        tx.button(
+                            "quiet_slot",
+                            ("Allow this reminder: " if language == "en" else "أوافق على التذكير: ")
+                            + title,
+                            slot=slot,
+                        )
+                        lines.append(
+                            title
+                            + ": "
+                            + instant
+                            + (
+                                "; this reminder needs separate consent."
+                                if language == "en"
+                                else "؛ التذكير ده محتاج موافقتك لوحده."
+                            )
+                        )
                 return template, "\n".join(lines), "preference"
             return reply(template)
         if contains(
@@ -610,9 +634,28 @@ class ConciergeTurn:
         if history:
             return "patient_plan_summary", "\n".join(history), "history"
         entries = education.retrieve(text, synthetic=self.synthetic)
-        bundle = answer.build_bundle(
-            tx.snapshot, text, entries, tuple(t.model_dump() for t in session.turns), history
+        presentation = replace(
+            tx.snapshot, patient=tx.snapshot.patient.model_copy(update={"language": language})
         )
+        bundle = answer.build_bundle(
+            presentation, text, entries, tuple(t.model_dump() for t in session.turns), history
+        )
+        from sanad.concierge.reuse import best
+
+        reusable = best(self.store, tx.snapshot.scope.doctor_id, text, exact=True)
+        if reusable and not bundle.answerable:
+            reused = answer.doctor_reuse(
+                self.store, presentation, reusable, self.runtime.safety_policy
+            )
+            if reused.reply:
+                ref = to_record(reusable, reusable.scope).ref
+                tx.builder.command = tx.builder.command.model_copy(
+                    update={"expected_versions": (*tx.builder.command.expected_versions, ref)}
+                )
+                tx.builder.audit("DOCTOR_REUSE_ANSWERED", keys.digest(tx.id + ":reuse"), (ref,))
+                return reused.template, reused.reply, reused.kind
+            question.open_ticket(tx, text)
+            return reply("patient_safe_fallback")
         agent_scope = AgentScope(
             principal=tx.principal,
             scope=tx.snapshot.scope,
@@ -631,6 +674,17 @@ class ConciergeTurn:
             observe=self.observe,
         )
         composed = asyncio.run(answer.compose(text, bundle, agent, self.runtime.safety_policy))
+        if composed.ticket and reusable:
+            reused = answer.doctor_reuse(
+                self.store, presentation, reusable, self.runtime.safety_policy
+            )
+            if reused.reply:
+                ref = to_record(reusable, reusable.scope).ref
+                tx.builder.command = tx.builder.command.model_copy(
+                    update={"expected_versions": (*tx.builder.command.expected_versions, ref)}
+                )
+                tx.builder.audit("DOCTOR_REUSE_ANSWERED", keys.digest(tx.id + ":reuse"), (ref,))
+                return reused.template, reused.reply, reused.kind
         if composed.ticket:
             question.open_ticket(tx, text)
         if composed.failure:
@@ -650,7 +704,7 @@ class ConciergeTurn:
 
     def _start_reply(self, tx: PatientTurnCommit) -> tuple[str, str, str]:
         key = "patient_start_recorded"
-        language = tx.snapshot.patient.language
+        language = effective(tx.snapshot.patient.language, audience="patient")
         if not tx.profile.routine_contact_enabled:
             return key, templates.render("patient_start_stopped", language), "start"
         tasks = [

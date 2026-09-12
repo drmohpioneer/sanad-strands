@@ -14,6 +14,7 @@ from sanad.domain import (
     Mission,
     PatientScope,
     ReviewObligation,
+    TenantScope,
     VersionRef,
 )
 from sanad.domain import events as ev
@@ -39,6 +40,7 @@ from sanad.store import keys
 from sanad.store.protocol import Store
 from sanad.store.records import (
     CommitRequest,
+    Doctor,
     DoctorAuthority,
     Evidence,
     OutboundIntent,
@@ -297,14 +299,23 @@ def describe(value: dict[str, JsonValue]) -> str:
     return text + (" [detached from current chart]" if value.get("state") == "detached" else "")
 
 
-def notice_text(correction: Correction) -> str:
+def notice_text(
+    correction: Correction, *, recipient: Doctor | None = None, actor: Doctor | None = None
+) -> str:
+    changed_by = (
+        "you"
+        if recipient and correction.actor.subject == recipient.telegram_user_id
+        else actor.name
+        if actor and actor.telegram_user_id == correction.actor.subject and actor.name.strip()
+        else "the doctor"
+    )
     before = describe(correction.before)
     after = describe(correction.after)
     lines = [
         "Correction to the accepted record.",
         f"From: {before}",
         f"To: {after}",
-        f"Changed by {correction.actor.subject}: {correction.reason}",
+        f"Changed by {changed_by}: {correction.reason}",
     ]
     if correction.predicates:
         lines.append(
@@ -329,6 +340,16 @@ def notice_text(correction: Correction) -> str:
     return "\n".join(lines)
 
 
+def rendered_notice(store: Store, correction: Correction, recipient_id: str) -> str:
+    def doctor(id: str | None) -> Doctor | None:
+        row = store.get(TenantScope(doctor_id=id), "doctor", id) if id else None
+        return from_record(row, Doctor) if row else None
+
+    return notice_text(
+        correction, recipient=doctor(recipient_id), actor=doctor(correction.actor.doctor_id)
+    )
+
+
 def notice(builder: CommitBuilder, correction: Correction, obligation: ReviewObligation) -> None:
     doctor_row = builder.store.get(builder.scope, "doctor_authority", builder.scope.doctor_id)
     profile = builder.store.get_patient_profile(builder.scope)
@@ -346,7 +367,9 @@ def notice(builder: CommitBuilder, correction: Correction, obligation: ReviewObl
         profile,
         template_id="accepted_correction",
     )
-    payload: dict[str, JsonValue] = {"text": notice_text(correction)}
+    payload: dict[str, JsonValue] = {
+        "text": rendered_notice(builder.store, correction, builder.scope.doctor_id)
+    }
     intent = intent.model_copy(
         update={
             "payload": payload,

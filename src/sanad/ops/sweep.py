@@ -32,6 +32,7 @@ LANES = (
     "bundle",
     "mission",
     "followup",
+    "question_digest",
     "claim",
     "scribe",
     "media",
@@ -128,6 +129,11 @@ def sweep_due(
                     worker.accountability(row, runtime.clock())
                     schedule(runtime.steward, row)
 
+                def question_digest(row: StoredRecord) -> None:
+                    from sanad.contact.question_digest import wake
+
+                    wake(runtime.steward, row)
+
                 def bundle(row: StoredRecord) -> None:
                     from sanad.contact.bundle import wake
 
@@ -147,6 +153,7 @@ def sweep_due(
                     mission=contact,
                     followup=contact,
                     bundle=bundle,
+                    question_digest=question_digest,
                     review=review,
                 )
                 if upload_handler:

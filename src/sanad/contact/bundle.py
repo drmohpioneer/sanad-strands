@@ -105,6 +105,10 @@ def stamp(store: Store, intent: OutboundIntent, now: datetime) -> dict[str, obje
 
 
 def accepted_schedule(store: Store, intent: OutboundIntent, now: datetime) -> dict[str, object]:
+    if intent.template_id == "doctor_question_digest":
+        from sanad.contact.question_digest import accepted
+
+        return accepted(store, intent, now)
     if intent.scope_kind != "doctor" or type(intent.scope) is not TenantScope:
         return {}
     row = store.get(intent.scope, "bundle_schedule", intent.scope.doctor_id)
@@ -151,6 +155,19 @@ def freshness(
         != "doctor"
     ):
         return "recipient_authority"
+    if intent.template_id == "doctor_question_digest":
+        from sanad.contact.question_digest import due, load
+
+        digest = load(store, scope)
+        if (
+            not digest
+            or digest.pending_intent_id != intent.id
+            or intent.logical_key != f"question_digest:{scope.doctor_id}:{digest.generation}"
+        ):
+            return "bundle_generation"
+        if not due(store, scope):
+            return "bundle_empty"
+        return "expired" if intent.expires_at <= now else None
     schedule_row = store.get(scope, "bundle_schedule", scope.doctor_id)
     schedule = from_record(schedule_row, BundleSchedule) if schedule_row else None
     if (
@@ -203,9 +220,17 @@ def payload(store: Store, intent: OutboundIntent, now: datetime) -> dict[str, Js
 def payload_snapshot(
     store: Store, intent: OutboundIntent, now: datetime
 ) -> tuple[dict[str, JsonValue], tuple[VersionRef, ...]]:
+    if intent.template_id == "doctor_question_digest":
+        from sanad.contact.question_digest import payload_snapshot as question_snapshot
+
+        return question_snapshot(store, intent, now)
     assert type(intent.scope) is TenantScope
     doctor_row = store.get(intent.scope, "doctor", intent.scope.doctor_id)
-    language = from_record(doctor_row, Doctor).language if doctor_row else default_language
+    from sanad.domain.language import effective
+
+    language = effective(
+        from_record(doctor_row, Doctor).language if doctor_row else default_language
+    )
     reviews = eligible(store, intent.scope, now)
     lines = []
     for review in reviews[: POLICY.bundle_max_lines]:
@@ -221,9 +246,9 @@ def payload_snapshot(
         )
         days = (now - (review.first_notice_at or now)).days
         lines.append(
-            f"{name} — {ENGLISH_KINDS[review.review_kind]} — {days} days since first notice"
+            f"{name}: {ENGLISH_KINDS[review.review_kind]}: {days} days since first notice"
             if language == "en"
-            else f"{name} — {KINDS[review.review_kind]} — {days} يوم من أول تنبيه"
+            else f"{name}: {KINDS[review.review_kind]}: {days} يوم من أول تنبيه"
         )
     if len(reviews) > POLICY.bundle_max_lines:
         count = len(reviews) - POLICY.bundle_max_lines
@@ -375,7 +400,10 @@ def review_wake(steward: "Steward", record: StoredRecord) -> None:
 
     source = from_record(record, ReviewObligation)
     scope = model_scope(source)
-    if type(scope) is not TenantScope or source.review_kind != "delivery_failure":
+    if not (
+        (type(scope) is TenantScope and source.review_kind == "delivery_failure")
+        or (type(scope) is keys.IntakeScope and source.review_kind == "intake_clarification")
+    ):
         return
     now = steward.clock()
     command_id = f"sweep:review:{source.id}:{source.version}"

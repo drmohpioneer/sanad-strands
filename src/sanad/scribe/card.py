@@ -6,6 +6,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from sanad.channels.telegram import wording
+from sanad.domain.language import effective
 from sanad.media.numbers import numbers_in
 from sanad.scribe.extract import (
     REQUEST_MISSING_QUESTION,
@@ -126,7 +127,7 @@ def supported_text(text: str, proposal: Proposal) -> str:
             m[0]
             if set(numbers_in(m[0])) <= present
             else "[number not heard]"
-            if proposal.language == "en"
+            if effective(proposal.language, audience="doctor") == "en"
             else "[رقم غير مسموع]"
         ),
         text,
@@ -142,16 +143,16 @@ PHOTO_LABELS = {
     "printed_name": ("الاسم المطبوع (غير مؤكد): ", "Printed name (unverified): "),
     "row": ("صف ", "Row "),
     "document": ("بيانات الصورة", "Image details"),
-    "disagreement": (" — ⚠️ قراءتين مختلفتين: ", " — ⚠️ Two different readings: "),
+    "disagreement": (": ⚠️ قراءتين مختلفتين: ", ": ⚠️ Two different readings: "),
     "printed_note": ("ملاحظة مطبوعة (مش تعليمات): ", "Printed note (not an instruction): "),
     "edit_row": (
         "للتعديل: صف 1: الاسم=...؛ القيمة=...؛ الوحدة=... (أو الجرعة=... للدوا)",
-        "To edit: row 1: name=...; value=...; unit=... (or dose=... for medication)",
+        "To correct an item, tap Edit and specify its row and field, for example row 1: dose=5 mg.",
     ),
     "effective": ("التغيير يبدأ: ", "Change starts: "),
     "checkin": ("المتابعة المطلوبة: ", "Requested check-in: "),
     "or": (" أو ", " or "),
-    "question_confirmation": ("؟ — محتاج تأكيد", "? — needs confirmation"),
+    "question_confirmation": ("؟: محتاج تأكيد", "?: needs confirmation"),
     "numbers": ("الأرقام: ", "Numbers: "),
     "comma": ("، ", ", "),
     "age": ("العمر: ", "Age: "),
@@ -160,7 +161,7 @@ PHOTO_LABELS = {
     "female": ("أنثى", "female"),
     "identifiers": ("أرقام التعريف: ", "Identifiers: "),
     "last_activity": ("آخر نشاط: ", "Last activity: "),
-    "confirmation": (" — محتاج تأكيد", " — needs confirmation"),
+    "confirmation": (": محتاج تأكيد", ": needs confirmation"),
     "explicit": ("صريح", "explicit"),
     "explicit_expression": ("صريح: ", "explicit: "),
     "default": ("افتراضي ", "default "),
@@ -183,7 +184,7 @@ PHOTO_LABELS = {
         "سمعت الرقم {number} ومش عارف يتحط فين",
         "I heard {number}; which item is it for?",
     ),
-    "not_recorded": ("مش هيتسجل:", "Not recorded:"),
+    "not_recorded": ("محتاج تأكيد:", "Needs confirmation:"),
     "superseded": (
         "الكارت ده بدّل الكارت اللي قبله؛ الأزرار القديمة مش شغالة.",
         "This card replaces the previous card; the old buttons no longer work.",
@@ -221,7 +222,7 @@ PHOTO_REASONS = {
 
 
 def _photo_date(instant: datetime, proposal: Proposal, timezone: str | None = None) -> str:
-    if proposal.language == "en":
+    if effective(proposal.language, audience="doctor") == "en":
         from sanad.scribe.english import date
 
         return date(
@@ -239,7 +240,7 @@ def render_card(proposal: Proposal, language: str | None = None) -> tuple[str, .
         proposal = proposal.model_copy(update={"language": language})
     if not proposal.photo:
         return render_dictation(proposal)
-    language = proposal.language
+    language = effective(proposal.language, audience="doctor")
 
     def label(key: str) -> str:
         return PHOTO_LABELS[key][language == "en"]
@@ -252,7 +253,7 @@ def render_card(proposal: Proposal, language: str | None = None) -> tuple[str, .
         label("heard"),
     ]
     if proposal.photo:
-        from sanad.scribe.crosscheck import shift_warning
+        from sanad.scribe.crosscheck import reading_text, shift_warning
 
         lines[1] = label("read")
         for printed_name in dict.fromkeys(
@@ -274,10 +275,15 @@ def render_card(proposal: Proposal, language: str | None = None) -> tuple[str, .
                 )
                 lines.append(
                     row_label
+                    + " ("
+                    + d.field.split(".")[-1]
+                    + ")"
                     + label("disagreement")
-                    + plain(d.first or wording.label("unreadable", language))
+                    + plain(reading_text(d.first, d.field) or wording.label("unreadable", language))
                     + " / "
-                    + plain(d.second or wording.label("unreadable", language))
+                    + plain(
+                        reading_text(d.second, d.field) or wording.label("unreadable", language)
+                    )
                 )
         for note in dict.fromkeys(
             (*proposal.photo.reads.first.notes, *proposal.photo.reads.second.notes)
@@ -320,6 +326,8 @@ def render_card(proposal: Proposal, language: str | None = None) -> tuple[str, .
                 details.append(plain(choice.age))
             if choice.sex:
                 details.append(label("male" if choice.sex == "male" else "female"))
+            if choice.headline:
+                details.append(plain(choice.headline))
             details.append(label("last_activity") + _photo_date(choice.updated_at, proposal))
             lines.append("• " + label("comma").join(details))
     clarification = proposal.intent == "unclear" or any(
@@ -327,6 +335,8 @@ def render_card(proposal: Proposal, language: str | None = None) -> tuple[str, .
     )
     if not clarification:
         for i, order in enumerate(candidate.orders):
+            if proposal.blocked(f"order:{i}"):
+                continue
             fields = [
                 supported_text(v, proposal)
                 for v in (
@@ -340,16 +350,38 @@ def render_card(proposal: Proposal, language: str | None = None) -> tuple[str, .
                 if v
             ]
             first = " ".join(fields[:2])
-            suffix = label("comma") + label("comma").join(fields[2:]) if len(fields) > 2 else ""
+            suffix = (
+                label("comma") + label("comma").join(dict.fromkeys(fields[2:]))
+                if len(fields) > 2
+                else ""
+            )
             action = PHOTO_ACTIONS[order.action][language == "en"]
             line = "• " + first + suffix + " (" + action + ")"
+            if proposal.photo and any(
+                proposal.photo.row_targets[r] == f"order:{i}"
+                for r in proposal.photo.single_rows
+                if r < len(proposal.photo.row_targets)
+            ):
+                line += " (one reader)"
             if proposal.blocked(f"order:{i}"):
                 line += label("confirmation")
             lines.append(line)
+        if candidate.missions:
+            lines.append("Requested:")
         for i, mission in enumerate(candidate.missions):
+            if proposal.blocked(f"mission:{i}"):
+                continue
+            single = proposal.photo and any(
+                proposal.photo.row_targets[r] == f"mission:{i}"
+                for r in proposal.photo.single_rows
+                if r < len(proposal.photo.row_targets)
+            )
             lines.append(
                 "• "
+                + mission.kind
+                + ": "
                 + supported_text(mission.text, proposal)
+                + (" (one reader)" if single else "")
                 + (label("confirmation") if proposal.blocked(f"mission:{i}") else "")
             )
             timing = next((t.resolved for t in proposal.timings if t.item == f"mission:{i}"), None)
@@ -376,14 +408,20 @@ def render_card(proposal: Proposal, language: str | None = None) -> tuple[str, .
                 )
                 lines.append(label("due").format(due=due, reason=reason))
                 lines.append(label("escalation").format(time=escalation))
+        start_times: dict[str, list[str]] = {}
         for i, order in enumerate(candidate.orders):
             timing = next((t.resolved for t in proposal.timings if t.item == f"order:{i}"), None)
             if order.action == "start" and timing and not proposal.blocked(f"order:{i}"):
                 local = _photo_date(timing.due_at, proposal, timing.timezone)
-                lines.append(label("start_deadline").format(drug=plain(order.drug), time=local))
-                lines.append(label("day_three"))
+                start_times.setdefault(local, []).append(plain(order.drug))
+        for local, drugs in start_times.items():
+            lines.append(
+                label("start_deadline").format(drug=label("comma").join(drugs), time=local)
+            )
+        if start_times:
+            lines.append(label("day_three"))
         for i, fact in enumerate(candidate.facts):
-            if not any(
+            if not proposal.blocked(f"fact:{i}") and not any(
                 issue.item == f"fact:{i}" and issue.code == "unsafe_text"
                 for issue in proposal.issues
             ):
@@ -398,7 +436,7 @@ def render_card(proposal: Proposal, language: str | None = None) -> tuple[str, .
                     + supported_text(fact_text, proposal)
                 )
         for i, alert in enumerate(candidate.alerts):
-            if not any(
+            if not proposal.blocked(f"alert:{i}") and not any(
                 issue.item == f"alert:{i}" and issue.code == "unsafe_text"
                 for issue in proposal.issues
             ):
@@ -417,10 +455,36 @@ def render_card(proposal: Proposal, language: str | None = None) -> tuple[str, .
         from sanad.scribe.english import REASONS as ENGLISH_REASONS
 
         lines.append(label("not_recorded"))
-        lines.extend(
-            "• " + PHOTO_REASONS.get(code, (REASONS[code], ENGLISH_REASONS[code]))[language == "en"]
-            for code in dict.fromkeys(i.code for i in blocked)
-        )
+        for issue in dict.fromkeys(blocked):
+            family, _, index = issue.item.partition(":")
+            subject = (
+                candidate.orders[int(index)].drug
+                if family == "order"
+                else candidate.missions[int(index)].text
+                if family == "mission"
+                else candidate.facts[int(index)].text
+                if family == "fact"
+                else None
+            )
+            if subject:
+                lines.append(
+                    "• "
+                    + plain(subject)
+                    + ": "
+                    + PHOTO_REASONS.get(
+                        issue.code, (REASONS[issue.code], ENGLISH_REASONS[issue.code])
+                    )[language == "en"]
+                )
+            elif issue.item == "all":
+                lines.append(
+                    "• "
+                    + label("document")
+                    + ": "
+                    + PHOTO_REASONS.get(
+                        issue.code, (REASONS[issue.code], ENGLISH_REASONS[issue.code])
+                    )[language == "en"]
+                )
+
     if proposal.supersedes_id:
         lines.append(label("superseded"))
     lines.append(label("valid"))
@@ -506,7 +570,14 @@ def medication_line(proposal: Proposal, index: int) -> str:
     from sanad.scribe.names import normalize
 
     frequency = supported_text(order.frequency or "", proposal)
-    if normalize(frequency) not in normalize(proposal.source_text):
+    if (
+        proposal.evidence_fingerprint
+        and effective(proposal.language, audience="doctor") == "en"
+        and not proposal.photo
+    ):
+        if not permits(proposal, f"order:{index}", "frequency"):
+            frequency = ""
+    elif normalize(frequency) not in normalize(proposal.source_text):
         frequency = ""
     fields = [frequency] if frequency else []
     fields.extend(
@@ -516,8 +587,8 @@ def medication_line(proposal: Proposal, index: int) -> str:
     )
     line = name + (" " + dose if dose else "")
     if fields:
-        line += ", " + ", ".join(plain(v) for v in fields)
-    if proposal.language == "en" and not proposal.photo:
+        line += ", " + ", ".join(dict.fromkeys(plain(v) for v in fields))
+    if effective(proposal.language, audience="doctor") == "en" and not proposal.photo:
         change = next(
             (a for a in proposal.amendments if a.item == f"order:{index}" and a.old and not a.noop),
             None,
@@ -534,7 +605,15 @@ def medication_line(proposal: Proposal, index: int) -> str:
             previous = " ".join(v for v in (change.old.drug, change.old.dose) if v)
             line = supported_text(previous, proposal) + " → " + line
         if order.action != "continue":
-            line += " (" + order.action + ")"
+            home = next(
+                (
+                    a
+                    for a in proposal.amendments
+                    if a.item == f"order:{index}" and a.old is None and a.note
+                ),
+                None,
+            )
+            line += " (" + order.action + ("; " + home.note if home and home.note else "") + ")"
     elif order.action != "continue":
         line += " (" + _ACTIONS[order.action] + ")"
     if proposal.evidence_fingerprint and any(
@@ -543,7 +622,11 @@ def medication_line(proposal: Proposal, index: int) -> str:
         and e.transformation == "name_resolver:proposal"
         for e in proposal.evidence
     ):
-        line += " (unverified)" if proposal.language == "en" else " (غير متحقق)"
+        line += (
+            " (unverified)"
+            if effective(proposal.language, audience="doctor") == "en"
+            else " (غير متحقق)"
+        )
     return line
 
 
@@ -565,7 +648,7 @@ def consumed_question_numbers(proposal: Proposal) -> set[str]:
 
 
 def dictation_questions(proposal: Proposal) -> tuple[str, ...]:
-    if proposal.language == "en" and not proposal.photo:
+    if effective(proposal.language, audience="doctor") == "en" and not proposal.photo:
         from sanad.scribe.english import questions as english_questions
 
         return english_questions(proposal)
@@ -683,7 +766,11 @@ def clinical_line(proposal: Proposal, item: str, spoken: str) -> str:
     task_marker = ""
     if item.startswith("mission:"):
         mission = proposal.candidate.missions[int(item.split(":")[1])]
-        if mission.kind == "TASK" and not proposal.photo and proposal.language != "en":
+        if (
+            mission.kind == "TASK"
+            and not proposal.photo
+            and effective(proposal.language, audience="doctor") != "en"
+        ):
             from sanad.concierge.tasks import marker
 
             task_marker = marker(mission.text, proposal.language)
@@ -760,7 +847,7 @@ def history_lines(proposal: Proposal, item: str, spoken: str) -> tuple[str, ...]
 def render_dictation(proposal: Proposal) -> tuple[str, ...]:
     from sanad.scribe.grounding import invalid_claims, permits
 
-    if proposal.language == "en":
+    if effective(proposal.language, audience="doctor") == "en":
         from sanad.scribe.english import render
 
         return render(proposal)
@@ -793,21 +880,29 @@ def render_dictation(proposal: Proposal) -> tuple[str, ...]:
                 )
             )
             lines.append("• " + "، ".join(details))
+    blocked_lines: list[str] = []
     oversized = any(i.code == "batch_too_large" for i in proposal.issues)
     if candidate.orders:
-        lines.append("الأدوية:")
-        lines.extend(medication_line(proposal, i) for i in range(len(candidate.orders)))
+        if any(not proposal.blocked(f"order:{i}") for i in range(len(candidate.orders))):
+            lines.append("الأدوية:")
+        for i in range(len(candidate.orders)):
+            (blocked_lines if proposal.blocked(f"order:{i}") else lines).append(
+                medication_line(proposal, i)
+            )
         lines.extend(
             diff_lines(
                 tuple(
                     change.model_copy(update={"new": display_order(proposal, change.new)})
                     for change in proposal.amendments
-                    if not proposal.evidence_fingerprint
-                    or (
-                        permits(proposal, change.item, "action")
-                        and not any(
-                            c.item == change.item and c.field.startswith("prior:")
-                            for c in invalid_claims(proposal)
+                    if not proposal.blocked(change.item)
+                    and (
+                        not proposal.evidence_fingerprint
+                        or (
+                            permits(proposal, change.item, "action")
+                            and not any(
+                                c.item == change.item and c.field.startswith("prior:")
+                                for c in invalid_claims(proposal)
+                            )
                         )
                     )
                 )
@@ -835,7 +930,7 @@ def render_dictation(proposal: Proposal) -> tuple[str, ...]:
                         reference=proposal.created_at,
                     )
                 )
-    required = []
+    required: list[str] = []
     for i, mission in enumerate(candidate.missions):
         if proposal.evidence_fingerprint and not permits(proposal, f"mission:{i}", "text"):
             continue
@@ -869,11 +964,11 @@ def render_dictation(proposal: Proposal) -> tuple[str, ...]:
                 reason = f"افتراضي {days} يوم"
             else:
                 reason = "مقترح: " + plain(timing.due_reason)
-            line += f" — الموعد: {due} ({reason})"
+            line += f": الموعد: {due} ({reason})"
             line += (
                 "؛ " if timing.due_at == timing.escalation_at else "\n  "
             ) + f"لو متعملش هبلّغك: {escalation}"
-        required.append(line)
+        (blocked_lines if proposal.blocked(f"mission:{i}") else required).append(line)
     started = []
     for i, order in enumerate(candidate.orders):
         timing = next((t.resolved for t in proposal.timings if t.item == f"order:{i}"), None)
@@ -905,6 +1000,12 @@ def render_dictation(proposal: Proposal) -> tuple[str, ...]:
         if not any(x.item == f"fact:{i}" and x.code == "unsafe_text" for x in proposal.issues)
         for line in history_lines(proposal, f"fact:{i}", f.text)
     ]
+    for i, f in enumerate(candidate.facts):
+        if proposal.blocked(f"fact:{i}"):
+            for line in history_lines(proposal, f"fact:{i}", f.text):
+                if line in facts:
+                    facts.remove(line)
+                    blocked_lines.append(line)
     if facts:
         limit = (
             DRAFT_SCRIBE_POLICY.history_lines_max
@@ -917,11 +1018,18 @@ def render_dictation(proposal: Proposal) -> tuple[str, ...]:
     alerts = [
         supported_text(a, proposal)
         for i, a in enumerate(candidate.alerts)
-        if not any(x.item == f"alert:{i}" and x.code == "unsafe_text" for x in proposal.issues)
+        if not proposal.blocked(f"alert:{i}")
+        and not any(x.item == f"alert:{i}" and x.code == "unsafe_text" for x in proposal.issues)
     ]
     if alerts:
         lines.extend(("بلّغني لو:", *alerts))
-    questions = dictation_questions(proposal)
+    blocked_lines.extend(
+        "بلّغني لو: " + supported_text(a, proposal)
+        for i, a in enumerate(candidate.alerts)
+        if proposal.blocked(f"alert:{i}")
+        and not any(x.item == f"alert:{i}" and x.code == "unsafe_text" for x in proposal.issues)
+    )
+    questions = tuple(blocked_lines) + dictation_questions(proposal)
     if questions:
         lines.extend(("محتاج تأكيد:", *questions))
     if proposal.corrected:

@@ -50,7 +50,7 @@ def test_scribe_v8_has_capped_known_names_and_current_order_rules() -> None:
         assert "means continue" in prompt and "never repeat an ordered drug as history" in prompt
         assert "{" not in prompt and "5/160/12.5" not in prompt
     assert SYSTEM_PROMPT.startswith("scribe-v8.")
-    assert CORRECTION_PROMPT.startswith("scribe-correction-v8.")
+    assert CORRECTION_PROMPT.startswith("scribe-correction-v9.")
 
 
 @pytest.mark.parametrize(

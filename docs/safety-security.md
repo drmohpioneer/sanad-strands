@@ -14,7 +14,7 @@ Suspension/revocation increments the doctor's authorization epoch, invalidates l
 
 The current design uses a random one-time exchange delivered to the approved doctor's Telegram account. `/d/<token>` renders a neutral Continue page. Only the explicit POST consumes the token, preventing ordinary link previews from burning it. Store the token hash, enforce ten-minute expiry and single-use consumption, rotate the session, and redirect to a clean dashboard URL.
 
-Use Secure, HttpOnly, SameSite cookies; CSRF protection for writes; server-side revocation and an authorization-epoch check on every request. Reject expired exchanges and stale sessions after suspension. The transient exchange is the sole permitted doctor URL secret: redact or suppress it in proxy/access/application logs, telemetry, analytics and error reporting; use a no-referrer policy and no third-party content on the exchange page. Do not place lasting credentials in URLs or localStorage.
+Use Secure, HttpOnly, SameSite cookies; CSRF protection for writes; server-side revocation and an authorization-epoch check on every request. Reject expired exchanges and stale sessions after suspension. The transient exchange is the sole permitted doctor URL secret: redact or suppress it in proxy/access/application logs, telemetry, analytics and error reporting; use a same-origin referrer policy (no-referrer makes browsers send Origin: null on the continue form, which the same-origin exchange check refuses) and no third-party content on the exchange page. Do not place lasting credentials in URLs or localStorage.
 
 Reissuing a link revokes previous unconsumed exchanges as specified by the login contract. Callback actions also validate actor, target ownership, version, expiry and one-time action semantics. A captured old confirmation cannot update a newly amended record. Authentication and ownership checks apply before serving patient media, including any temporary object-download capability.
 
@@ -107,5 +107,24 @@ an operational policy; a delete is not a claim of forensic erasure. Accepted
 receipt processing revalidates patient authority independently of browser idle
 expiry. Session or binding changes before attachment can require a fresh upload.
 
-Administrator sessions and their clinical-read boundary are not implemented by
-this checkpoint. The existing identity schema and authentication flow are unchanged.
+Checkpoint 1 did not change identity. Checkpoint 2 adds the following boundary.
+
+
+## Administrator sessions (18b checkpoint 2)
+
+`/login admin` is available only to the configured Telegram administrator. The
+hashed `/ad` credential shares the neutral Continue page, pre-session CSRF, origin
+checks, cookie rotation and expiry policy of existing exchanges; `/ad` is also
+redacted from logs. This is the same transient URL-secret exception as `/d` and
+`/pl`, never a lasting credential. AdminAccount is created lazily and its epoch
+revokes only admin access. `/logout` with no AdminAccount creates nothing.
+
+An admin session contains no clinical scope. Only application/account metadata,
+the four account actions and admin logout are available; every clinical route,
+including uploads, refuses it. A doctor cookie cannot invoke admin routes even
+when its subject also has the configured admin role. The account transaction
+rechecks the selected role and admin epoch with a conditional AdminAccount read.
+Reasons come from fixed account codes, and receipts/audits retain `web-admin`.
+Sign out everywhere leaves a separate doctor session valid. Configuration A to B
+to A can revive A's old epoch within the absolute TTL; revoke when restoring A
+if those old credentials must remain invalid. No clinical validation is implied.

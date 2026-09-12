@@ -204,6 +204,11 @@ def proposal_anchored(spoken: str, proposal: str, source: str) -> bool:
 
 _CONNECTORS = {"و", "في", "فى", "in", "and", "of", "the"}
 _REQUEST_WORDS = {
+    "request",
+    "order",
+    "ask",
+    "for",
+    "send",
     "طلبت",
     "وطلبت",
     "منه",
@@ -427,12 +432,13 @@ def source_anchored(
 
 
 _TEST_REQUEST = re.compile(
-    r"(?:\b(?:i\s+)?(?:ordered|request(?:ed)?)(?:\s+(?:tests?|labs?))?\s*:?\s+|"
+    r"(?:\b(?:i\s+)?(?:order(?:ed)?|request(?:ed)?|ask\s+for|send\s+for)(?:\s+(?:tests?|labs?))?\s*:?\s+|"
     r"(?:و?طلبت|تحاليل|تحليل)\s+)([^.;؛\n]+)",
     re.I,
 )
 _NEXT_REQUEST = re.compile(
-    r"\s+and\s+(?:i\b|(?:can\s+)?(?:add|start|increase|decrease|change|visit|review)\b)"
+    r"\s+and\s+(?:i\b|(?:can\s+)?(?:add|start|increase|decrease|change|visit|review)\b|"
+    r"(?:check|measure|monitor)\b(?=[^.;؛\n]*\b(?:once|twice|daily|times|days?|weeks?|hours?)\b))"
     r"|\s+و(?:ب?يراجع|يحضر|يزور|يقيس|يسجل|بلغني)\b",
     re.I,
 )

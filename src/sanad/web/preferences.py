@@ -21,6 +21,14 @@ class LanguageBody(BaseModel):
     command_id: str = Field(pattern=r"^[A-Za-z0-9-]{1,64}$")
 
 
+class DigestBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    digest_time: str = Field(pattern=r"^(?:[01][0-9]|2[0-3]):[0-5][0-9]$")
+    digest_packing: Literal["one", "each"]
+    expected_version: int = Field(strict=True, ge=1)
+    command_id: str = Field(pattern=r"^[A-Za-z0-9-]{1,64}$")
+
+
 def preference_router(login: LoginService) -> APIRouter:
     router = APIRouter()
     guard = require_session("doctor")
@@ -32,6 +40,8 @@ def preference_router(login: LoginService) -> APIRouter:
             raise HTTPException(401)
         return {
             "language": doctor.language,
+            "digest_time": doctor.digest_time,
+            "digest_packing": doctor.digest_packing,
             "effective_language": effective(doctor.language),
             "version": doctor.version,
             "timezone": doctor.timezone,
@@ -40,7 +50,9 @@ def preference_router(login: LoginService) -> APIRouter:
 
     @router.post("/api/preferences")
     def language(
-        body: LanguageBody, request: Request, session: Annotated[WebSession, Depends(guard)]
+        body: LanguageBody | DigestBody,
+        request: Request,
+        session: Annotated[WebSession, Depends(guard)],
     ) -> dict[str, str]:
         # This is a session-authenticated adapter, never a Telegram webhook impersonation.
         # Its transport and durable provenance are explicitly `web-language`.
@@ -57,20 +69,25 @@ def preference_router(login: LoginService) -> APIRouter:
             or auth.principal.auth_epoch != session.auth_epoch
         ):
             raise HTTPException(401)
-        text = "/lang " + body.language
+        channel = "web-language" if isinstance(body, LanguageBody) else "web-digest"
+        text = (
+            "/lang " + body.language
+            if isinstance(body, LanguageBody)
+            else f"/digest {body.digest_time} {body.digest_packing}"
+        )
         verdict = screen_text(text, policy=runtime.safety_policy)
         now = login.clock()
-        transport_key = keys.digest(f"{session.id}:{body.command_id}:{body.language}")
+        transport_key = keys.digest(f"{session.id}:{body.command_id}:{text}")
         receipt = InboundReceipt(
-            id=keys.inbound("web-language", keys.digest(transport_key)).pk,
+            id=keys.inbound(channel, keys.digest(transport_key)).pk,
             scope=doctor.scope,
-            transport="web-language",
+            transport=channel,
             transport_key=transport_key,
             source_subject=auth.principal.subject,
             # The accepted Scribe command validates the account's private reply destination.
             # This comes from the account, not from browser input or claimed Telegram data.
             source_chat=doctor.private_chat_id,
-            channel="web-language",
+            channel=channel,
             kind="text",
             payload={"kind": "text", "text": text},
             principal=auth.principal,
@@ -87,9 +104,7 @@ def preference_router(login: LoginService) -> APIRouter:
             raise HTTPException(503)
         # Reuses parsing, work claim, authority checks, ScribeLanguage transaction,
         # audit and queued reply. No provider or transport dispatch is called here.
-        result = route_receipt(
-            runtime, accepted.record.scoped_key(receipt.scope), owner="web-language"
-        )
+        result = route_receipt(runtime, accepted.record.scoped_key(receipt.scope), owner=channel)
         if result.status not in {"accepted", "duplicate", "completed"}:
             raise HTTPException(409)
         return {"status": "accepted"}

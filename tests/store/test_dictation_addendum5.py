@@ -32,7 +32,7 @@ def test_embedded_dose_history_and_name_guard_survive_confirmation(
         },
     )
     blocked = proposed_name == "Forxiga"
-    assert proposal.prompt_version == "scribe-v8"
+    assert proposal.prompt_version == "scribe-v10"
     assert proposal.candidate.facts == ()
     assert proposal.candidate.orders[0].dose == "5 مج"
     assert proposal.blocked("order:0") == blocked

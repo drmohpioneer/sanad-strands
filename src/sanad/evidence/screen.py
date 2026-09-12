@@ -134,7 +134,7 @@ def context(
 
 def render_context(block: dict[str, JsonValue], language: str) -> str:
     def clean(value: JsonValue) -> str:
-        return " ".join(str(value or "—").replace("{", "(").replace("}", ")").split())
+        return " ".join(str(value or "Not recorded").replace("{", "(").replace("}", ")").split())
 
     lines = [templates.render("context_heading", language)]
     medications = block.get("medications", [])

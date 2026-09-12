@@ -93,6 +93,7 @@ def assert_rendered_evidence(proposal: Proposal, fixture: str) -> None:
     # Check the schema too: an optional new field cannot escape just because all
     # existing fixtures happen to leave it empty. Exemptions are explicit metadata.
     metadata_fields = {
+        "action_quote",
         "name_latin",
         "generic",
         "clinical_en",
@@ -147,6 +148,14 @@ def assert_rendered_evidence(proposal: Proposal, fixture: str) -> None:
                     " start stop change continue بداية إيقاف تغيير استمرار mg مج مجم مليجرام"
                     " unverified غير متحقق Dx ECG Echo Complaint History Finding"
                 )
+                for change in proposal.amendments:
+                    if (
+                        change.item == item
+                        and change.old is None
+                        and change.note
+                        in {"doctor instructed, not on file before", "previous dose not on file"}
+                    ):
+                        allowed += " " + change.note
                 permitted = set(re.findall(r"\w+|[%]", allowed.casefold()))
                 for token in re.findall(r"\w+|[%]", rendered.casefold()):
                     assert token in permitted, (
@@ -203,11 +212,18 @@ def assert_final_surface_evidence(proposal: Proposal, surface: str, fixture: str
         " confirm cancel edit valid minutes due default days if not done i will notify you at"
         " the same time unconfirmed of from reported date day three follow up runs by here does"
         " establish that treatment started readings every slot total expected extra"
-        " مريض جديد الأدوية المطلوب التاريخ المرضي المريض بداية إيقاف تغيير استمرار مين بل غني"
+        " مريض جديد الأدوية أدوية قديمة المطلوب التاريخ المرضي المريض بداية إيقاف تغيير استمرار"
+        " مين بل غني"
         " مج مجم مليجرام غير متحقق ذكر أنثى سنة يوم افتراضي صريح الموعد صالح دقيقة"
         " تمام تعديل إلغاء تأكيد بداية متابعة اليوم الثالث من تاريخ البداية اللي"
         " يبل غنا بيه التأكيد هنا مش دليل إنه بدأ لو متأكدش متعملش هبل غك في نفس"
     )
+    for change in proposal.amendments:
+        if change.old is None and change.note in {
+            "doctor instructed, not on file before",
+            "previous dose not on file",
+        }:
+            allowed += " " + change.note
     # The code-owned deadline record authorizes its actual calendar rendering and defaults.
     for timing in proposal.timings:
         if any(c.item == timing.item and c.field == "deadline" for c in invalid):
@@ -232,7 +248,9 @@ def required_in_language(text: str, language: Language) -> tuple[str, ...]:
     if language == "en":
         return (text,)
     for action, label in (("start", "بداية"), ("stop", "إيقاف"), ("change", "تغيير")):
-        text = text.replace(f"({action})", f"({label})")
+        text = text.replace(f"({action})", f"({label})").replace(
+            f"({action}; doctor instructed, not on file before)", f"({label})"
+        )
     if " → " in text:
         previous, current = text.split(" → ")
         from sanad.scribe.names import split_drug_dose
@@ -252,6 +270,7 @@ def required_in_language(text: str, language: Language) -> tuple[str, ...]:
 
 @pytest.mark.parametrize("row", CORPUS, ids=lambda r: r["id"])
 @pytest.mark.parametrize("language", ["en", "ar"])
+@pytest.mark.usefixtures("legacy_dictation_schema")
 def test_contrasting_corpus_evidence_completeness_and_confirmation(
     row: dict[str, Any], language: Language
 ) -> None:
@@ -267,7 +286,10 @@ def exercise_corpus(
     questions = "\n".join(dictation_questions(proposal))
     for required in row["required"]:
         for value in required_in_language(required, language):
-            assert value in surface, f"{row['id']}: missing required {value!r}\n{surface}"
+            assert value in "\n".join(render_card(proposal, language)), (
+                f"{row['id']}: item must remain visible, including under "
+                f"Needs confirmation: {value!r}"
+            )
     for forbidden in row["forbidden"]:
         assert forbidden not in surface, f"{row['id']}: forbidden fact {forbidden!r}\n{surface}"
     for question in row["questions"]:
@@ -377,11 +399,13 @@ def test_existing_dictations_share_rendered_invariant(example: Any) -> None:
     assert_rendered_evidence(proposal, example.input[:35])
 
 
+@pytest.mark.usefixtures("legacy_dictation_schema")
 def test_existing_english_fixture_shares_rendered_invariant() -> None:
     world = world_for("en")
     assert_rendered_evidence(dictate(world, SOURCE, VALUE), "existing-english")
 
 
+@pytest.mark.usefixtures("legacy_dictation_schema")
 def test_removed_evidence_and_late_candidate_changes_are_rejected() -> None:
     _, proposal = prepare(CORPUS[0], "en")
     without = proposal.model_copy(
@@ -410,6 +434,7 @@ def test_corpus_is_data_and_has_eight_contrasting_pairs() -> None:
     assert [row["id"][:2] for row in CORPUS[:16]] == [f"{n:02}" for n in range(1, 17)]
 
 
+@pytest.mark.usefixtures("legacy_dictation_schema")
 def test_invariant_catches_a_new_unguarded_rendered_field(monkeypatch: pytest.MonkeyPatch) -> None:
     from sanad.scribe import card
 
@@ -421,6 +446,7 @@ def test_invariant_catches_a_new_unguarded_rendered_field(monkeypatch: pytest.Mo
 
 
 @pytest.mark.parametrize("language", ["en", "ar"])
+@pytest.mark.usefixtures("legacy_dictation_schema")
 def test_question_key_keeps_independent_occurrences_and_reasons(language: Language) -> None:
     from sanad.scribe.extract import ProposalIssue
     from sanad.scribe.grounding import deduplicate_questions
@@ -451,6 +477,7 @@ def test_question_key_keeps_independent_occurrences_and_reasons(language: Langua
         {"origin": "code_computed", "transformation": "candidate_classification"},
     ],
 )
+@pytest.mark.usefixtures("legacy_dictation_schema")
 def test_invalid_dose_evidence_is_neither_printable_nor_confirmable(
     alteration: dict[str, Any],
 ) -> None:
@@ -470,6 +497,7 @@ def test_invalid_dose_evidence_is_neither_printable_nor_confirmable(
     assert not confirmable_evidence(changed)
 
 
+@pytest.mark.usefixtures("legacy_dictation_schema")
 def test_pending_dose_edit_retains_start_action_and_correction_evidence() -> None:
     world, before = prepare(CORPUS[0], "en")
     value = before.candidate.model_dump()
@@ -493,6 +521,7 @@ def test_pending_dose_edit_retains_start_action_and_correction_evidence() -> Non
         ("The starter mentions", "start"),
     ],
 )
+@pytest.mark.usefixtures("legacy_dictation_schema")
 def test_contractions_history_and_keyword_prefixes_do_not_authorize_an_order(
     prefix: str,
     action: str,
@@ -508,6 +537,7 @@ def test_contractions_history_and_keyword_prefixes_do_not_authorize_an_order(
     exercise_corpus(row, "en")
 
 
+@pytest.mark.usefixtures("legacy_dictation_schema")
 def test_a_new_clinical_field_requires_an_explicit_origin_rule() -> None:
     from sanad.scribe.extract import OrderCandidate
     from sanad.scribe.grounding import seal

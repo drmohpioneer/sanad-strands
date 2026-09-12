@@ -9,7 +9,7 @@ from pydantic import BaseModel, JsonValue
 from sanad.concierge.records import ReportFactPayload
 from sanad.domain import FollowUpTask, Mission, PatientScope, Principal, VersionRef
 from sanad.domain.entities import TERMINAL_STATES
-from sanad.domain.language import default_language
+from sanad.domain.language import default_language, effective
 from sanad.scribe.extract import OrderCandidate
 from sanad.scribe.memory import NameVocabulary
 from sanad.scribe.records import CareOrderHead, CareOrderVersion, ClinicalFact
@@ -206,6 +206,7 @@ def order_line(
     history: bool = False,
     names: Context | None = None,
 ) -> str:
+    language = effective(language, audience="patient")
     instruction = order.structured_instruction
     assert isinstance(instruction, OrderCandidate)
     resolved = resolve_name(instruction.drug, "drug", instruction.drug, ctx=names)
@@ -270,7 +271,7 @@ def summary(snapshot: Snapshot) -> dict[str, JsonValue]:
 
 
 def render_summary(snapshot: Snapshot) -> str:
-    en = snapshot.patient.language == "en"
+    en = effective(snapshot.patient.language, audience="patient") == "en"
     lines = [("Your doctor: " if en else "دكتورك: ") + snapshot.doctor.name]
     lines.extend(
         order_line(o, snapshot.patient.language, names=snapshot.names) for o in snapshot.orders
@@ -292,7 +293,7 @@ def render_summary(snapshot: Snapshot) -> str:
         lines.append(
             ("Next requested task: " if en else "المطلوب بعد كده من الدكتور: ")
             + str(next_mission["title"])
-            + " — "
+            + ": "
             + str(next_mission["due_at"])
         )
     return "\n".join(lines)
@@ -312,7 +313,7 @@ def projection(snapshot: Snapshot) -> dict[str, JsonValue]:
                 "text": f.payload.text,
                 "kind": f.payload.report_kind,
                 "label": "Self-reported"
-                if snapshot.patient.language == "en"
+                if effective(snapshot.patient.language, audience="patient") == "en"
                 else "حسب كلام المريض",
             }
             for f in snapshot.facts

@@ -36,7 +36,7 @@ def test_schema_ignores_model_bookkeeping_and_unknown_keys_at_every_level() -> N
     assert all(name not in description for name in ("intent", "numbers_used", "_dropped_numbers"))
     assert "foreign" not in value.model_dump_json() and "999" not in value.model_dump_json()
     assert not candidate_issues(value, "أحمد أملوديبين 5 مج وبنسلين وتحليل سكر بعد أسبوعين")
-    assert "scribe-correction-v8" in CORRECTION_PROMPT
+    assert "scribe-correction-v9" in CORRECTION_PROMPT
     assert "correct the previous card" in CORRECTION_PROMPT.lower()
 
 
@@ -98,7 +98,11 @@ def test_malformed_nonnumeric_item_stays_empty_without_placeholder_question(
     malformed: object,
 ) -> None:
     value = DictationCandidate.model_validate({"orders": [malformed]})
-    assert value.orders == () and value.ambiguities == ()
+    assert value.orders == () and value.ambiguities == (
+        ("wrong دواء",)
+        if isinstance(malformed, dict) and malformed.get("action") == "wrong"
+        else ()
+    )
     assert any(q.code == "clarification" for q in candidate_issues(value, "وقف الدوا"))
     assert (
         DictationCandidate.model_validate_json(value.model_dump_json()).ambiguities

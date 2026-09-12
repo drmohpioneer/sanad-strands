@@ -277,8 +277,8 @@ TEMPLATES = {
         "This choice has already been used or is no longer valid.",
     ),
     "doctor_questions_page": (
-        "الأسئلة — صفحة {page}/{pages}",
-        "Questions — page {page}/{pages}",
+        "الأسئلة: صفحة {page}/{pages}",
+        "Questions: page {page}/{pages}",
     ),
     "doctor_questions_no_plan": (
         "مفيش أمر دوا نشط.",

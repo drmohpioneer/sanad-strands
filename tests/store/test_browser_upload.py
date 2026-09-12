@@ -83,7 +83,7 @@ def uploads(store: StoreBase, clock: FakeClock) -> Iterator[UploadWorld]:
         assert browser_login(client, world.login_path(PATIENT)).status_code == 303
         session = world.login.session(client.cookies["sanad_session"])
         assert session
-        yield mount(world, client, session)
+        yield mount(world, client, WebSession.model_validate(session.model_dump()))
 
 
 def test_received_receipt_is_scoped_screened_and_recoverable(uploads: UploadWorld) -> None:
@@ -368,7 +368,7 @@ def test_browser_and_telegram_image_have_equal_business_event_semantics(
         world.concierge.synthetic = True
         with world.client() as client:
             client.cookies.update(cookies)
-            upload = mount(world, client, session)
+            upload = mount(world, client, WebSession.model_validate(session.model_dump()))
             vision = ScriptedVision(evidence.lab(), evidence.lab())
             telegram = FakeTelegramFiles(png())
             media = cast(S3MediaStore, upload.ingress.storage)
@@ -692,6 +692,7 @@ def test_app_injects_upload_storage_and_saved_key_submission(uploads: UploadWorl
         transport=world.transport,
         web_settings=world.app.state.web_settings,
         upload_storage=uploads.ingress.storage,
+        consent_policy=world.claims.consent_policy,
         receipt_submit=saved.append,
     )
     assert app.state.uploads.storage is uploads.ingress.storage
@@ -775,6 +776,7 @@ def test_lambda_composition_selects_staged_source_without_provider_calls(
     )
     stage = uploads.stages()[0]
     values = {
+        "gemini_api_key": "synthetic-not-a-credential",
         "bot-token": "4242:synthetic-token-value",
         "webhook-secret": "synthetic-webhook-secret",
         "tick-secret": "synthetic-tick",

@@ -239,7 +239,7 @@ def test_live_gate_counts_invented_names_even_when_disagreement_blocks_them(
     assert note["invented_items"] == 1 and note["receipt_completed"]
     assert note["invented_items_reaching_card"] == (0 if single else 1)
     assert note["honest_card"] is single and note["card"] is not single
-    assert note["proposed_orders"] == (0 if single else 2)
-    assert note["proposed_facts"] == 0
+    assert note["proposed_orders"] == 0
+    assert note["proposed_facts"] == (0 if single else 3)
     assert form["medication_rows_recovered"] == 2 and form["passed"]
     assert result["state"] == ("passed" if single else "failed")

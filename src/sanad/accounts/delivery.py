@@ -49,7 +49,18 @@ def account_freshness(
         row = store.get_account_source(scope, ref)
         if row is None:
             return "source_version"
-        if row.entity_type == "doctor_login":
+        if row.entity_type == "admin_login":
+            exchange = from_record(row, LoginExchange)
+            if (
+                intent.audience != "admin"
+                or intent.template_id != "admin_login_link"
+                or exchange.state != "issued"
+                or exchange.expires_at <= now
+                or exchange.subject != intent.recipient_subject
+                or exchange.auth_epoch != auth.admin_epoch
+            ):
+                return "credential_revoked"
+        elif row.entity_type == "doctor_login":
             exchange = from_record(row, LoginExchange)
             if (
                 intent.template_id != "doctor_login_link"
@@ -105,7 +116,7 @@ def account_freshness(
         elif row.entity_type == "subject_binding":
             bound = from_record(row, SubjectBinding)
             if (
-                intent.template_id != "claim_refused"
+                intent.template_id not in {"claim_refused", "admin_no_sessions"}
                 or bound.telegram_user_id != intent.recipient_subject
                 or bound.private_chat_id != intent.recipient_ref
             ):
@@ -158,6 +169,7 @@ def account_freshness(
                 "patient_emergency",
                 "patient_safety_ack",
                 "claim_refused",
+                "admin_no_sessions",
             }:
                 return "recipient_authority"
         else:
@@ -170,6 +182,17 @@ def account_freshness(
             or auth.auth_epoch != intent.recipient_auth_epoch_seen
         ):
             return "recipient_authority"
+    if intent.template_id == "admin_login_link":
+        if auth.admin_epoch != intent.recipient_auth_epoch_seen:
+            return "recipient_authority"
+        return None
+    if intent.audience == "admin" and auth.admin_epoch is not None:
+        if (
+            intent.recipient_auth_epoch_seen is not None
+            and auth.admin_epoch != intent.recipient_auth_epoch_seen
+        ):
+            return "recipient_authority"
+        return None
     if "doctor" in auth.principal.verified_roles:
         if auth.auth_epoch != intent.recipient_auth_epoch_seen:
             return "recipient_authority"

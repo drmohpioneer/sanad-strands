@@ -47,13 +47,19 @@ def agent(model: ScriptedModel, *, role: AgentRole = "scribe", **changes: Any) -
 
 def test_registry_is_frozen_and_exact() -> None:
     registry = ModelRegistry()
-    assert registry.worker == registry.vision == "us.amazon.nova-lite-v1:0"
-    assert registry.cross_check == "us.amazon.nova-pro-v1:0"
+    assert registry.worker == "us.amazon.nova-lite-v1:0"
+    assert registry.vision == "gemini-3.8-flash"
+    assert registry.cross_check == "gemini-3.5-flash-lite"
     assert registry.classifier == "us.amazon.nova-micro-v1:0"
-    assert registry.speech == "mistral.voxtral-small-24b-2507"
+    assert registry.speech == "gemini-3.8-flash"
     assert {r.model_id for r in registry.rejected} == {
+        "gemini-2.5-flash",
+        "gemini-3-flash-preview",
         "us.amazon.nova-2-lite-v1:0",
         "mistral.voxtral-mini-3b-2507",
+        "mistral.voxtral-small-24b-2507",
+        "us.amazon.nova-lite-v1:0",
+        "whisper-large-v3-turbo",
     }
     with pytest.raises(ValidationError):
         ModelRegistry.model_validate({"temperature": 1})

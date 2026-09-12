@@ -111,6 +111,7 @@ class ScribeRepository:
             "ScribeExpire",
             "ScribeReply",
             "ScribeLanguage",
+            "ScribeDigest",
             "ScribeInvalidate",
             "ScribeWork",
         ],

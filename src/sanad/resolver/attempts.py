@@ -33,6 +33,8 @@ class Action(_BoundaryValue):
 
 
 def area_in(text: str, *, answering: bool = False) -> str | None:
+    from unicodedata import name
+
     # Explicit location framing, or the answer to this attempt's area question only.
     match = re.search(
         r"(?:\b(?:in|near|area:|neighbourhood:|neighborhood:)\s+|(?:في|منطقة|حي)\s+)([^.!?؟;\n]{2,120})",
@@ -40,6 +42,10 @@ def area_in(text: str, *, answering: bool = False) -> str | None:
         re.I,
     )
     area = match[1].strip() if match else text.strip() if answering else None
+    if not match and area:
+        letters = sum(c.isalpha() and name(c, "").startswith(("LATIN ", "ARABIC ")) for c in area)
+        if letters < 2 and not any(c.isdigit() for c in area):
+            return None
     if area:
         # A geocoding query contains only the stated area clause, never the
         # rest of a patient's report. No clinical source text goes to OSM.

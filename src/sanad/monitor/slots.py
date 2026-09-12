@@ -13,8 +13,17 @@ from sanad.domain.predicates import PredicateResult
 from sanad.monitor import policy
 
 _METRICS = {
-    "blood pressure": ("bp", "blood pressure", "ضغط الدم", "الضغط", "ضغط"),
-    "blood glucose": ("glucose", "blood glucose", "blood sugar", "سكر", "السكر", "سكري", "جلوكوز"),
+    "blood pressure": ("bp", "blood pressure", "pressure", "ضغط الدم", "الضغط", "ضغط", "ضغطه"),
+    "blood glucose": (
+        "glucose",
+        "sugar",
+        "blood glucose",
+        "blood sugar",
+        "سكر",
+        "السكر",
+        "سكري",
+        "جلوكوز",
+    ),
     "weight": ("weight", "وزن", "وزني", "الوزن"),
     "pulse": ("pulse", "heart rate", "نبض", "نبضي", "النبض"),
 }

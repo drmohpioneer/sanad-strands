@@ -32,6 +32,7 @@ class CommandResult(_BoundaryValue):
         "unsupported",
         "needs_confirmation",
         "invalid_input",
+        "invalid_action",
     ]
     event_ids: tuple[str, ...] = ()
     resulting_versions: tuple[VersionRef, ...] = ()

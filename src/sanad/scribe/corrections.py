@@ -379,6 +379,12 @@ def merge_correction(
         a
         for a in old.ambiguities
         if not any(number in numbers_in(text) for number in numbers_in(a))
+        and not any(
+            (name := normalize(order.drug))
+            and re.search(r"(?<!\w)" + re.escape(name) + r"(?!\w)", normalize(a))
+            and re.search(r"(?<!\w)" + re.escape(name) + r"(?!\w)", normalize(text))
+            for order in proposed.orders
+        )
     )
     merged = old.model_copy(
         update={

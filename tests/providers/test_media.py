@@ -322,8 +322,8 @@ def test_two_readers_identity_low_and_kernel_overrides_model_flag() -> None:
     assert result.first.items[0].lab_verdict is not None
     assert result.first.items[0].lab_verdict.level == "critical"
     assert [call[0] for call in caller.calls] == [
-        "us.amazon.nova-lite-v1:0",
-        "us.amazon.nova-pro-v1:0",
+        "gemini-3.8-flash",
+        "gemini-3.5-flash-lite",
     ]
     assert caller.calls[0][1][0]["image"]["format"] == "png"
 

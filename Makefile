@@ -7,10 +7,10 @@ install:
 	uv sync --locked
 
 test:
-	uv run --offline --no-sync pytest $(TEST_ARGS)
+	uv run --offline --no-sync pytest tests tests/system $(TEST_ARGS)
 
 test-ddb:
-	uv run --offline --no-sync pytest tests/store tests/deploy --ddb --require-ddb
+	uv run --offline --no-sync pytest tests/store tests/deploy tests/system --ddb --require-ddb
 
 lint:
 	uv run --offline --no-sync ruff check .

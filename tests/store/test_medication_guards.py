@@ -202,7 +202,7 @@ def test_resolved_barrier_projection_accepts_only_exact_event(
             BarrierResolved(
                 event_id=request.command.command_id + ":barrier-resolved:" + original.id
             ),
-            clock(),
+            builder.now,
             builder.policy.timing,
         )
         assert isinstance(outcome, TransitionResult)

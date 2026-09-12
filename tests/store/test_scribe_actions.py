@@ -140,7 +140,7 @@ def test_correction_versions_card_and_preserves_number_union(world: ScribeWorld)
     corrected = TABLE[0].candidate.model_dump()
     corrected["orders"][0]["dose"] = "2.5 مج"
     second = world.dictate("خلي الجرعة 2.5 مج", corrected, id=11)
-    assert second.prompt_version == "scribe-correction-v8"
+    assert second.prompt_version == "scribe-correction-v9"
     assert (
         second.id == first.id and second.version > first.version and not second.blocked("alert:0")
     )
@@ -411,7 +411,7 @@ def test_delayed_confirmation_preserves_shown_deadlines_and_provenance(world: Sc
     allergy = next(f for f in facts if f.category == "allergy")
     assert allergy.provenance.source_span is None
     assert allergy.provenance.source_observation_id == proposal.source_receipt_id
-    assert allergy.provenance.prompt_version == "scribe-v8"
+    assert allergy.provenance.prompt_version == "scribe-v10"
     assert allergy.provenance.model_id == "us.amazon.nova-lite-v1:0"
     assert patient.age == "60" and any(f.category == "demographic" for f in facts)
 
@@ -519,7 +519,7 @@ def test_nonnumeric_malformed_item_does_not_become_a_silent_patient_lookup(
         },
     )
     assert "فيه بند مش واضح" not in render_card(proposal)[0]
-    assert "مش واضح المطلوب؛ وضّح المريض والتعليمات." in render_card(proposal)[0]
+    assert 'سمعت "wrong الدوا"، توضح المقصود؟' in render_card(proposal)[0]
     assert proposal.candidate.orders == () and proposal.blocked("all")
     assert world.claims.patient(world.doctor.id, own.id) == own
 

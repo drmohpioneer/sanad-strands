@@ -3,271 +3,207 @@
 from sanad.presentation.catalog import Catalog, validate_catalog
 
 CATALOG: Catalog = {
-    "doctor.application_received": {
-        "ar": (
-            "طلب التسجيل كدكتور وصل، ومستني مراجعة الإدارة.\nYour doctor "
-            "registration application was received and is awaiting admin review."
+    "doctor.dashboard_signed_out": {
+        "ar": "تم تسجيل الخروج من لوحة المتابعة.",
+        "en": "Signed out of the dashboard.",
+    },
+    "doctor.account_suspended": {
+        "ar": "حسابك موقوف. تواصل مع الإدارة.",
+        "en": "Your account is suspended. Contact the administrator.",
+    },
+    "doctor.patient_not_linked": {
+        "ar": "لسه مش مرتبط بدكتور. افتح رابط الدعوة اللي بعته الدكتور.",
+        "en": "You are not linked to a doctor yet. Open the invitation link your doctor sent you.",
+    },
+    "doctor.login_refused": {
+        "ar": "تعذر الدخول. تواصل مع الإدارة.",
+        "en": "Sign-in was refused. Contact the administrator.",
+    },
+    "doctor.scribe_digest": {
+        "en": (
+            "Patient questions are collected and sent to you once a day at {time} Cairo "
+            "(packing: {packing}). {waiting}"
         ),
+        "ar": (
+            "أسئلة المرضى بتتجمع وبتتبعتلك مرة في اليوم الساعة {time} بتوقيت القاهرة "
+            "(التجميع: {packing}). {waiting}"
+        ),
+    },
+    "doctor.scribe_digest_usage": {
+        "en": "Use /digest to see your setting. Set a time with "
+        "/digest 20:00, choose /digest one or /digest each, or "
+        "combine them with /digest 21:30 each.",
+        "ar": "استخدم /digest لعرض الإعداد. غيّر الوقت باستخدام "
+        "/digest 20:00، أو التجميع باستخدام /digest one أو "
+        "/digest each، أو الاتنين باستخدام /digest 21:30 each.",
+    },
+    "doctor.doctor_question_digest": {
+        "en": "These questions are waiting for your answer.\n\n{lines}",
+        "ar": "الأسئلة دي مستنية إجابتك.\n\n{lines}",
+    },
+    "doctor.application_received": {
+        "ar": "طلب التسجيل كدكتور وصل، ومستني مراجعة الإدارة.",
         "en": "Your doctor registration application was received and is awaiting admin review.",
     },
     "doctor.admin_new_application": {
-        "ar": (
-            "طلب تسجيل دكتور جديد. البيانات دي مقدمة من صاحب الطلب ولسه مش متحققة:\n"
-            "الاسم: {name}\nالتخصص: {specialty}\nالمدينة: {city}\nNew doctor "
-            "application. These applicant-provided details are unverified:\nName: "
-            "{name}\nSpecialty: {specialty}\nCity: {city}"
-        ),
-        "en": (
-            "New doctor application. These applicant-provided details are "
-            "unverified:\nName: {name}\nSpecialty: {specialty}\nCity: {city}"
-        ),
+        "ar": "طلب تسجيل دكتور جديد. البيانات دي مقدمة من صاحب "
+        "الطلب ولسه مش متحققة:\n"
+        "الاسم: {name}\n"
+        "التخصص: {specialty}\n"
+        "المدينة: {city}",
+        "en": "New doctor application. These applicant-provided "
+        "details are unverified:\n"
+        "Name: {name}\n"
+        "Specialty: {specialty}\n"
+        "City: {city}",
     },
     "doctor.doctor_approved": {
-        "ar": (
-            "تمت الموافقة على حسابك كدكتور في سند.\nYour doctor account in Sanad has been approved."
-        ),
-        "en": "Your doctor account in Sanad has been approved.",
+        "ar": "تمت الموافقة على حسابك كدكتور في سند. {name}",
+        "en": "Your doctor account in Sanad has been approved. {name}",
     },
     "doctor.application_rejected": {
-        "ar": (
-            "طلب التسجيل مش مقبول حاليًا.\nYour registration application is not "
-            "approved at this time."
-        ),
+        "ar": "طلب التسجيل مش مقبول حاليًا.",
         "en": "Your registration application is not approved at this time.",
     },
     "doctor.doctor_welcome_back": {
-        "ar": (
-            "أهلًا برجوعك. حسابك كدكتور في سند معتمد.\nWelcome back. Your doctor "
-            "account in Sanad is approved."
-        ),
-        "en": "Welcome back. Your doctor account in Sanad is approved.",
+        "ar": "أهلًا برجوعك. اكتب أو سجّل اللي عايز تعمله للمريض "
+        "بكلامك، أو ابعت صورة الروشتة. اكتب /help لعرض الأوامر.",
+        "en": "Welcome back. Write or record what you want to do for "
+        "a patient, in your own words. You can also send a "
+        "prescription photo. Type /help for the commands.",
     },
     "doctor.doctor_capability_pending": {
-        "ar": (
-            "رسالتك وصلت. التعامل مع خطط المرضى والملفات مش متاح هنا لسه.\nYour "
-            "message was received. Patient plans and files cannot be handled here "
-            "yet."
-        ),
+        "ar": "رسالتك وصلت. التعامل مع خطط المرضى والملفات مش متاح هنا لسه.",
         "en": "Your message was received. Patient plans and files cannot be handled here yet.",
     },
     "doctor.callback_refused": {
-        "ar": "الإجراء ده مش متاح من الزر ده.\nThis action is unavailable from this button.",
+        "ar": "الإجراء ده مش متاح من الزر ده.",
         "en": "This action is unavailable from this button.",
     },
     "doctor.doctor_suspended_notice": {
-        "ar": (
-            "تم تعليق صلاحيات حسابك كدكتور في سند.\nYour doctor account permissions "
-            "in Sanad have been suspended."
-        ),
+        "ar": "تم تعليق صلاحيات حسابك كدكتور في سند.",
         "en": "Your doctor account permissions in Sanad have been suspended.",
     },
+    "doctor.admin_login_link": {
+        "ar": "رابط دخول الإدارة صالح لعشر دقائق ولمرة واحدة.\n{link}",
+        "en": "Administrator sign-in: valid for ten minutes and one use. Press Continue.\n{link}",
+    },
+    "doctor.admin_no_sessions": {
+        "ar": "لا توجد جلسات إدارة.",
+        "en": "There are no administrator sessions.",
+    },
     "doctor.doctor_login_link": {
-        "ar": (
-            "رابط دخولك لسند صالح لمدة عشر دقايق ولمرة واحدة. اضغط متابعة لإكمال "
-            "الدخول.\nYour Sanad login link is valid for ten minutes and one use. "
-            "Press Continue to sign in.\n{link}"
-        ),
-        "en": (
-            "رابط دخولك لسند صالح لمدة عشر دقايق ولمرة واحدة. اضغط متابعة لإكمال "
-            "الدخول.\nYour Sanad login link is valid for ten minutes and one use. "
-            "Press Continue to sign in.\n{link}"
-        ),
+        "ar": "لينك دخولك لسند صالح لعشر دقايق ولمرة واحدة. انسخه والصقه في المتصفح، "
+        "ومتدوسش عليه جوه تيليجرام.\n{link}",
+        "en": "Your one-time sign-in link, valid for ten minutes. Copy it and paste it "
+        "into your browser. Do not tap it inside Telegram.\n"
+        "{link}",
     },
     "doctor.consent_request": {
-        "ar": (
-            "سند مساعد بالذكاء الاصطناعي لمتابعة تعليمات د. {doctor}. الربط محتاج "
-            "موافقتك وتأكيد الدكتور إنك الشخص المقصود.\nهنعالج رسائلك وصوتك وصورك "
-            "وبيانات حسابك وخطة الدكتور للشرح والتذكير وجمع المتابعة. المعالجة "
-            "تشمل مقدم قناة تيليجرام ومقدمي الاستضافة السحابية ونماذج الذكاء "
-            "الاصطناعي. رسائل البوت مش محادثة طبية مشفرة من الطرف للطرف.\nالمتابعة "
-            "الروتينية بحد أقصى رسالة متابعة واحدة في اليوم، خارج ساعات الهدوء "
-            "{quiet_start}–{quiet_end} بتوقيت {timezone}. أي تذكير بمواعيد محددة "
-            "أو أثناء الهدوء محتاج موافقة منفصلة.\nسند ممكن يغلط، ومش بيشخص أو "
-            "بيكتب علاج أو بيغير تعليمات الدكتور. مش خدمة طوارئ ومفيش وعد بوقت رد "
-            "الدكتور. تقدر ترفض دلوقتي أو تتواصل مع العيادة لوقف التواصل الروتيني "
-            "وسحب الموافقة. ده مش بيغير العلاج.\nالاحتفاظ بالبيانات: {retention}\n"
-            "التواصل مع العيادة: {clinic_contact}\nSanad is an AI assistant "
-            "following Dr {doctor}'s instructions. Linking requires your consent "
-            "and the doctor's confirmation of your identity.\nWe process your "
-            "messages, voice, images, account details and doctor's plan for "
-            "explanations, reminders and follow-up collection. Processing involves "
-            "the Telegram channel provider, cloud hosting providers and AI model "
-            "providers. Bot messages are not end-to-end encrypted clinical "
-            "communication.\nRoutine follow-up is limited to one chase message per "
-            "day, outside quiet hours {quiet_start}–{quiet_end} in {timezone}. "
-            "Scheduled reminders and quiet-hour exceptions require separate "
-            "consent.\nSanad can make mistakes; it does not diagnose, prescribe or "
-            "change the doctor's instructions. It is not an emergency service and "
-            "does not promise a doctor response time. You may decline now or "
-            "contact the clinic to stop routine contact and withdraw consent. This "
-            "does not change treatment.\nData retention: {retention}\nClinic "
-            "contact: {clinic_contact}"
-        ),
-        "en": (
-            "سند مساعد بالذكاء الاصطناعي لمتابعة تعليمات د. {doctor}. الربط محتاج "
-            "موافقتك وتأكيد الدكتور إنك الشخص المقصود.\nهنعالج رسائلك وصوتك وصورك "
-            "وبيانات حسابك وخطة الدكتور للشرح والتذكير وجمع المتابعة. المعالجة "
-            "تشمل مقدم قناة تيليجرام ومقدمي الاستضافة السحابية ونماذج الذكاء "
-            "الاصطناعي. رسائل البوت مش محادثة طبية مشفرة من الطرف للطرف.\nالمتابعة "
-            "الروتينية بحد أقصى رسالة متابعة واحدة في اليوم، خارج ساعات الهدوء "
-            "{quiet_start}–{quiet_end} بتوقيت {timezone}. أي تذكير بمواعيد محددة "
-            "أو أثناء الهدوء محتاج موافقة منفصلة.\nسند ممكن يغلط، ومش بيشخص أو "
-            "بيكتب علاج أو بيغير تعليمات الدكتور. مش خدمة طوارئ ومفيش وعد بوقت رد "
-            "الدكتور. تقدر ترفض دلوقتي أو تتواصل مع العيادة لوقف التواصل الروتيني "
-            "وسحب الموافقة. ده مش بيغير العلاج.\nالاحتفاظ بالبيانات: {retention}\n"
-            "التواصل مع العيادة: {clinic_contact}\nSanad is an AI assistant "
-            "following Dr {doctor}'s instructions. Linking requires your consent "
-            "and the doctor's confirmation of your identity.\nWe process your "
-            "messages, voice, images, account details and doctor's plan for "
-            "explanations, reminders and follow-up collection. Processing involves "
-            "the Telegram channel provider, cloud hosting providers and AI model "
-            "providers. Bot messages are not end-to-end encrypted clinical "
-            "communication.\nRoutine follow-up is limited to one chase message per "
-            "day, outside quiet hours {quiet_start}–{quiet_end} in {timezone}. "
-            "Scheduled reminders and quiet-hour exceptions require separate "
-            "consent.\nSanad can make mistakes; it does not diagnose, prescribe or "
-            "change the doctor's instructions. It is not an emergency service and "
-            "does not promise a doctor response time. You may decline now or "
-            "contact the clinic to stop routine contact and withdraw consent. This "
-            "does not change treatment.\nData retention: {retention}\nClinic "
-            "contact: {clinic_contact}"
-        ),
+        "ar": "سند مساعد بالذكاء الاصطناعي لمتابعة تعليمات د. {doctor}. "
+        "الربط محتاج موافقتك وتأكيد الدكتور إنك الشخص المقصود.\n"
+        "هنعالج رسائلك وصوتك وصورك وبيانات حسابك وخطة الدكتور للشرح "
+        "والتذكير وجمع المتابعة. المعالجة تشمل مقدم قناة تيليجرام "
+        "ومقدمي الاستضافة السحابية ونماذج الذكاء الاصطناعي. رسائل "
+        "البوت مش محادثة طبية مشفرة من الطرف للطرف.\n"
+        "المتابعة الروتينية بحد أقصى رسالة متابعة واحدة في اليوم، "
+        "خارج ساعات الهدوء {quiet_start}, {quiet_end} بتوقيت "
+        "{timezone}. أي تذكير بمواعيد محددة أو أثناء الهدوء محتاج "
+        "موافقة منفصلة.\n"
+        "سند ممكن يغلط، ومش بيشخص أو بيكتب علاج أو بيغير تعليمات "
+        "الدكتور. مش خدمة طوارئ ومفيش وعد بوقت رد الدكتور. تقدر "
+        "ترفض دلوقتي أو تتواصل مع العيادة لوقف التواصل الروتيني "
+        "وسحب الموافقة. ده مش بيغير العلاج.\n"
+        "الاحتفاظ بالبيانات: {retention}\n"
+        "التواصل مع العيادة: {clinic_contact}",
+        "en": "Sanad is an AI assistant following Dr {doctor}'s "
+        "instructions. Linking requires your consent and the "
+        "doctor's confirmation of your identity.\n"
+        "We process your messages, voice, images, account details "
+        "and doctor's plan for explanations, reminders and "
+        "follow-up collection. Processing involves the Telegram "
+        "channel provider, cloud hosting providers and AI model "
+        "providers. Bot messages are not end-to-end encrypted "
+        "clinical communication.\n"
+        "Routine follow-up is limited to one chase message per day, "
+        "outside quiet hours {quiet_start}, {quiet_end} in "
+        "{timezone}. Scheduled reminders and quiet-hour exceptions "
+        "require separate consent.\n"
+        "Sanad can make mistakes; it does not diagnose, prescribe "
+        "or change the doctor's instructions. It is not an "
+        "emergency service and does not promise a doctor response "
+        "time. You may decline now or contact the clinic to stop "
+        "routine contact and withdraw consent. This does not change "
+        "treatment.\n"
+        "Data retention: {retention}\n"
+        "Clinic contact: {clinic_contact}",
     },
     "doctor.consent_recorded_wait_doctor": {
-        "ar": (
-            "موافقتك اتسجلت. مستنيين الدكتور يؤكد إنك الشخص المقصود قبل تفعيل "
-            "الربط.\nYour consent was recorded. The doctor must confirm your "
-            "identity before linking is activated."
-        ),
-        "en": (
-            "موافقتك اتسجلت. مستنيين الدكتور يؤكد إنك الشخص المقصود قبل تفعيل "
-            "الربط.\nYour consent was recorded. The doctor must confirm your "
-            "identity before linking is activated."
-        ),
+        "ar": "موافقتك اتسجلت. مستنيين الدكتور يؤكد إنك الشخص المقصود قبل تفعيل الربط.",
+        "en": "Your consent was recorded. The doctor must "
+        "confirm your identity before linking is "
+        "activated.",
     },
     "doctor.consent_declined_ack": {
-        "ar": (
-            "تم تسجيل عدم الموافقة. الربط مش هيتفعل.\nYour decline was recorded. "
-            "Linking will not be activated."
-        ),
-        "en": (
-            "تم تسجيل عدم الموافقة. الربط مش هيتفعل.\nYour decline was recorded. "
-            "Linking will not be activated."
-        ),
+        "ar": "تم تسجيل عدم الموافقة. الربط مش هيتفعل.",
+        "en": "Your decline was recorded. Linking will not be activated.",
     },
     "doctor.claim_refused": {
-        "ar": (
-            "مش ممكن نكمل الربط من الدعوة دي. تواصل مع العيادة.\nThis invitation "
-            "cannot complete linking. Contact the clinic."
-        ),
-        "en": (
-            "مش ممكن نكمل الربط من الدعوة دي. تواصل مع العيادة.\nThis invitation "
-            "cannot complete linking. Contact the clinic."
-        ),
+        "ar": "مش ممكن نكمل الربط من الدعوة دي. تواصل مع العيادة.",
+        "en": "This invitation cannot complete linking. Contact the clinic.",
     },
     "doctor.claim_awaiting_doctor": {
-        "ar": (
-            "صاحب حساب تيليجرام {claimant} وافق على الربط. تأكد من هويته من "
-            "المقابلة أو وسيلة تواصل موثوقة قبل التأكيد.\nTelegram account "
-            "{claimant} consented to linking. Verify this is the intended patient "
-            "through the encounter or an established contact method before "
-            "confirming."
-        ),
-        "en": (
-            "صاحب حساب تيليجرام {claimant} وافق على الربط. تأكد من هويته من "
-            "المقابلة أو وسيلة تواصل موثوقة قبل التأكيد.\nTelegram account "
-            "{claimant} consented to linking. Verify this is the intended patient "
-            "through the encounter or an established contact method before "
-            "confirming."
-        ),
+        "ar": "صاحب حساب تيليجرام {claimant} وافق على الربط. تأكد "
+        "من هويته من المقابلة أو وسيلة تواصل موثوقة قبل "
+        "التأكيد.",
+        "en": "Telegram account {claimant} consented to linking. "
+        "Verify this is the intended patient through the "
+        "encounter or an established contact method before "
+        "confirming.",
     },
     "doctor.claim_declined_doctor": {
-        "ar": (
-            "صاحب طلب الربط رفض الموافقة. الربط لم يتفعل؛ يمكنك إصدار دعوة جديدة.\n"
-            "The claimant declined consent. Linking was not activated; you may "
-            "issue a new invitation."
-        ),
-        "en": (
-            "صاحب طلب الربط رفض الموافقة. الربط لم يتفعل؛ يمكنك إصدار دعوة جديدة.\n"
-            "The claimant declined consent. Linking was not activated; you may "
-            "issue a new invitation."
-        ),
+        "ar": "صاحب طلب الربط رفض الموافقة. الربط لم يتفعل؛ يمكنك إصدار دعوة جديدة.",
+        "en": "The claimant declined consent. Linking was not "
+        "activated; you may issue a new invitation.",
     },
     "doctor.claim_rejected": {
-        "ar": (
-            "طلب الربط لم يتم تأكيده. تواصل مع العيادة للحصول على دعوة جديدة.\nThe "
-            "linking request was not confirmed. Contact the clinic for a new "
-            "invitation."
-        ),
-        "en": (
-            "طلب الربط لم يتم تأكيده. تواصل مع العيادة للحصول على دعوة جديدة.\nThe "
-            "linking request was not confirmed. Contact the clinic for a new "
-            "invitation."
-        ),
+        "ar": "طلب الربط لم يتم تأكيده. تواصل مع العيادة للحصول على دعوة جديدة.",
+        "en": "The linking request was not confirmed. Contact the clinic for a new invitation.",
     },
     "doctor.binding_confirmed": {
-        "ar": (
-            "الدكتور أكد هويتك وتم تفعيل ربط حسابك بسند بناءً على موافقتك.\nThe "
-            "doctor confirmed your identity. Your Sanad account link is active "
-            "with your consent."
-        ),
-        "en": (
-            "الدكتور أكد هويتك وتم تفعيل ربط حسابك بسند بناءً على موافقتك.\nThe "
-            "doctor confirmed your identity. Your Sanad account link is active "
-            "with your consent."
-        ),
+        "ar": "الدكتور أكد هويتك وتم تفعيل ربط حسابك بسند بناءً على موافقتك.",
+        "en": "The doctor confirmed your identity. Your Sanad account "
+        "link is active with your consent.",
     },
     "doctor.invitation_expired_doctor": {
-        "ar": (
-            "انتهت صلاحية دعوة الربط بدون تفعيل. يمكنك إصدار دعوة جديدة؛ مواعيد "
-            "الخطة لم تتغير.\nThe linking invitation expired without activation. "
-            "You may issue a new invitation; plan deadlines are unchanged."
-        ),
-        "en": (
-            "انتهت صلاحية دعوة الربط بدون تفعيل. يمكنك إصدار دعوة جديدة؛ مواعيد "
-            "الخطة لم تتغير.\nThe linking invitation expired without activation. "
-            "You may issue a new invitation; plan deadlines are unchanged."
-        ),
+        "ar": "انتهت صلاحية دعوة الربط بدون تفعيل. يمكنك إصدار دعوة جديدة؛ مواعيد الخطة لم تتغير.",
+        "en": "The linking invitation expired without "
+        "activation. You may issue a new invitation; plan "
+        "deadlines are unchanged.",
     },
     "doctor.patient_login_link": {
-        "ar": (
-            "رابط دخولك لسند صالح لمدة عشر دقايق ولمرة واحدة. اضغط متابعة لإكمال "
-            "الدخول.\nYour Sanad login link is valid for ten minutes and one use. "
-            "Press Continue to sign in.\n{link}"
-        ),
-        "en": (
-            "رابط دخولك لسند صالح لمدة عشر دقايق ولمرة واحدة. اضغط متابعة لإكمال "
-            "الدخول.\nYour Sanad login link is valid for ten minutes and one use. "
-            "Press Continue to sign in.\n{link}"
-        ),
+        "ar": "لينك دخولك لسند صالح لعشر دقايق ولمرة واحدة. انسخه والصقه في المتصفح، "
+        "ومتدوسش عليه جوه تيليجرام.\n{link}",
+        "en": "Your one-time sign-in link, valid for ten minutes. Copy it and paste it "
+        "into your browser. Do not tap it inside Telegram.\n"
+        "{link}",
     },
     "doctor.doctor_photo_unreadable": {
         "ar": "مش قادر أقرا الصورة: {reason}. صوّر من فوق في نور كويس وابعتها تاني.",
-        "en": (
-            "I could not read the image: {reason}. Photograph it from above in "
-            "good light and resend it."
-        ),
+        "en": "I could not read the image: {reason}. Photograph "
+        "it from above in good light and resend it.",
     },
     "doctor.scribe_intake_pending": {
         "ar": "الصورة محفوظة عندك. اختار المريض، أو مريض جديد، أو مش دلوقتي.",
         "en": "Your image is saved. Choose a patient, New patient, or Not now.",
     },
-    "doctor.scribe_amendment_line": {
-        "ar": "{drug}: {old} ← {new}",
-        "en": "{drug}: {old} → {new}",
-    },
+    "doctor.scribe_amendment_line": {"ar": "{drug}: {old} ← {new}", "en": "{drug}: {old} → {new}"},
     "doctor.scribe_brand_change_line": {
         "ar": "{old_drug} {old} ← {new_drug} {new}",
         "en": "{old_drug} {old} → {new_drug} {new}",
     },
-    "doctor.scribe_card": {
-        "ar": "{body}",
-        "en": "{body}",
-    },
-    "doctor.scribe_confirmed": {
-        "ar": "اتسجل:\n{body}",
-        "en": "Recorded:\n{body}",
-    },
+    "doctor.scribe_card": {"ar": "{body}", "en": "{body}"},
+    "doctor.scribe_confirmed": {"ar": "اتسجل:\n{body}", "en": "Recorded:\n{body}"},
     "doctor.scribe_stale": {
         "ar": "الكارت اتغير أو مبقاش صالح. ابعت التعليمات من جديد.",
         "en": "The card changed or is no longer valid. Send the instructions again.",
@@ -285,14 +221,14 @@ CATALOG: Catalog = {
         "en": "Send your correction by text or voice. The previous card cannot be confirmed.",
     },
     "doctor.scribe_invitation": {
-        "ar": (
-            "افتح اللينك أو امسح الكود، وبعدها وافق على الربط واستنى تأكيد "
-            "الدكتور.\nصالح 24 ساعة\n{link}"
-        ),
-        "en": (
-            "Open the link or scan the code, consent to linking, and wait for the "
-            "doctor's confirmation.\nValid for 24 hours\n{link}"
-        ),
+        "ar": "افتح اللينك أو امسح الكود، وبعدها وافق على الربط واستنى "
+        "تأكيد الدكتور.\n"
+        "صالح 24 ساعة\n"
+        "{link}\nأي /qr جديد بيلغي اللينك ده.",
+        "en": "Open the link or scan the code, consent to linking, and "
+        "wait for the doctor's confirmation.\n"
+        "Valid for 24 hours\n"
+        "{link}\nA new /qr replaces this link.",
     },
     "doctor.doctor_voice_unreadable": {
         "ar": "مش قادر أسمع التسجيل. ابعته تاني أو اكتب الكلام.",
@@ -308,16 +244,37 @@ CATALOG: Catalog = {
     },
     "doctor.doctor_help": {
         "ar": (
-            "أوامر سند:\n/start — ترحيب\n/help — المساعدة\n/new الاسم — مريض جديد\n"
-            "/find الاسم — بحث\n/qr الاسم — دعوة ربط\n/cancel — إلغاء الكارت\nابعت "
-            "التعليمات كتابة أو بصوتك، وراجع الكارت قبل ✅ تمام."
+            "أوامر سند:\n"
+            "/start: ترحيب\n"
+            "/help: المساعدة\n"
+            "/new الاسم: مريض جديد\n"
+            "/find الاسم: بحث\n"
+            "/qr الاسم: دعوة ربط\n"
+            "/cancel: إلغاء الكارت\n"
+            "ابعت التعليمات كتابة أو بصوتك، وراجع الكارت قبل ✅ تمام."
         ),
         "en": (
-            "Sanad commands:\n/start — welcome\n/help — help\n/new name — new patient\n"
-            "/find name — search\n/qr name — linking invitation\n/cancel — cancel "
-            "card\n/intake — saved images\n/lang en | ar — language\nSend "
-            "instructions by text or voice and review the card before tapping ✅ "
-            "Confirm.\nContest mode is English; Arabic is a declared upgrade."
+            "Sanad commands:\n"
+            "/start: welcome\n"
+            "/help: help\n"
+            "/new name: new patient\n"
+            "/find name: search\n"
+            "/qr name: linking invitation\n"
+            "/cancel: cancel card\n"
+            "/intake: saved images\n"
+            "/lang en | ar: language\n"
+            "/login: sign in\n"
+            "/logout: sign out\n"
+            "/digest: question digest settings\n"
+            "/questions: list questions\n"
+            "/answer N text: answer and queue to patient\n"
+            "/send N: send a proposed reply\n"
+            "/reuse: save a reusable answer\n"
+            "/inbox: unresolved reviews\n"
+            "/corrections: correct a record\n"
+            "/name: set your display name\n"
+            "Send instructions by text or voice and review the card before tapping ✅ Confirm.\n"
+            "Contest mode is English; Arabic is a declared upgrade."
         ),
     },
 }

@@ -13,6 +13,7 @@ from store.account_fixtures import APPLICANT, update
 from store.scribe_fixtures import ScribeWorld
 
 
+@pytest.mark.usefixtures("legacy_dictation_schema")
 def test_english_card_and_monitoring_confirmation(store: StoreBase, clock: FakeClock) -> None:
     world = ScribeWorld.create(store, clock)
     world.approve(language="en")
@@ -23,7 +24,7 @@ def test_english_card_and_monitoring_confirmation(store: StoreBase, clock: FakeC
     assert (
         "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00)" in text
     )
-    assert "TEST: CBC, Na, K, lipid profile — due" in text
+    assert "TEST: CBC, Na, K, lipid profile: due" in text
     assert "What dose of Forxiga did you intend?" in text
     assert "✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes" in text
     assert [i.code for i in proposal.issues] == ["dose_missing"]
@@ -51,6 +52,7 @@ def test_english_card_and_monitoring_confirmation(store: StoreBase, clock: FakeC
     assert [r.body["name"] for r in heads] == ["Exforge HCT"]
 
 
+@pytest.mark.usefixtures("legacy_dictation_schema")
 def test_english_reply_updates_the_same_card_and_keeps_its_expiry(
     store: StoreBase, clock: FakeClock
 ) -> None:
@@ -72,6 +74,7 @@ def test_english_reply_updates_the_same_card_and_keeps_its_expiry(
 
 
 @pytest.mark.parametrize("language", ["en", "ar"])
+@pytest.mark.usefixtures("legacy_dictation_schema")
 def test_oversized_card_keeps_orders_and_missions_and_edit_reveals_history(
     store: StoreBase, clock: FakeClock, language: str
 ) -> None:
@@ -179,6 +182,7 @@ def test_new_record_defaults_and_patient_binding_follow_doctor(
     assert world.bound().language == "ar"
 
 
+@pytest.mark.usefixtures("legacy_dictation_schema")
 def test_same_family_brand_change_reuses_the_current_head(
     store: StoreBase, clock: FakeClock
 ) -> None:

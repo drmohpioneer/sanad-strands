@@ -126,7 +126,7 @@ async def run_check(
         "state": "started",
         "prompt_version": PROMPT_VERSION,
         "speech_prompt_version": SPEECH_VERSION,
-        "spend_cap_usd": 0.05,
+        "spend_cap_usd": 0.15,
         "checks": {},
         "calls": [],
         "speech_attempts": [],
@@ -140,7 +140,7 @@ async def run_check(
     }
     with destination.open("x") as output:
         json.dump(report, output, indent=2)
-    spend = DictationSpend(cap=0.05)
+    spend = DictationSpend(cap=0.15)
     context = scoped()
     private_provider_logs()
     try:

@@ -1,11 +1,16 @@
 """Real, synthetic development checks. No real doctor or patient is enrolled."""
 
 import argparse
+import asyncio
 import json
 import secrets
+import shutil
+import subprocess
+import tempfile
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
@@ -24,8 +29,8 @@ from deploy.common import (
 from deploy.ops import tick_fire
 from sanad.accounts.commands import ApplyAsDoctor, ApproveDoctor
 from sanad.accounts.service import AccountService
-from sanad.auth.claim import ClaimService
-from sanad.auth.commands import CreatePatientStub
+from sanad.auth.claim import ClaimService, consent_policy
+from sanad.auth.commands import CreatePatientStub, IssuedInvitation, IssueInvitation
 from sanad.channels.telegram import wording
 from sanad.domain import PatientScope, TenantScope
 from sanad.ops.tick_signing import signed_headers
@@ -175,11 +180,11 @@ def webhook(
     }
 
 
-def tenant(aws: Any, table: str, url: str) -> dict[str, Any]:
+def tenant(aws: Any, table: str, url: str, *, bot_id: str | None = None) -> dict[str, Any]:
     store = DynamoStore(client(aws, "dynamodb"), table)
     # A separate synthetic bot namespace prevents the live bot from delivering
     # this account-service smoke's outbox. Values are impossible Telegram IDs.
-    bot, admin = "9907" + str(secrets.randbelow(10**12)), "999999999999999900"
+    bot, admin = bot_id or "9907" + str(secrets.randbelow(10**12)), "999999999999999900"
     accounts = AccountService(
         store,
         utc_now,
@@ -190,7 +195,7 @@ def tenant(aws: Any, table: str, url: str) -> dict[str, Any]:
     )
     doctors = []
     actors = []
-    for subject in ("999999999999999901", "999999999999999902"):
+    for subject in ("999999" + str(secrets.randbelow(10**12)).zfill(12) for _ in range(2)):
         result = accounts.apply(
             ApplyAsDoctor(
                 command_id=uuid4().hex,
@@ -223,7 +228,7 @@ def tenant(aws: Any, table: str, url: str) -> dict[str, Any]:
         and store.authorize(bot, actors[0].subject).principal.doctor_id == doctors[0],
         "tenant A authorization isolation",
     )
-    claims = ClaimService(accounts, url)
+    claims = ClaimService(accounts, url, consent_policy=lambda doctor_id: consent_policy())
     created = claims.create_stub(
         CreatePatientStub(
             command_id=uuid4().hex, actor=actors[0], display_name="Synthetic Deployment Patient"
@@ -252,7 +257,63 @@ def tenant(aws: Any, table: str, url: str) -> dict[str, Any]:
         "patient_stubs": 1,
         "foreign_scope_denied": True,
         "synthetic_bot_namespace": bot,
+        "doctor_id": doctors[0],
+        "doctor_subject": actors[0].subject,
+        "patient_id": patient,
     }
+
+
+def enrollment(
+    aws: Any, http: httpx.Client, url: str, table: str, values: dict[str, str]
+) -> dict[str, Any]:
+    """Issue through the product and test the deployed worker's consent wiring."""
+    bot = values["bot-token"].split(":", 1)[0]
+    fixture = tenant(aws, table, url, bot_id=bot)
+    store = DynamoStore(client(aws, "dynamodb"), table)
+    accounts = AccountService(
+        store,
+        utc_now,
+        IdentityConfig(bot_id=bot, admin_user_id=values["admin-telegram-id"]),
+        lambda key, language, fields: wording.render(key, language, **fields),
+        approve_label=(wording.APPROVE_BUTTON, "Approve"),
+        reject_label=(wording.REJECT_BUTTON, "Reject"),
+    )
+    claims = ClaimService(accounts, url, consent_policy=lambda doctor_id: consent_policy())
+    invitation = claims.issue_invitation(
+        IssueInvitation(
+            command_id=uuid4().hex,
+            actor=store.authorize(bot, fixture["doctor_subject"]).principal,
+            patient_id=fixture["patient_id"],
+        )
+    )
+    require(isinstance(invitation, IssuedInvitation), "enrollment invitation not issued")
+    assert isinstance(invitation, IssuedInvitation)
+    subject = "999998" + str(secrets.randbelow(10**12)).zfill(12)
+    id = secrets.randbelow(2**31)
+    response = http.post(
+        url + "/tg",
+        headers={"X-Telegram-Bot-Api-Secret-Token": values["webhook-secret"]},
+        json={
+            "update_id": id,
+            "message": {
+                "message_id": id,
+                "date": int(time.time()),
+                "from": {"id": subject, "is_bot": False},
+                "chat": {"id": subject, "type": "private"},
+                "text": "/start " + invitation.token.get_secret_value(),
+            },
+        },
+    )
+    require(response.status_code == 200, "enrollment receipt refused")
+    for _ in range(30):
+        inv = claims.invitation(keys.digest(invitation.token.get_secret_value()))
+        pending = (
+            claims.patient_claim(inv.pending_claim_id) if inv and inv.pending_claim_id else None
+        )
+        if pending and pending.state == "pending" and pending.candidate_subject == subject:
+            return {"invitation_issued": True, "pending_claim": True, "patient_activated": False}
+        time.sleep(0.5)
+    raise OperationError("enrollment pending claim not observed")
 
 
 def browser_session(http: httpx.Client, url: str) -> dict[str, Any]:
@@ -318,16 +379,114 @@ def cost(aws: Any, out: dict[str, str]) -> dict[str, Any]:
     }
 
 
+SYNTHETIC_SPEECH = (
+    "Synthetic speech check. Record the number five. "
+    "This is a test recording, with no patient information."
+)
+
+
+def synthetic_english_clip() -> bytes:
+    """Generate the shared 15-second English smoke/live fixture locally.
+
+    No TTS provider or credential is involved. Uses macOS say or local espeak,
+    then ffmpeg to pad/cut the synthetic recording to exactly fifteen seconds.
+    """
+    with tempfile.TemporaryDirectory(prefix="sanad-synthetic-") as directory:
+        source = Path(directory) / "speech.wav"
+        if shutil.which("say"):
+            argv = [
+                "say",
+                "-v",
+                "Samantha",
+                "--data-format=LEI16@16000",
+                "-o",
+                str(source),
+                SYNTHETIC_SPEECH,
+            ]
+        elif shutil.which("espeak"):
+            argv = ["espeak", "-v", "en", "-w", str(source), SYNTHETIC_SPEECH]
+        else:
+            raise OperationError("Local English speech generator unavailable")
+        subprocess.run(argv, check=True, capture_output=True, timeout=30)
+        return subprocess.run(
+            [
+                "ffmpeg",
+                "-nostdin",
+                "-v",
+                "error",
+                "-i",
+                str(source),
+                "-af",
+                "apad",
+                "-t",
+                "15",
+                "-ar",
+                "16000",
+                "-ac",
+                "1",
+                "-c:a",
+                "libmp3lame",
+                "-b:a",
+                "48k",
+                "-f",
+                "mp3",
+                "pipe:1",
+            ],
+            check=True,
+            capture_output=True,
+            timeout=30,
+        ).stdout
+
+
+def gemini(aws: Any, env: str) -> dict[str, Any]:
+    """Prove decrypted SSM configuration from the operator, not Lambda egress."""
+    from sanad.domain import Provenance
+    from sanad.media.audio import ConvertedAudio, FFmpegConverter
+    from sanad.media.speech import SpeechAdapter, Transcript
+    from sanad.models.gemini import GeminiCaller
+
+    name = f"/sanad/{env}/gemini_api_key"
+    response = client(aws, "ssm").get_parameters(Names=[name], WithDecryption=True)
+    values = {p["Name"]: p["Value"] for p in response["Parameters"]}
+    require(set(values) == {name} and bool(values[name]), "media configuration unavailable")
+    source = Provenance(
+        source_observation_id="synthetic-smoke",
+        actor_kind="doctor",
+        actor_id="synthetic-doctor",
+        source_kind="doctor_statement",
+        received_at=datetime.now(UTC),
+    )
+    adapter = SpeechAdapter(
+        GeminiCaller("11M-smoke", values[name], timeout=30), FFmpegConverter(), source
+    )
+    result = asyncio.run(
+        adapter.transcribe_converted(
+            ConvertedAudio(data=synthetic_english_clip(), duration=15), expected_language="en"
+        )
+    )
+    require(isinstance(result, Transcript), "media smoke unavailable")
+    assert isinstance(result, Transcript)
+    require("5" in result.numbers, "media smoke did not recover the synthetic number")
+    return {
+        "ok": True,
+        "latency_ms": round(result.metadata.latency_ms, 2),
+        "input_tokens": result.metadata.input_tokens if result.metadata.usage_known else None,
+        "output_tokens": result.metadata.output_tokens if result.metadata.usage_known else None,
+    }
+
+
 def run_smoke(aws: Any, env: str, out: dict[str, str], revision: str) -> dict[str, Any]:
     values, _ = parameter_values(client(aws, "ssm"), env)
     url = out["FunctionUrl"].rstrip("/")
     checks = {}
     with httpx.Client(trust_env=False, timeout=35) as http:
         functions: dict[str, Callable[[], dict[str, Any]]] = {
+            "gemini": lambda: gemini(aws, env),
             "health": lambda: health(http, url, revision),
             "tick": lambda: tick(aws, env, http, url, values["tick-secret"]),
             "webhook": lambda: webhook(aws, http, url, out["TableName"], values),
             "tenant": lambda: tenant(aws, out["TableName"], url),
+            "enrollment": lambda: enrollment(aws, http, url, out["TableName"], values),
             "session": lambda: browser_session(http, url),
             "cost": lambda: cost(aws, out),
         }

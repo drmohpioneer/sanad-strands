@@ -405,6 +405,11 @@
                 },
                 {
                   "Effect": "Allow",
+                  "Action": ["dynamodb:Scan"],
+                  "Resource": {"Fn::GetAtt": ["Table", "Arn"]}
+                },
+                {
+                  "Effect": "Allow",
                   "Action": [
                     "s3:GetObject",
                     "s3:PutObject",

@@ -1,6 +1,6 @@
 """Code-rendered evidence wording. Every string is OWNER_REVIEW_PENDING."""
 
-from sanad.domain.language import default_language
+from sanad.domain.language import default_language, effective
 from sanad.presentation.context import PresentationContext
 
 OWNER_REVIEW_PENDING = True
@@ -46,6 +46,10 @@ TEXT = {
     "doctor_evidence_card": (
         "مستند محتاج قرار: {title}\n{details}",
         "Evidence needs a decision: {title}\n{details}",
+    ),
+    "doctor_evidence_already_handled": (
+        "الاختيار ده اتنفذ بالفعل.",
+        "This evidence decision is already handled.",
     ),
     "doctor_evidence_stale": (
         "الاختيار ده انتهى أو اتغير، افتح /evidence تاني",
@@ -129,11 +133,11 @@ BUTTONS = {
 
 
 def button(key: str, language: str) -> str:
-    return BUTTONS[key][language == "en"]
+    return BUTTONS[key][effective(language, audience="doctor") == "en"]
 
 
 def missing_text(missing: tuple[str, ...], language: str) -> str:
-    if language == "en":
+    if effective(language, audience="doctor") == "en":
         return ", ".join(
             MISSING_EN.get(
                 v,

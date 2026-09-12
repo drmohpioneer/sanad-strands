@@ -561,9 +561,9 @@ def test_doctor_actions_revalidate_scope_and_session(
             original = world.login.require
             calls = 0
 
-            def revoke(cookie: str, role: str):  # type: ignore[no-untyped-def]
+            def revoke(cookie: str, role: str, **kwargs: str):  # type: ignore[no-untyped-def]
                 nonlocal calls
-                session = original(cookie, role)  # type: ignore[arg-type]
+                session = original(cookie, role, **kwargs)  # type: ignore[call-overload]
                 calls += 1
                 if calls == 1:
                     doctor = world.doctor

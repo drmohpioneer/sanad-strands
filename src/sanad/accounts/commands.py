@@ -8,7 +8,7 @@ from pydantic import Field
 from sanad.domain import NonblankStr, PositiveVersion, Principal, VersionRef
 from sanad.domain.boundaries import _BoundaryValue
 from sanad.domain.operations import OperationsPolicy, PositiveDuration
-from sanad.store.records import Accepted, Duplicate, Forbidden, StaleVersion, TooLarge
+from sanad.store.records import Accepted, Claim, Duplicate, Forbidden, StaleVersion, TooLarge
 
 
 class AccountPolicy(_BoundaryValue):
@@ -23,6 +23,11 @@ class AccountCommand(_BoundaryValue):
     command_id: NonblankStr
     actor: Principal
     expected_versions: tuple[VersionRef, ...] = ()
+    session_role: Literal["doctor", "patient", "admin"] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    admin_epoch: int | None = Field(default=None, exclude_if=lambda value: value is None)
+    inbound_claim: Claim | None = Field(default=None, exclude=True)
 
 
 class ApplyAsDoctor(AccountCommand):
@@ -32,6 +37,11 @@ class ApplyAsDoctor(AccountCommand):
     claimed_specialty: Annotated[str, Field(strict=True, max_length=160)] = ""
     claimed_city: Annotated[str, Field(strict=True, max_length=160)] = ""
     restart_rejected: bool = False
+
+
+class SetDoctorName(AccountCommand):
+    type: Literal["SetDoctorName"] = "SetDoctorName"
+    name: Annotated[str, Field(strict=True, min_length=1, max_length=160)]
 
 
 class ApproveDoctor(AccountCommand):

@@ -22,9 +22,11 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 
 from sanad.api.app import create_app
 from sanad.api.internal import process_event as process_event
+from sanad.auth.claim import consent_policy
 from sanad.channels.telegram.settings import TelegramSettings
 from sanad.media.audio import FFmpegConverter
 from sanad.media.storage import S3MediaStore
+from sanad.models.io import ModelCaller
 from sanad.models.registry import ModelRegistry
 from sanad.models.timeouts import (
     PROVIDER_CONNECT_TIMEOUT,
@@ -56,11 +58,41 @@ class MetadataOnlyErrors(logging.Filter):
         return True
 
 
+def media_caller(
+    model_id: str,
+    policy_version: str,
+    api_key: str,
+    *,
+    region: str = "us-east-1",
+    read_timeout: float = SPEECH_READ_TIMEOUT,
+    timeout: float = TRANSCRIPTION_TIMEOUT,
+) -> "ModelCaller":
+    from sanad.models.gemini import GeminiCaller
+    from sanad.models.io import BedrockCaller
+
+    if model_id.startswith("gemini-"):
+        return GeminiCaller(policy_version, api_key, timeout=timeout)
+    return BedrockCaller(
+        boto3.client(
+            "bedrock-runtime",
+            region_name=region,
+            config=Config(
+                connect_timeout=PROVIDER_CONNECT_TIMEOUT,
+                read_timeout=read_timeout,
+                retries={"total_max_attempts": 1},
+            ),
+        ),
+        policy_version,
+        timeout=timeout,
+    )
+
+
 def configure(revision: str) -> FastAPI:
     config = Config(connect_timeout=2, read_timeout=3, retries={"total_max_attempts": 1})
     prefix = os.environ["SANAD_SSM_PREFIX"]
     ssm = boto3.client("ssm", config=config)
     names = (
+        "gemini_api_key",
         "bot-token",
         "webhook-secret",
         "tick-secret",
@@ -88,6 +120,16 @@ def configure(revision: str) -> FastAPI:
         values["tick-secret"], NonceStore(store, "tick:" + os.environ["SANAD_ENV"]), utc_now
     )
     media_store = S3MediaStore(os.environ["SANAD_BUCKET"], boto3.client("s3", config=config))
+    web_settings = WebSettings(
+        public_base_url=values["public-base-url"],
+        bot_username=values["bot-username"],
+        **(
+            {"consent_retention": os.environ["SANAD_CONSENT_RETENTION"]}
+            if os.environ.get("SANAD_CONSENT_RETENTION")
+            else {}
+        ),
+    )
+    policy = consent_policy(retention=web_settings.consent_retention)
     app = create_app(
         revision,
         synthetic=os.environ.get("SANAD_ENV") in {"dev", "synthetic", "test", "judge"},
@@ -95,9 +137,8 @@ def configure(revision: str) -> FastAPI:
         store=store,
         receipt_submit=invoker,
         upload_storage=media_store,
-        web_settings=WebSettings(
-            public_base_url=values["public-base-url"], bot_username=values["bot-username"]
-        ),
+        web_settings=web_settings,
+        consent_policy=lambda doctor_id: policy,
         tick_verifier=verifier,
         tick_sweep=lambda: sweep_due(
             app.state.telegram,
@@ -114,7 +155,7 @@ def configure(revision: str) -> FastAPI:
     from sanad.media.speech import SpeechAdapter
     from sanad.media.telegram import TelegramFileClient
     from sanad.media.vision import VisionAdapter
-    from sanad.models.io import CALL_TIMEOUT, BedrockCaller
+    from sanad.models.io import CALL_TIMEOUT
     from sanad.scribe.turn import ScribeTurn
     from sanad.steward.types import StewardPolicy
     from sanad.store.keys import IntakeScope, digest
@@ -129,23 +170,25 @@ def configure(revision: str) -> FastAPI:
         read_timeout: float = SPEECH_READ_TIMEOUT,
         timeout: float = TRANSCRIPTION_TIMEOUT,
     ) -> SpeechAdapter:
-        caller = BedrockCaller(
-            boto3.client(
-                "bedrock-runtime",
-                region_name=app.state.model_registry.region,
-                config=Config(
-                    connect_timeout=PROVIDER_CONNECT_TIMEOUT,
-                    read_timeout=read_timeout,
-                    retries={"total_max_attempts": 1},
-                ),
-            ),
+        caller = media_caller(
+            app.state.model_registry.speech,
             runtime.safety_policy.policy_version,
+            values["gemini_api_key"],
+            region=app.state.model_registry.region,
+            read_timeout=read_timeout,
             timeout=timeout,
         )
         return SpeechAdapter(caller, _audio_converter, source, app.state.model_registry)
 
     scribe.vision_factory = lambda source: VisionAdapter(
-        speech(source, read_timeout=22, timeout=CALL_TIMEOUT).caller,
+        media_caller(
+            app.state.model_registry.vision,
+            runtime.safety_policy.policy_version,
+            values["gemini_api_key"],
+            region=app.state.model_registry.region,
+            read_timeout=22,
+            timeout=CALL_TIMEOUT,
+        ),
         source,
         runtime.safety_policy,
         app.state.model_registry,

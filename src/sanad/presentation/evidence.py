@@ -56,6 +56,10 @@ CATALOG: Catalog = {
         "ar": "مستند محتاج قرار: {title}\n{details}",
         "en": "Evidence needs a decision: {title}\n{details}",
     },
+    "evidence.doctor_evidence_already_handled": {
+        "ar": "الاختيار ده اتنفذ بالفعل.",
+        "en": "This evidence decision is already handled.",
+    },
     "evidence.doctor_evidence_stale": {
         "ar": "الاختيار ده انتهى أو اتغير، افتح /evidence تاني",
         "en": "This choice expired or changed. Open /evidence again.",

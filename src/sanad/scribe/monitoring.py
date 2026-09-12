@@ -8,15 +8,17 @@ from sanad.domain import DoctorTimingPolicy, MissionKind
 from sanad.domain.deadlines import NeedsClarification, ResolvedTiming, resolve_timing
 from sanad.domain.entities import MonitorDetails
 from sanad.monitor import policy
-from sanad.monitor.slots import UNITS, generate, requested_metric
+from sanad.monitor.slots import UNITS, generate, metric, requested_metric
 from sanad.scribe.names import normalize
 
 _COUNT = (
     r"(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|"
-    r"واحد|اثنين|اتنين|ثلاث|ثلاثة|ثلاثه|اربع|اربعة|اربعه|خمس|خمسة|خمسه|ست|سته|سبع|سبعه)"
+    r"واحد|اثنين|اتنين|تلات|ثلاث|ثلاثة|ثلاثه|اربع|اربعة|اربعه|خمس|خمسة|خمسه|ست|سته|سبع|سبعه)"
 )
 _FREQUENCY = re.compile(
-    rf"{_COUNT}\s+(?:times?\s+(?:(?:a|per|each)\s+day|daily)|مرات\s+(?:في\s+اليوم|يوميا))",
+    rf"(?:{_COUNT}\s+(?:times?\s+(?:(?:a|per|each)\s+day|daily)|مرات\s+(?:في\s+اليوم|يوميا))"
+    r"|(?:once|twice|thrice)\s+(?:(?:a|per|each)\s+day|daily)"
+    r"|every morning and evening|(?:مره|مرتين)\s+(?:في\s+اليوم|يوميا))",
     re.I,
 )
 _DURATION = re.compile(
@@ -38,9 +40,23 @@ def spoken_counts(text: str) -> set[str]:
     return {_ENGLISH_COUNTS[t] for t in normalize(text).split() if t in _ENGLISH_COUNTS}
 
 
+def frequency_count(value: str) -> int:
+    from sanad.scribe.timing import _DURATION_NUMBERS
+
+    word = value.split()[0]
+    aliases = {"once": 1, "twice": 2, "thrice": 3, "every": 2, "مره": 1, "مرتين": 2, "تلات": 3}
+    return int(word) if word.isdigit() else aliases.get(word, _DURATION_NUMBERS.get(word, 0))
+
+
+def spoken_clause(text: str) -> str:
+    # Keep the original words and offsets available to the ordinary grounding gate.
+    parts = re.split(r"[.;،\n]|\band\b(?!\s+evening\b)", text, flags=re.I)
+    return next((part.strip() for part in parts if compile_schedule(part)), text)
+
+
 def request_counts(text: str) -> set[str]:
     normalized = normalize(text)
-    counts = {match[0].split()[0] for match in _FREQUENCY.finditer(normalized)} | {
+    counts = {str(frequency_count(match[0])) for match in _FREQUENCY.finditer(normalized)} | {
         match[1] for match in _DURATION.finditer(normalized)
     }
     return {_ENGLISH_COUNTS.get(value, value) for value in counts}
@@ -48,9 +64,20 @@ def request_counts(text: str) -> set[str]:
 
 def task_request(text: str) -> bool:
     text = normalize(text)
+    frequency = _FREQUENCY.search(text)
     return bool(
-        re.search(r"\b(?:measure|record|chart|monitor)\b|قياس|قيس|سجل|جدول", text)
-        and _FREQUENCY.search(text)
+        frequency
+        and (
+            re.search(
+                r"\b(?:measure|record|chart|monitor|check|watch|follow|track|keep an eye on)\b"
+                r"|قياس|قيس|سجل|جدول",
+                text,
+            )
+            or any(
+                metric(" ".join(text[: frequency.start()].strip(" ,،:").split()[-size:]))
+                for size in (1, 2, 3)
+            )
+        )
     )
 
 
@@ -156,7 +183,7 @@ def compile_schedule(text: str) -> Schedule | None:
     def count(word: str) -> int:
         return int(word) if word.isdigit() else _DURATION_NUMBERS.get(word, 0)
 
-    times = count(frequency[0].split()[0])
+    times = frequency_count(frequency[0])
     days = count(duration[1])
     if duration[2].startswith(("week", "اسب")):
         days *= 7
@@ -170,7 +197,8 @@ def compile_schedule(text: str) -> Schedule | None:
 
 
 def _bare_duration(value: str) -> str:
-    return re.sub(r"^(?:for|لمده|مده)\s+", "", normalize(value)).strip()
+    text = re.sub(r"^(?:for|لمده|مده)\s+", "", normalize(value)).strip()
+    return " ".join(_ENGLISH_COUNTS.get(word, word) for word in text.split())
 
 
 def timing(

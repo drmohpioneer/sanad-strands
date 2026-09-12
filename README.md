@@ -196,6 +196,7 @@ The card keeps the patient, medications, required work, history, alerts and shor
 | `/cancel` | Discard the pending card |
 | `/intake` | Reopen a private photo awaiting patient selection |
 | `/lang en`, `/lang ar` | Set the doctor's language for subsequent turns |
+| `/digest`, `/digest 21:30 each` | Show or set the local question digest time and packing (`one` or `each`) |
 
 If your dictation mentions a requested test or examination and the primary reading
 omits it, Scribe retries once within the existing extraction deadline. If it is
@@ -291,6 +292,18 @@ The versioned [education set](src/sanad/concierge/education/sources.yaml) contai
 `SANAD_LIVE=1 make live-check-10` is the isolated five-request Nova Lite check. Its authorized attempt-2 allowance is recorded in `docs/evidence/live-10-2026-09-07b.json` before network access and cannot be repeated by overwriting evidence. See the [contract 10 report](docs/contracts/10-patient-onboarding-concierge-and-education.md#report-attempt-2) for measured results and remaining review gates.
 
 ## Doctor questions and task reports
+
+Unanswered overdue questions ring at the doctor's configured digest time (default
+20:00 in the doctor's timezone). `/digest` shows the setting; `/digest 20:00`,
+`/digest one`, `/digest each`, and `/digest 21:30 each` change it. `one` packs
+up to twenty questions into one message; `each` sends individual notices at the
+same time. Questions omitted by the cap take priority at the next digest, and
+still-open questions recur. Long packed lines are abbreviated with `/questions`
+for more detail. The digest's own numbers support `/answer N …` and `/close N`;
+a newer question listing replaces those numbers. Delivery uncertainty blocks a
+new fire until disposition. Danger remains immediate, and DONE is unchanged.
+The preferences API exposes the same setting and accepts either a language body
+or a digest-time/packing body with `expected_version` and `command_id`.
 
 `/questions` lists six open questions with patient name, one active-plan line and age. `/questions 2` shows the next page. `/answer <n> <text>` and `/close <n>` use the most recently shown page, whose numbers remain fixed for one hour. Answers must pass the patient-output validator and the 700-character reply cap. Closing records an unsuccessful closure and tells the patient to ask at the visit. A full contact stop or unreachable patient leaves delivery visibly pending to the doctor; stopping routine reminders still permits a solicited answer.
 
@@ -414,7 +427,7 @@ not establish speech accuracy or clinical readiness. See the [11g implementation
 
 The doctor's `/a` dashboard provides patient search, filters, stable sorting and 50-row pages. `/a/patients/{patient_id}` shows orders, care requests, monitoring slots and evidence provenance. `/a/inbox` lists patient and unassigned reviews, `/a/history` shows resolved patient and unassigned reviews, and `/a/preferences` saves language through the same durable `/lang` command. Acknowledge/resolve remain in Telegram until slice-17 integration is reviewed. The contest override still displays English.
 
-The patient's `/pp` browser is read-only in this slice: medication plan, requests, medication reports, last reading, reminders and open questions. Messages continue through Telegram. An upload API exists (see below); the dashboard control for it is not built. No admin browser or new identity is added. Existing session, consent, CSRF and epoch guards remain in force.
+The patient's `/pp` browser is read-only in this slice: medication plan, requests, medication reports, last reading, reminders and open questions. Messages continue through Telegram. An upload API exists (see below); the dashboard control for it is not built. Administrator account access is available separately at `/admin`. Existing session, consent, CSRF and epoch guards remain in force.
 
 `/demo` uses a labelled, separate static synthetic dataset without authenticated navigation or a clinical data source. The UI uses self-hosted fonts, light/dark themes and structural RTL; no npm, bundler or external assets. [Design tokens and computed contrast](docs/design-system.md) are documented. Actual browser inspection remains an open contract-18 acceptance gate; offline test success alone does not establish visual, accessibility or clinical readiness.
 
@@ -450,7 +463,7 @@ workers. It is neither a download URL nor a credential. No browser storage or
 provider calls bypass the normal evidence processing path.
 
 Checkpoint 1 of 18b is implemented locally for review, with synthetic verification.
-Administrator browser sessions remain unreleased checkpoint 2. Telegram is still
+Administrator browser sessions are implemented by checkpoint 2. Telegram is still
 required by runtime setup, patient consent/binding and delivery; this change does
 not establish that Telegram can yet be removed from the application.
 
@@ -493,3 +506,29 @@ unsent. Reopening always requires its separate preview and confirmation.
 This local contract-19 implementation is pending architect review and rendered
 browser verification; it is not accepted or clinically validated. Unassigned intake
 correction and re-filing onto another patient are outside this slice.
+
+Doctor question commands: `/questions` lists open questions and proposed replies
+from answers that doctor explicitly saved. `/answer N your text` replies;
+`/send N` sends the bound proposal after current validation; `/defer N` postpones
+its deadline by at least 24 hours; `/close N` closes without fulfillment.
+After an accepted answer, its reuse button or `/reuse` explicitly saves the
+latest available answer for similar questions. Exact matching patient questions
+can then receive the validated saved answer with doctor attribution. Proposed
+replies are abbreviated in listings; the stored answer remains complete.
+The authenticated `/api/questions` endpoints provide the same actions.
+
+
+### Administrator browser
+
+Send `/login admin` in the configured administrator's private Telegram chat, open
+the one-use link and press Continue. `/admin` lists applications with account
+status and version-aware approve, reject, suspend and reinstate controls. Rejection
+and suspension use the displayed reason choices. A stale action requires a refreshed
+row; an already-approved application says so without creating another doctor.
+
+The administrator can manage accounts but cannot open patient records, evidence,
+messages, preferences or uploads. A person who is also a doctor uses `/login`
+for the separate doctor role. One cookie holds one selected role. Browser **Sign
+out everywhere**, or Telegram `/logout`, revokes admin sessions and pending links
+without changing that person's doctor account. The same-origin, CSRF and session
+expiry rules apply to all admin writes.

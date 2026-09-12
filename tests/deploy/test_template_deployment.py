@@ -35,7 +35,7 @@ def test_template_declares_scoped_stack_and_account_concurrency_cap() -> None:
         "Amount": 20,
         "Unit": "USD",
     }
-    assert len(PARAMETERS) == 7 and sum(p[0] == "SecureString" for p in PARAMETERS.values()) == 4
+    assert len(PARAMETERS) == 8 and sum(p[0] == "SecureString" for p in PARAMETERS.values()) == 5
     for forbidden in (
         "TELEGRAM_BOT_TOKEN_SANAD_STRANDS=",
         "AWS_SECRET_ACCESS_KEY",
@@ -118,3 +118,16 @@ def test_relay_zip_packages_exact_shared_signing_source_and_small_runtime_image(
     assert "aws-lambda-adapter:0.9.1" in docker and "python:3.12-slim" in docker
     assert "--locked --no-dev" in docker and "uv build" in docker
     assert "whisper" not in docker.lower() and "--no-access-log" in docker
+
+
+def test_patient_history_scan_is_limited_to_this_table() -> None:
+    resources = json.loads((ROOT / "deploy/stack.yaml").read_text())["Resources"]
+    statements = resources["AppRole"]["Properties"]["Policies"][0]["PolicyDocument"]["Statement"]
+    scan = [s for s in statements if "dynamodb:Scan" in s["Action"]]
+    assert scan == [
+        {
+            "Effect": "Allow",
+            "Action": ["dynamodb:Scan"],
+            "Resource": {"Fn::GetAtt": ["Table", "Arn"]},
+        }
+    ]

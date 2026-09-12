@@ -78,7 +78,9 @@ def test_reader_retry_and_survivor_are_concurrent(
         candidate = candidate_from(read, kind, POLICY)
         assert not candidate.orders and not candidate.facts
     attempts = caller.calls[read.second.provenance.model_id or ""]
-    assert len(attempts) == 2 and attempts[1].endswith("أرجع كائن JSON فقط بدون أي كلام خارجه.")
+    assert len(attempts) == 2 and attempts[1].endswith(
+        "Return only one JSON object with no surrounding text."
+    )
 
 
 def test_retry_can_recover_without_single_reader() -> None:
@@ -245,7 +247,7 @@ def test_prompt_has_no_vocabulary_and_unchanged_schema() -> None:
         not re.search(r"(?<!\w)" + re.escape(name) + r"(?!\w)", VISION_PROMPT, re.I)
         for name in names
     )
-    assert VISION_PROMPT_VERSION == "document-fields-v4"
+    assert VISION_PROMPT_VERSION == "document-fields-v5"
     assert all(
         f"- {field}:" in VISION_PROMPT
         for field in (
@@ -266,18 +268,19 @@ def test_prompt_has_no_vocabulary_and_unchanged_schema() -> None:
             "notes",
         )
     )
-    assert "[غير مقروء]" in VISION_PROMPT and "{" not in VISION_PROMPT
+    assert "[unreadable]" in VISION_PROMPT and "{" not in VISION_PROMPT
     assert all(phrase not in VISION_PROMPT for phrase in CONTROL_PHRASES)
     # Freeze the entire instruction: adding any vocabulary or any of the 25
     # prohibited phrase hints is a failing prompt change, even when no drug matches.
     assert (
         hashlib.sha256(VISION_PROMPT.encode()).hexdigest()
-        == "cd437a6cdddcc7c339b52896a0d71029b725e081de26c2a5c28431e8ac03e07b"
+        == "9a99eb2f3e7d99cb1a2db9dc47fa76f97c00d3f636ceae343405a23d5a691d5a"
     )
     assert (
         vision_prompt("lab")
         == VISION_PROMPT
-        + "التعليق المصاحب يقترح lab؛ التعليق استرشادي فقط؛ لو الورقة مختلفة فاذكر ذلك."
+        + "The accompanying caption suggests lab; this is only a hint; "
+        "report if the document differs."
     )
 
 

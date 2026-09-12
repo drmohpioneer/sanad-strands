@@ -1,5 +1,6 @@
 import asyncio
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -58,7 +59,8 @@ def test_11b_live_runner_hermetic_oracle_redaction_and_single_allowance(
     assert OWNER_SYNTHETIC.input not in destination.read_text()
     assert OWNER_SYNTHETIC.candidate.patient.name_as_spoken
     assert OWNER_SYNTHETIC.candidate.patient.name_as_spoken not in destination.read_text()
-    assert "560" not in destination.read_text()
+    # Whole number only: a timestamp such as "...:51.375605" contains "560" by chance.
+    assert not re.search(r"(?<!\d)560(?!\d)", destination.read_text())
     with pytest.raises(RuntimeError, match="already recorded"):
         asyncio.run(
             run_check(
@@ -72,7 +74,7 @@ def test_11b_live_runner_hermetic_oracle_redaction_and_single_allowance(
 
 def test_11b_request_order_count_output_and_spend_caps() -> None:
     raw = ScriptedConverse(response("synthetic"), response("synthetic"))
-    guard = DictationSpend(cap=0.05)
+    guard = DictationSpend(cap=0.15)
     client = DictationRequests(raw, guard)
     registry = ModelRegistry()
     with pytest.raises(RuntimeError, match="allowance"):
@@ -81,8 +83,8 @@ def test_11b_request_order_count_output_and_spend_caps() -> None:
         client.converse(modelId=model, inferenceConfig={"maxTokens": 2048})
     with pytest.raises(RuntimeError, match="allowance"):
         client.converse(modelId=registry.worker, inferenceConfig={"maxTokens": 2048})
-    assert len(raw.calls) == 2 and guard.estimated < 0.05
-    another = DictationRequests(raw, DictationSpend(cap=0.05))
+    assert len(raw.calls) == 2 and guard.estimated < 0.15
+    another = DictationRequests(raw, DictationSpend(cap=0.15))
     with pytest.raises(RuntimeError, match="output_limit"):
         another.converse(modelId=registry.speech, inferenceConfig={"maxTokens": 2049})
     assert len(raw.calls) == 2
@@ -124,7 +126,7 @@ def test_live_provider_path_retries_once_and_accounts_unknown_usage(
     assert len(raw.calls) == (3 if transient_count == 1 else 2)
     assert len(report["calls"]) == len(raw.calls)
     assert not report["calls"][0]["usage_known"] and report["calls"][0]["estimated_usd"] > 0
-    assert report["estimated_usd"] < 0.05
+    assert report["estimated_usd"] < 0.15
     assert converter.calls == 1
     assert "PRIVATE" not in destination.read_text()
     assert OWNER_SYNTHETIC.input not in destination.read_text()
@@ -154,7 +156,7 @@ def test_live_check_does_not_retry_other_speech_failures(
 
 def test_request_retry_must_be_authorized_and_cannot_follow_extraction() -> None:
     raw = ScriptedConverse(response("synthetic"), response("synthetic"), response("synthetic"))
-    client = DictationRequests(raw, DictationSpend(cap=0.05))
+    client = DictationRequests(raw, DictationSpend(cap=0.15))
     speech, worker = ModelRegistry().speech, ModelRegistry().worker
     with pytest.raises(RuntimeError, match="retry_allowance"):
         client.allow_speech_retry()
@@ -188,7 +190,7 @@ def test_audio_and_request_bounds_refuse_before_provider_access(
     )
     assert report["state"] == "failed" and not caller.calls and not model.script.calls
     raw = ScriptedConverse()
-    client = DictationRequests(raw, DictationSpend(cap=0.05))
+    client = DictationRequests(raw, DictationSpend(cap=0.15))
     with pytest.raises(RuntimeError, match="input_limit"):
         client.converse(
             modelId=ModelRegistry().speech, inferenceConfig={"maxTokens": 2048}, text="x" * 50001

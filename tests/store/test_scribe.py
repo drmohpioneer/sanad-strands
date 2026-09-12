@@ -1,4 +1,7 @@
+import hashlib
+import json
 from datetime import timedelta
+from pathlib import Path
 
 import pytest
 from harness import FakeClock
@@ -55,10 +58,13 @@ def test_handwritten_cards_through_real_receipt(
         if example.extraction_calls == 2:
             assert model.script.calls[0] == model.script.calls[1]
         proposal = world.proposal
-    assert render_card(proposal) == (example.card,)
+    # Preserve the handwritten original and record only 6d's blocked-item moves.
+    snapshots = json.loads((Path(__file__).parents[1] / "scribe/oracle_20_6d_ar.json").read_text())
+    expected = snapshots.get(hashlib.sha256(example.input.encode()).hexdigest(), example.card)
+    assert render_card(proposal) == (expected,)
     assert panel(world.store, world.doctor.scope) == ()
     card = next(i for i in world.cards() if i.template_id == "scribe_card")
-    assert card.payload and card.payload["text"] == example.card
+    assert card.payload and card.payload["text"] == expected
     assert world.dispatch(card).status == "provider_accepted"
 
 

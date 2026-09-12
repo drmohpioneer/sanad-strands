@@ -113,7 +113,7 @@ def resolve_timing(
         if proposal is not None:
             rejection = (
                 "Rejected proposal: offset outside inferred bounds "
-                f"{policy.inferred_min_days}–{policy.inferred_max_days} days. "
+                f"{policy.inferred_min_days}, {policy.inferred_max_days} days. "
             )
         default = policy.default_deadlines[kind]
         if default.relative_to == "schedule_end":

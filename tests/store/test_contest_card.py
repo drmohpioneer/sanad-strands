@@ -24,7 +24,7 @@ def test_an_arabic_doctor_receives_an_english_card(store: StoreBase, clock: obje
         "New patient Synthetic Person, 40 years old. Add Concor 5.",
         {
             "patient": {"name_as_spoken": "Synthetic Person", "age": "40"},
-            "orders": [{"action": "start", "drug": "Concor", "dose": "5"}],
+            "orders": [{"action": "start", "drug": "Concor", "dose": "5", "action_quote": "Add"}],
         },
     )
     assert proposal.language == "en"

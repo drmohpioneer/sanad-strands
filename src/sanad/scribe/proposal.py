@@ -26,6 +26,8 @@ class ScribeRecord(_BoundaryValue):
 
 
 class PatientChoice(_BoundaryValue):
+    score: int = Field(default=0, ge=0, le=4)
+    headline: str | None = None
     patient_id: NonblankStr
     display_name: NonblankStr
     age: str | None = None

@@ -17,12 +17,12 @@
     "text_en": "Blood pressure describes the force of blood against vessel walls. The two readings reflect the heartbeat and the rest between beats. WHO uses 140/90 as a general threshold for high blood pressure, not your personal treatment target. Diagnosis needs repeated measurements and a clinician’s assessment. High blood pressure may have no obvious symptoms. Your own targets and measurement times come from your doctor’s plan.",
     "source_url": "https://www.who.int/news-room/fact-sheets/detail/hypertension",
     "source_title": "Hypertension",
-    "source_label": "منظمة الصحة العالمية — يعني إيه ضغط عالي",
+    "source_label": "منظمة الصحة العالمية: يعني إيه ضغط عالي",
     "retrieved_on": "2026-09-07",
     "reviewed_by": "pending owner review",
     "version": "education-v1-2026-09-07",
     "content_kind": "clinical",
-    "source_label_en": "World Health Organization — High blood pressure"
+    "source_label_en": "World Health Organization: High blood pressure"
   },
   {
     "id": "home_bp",
@@ -41,12 +41,12 @@
     "text_en": "Home readings give your clinician repeated blood pressure measurements outside a clinic visit. Both numbers are needed to communicate the reading. Devices differ, so a clinician can explain the device instructions. Measurement times and the number of days should come from the agreed plan. Recording the measurement time helps identify each reading. Recording a value does not establish clinical review or a treatment change.",
     "source_url": "https://www.nhs.uk/tests-and-treatments/blood-pressure-test/",
     "source_title": "Blood pressure test - NHS",
-    "source_label": "NHS البريطانية — ليه نقيس الضغط في البيت",
+    "source_label": "NHS البريطانية: ليه نقيس الضغط في البيت",
     "retrieved_on": "2026-09-07",
     "reviewed_by": "pending owner review",
     "version": "education-v1-2026-09-07",
     "content_kind": "clinical",
-    "source_label_en": "NHS — Home blood pressure readings"
+    "source_label_en": "NHS: Home blood pressure readings"
   },
   {
     "id": "heart_failure",
@@ -66,12 +66,12 @@
     "text_en": "Heart failure means the heart does not pump blood as effectively as the body needs. It does not mean the heart has stopped. Fluid can accumulate and may affect body weight or cause swollen legs. Weight monitoring may therefore be part of a doctor’s plan. A change needs clinical context rather than interpretation from a single number. Personal weighing schedules and fluid instructions belong to the care plan.",
     "source_url": "https://www.nhs.uk/conditions/heart-failure/",
     "source_title": "Heart failure - NHS",
-    "source_label": "NHS البريطانية — ضعف القلب ومتابعة الوزن",
+    "source_label": "NHS البريطانية: ضعف القلب ومتابعة الوزن",
     "retrieved_on": "2026-09-07",
     "reviewed_by": "pending owner review",
     "version": "education-v1-2026-09-07",
     "content_kind": "clinical",
-    "source_label_en": "NHS — Heart failure and weight"
+    "source_label_en": "NHS: Heart failure and weight"
   },
   {
     "id": "atrial_fibrillation",
@@ -91,12 +91,12 @@
     "text_en": "Atrial fibrillation is an irregular heart rhythm. It can cause palpitations or tiredness, and some people have no symptoms. Palpitations alone do not establish the diagnosis. A clinician assesses symptoms and tests to identify their cause. Clot prevention can be part of the clinician’s individually assessed plan. This explains the term; it does not diagnose you or select a medicine. Personal instructions come from your plan.",
     "source_url": "https://www.nhs.uk/conditions/atrial-fibrillation/",
     "source_title": "Atrial fibrillation - NHS",
-    "source_label": "NHS البريطانية — يعني إيه رجفان أذيني",
+    "source_label": "NHS البريطانية: يعني إيه رجفان أذيني",
     "retrieved_on": "2026-09-07",
     "reviewed_by": "pending owner review",
     "version": "education-v1-2026-09-07",
     "content_kind": "clinical",
-    "source_label_en": "NHS — Atrial fibrillation"
+    "source_label_en": "NHS: Atrial fibrillation"
   },
   {
     "id": "anticoagulants",
@@ -116,12 +116,12 @@
     "text_en": "Anticoagulants reduce clot formation; they do not literally turn blood into a thinner liquid. Clinicians prescribe them according to clot risk. Bleeding is a risk patients should understand. Blood in urine or stool, and vomiting blood, are examples of signs needing medical attention. This is general information rather than an assessment of your symptoms. Missed-dose and treatment-change questions need professional advice; this explanation gives no replacement dose.",
     "source_url": "https://www.nhs.uk/medicines/anticoagulants/",
     "source_title": "Anticoagulant medicines - NHS",
-    "source_label": "NHS البريطانية — السيولة وعلامات النزيف",
+    "source_label": "NHS البريطانية: السيولة وعلامات النزيف",
     "retrieved_on": "2026-09-07",
     "reviewed_by": "pending owner review",
     "version": "education-v1-2026-09-07",
     "content_kind": "clinical",
-    "source_label_en": "NHS — Anticoagulants and bleeding"
+    "source_label_en": "NHS: Anticoagulants and bleeding"
   },
   {
     "id": "inr",
@@ -140,12 +140,12 @@
     "text_en": "INR standardizes a measure of blood clotting time and is used to monitor a particular anticoagulant treatment. It helps the treating team assess the balance between clotting and bleeding risks. Not every anticoagulant uses the same test. Doses, testing schedules and targets depend on the person and clinician’s instructions. Missing treatment or monitoring may affect protection. Missed-dose questions require professional advice; no individual target is supplied here.",
     "source_url": "https://www.nth.nhs.uk/resources/anticoagulants-blood-thinners/",
     "source_title": "Anticoagulants (Blood Thinners) - North Tees and Hartlepool NHS Foundation Trust",
-    "source_label": "NHS البريطانية — تحليل سيولة الدم",
+    "source_label": "NHS البريطانية: تحليل سيولة الدم",
     "retrieved_on": "2026-09-07",
     "reviewed_by": "pending owner review",
     "version": "education-v1-2026-09-07",
     "content_kind": "clinical",
-    "source_label_en": "NHS — The INR blood test"
+    "source_label_en": "NHS: The INR blood test"
   },
   {
     "id": "statins",
@@ -164,12 +164,12 @@
     "text_en": "Statins are a group of medicines that reduce the cholesterol the body produces. A clinician may prescribe them as part of cardiovascular risk management. The body needs some cholesterol, but excessive cholesterol can damage blood vessels over time. Treatment is selected from an overall assessment, not symptoms alone. A medicine-group name does not specify an individual dose or schedule. Your own instructions come from your current prescription.",
     "source_url": "https://www.nhs.uk/medicines/statins/",
     "source_title": "Statins - NHS",
-    "source_label": "NHS البريطانية — إيه فايدة أدوية الستاتين",
+    "source_label": "NHS البريطانية: إيه فايدة أدوية الستاتين",
     "retrieved_on": "2026-09-07",
     "reviewed_by": "pending owner review",
     "version": "education-v1-2026-09-07",
     "content_kind": "clinical",
-    "source_label_en": "NHS — Statins"
+    "source_label_en": "NHS: Statins"
   },
   {
     "id": "ldl",
@@ -189,12 +189,12 @@
     "text_en": "LDL is often called bad cholesterol because it can contribute to fatty deposits in arteries. A lipid test contains different measurements, and total cholesterol is not identical to each component. The body needs cholesterol for some functions. Clinicians interpret measurements alongside overall cardiovascular risk. Your personal target belongs to your care plan; explaining the test’s name does not establish a target or interpret your result.",
     "source_url": "https://www.essex.icb.nhs.uk/health/prevention/live-well/cardiovascular-health/cholesterol/",
     "source_title": "High cholesterol | Causes, testing and treatment",
-    "source_label": "NHS البريطانية — يعني إيه الكوليسترول الضار",
+    "source_label": "NHS البريطانية: يعني إيه الكوليسترول الضار",
     "retrieved_on": "2026-09-07",
     "reviewed_by": "pending owner review",
     "version": "education-v1-2026-09-07",
     "content_kind": "clinical",
-    "source_label_en": "NHS — What LDL means"
+    "source_label_en": "NHS: What LDL means"
   },
   {
     "id": "lipid_test",
@@ -215,12 +215,12 @@
     "text_en": "A lipid blood test helps assess cholesterol and cardiovascular risk together with other factors. Most people do not need to fast for cholesterol testing, but fasting may be requested in some cases. Other tests ordered at the same time may have different preparation instructions. This general information does not override your own test order. Unclear preparation needs clarification from the clinician or testing service.",
     "source_url": "https://www.nhs.uk/conditions/high-cholesterol/getting-tested/",
     "source_title": "High cholesterol - Getting tested - NHS",
-    "source_label": "NHS البريطانية — تحليل الدهون والصيام",
+    "source_label": "NHS البريطانية: تحليل الدهون والصيام",
     "retrieved_on": "2026-09-07",
     "reviewed_by": "pending owner review",
     "version": "education-v1-2026-09-07",
     "content_kind": "clinical",
-    "source_label_en": "NHS — Lipid testing and fasting"
+    "source_label_en": "NHS: Lipid testing and fasting"
   },
   {
     "id": "potassium",
@@ -239,12 +239,12 @@
     "text_en": "Potassium may be measured with kidney-function monitoring. Some blood-pressure and heart medicines require these checks before treatment or when a clinician changes a dose. Testing helps the treating team assess the medicine’s effects. A test request alone does not diagnose a problem. Results need the correct units and individual clinical context. This explanation neither supplies a new dose nor changes the existing prescription.",
     "source_url": "https://www.nhs.uk/medicines/ramipril/about-ramipril/",
     "source_title": "About ramipril - NHS",
-    "source_label": "NHS البريطانية — ليه نتابع البوتاسيوم",
+    "source_label": "NHS البريطانية: ليه نتابع البوتاسيوم",
     "retrieved_on": "2026-09-07",
     "reviewed_by": "pending owner review",
     "version": "education-v1-2026-09-07",
     "content_kind": "clinical",
-    "source_label_en": "NHS — Why potassium is checked"
+    "source_label_en": "NHS: Why potassium is checked"
   },
   {
     "id": "creatinine",
@@ -263,12 +263,12 @@
     "text_en": "Creatinine is a waste product measured as part of kidney assessment. Clinicians may combine its level with other information to estimate kidney filtration. Urine tests or other investigations may also be needed. A number without its units and clinical context is insufficient for an individual conclusion. This explains the test rather than declaring the kidneys healthy or changing a medicine because of a result.",
     "source_url": "https://www.nhs.uk/conditions/kidney-disease/diagnosis/",
     "source_title": "Chronic kidney disease - Diagnosis - NHS",
-    "source_label": "NHS البريطانية — تحليل الكرياتينين ووظائف الكلى",
+    "source_label": "NHS البريطانية: تحليل الكرياتينين ووظائف الكلى",
     "retrieved_on": "2026-09-07",
     "reviewed_by": "pending owner review",
     "version": "education-v1-2026-09-07",
     "content_kind": "clinical",
-    "source_label_en": "NHS — Creatinine and kidney function"
+    "source_label_en": "NHS: Creatinine and kidney function"
   },
   {
     "id": "diuretics",
@@ -289,12 +289,12 @@
     "text_en": "Diuretics increase salt and water loss through urine and may be used for fluid accumulation. Dizziness or thirst can occur with medicines in this group. Dizziness alone does not establish its cause or determine its significance. Describing the symptom and its timing helps professional review. Treatment-change questions need the doctor’s decision. This information does not authorize changing fluids, salt amounts or a prescribed dose.",
     "source_url": "https://www.nhs.uk/medicines/furosemide/",
     "source_title": "Furosemide: a medicine to treat oedema - NHS",
-    "source_label": "NHS البريطانية — مدرات البول والدوخة",
+    "source_label": "NHS البريطانية: مدرات البول والدوخة",
     "retrieved_on": "2026-09-07",
     "reviewed_by": "pending owner review",
     "version": "education-v1-2026-09-07",
     "content_kind": "clinical",
-    "source_label_en": "NHS — Diuretics and dizziness"
+    "source_label_en": "NHS: Diuretics and dizziness"
   },
   {
     "id": "nitrates",
@@ -314,12 +314,12 @@
     "text_en": "Nitrates are a medicine group used in angina care. Different preparations include sprays, tablets and patches, and their uses are not interchangeable. The group’s name alone does not specify how your preparation should be used. General information about available forms is not an instruction to try or substitute one. Individual dose and timing come from the prescription. Current pain needs its own clinical assessment.",
     "source_url": "https://www.nhs.uk/medicines/glyceryl-trinitrate-gtn/about-glyceryl-trinitrate-gtn/",
     "source_title": "About glyceryl trinitrate (GTN) - NHS",
-    "source_label": "NHS البريطانية — يعني إيه أدوية النترات",
+    "source_label": "NHS البريطانية: يعني إيه أدوية النترات",
     "retrieved_on": "2026-09-07",
     "reviewed_by": "pending owner review",
     "version": "education-v1-2026-09-07",
     "content_kind": "clinical",
-    "source_label_en": "NHS — Nitrates"
+    "source_label_en": "NHS: Nitrates"
   },
   {
     "id": "diabetes",
@@ -338,12 +338,12 @@
     "text_en": "Diabetes can affect blood vessels over time, so cardiovascular health is part of its care. Blood pressure and cholesterol may also need attention according to the clinician’s assessment. Follow-up considers overall health rather than an isolated glucose number. A glucose result needs units, timing and context. Personal targets and tests come from the treating clinician. This explains the relationship and does not interpret a personal result or change treatment.",
     "source_url": "https://www.nhs.uk/conditions/type-2-diabetes/complications/",
     "source_title": "Complications of type 2 diabetes - NHS",
-    "source_label": "NHS البريطانية — السكر وصحة القلب",
+    "source_label": "NHS البريطانية: السكر وصحة القلب",
     "retrieved_on": "2026-09-07",
     "reviewed_by": "pending owner review",
     "version": "education-v1-2026-09-07",
     "content_kind": "clinical",
-    "source_label_en": "NHS — Diabetes and heart health"
+    "source_label_en": "NHS: Diabetes and heart health"
   },
   {
     "id": "emergency",
@@ -362,13 +362,13 @@
     "text_en": "Sanad’s emergency instructions come from its safety policy. When that pathway triggers, the approved wording is: This could be an emergency. Go to the nearest emergency room now, or call 123 (ambulance). Do not wait for a reply here. A queued question or pending message does not establish that a doctor has read it. This describes the safety pathway and does not diagnose symptoms.",
     "source_url": "https://www.nhs.uk/conditions/heart-attack/",
     "source_title": "Heart attack - NHS",
-    "source_label": "سياسة الأمان في سند — إمتى مسار الطوارئ مهم",
+    "source_label": "سياسة الأمان في سند: إمتى مسار الطوارئ مهم",
     "retrieved_on": "2026-09-07",
     "reviewed_by": "pending owner review",
     "version": "education-v1-2026-09-07",
     "content_kind": "safety",
     "source_basis": "Actionable wording exclusively from SAFETY_POLICY_V1_CARDIOLOGY_DRAFT patient_emergency; public NHS page is background, its UK telephone numbers and medicine advice are not imported.",
-    "source_label_en": "Sanad safety policy — Emergency guidance"
+    "source_label_en": "Sanad safety policy: Emergency guidance"
   },
   {
     "id": "photo",
@@ -389,13 +389,13 @@
     "text_en": "A clear photograph needs good lighting, a steady device and an uncluttered background. Sanad’s document instructions are to show the whole page from above, with names, numbers, units and dates readable and without glare. Separate pages reduce row confusion. Use your bound private bot conversation. Saving an image does not interpret a result or activate a prescription. NHS guidance supports image quality; document and bot instructions are Sanad’s own.",
     "source_url": "https://myhealth-devon.nhs.uk/my-referral/taking-medical-photographs/",
     "source_title": "Taking Medical Photographs - MyHealth Devon",
-    "source_label": "إرشادات سند — تصوير التحليل أو الروشتة",
+    "source_label": "إرشادات سند: تصوير التحليل أو الروشتة",
     "retrieved_on": "2026-09-07",
     "reviewed_by": "pending owner review",
     "version": "education-v1-2026-09-07",
     "content_kind": "product",
     "source_basis": "Public NHS background only. Sanad-specific statements derive from docs/architecture.md and docs/contracts/10-patient-onboarding-concierge-and-education.md; not attributed to NHS.",
-    "source_label_en": "Sanad — Photographing a report or prescription"
+    "source_label_en": "Sanad: Photographing a report or prescription"
   },
   {
     "id": "qr",
@@ -415,12 +415,12 @@
     "text_en": "A Sanad invitation code opens a service-linking flow and contains no patient name or treatment details. Opening it shows the service, doctor and consent instructions rather than the chart. After consent and a claim, the doctor confirms the intended person before plan access. Invitations expire and cannot transfer a chart. The NHS page provides background on QR-based sign-in; these invitation rules are Sanad’s own specification.",
     "source_url": "https://help.login.nhs.uk/manage/passkeys",
     "source_title": "Passkeys",
-    "source_label": "إرشادات سند — دعوة الربط في سند",
+    "source_label": "إرشادات سند: دعوة الربط في سند",
     "retrieved_on": "2026-09-07",
     "reviewed_by": "pending owner review",
     "version": "education-v1-2026-09-07",
     "content_kind": "product",
     "source_basis": "Public NHS background only. Sanad-specific statements derive from docs/architecture.md and docs/contracts/10-patient-onboarding-concierge-and-education.md; not attributed to NHS.",
-    "source_label_en": "Sanad — Your Sanad QR invitation"
+    "source_label_en": "Sanad: Your Sanad QR invitation"
   }
 ]

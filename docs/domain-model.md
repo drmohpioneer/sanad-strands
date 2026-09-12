@@ -566,3 +566,84 @@ expected-version references, and 512 KiB serialized outputs, before store overhe
 The store additionally enforces 100 operations, 400 KiB per item and 4 MiB. Larger
 fan-out fails atomically without advancing current truth. Scribe amendments retain
 the same store limits and one final revision per record.
+
+## Reusable doctor answers (contract 17d)
+
+`ReuseOffer` and `ReusableAnswer` are versioned tenant records under
+`REUSE_OFFER#id` and `REUSABLE_ANSWER#id`. Offers retain exact accepted answer and
+question text, doctor id/auth epoch, source patient/mission and post-answer
+version, original listing token, one-hour expiry and explicit consumption actor
+command/time. Reusable answers retain normalized and original question text,
+exact answer text, source patient/mission and creation time. No patient or model
+can create either record. The shared store reconstructs the authorized command's
+complete write set and conditionally checks cross-partition versions before
+admitting their writes. Application expiry, not TTL, controls offer validity.
+
+`OutboundIntent.question_bindings` adds mission versions and optional reusable
+answer id/version beside the existing patient/mission target pairs. Existing
+records without bindings remain readable; sending a proposal from an unbound
+legacy listing is refused. `AuditEvent.question_command` optionally retains the
+immutable private payload of a committed doctor question action for receipt
+recovery. These fields are excluded from model representations and are not public
+patient projections. No clinical event or transition schema changes.
+
+
+## Administrator identity (18b checkpoint 2)
+
+`AdminAccount` is a versioned bot AccountScope row at `ADMIN_ACCOUNT#<configured
+Telegram user id>` with `auth_epoch`, creation/update timestamps and no revoked_at.
+Only initial admin link issuance creates it; revocation increments the epoch.
+The configured identity, not the presence of this row, grants the admin role.
+Authorization exposes `admin_epoch` independently of the doctor's `auth_epoch`.
+
+LoginExchange admits `admin_login` and intended_role `admin`; TokenHead admits
+that purpose. Admin exchanges and WebSessions require doctor_id and all patient,
+binding and consent fields to be null. Doctor/patient sessions still require a
+nonblank doctor id and their original role-specific fields. `WebSession` is typed
+by its doctor-id value: existing clinical consumers retain the string variant;
+identity decoding uses `AnyWebSession` (`str | None`) with the same role validators.
+Both variants serialize the same `web_session` record family. No migration or
+weakened clinical decoder is required.
+
+Account commands optionally carry selected session_role and admin_epoch; omitted
+browser metadata does not change existing Telegram command fingerprints. Browser
+principals cannot omit this role at commit. Admin mutation checks condition the
+AdminAccount version along with the account target versions. The browser inbound
+receipt has transport/channel `web-admin`; account audit events optionally carry
+that channel. Clinical event payloads and their command semantics are unchanged.
+
+## Patient browser controls (contract 18d)
+
+`OutboundIntent.delivered_text` is optional private text, absent for legacy rows
+and pending delivery. Patient delivery completion may set it once to the exact
+rendered text. Only patient/provider-accepted records admit a value; subsequent
+completion cannot replace it. Missing text does not authorize reconstruction.
+The existing status name also represents web store-and-show acceptance, with a
+`web:<intent-id>` acceptance reference rather than a Telegram message ID.
+
+Web message and preference receipts retain the originating `web_session_id` in
+their private payload, use channel `web`, and transport `web-message` or
+`web-preference`. Their deterministic transport key includes the session ID,
+command ID and body digest. The existing callback payload carries only the
+hashed patient-action token, with no fabricated Telegram callback-query ID.
+
+A browser-command reservation is an operational CAS item under the bot account
+partition: `WEB_COMMAND#sha256(session-id:command-id)`, version 1, body digest,
+and TTL equal to the originating session's absolute expiry. It contains no
+patient text. A crash after reservation can retry the same receipt; only
+`accept_inbound` confers durable receipt acceptance. Expiry authorization never
+waits for TTL cleanup.
+
+A `SetContactPreference` command carrying its receipt's originating session ID
+may atomically advance that session's consent version alongside the existing
+Patient/Consent/PatientBinding/PatientProfile update. The session's identity,
+CSRF secret, binding, authority, expiry and revocation fields cannot change.
+The guard verifies live authority and conditions the exact old session version.
+Other sessions keep their previous consent snapshot and existing refusal.
+
+`patient_receipts(PatientScope)` exposes only owned inbound records, including
+historical transport-key records. The current DynamoDB implementation uses a
+filtered, internally paginated consistent scan and ownership-checked key reads;
+API pagination bounds returned conversation entries rather than scan cost.
+No global receipt key or cursor grants clinical access. A future indexed access
+pattern must account for historical rows before replacing this reader.

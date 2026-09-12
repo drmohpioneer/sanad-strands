@@ -151,7 +151,7 @@ def test_duplicates_extras_coverage_and_trend() -> None:
     assert coverage(d, at).satisfied
     rendered = table(d, "Africa/Cairo", "en")
     assert "Extra readings: 1" in rendered
-    assert "systolic: increase; range 130–160 mmHg" in rendered
+    assert "systolic: increase; range 130, 160 mmHg" in rendered
     assert "0 readings left" in patient_reply(d, ref, "en", "Africa/Cairo")
 
 

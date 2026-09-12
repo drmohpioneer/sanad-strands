@@ -62,7 +62,7 @@ _BOUNDARY = re.compile(r"(?<!\d)\.(?!\d)|[;؛\n]|[.!?](?=\s+[A-Z])")
 _ACTION = re.compile(
     r"(?<!\w)(?:و)?(?:"
     r"(?P<start>start(?:ed)?|add(?:ed)?|ابدا|ضفت|زودته|هيبدا)|"
-    r"(?P<stop>stop(?:ped)?|discontinue|وقف(?:ت)?|بطل)|"
+    r"(?P<stop>stop(?:ped)?|hold|discontinue|وقف(?:ت)?|بطل)|"
     r"(?P<change>increase|decrease|upgrade|change|switch|زود(?:ت)?|قلل(?:ت)?|غير(?:ت)?)|"
     r"(?P<continue>continue|taking|on|ماشي علي|ماشى علي|بياخد|واخد|خلي|استمر|كمل)"
     r")(?!\w)",
@@ -211,6 +211,34 @@ def _action_at(source: str, span: tuple[int, int]) -> tuple[str, tuple[int, int]
     return str(action.lastgroup), (begin, end), negative or historical
 
 
+def _cited_action(
+    order: OrderCandidate, source: str, drug_span: tuple[int, int]
+) -> tuple[tuple[int, int], bool] | None:
+    left, right = clause(source, *drug_span)
+    spans = [
+        span
+        for span in grounded(order.action_quote or "", source)
+        if (left <= span[0] and span[1] <= right)
+        or (span[0] < drug_span[1] and drug_span[0] < span[1])
+    ]
+    if not spans:
+        return None
+    citation = min(
+        spans,
+        key=lambda span: (max(0, drug_span[0] - span[1], span[0] - drug_span[1]), span[0]),
+    )
+    earlier = min(citation[0], drug_span[0])
+    prefix = normalize(source[left:earlier])[-25:]
+    prefix = re.split(r"[,،]|\band\b", prefix)[-1]
+    between = (
+        source[citation[1] : drug_span[0]]
+        if citation[1] <= drug_span[0]
+        else (source[drug_span[1] : citation[0]] if drug_span[1] <= citation[0] else "")
+    )
+    window = " ".join((prefix, normalize(source[citation[0] : citation[1]]), normalize(between)))
+    return citation, any(pattern.search(window) for pattern in (_NEGATIVE, _OTHER, _PAST))
+
+
 def _instruction_span(
     order: OrderCandidate, source: str, ctx: Context, spoken: str
 ) -> tuple[int, int] | None:
@@ -218,13 +246,29 @@ def _instruction_span(
     accepted = [
         span
         for span in spans
-        if (action := _action_at(source, span)) and not action[2] and action[0] == order.action
+        if (
+            bool((cited := _cited_action(order, source, span)) and not cited[1])
+            if order.action_quote is not None
+            else bool(
+                (action := _action_at(source, span)) and not action[2] and action[0] == order.action
+            )
+        )
     ]
     # The last explicit correction controls the current instruction for that name.
     if accepted:
         latest = max(spans)
         later = _action_at(source, latest)
-        if later and (later[2] or later[0] != order.action):
+        # Commas share a clause: a stale citation can verify at both mentions.
+        # Still reject an explicit later correction after an earlier drug span.
+        if (
+            later
+            and (later[2] or later[0] != order.action)
+            and (
+                order.action_quote is None
+                or latest > accepted[-1]
+                or any(span[1] <= later[1][0] for span in spans if span < latest)
+            )
+        ):
             return None
         if order.action == "change":
             _, end = clause(source, *accepted[-1])
@@ -288,6 +332,7 @@ def inventory(proposal: Proposal) -> tuple[Claim, ...]:
     c = proposal.candidate
     claims: list[Claim] = []
     excluded = {
+        "action_quote",
         "name_latin",
         "generic",
         "clinical_en",
@@ -334,7 +379,9 @@ def inventory(proposal: Proposal) -> tuple[Claim, ...]:
 
 def _fingerprint(proposal: Proposal) -> str:
     body = {
-        "candidate": proposal.candidate.model_dump(mode="json"),
+        "candidate": proposal.candidate.model_dump(
+            mode="json", exclude={"orders": {"__all__": {"action_quote"}}}
+        ),
         "claims": [(c.item, c.field, c.value) for c in inventory(proposal)],
         "source": proposal.source_text,
         "source_partition": proposal.source_partition.model_dump(mode="json")
@@ -344,12 +391,18 @@ def _fingerprint(proposal: Proposal) -> str:
         "scope": proposal.scope.model_dump(mode="json"),
         "versions": [v.model_dump(mode="json") for v in proposal.base_versions],
         "names": [n.model_dump(mode="json") for n in proposal.names],
-        "amendments": [a.model_dump(mode="json") for a in proposal.amendments],
+        "amendments": [
+            a.model_dump(mode="json", exclude={"old": {"action_quote"}, "new": {"action_quote"}})
+            for a in proposal.amendments
+        ],
         "timezone": proposal.timezone,
         "created_at": proposal.created_at.isoformat(),
         "selected_patient": proposal.selected_patient_id,
         "selected_display_name": proposal.selected_display_name,
-        "choices": [choice.model_dump(mode="json") for choice in proposal.choices],
+        "choices": [
+            choice.model_dump(mode="json", exclude={"headline", "score"})
+            for choice in proposal.choices
+        ],
     }
     return hashlib.sha256(json.dumps(body, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
@@ -394,6 +447,11 @@ def _record(
 
     source = proposal.source_text
     span = grounded(claim.value, source)
+    if claim.item.startswith("fact:") and claim.field == "text":
+        from sanad.scribe.amend import history_source
+
+        if history_source(proposal, claim.value):
+            return _evidence(claim, proposal, "code_computed", (), "home_medication_instruction")
     if claim.field == "compiled_text" or claim.field.startswith("schedule:"):
         from sanad.scribe.monitoring import compile_schedule, task_instruction
 
@@ -510,6 +568,13 @@ def _record(
                 )
             return None
         if claim.field == "action":
+            if order.action_quote is not None:
+                cited = _cited_action(order, source, drug) if drug else None
+                if cited and not cited[1] and drug:
+                    return _evidence(
+                        claim, proposal, "transcript_span", (cited[0], drug), "instruction_clause"
+                    )
+                return None
             if drug and (action := _action_at(source, drug)):
                 return _evidence(
                     claim, proposal, "transcript_span", (action[1], drug), "instruction_clause"
@@ -635,7 +700,18 @@ def _correction_record(
         return True, None
     index = int(claim.item.split(":")[1])
     if index >= len(previous.candidate.orders):
-        return False, None
+        offsets = _reply_instruction_offsets(claim, proposal, extent.start, extent.end)
+        if not offsets:
+            return True, None
+        record = _evidence(
+            claim, proposal, "authorized_correction", offsets, "reply_instruction:" + claim.item
+        ).model_copy(
+            update={
+                "correction_id": extent.proposal_id,
+                "correction_version": extent.proposal_version,
+            }
+        )
+        return True, record if _valid_correction(record, claim, proposal) else None
     prior_order = previous.candidate.orders[index]
     if not hasattr(prior_order, claim.field):
         return False, None
@@ -864,7 +940,20 @@ def _heard_question(claim: Claim, proposal: Proposal, drug: tuple[int, int] | No
         }.get(claim.field, "هذا البند")
     anchors = grounded(claim.value, source)
     span = drug or (anchors[-1] if anchors else None)
-    if claim.item.startswith("order:") and not span:
+    if claim.item.startswith("order:"):
+        cited_order = proposal.candidate.orders[int(claim.item.split(":")[1])]
+        invalid_citation = (
+            claim.field == "action"
+            and cited_order.action_quote is not None
+            and (
+                not drug
+                or not (citation := _cited_action(cited_order, source, drug))
+                or citation[1]
+            )
+        )
+    else:
+        invalid_citation = False
+    if claim.item.startswith("order:") and (not span or invalid_citation):
         order = proposal.candidate.orders[int(claim.item.split(":")[1])]
         reading = next(
             (n for n in proposal.names if n.item == claim.item and n.kind == "drug"), None
@@ -873,7 +962,7 @@ def _heard_question(claim: Claim, proposal: Proposal, drug: tuple[int, int] | No
         matches = grounded(spoken, source)
         if matches:
             span = matches[-1]
-            if not _action_at(source, span):
+            if invalid_citation or not _action_at(source, span):
                 quote = source[span[0] : span[1]]
                 return (
                     f'I heard "{quote}"; please clarify the {label}.'
@@ -1036,6 +1125,52 @@ def _correction_evidence(
     return record if _valid_correction(record, claim, proposal) else None
 
 
+def _reply_instruction_offsets(
+    claim: Claim, proposal: Proposal, start: int, end: int
+) -> tuple[tuple[int, int], ...]:
+    """Reproduce an explicit instruction inside one authenticated reply only."""
+    from sanad.scribe.resolver import Context
+
+    order = proposal.candidate.orders[int(claim.item.split(":")[1])]
+    reply = proposal.source_text[start:end]
+    found = mentions(reply, lexicon=partition_for(proposal).lexicon)
+    named = [m for m in found if not m.ambiguous and normalize(m.name) == normalize(order.drug)]
+    if not named:
+        return ()
+    drug = _instruction_span(order, reply, Context(), reply[slice(*named[-1].span)])
+    if drug is None or drug not in {m.span for m in named}:
+        return ()
+    action = _action_at(reply, drug)
+    if not action or action[2] or action[0] != order.action:
+        return ()
+    offsets: tuple[tuple[int, int], ...] = (action[1], drug)
+    if claim.field not in {"drug", "action"}:
+        if claim.field not in {
+            "dose",
+            "frequency",
+            "route",
+            "timing",
+            "duration",
+            "effective_expression",
+            "checkin_expression",
+        }:
+            return ()
+        attached = _dose_span(
+            claim.value, reply, drug, tuple(m.span for m in found), dose=claim.field == "dose"
+        )
+        if attached is None:
+            return ()
+        if claim.field == "dose":
+            if not complete_quantity(claim.value, reply, attached):
+                return ()
+            if order.action == "change":
+                binding = bind_change(order, reply)
+                if not binding or binding.new_dose != attached:
+                    return ()
+        offsets = (*offsets, attached)
+    return tuple((a + start, b + start) for a, b in offsets)
+
+
 def _answer_dose(value: str, answer: str, order: OrderCandidate) -> bool:
     # Timing-only replies leave a dose alone. A directional dose answer owns only TO.
     if re.search(
@@ -1069,6 +1204,15 @@ def _valid_correction(record: FieldEvidence, claim: Claim, proposal: Proposal) -
             extent.proposal_version,
         ):
             continue
+        if record.transformation == "reply_instruction:" + claim.item:
+            instruction_offsets = _reply_instruction_offsets(
+                claim, proposal, extent.start, extent.end
+            )
+            return bool(
+                instruction_offsets
+                and record.offsets == instruction_offsets
+                and record.source_ref == proposal.source_receipt_id
+            )
         answer = dict(extent.answers).get(claim.item, "")
         if claim.field in {"previous_drug", "previous_dose"}:
             order = proposal.candidate.orders[int(claim.item.split(":")[1])]
@@ -1217,14 +1361,20 @@ def valid_record(record: FieldEvidence, claim: Claim, proposal: Proposal) -> boo
             if record.transformation == "instruction_clause":
                 if len(record.offsets) != 2:
                     return False
-                action = _action_at(proposal.source_text, record.offsets[1])
-                if (
-                    not action
-                    or action[0] != claim.value
-                    or action[2]
-                    or action[1] != record.offsets[0]
-                ):
-                    return False
+                order = proposal.candidate.orders[int(claim.item.split(":")[1])]
+                if order.action_quote is not None:
+                    cited = _cited_action(order, proposal.source_text, record.offsets[1])
+                    if not cited or cited[1] or cited[0] != record.offsets[0]:
+                        return False
+                else:
+                    action = _action_at(proposal.source_text, record.offsets[1])
+                    if (
+                        not action
+                        or action[0] != claim.value
+                        or action[2]
+                        or action[1] != record.offsets[0]
+                    ):
+                        return False
         return (
             bool(record.offsets)
             and record.source_ref == proposal.source_receipt_id
@@ -1245,7 +1395,12 @@ def valid_record(record: FieldEvidence, claim: Claim, proposal: Proposal) -> boo
                 )
             )
         )
+    from sanad.scribe.amend import history_source
+
     permitted_computation = {
+        "home_medication_instruction": claim.field == "text"
+        and claim.item.startswith("fact:")
+        and history_source(proposal, claim.value) is not None,
         "resolved_timing": claim.field == "deadline",
         "candidate_classification": claim.field in {"kind", "category"},
         "resolved_test_list": claim.field == "text" and claim.item.startswith("mission:"),
@@ -1330,7 +1485,7 @@ def deduplicate_instructions(
             normalize(identity),
             order.action,
             order.model_copy(
-                update={"drug": identity, "name_latin": None, "generic": None}
+                update={"drug": identity, "name_latin": None, "generic": None, "action_quote": None}
             ).model_dump_json(),
         )
         occurrences = max(1, len(name_spans(identity, source, "drug", ctx)))

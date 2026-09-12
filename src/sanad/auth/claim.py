@@ -7,7 +7,9 @@ from uuid import uuid4
 
 from pydantic import BaseModel, JsonValue, SecretStr
 
+from sanad.accounts.service import AccountService
 from sanad.auth.commands import (
+    AuthPolicy,
     ClaimInvitation,
     ConfirmPatientClaim,
     ConsentPolicy,
@@ -18,7 +20,14 @@ from sanad.auth.commands import (
     RejectClaim,
     RevokeBinding,
 )
-from sanad.auth.service import IdentityService, InternalCommand, internal_actor, read_of, revise
+from sanad.auth.service import (
+    DEFAULT_AUTH_POLICY,
+    IdentityService,
+    InternalCommand,
+    internal_actor,
+    read_of,
+    revise,
+)
 from sanad.auth.tokens import issue_token
 from sanad.channels.telegram import wording
 from sanad.domain import PatientScope, Principal, VersionRef
@@ -44,8 +53,35 @@ from sanad.store.records import (
 )
 
 
+def consent_policy(
+    *,
+    quiet_hours: tuple[str, str] = ("22:00", "08:00"),
+    clinic_contact: str = "Contact your clinic directly. Sanad is not an emergency service.",
+    retention: str = "Development environment: synthetic data only, reset at any time.",
+    urgent_response_policy_id: str = "draft-2026-09",
+) -> ConsentPolicy:
+    """Shared explicit policy construction; callers can supply reviewed tenant terms."""
+    return ConsentPolicy(
+        quiet_hours=quiet_hours,
+        clinic_contact=clinic_contact,
+        retention=retention,
+        urgent_response_policy_id=urgent_response_policy_id,
+    )
+
+
 class ClaimService(IdentityService):
-    consent_policy: Callable[[str], ConsentPolicy | None] = staticmethod(lambda doctor_id: None)
+    def __init__(
+        self,
+        accounts: AccountService,
+        public_base_url: str,
+        *,
+        consent_policy: Callable[[str], ConsentPolicy | None] | None = None,
+        policy: AuthPolicy = DEFAULT_AUTH_POLICY,
+    ):
+        if consent_policy is None:
+            raise ValueError("Consent policy must be configured before enrollment starts")
+        super().__init__(accounts, public_base_url, policy=policy)
+        self.consent_policy = consent_policy
 
     def patient(self, doctor_id: str, patient_id: str) -> Patient | None:
         scope = PatientScope(doctor_id=doctor_id, patient_id=patient_id)

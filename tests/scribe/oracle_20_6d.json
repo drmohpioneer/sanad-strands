@@ -1,0 +1,152 @@
+{
+  "02-action-negated:96f5a3900d59": [
+    "New patient: Synthetic Person\nMedications:\nForxiga 10 (start)\nRequested:\nConfirm start of Forxiga: Wed 9 Sep, 10:00 (default 3 days); if unconfirmed I will notify you at the same time.\nDay-three follow-up runs from the start date reported by the patient; confirmation here does not establish that treatment started.\nNeeds confirmation:\nI heard \"start Forxiga 10.\"; please clarify the action.\nI heard \"Do not start Concor 5\"; please clarify the dose.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "04-dose-swapped:c610e5a38b76": [
+    "New patient: Synthetic Person\nNeeds confirmation:\nConcor (start)\nForxiga (start)\nI heard \"Add Concor 5 mg and Forxiga 10 mg\"; please clarify the dose.\nI heard \"Add Concor 5 mg and Forxiga 10 mg\"; please clarify the dose.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "06-dose-not-shared:1ac8ecb08c7c": [
+    "New patient: Synthetic Person\nMedications:\nConcor 5 mg (start)\nRequested:\nConfirm start of Concor: Wed 9 Sep, 10:00 (default 3 days); if unconfirmed I will notify you at the same time.\nDay-three follow-up runs from the start date reported by the patient; confirmation here does not establish that treatment started.\nNeeds confirmation:\nAmlodipine (start)\nI heard \"Add Concor 5 mg and amlodipine\"; please clarify the dose.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "08-mother-experiencer:96720b8736d5": [
+    "New patient: Synthetic Person\nNeeds confirmation:\nI heard \"The mother has diabetes\"; please clarify the text.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "10-superseded-dose:6e30fca81db2": [
+    "New patient: Synthetic Person\nNeeds confirmation:\nConcor (start)\nI heard \"10\"; which item does it belong to?\nI heard \"Start Concor 5 mg, actually make that 10 mg\"; please clarify the dose.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "11-learned-alias:d6ea3c8c6767": [
+    "New patient: Synthetic Person\nMedications:\nAmlor 5 (start)\nRequested:\nConfirm start of Amlor: Wed 9 Sep, 10:00 (default 3 days); if unconfirmed I will notify you at the same time.\nDay-three follow-up runs from the start date reported by the patient; confirmation here does not establish that treatment started.\nNeeds confirmation:\nNorvasc (stop)\nThere is no current order for this drug; please clarify the change.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "12-distinct-brand:d6ea3c8c6767": [
+    "New patient: Synthetic Person\nMedications:\nAmlor 5 (start)\nRequested:\nConfirm start of Amlor: Wed 9 Sep, 10:00 (default 3 days); if unconfirmed I will notify you at the same time.\nDay-three follow-up runs from the start date reported by the patient; confirmation here does not establish that treatment started.\nNeeds confirmation:\nNorvasc (stop)\nThere is no current order for this drug; please clarify the change.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "13-complete-request:7b18b2e87d32": [
+    "New patient: Synthetic Person\nRequested:\nTASK: call the clinic: due Sun 13 Sep, 10:00 (default 7 days); if not done I will notify you: Sun 13 Sep, 10:00\nNeeds confirmation:\nTEST: CBC: due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nI heard \"call the clinic\" for a test; which test did you mean?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "14-omitted-request:0b365cc307f1": [
+    "New patient: Synthetic Person\nNeeds confirmation:\nTEST: CBC: due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nI heard \"call the clinic\" for a test; which test did you mean?\nI heard \"call the clinic\"; what should I record?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "17-owner-regression:3b6d90500f1b": [
+    "New patient: Ahmed Saad, 55\nMedications:\nExforge 5/160 → Exforge HCT 5/160/12.5 (change)\nNebilet 5 (start)\nRequested:\nConfirm start of Nebilet: Wed 9 Sep, 10:00 (default 3 days); if unconfirmed I will notify you at the same time.\nDay-three follow-up runs from the start date reported by the patient; confirmation here does not establish that treatment started.\nHistory:\nDx: diabetes, hypertension\nNeeds confirmation:\nForxiga (start)\nTEST: CBC, creatinine, Na, K: due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nI heard \"hemolipid profile\" for a test; which test did you mean?\nWhat dose of Forxiga did you intend?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "23-unspoken-known-drug:cfc5f637fd27": [
+    "New patient: Synthetic Person\nMedications:\nConcor 5 (start)\nRequested:\nConfirm start of Concor: Wed 9 Sep, 10:00 (default 3 days); if unconfirmed I will notify you at the same time.\nDay-three follow-up runs from the start date reported by the patient; confirmation here does not establish that treatment started.\nNeeds confirmation:\nI heard \"Start Concor 5.\"; please clarify the action.\nI heard \"New patient Synthetic Person. Start Concor 5.\"; please clarify the drug.\nI heard \"Start Concor 5.\"; please clarify the dose.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "24-negated-finding:b878021b6bcc": [
+    "New patient: Synthetic Person\nNeeds confirmation:\nI heard \"No angina\"; please clarify the text.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "25-age-is-not-dose:cd890a3bf7c6": [
+    "New patient: Synthetic Person\nNeeds confirmation:\nConcor (start)\nI heard \"5\"; which item does it belong to?\nI heard \"Add Concor 5.\"; please clarify the dose.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "28-reply-stale-dose:295facbb6afa": [
+    "New patient: Synthetic Person\nNeeds confirmation:\nConcor (start)\nI heard \"10\"; which item does it belong to?\nI heard \"Start Concor 5\"; please clarify the dose.\nCard updated from your reply\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "english_dictations:e0a88a8c7d62": [
+    "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00): due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile: due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nForxiga (start)\nWhat dose of Forxiga did you intend?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "amendment-Concor:6b65b728fb2f": [
+    "Patient: Synthetic Person\nNeeds confirmation:\nConcor 5 مج → Concor (change)\nWhat dose of Concor did you intend?\nI heard \"10\"; which item does it belong to?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "deadline-doctor:e0a88a8c7d62": [
+    "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00): due Sat 12 Sep, 10:00 (explicit: tomorrow); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nForxiga (start)\nWhat dose of Forxiga did you intend?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "deadline-default:e0a88a8c7d62": [
+    "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00): due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nForxiga (start)\nWhat dose of Forxiga did you intend?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "deadline-scribe:e0a88a8c7d62": [
+    "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00): due Sat 12 Sep, 10:00 (suggested deadline); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nForxiga (start)\nWhat dose of Forxiga did you intend?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "question-request_missing:e0a88a8c7d62": [
+    "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00): due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile: due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nForxiga (start)\nI heard a request for tests or an examination; which items did you request?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "question-extraction_conflict:e0a88a8c7d62": [
+    "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00): due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile: due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nForxiga (start)\nI heard \"uncertain dose\" for Forxiga; which dose did you mean?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "question-clinical_unclear:e0a88a8c7d62": [
+    "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00): due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile: due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nForxiga (start)\nI heard \"uncertain dose\"; please clarify.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "question-drug_unclear:e0a88a8c7d62": [
+    "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00): due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile: due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nForxiga (start)\nPlease confirm the drug name as heard.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "question-fact_medication:e0a88a8c7d62": [
+    "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00): due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile: due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nForxiga (start)\nShould I record the current medication as continue?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "question-correction_unclear:e0a88a8c7d62": [
+    "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00): due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile: due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nForxiga (start)\nWhich item does your correction refer to?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "question-reader_disagreement:e0a88a8c7d62": [
+    "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00): due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile: due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nForxiga (start)\nThe readings differ; please edit the item.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "question-shifted_rows:e0a88a8c7d62": [
+    "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00): due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile: due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nForxiga (start)\nThe values may be shifted between rows; please edit them.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "question-order_missing:e0a88a8c7d62": [
+    "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00): due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile: due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nForxiga (start)\nThere is no current order for this drug; please clarify the change.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "question-document_unclear:e0a88a8c7d62": [
+    "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00): due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile: due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nForxiga (start)\nPlease clarify the document.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "question-unsupported_number:e0a88a8c7d62": [
+    "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00): due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile: due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nForxiga (start)\nA proposed number was not in your dictation; please edit the item.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "question-dose_unclear:e0a88a8c7d62": [
+    "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00): due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile: due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nForxiga (start)\nI heard \"uncertain dose\" for Forxiga; which dose did you mean?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "question-dose_missing:e0a88a8c7d62": [
+    "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00): due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile: due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nForxiga (start)\nWhat dose of Forxiga did you intend?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "question-disputed_number:e0a88a8c7d62": [
+    "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00): due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile: due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nForxiga (start)\nI heard \"999\"; is that correct?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "question-amendment_pending_09b:e0a88a8c7d62": [
+    "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00): due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile: due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nForxiga (start)\nThis medication amendment needs review.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "question-timing_unclear:e0a88a8c7d62": [
+    "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00): due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile: due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nForxiga (start)\nPlease specify the intended deadline.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "question-patient_missing:e0a88a8c7d62": [
+    "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00): due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile: due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nForxiga (start)\nWho is the patient?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "question-multiple_patients:e0a88a8c7d62": [
+    "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00): due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile: due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nForxiga (start)\nPlease send each patient's instructions separately.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "question-unsafe_text:e0a88a8c7d62": [
+    "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00): due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile: due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nForxiga (start)\nThis item needs review because of a danger signal.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "question-empty_item:e0a88a8c7d62": [
+    "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00): due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile: due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nForxiga (start)\nPlease clarify the empty item.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "question-batch_too_large:e0a88a8c7d62": [
+    "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00): due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile: due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nForxiga (start)\nThis batch exceeds the confirmation limit; edit it into smaller batches.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "question-clarification:e0a88a8c7d62": [
+    "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00): due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile: due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nForxiga (start)\nPlease clarify the patient and instructions.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "question-duplicate_order:e0a88a8c7d62": [
+    "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00): due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile: due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nForxiga (start)\nThere is more than one order for this drug; please clarify one order.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "question-unassigned_number:e0a88a8c7d62": [
+    "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00): due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile: due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nForxiga (start)\nI heard \"999\"; which item does it belong to?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "patient-missing-skipped:179a6812d9c1": [
+    "New patient: Who is the patient?, \n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "verification:e0a88a8c7d62": [
+    "New patient: Ahmed Saad, 53\nNeeds confirmation:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00): due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile: due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nPlease verify \"the original statement\".\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "monitor-request-missing:e0a88a8c7d62": [
+    "New patient: Ahmed Saad, 53\nNeeds confirmation:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00): due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile: due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nI heard a monitoring request missing from the card; what should I record?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "ambiguities:f9748b15ba7b": [
+    "New patient: , \nNeeds confirmation:\nWhat dose of Forxiga did you intend?\nI heard \"uncertain phrase\"; please clarify.\nI heard \"\"; please clarify.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "single-source:e0a88a8c7d62": [
+    "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00): due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile: due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nForxiga (start)\nWhat dose of Forxiga did you intend? Heard once.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "filtered-alerts:047358408a20": [
+    "New patient: , \nNotify me if:\nNeeds confirmation:\nThis item needs review because of a danger signal.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "long-quote:e0a88a8c7d62": [
+    "New patient: Ahmed Saad, 53\nNeeds confirmation:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00): due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile: due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nPlease verify \"word word word word word word word word word word word word word word word word word word word word word word word word…\".\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ]
+}

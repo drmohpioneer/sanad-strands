@@ -42,8 +42,8 @@ def test_render_escapes_all_untrusted_page_fields() -> None:
         assert "&lt;img" in text and 'dir="rtl"' in text
 
 
-def test_all_enrollment_wording_is_complete_bilingual_plain_text() -> None:
-    assert len(wording.ENROLLMENT_TEMPLATES) == 11
+def test_all_enrollment_wording_is_single_effective_language() -> None:
+    assert len(wording.ENROLLMENT_TEMPLATES) == 13
     assert wording.OWNER_REVIEW_PENDING and pages.OWNER_REVIEW_PENDING
     for key in wording.ENROLLMENT_TEMPLATES:
         fields = {k: "Synthetic" for k in wording.FIELDS[key]}
@@ -51,7 +51,7 @@ def test_all_enrollment_wording_is_complete_bilingual_plain_text() -> None:
             fields["link"] = "https://sanad.example/d/" + "A" * 43
         text = wording.render(key, "en", **fields)
         assert len(text) <= 4096
-        assert any("\u0600" <= c <= "\u06ff" for c in text)
+        assert not any("\u0600" <= c <= "\u06ff" for c in text)
         assert any(c.isascii() and c.isalpha() for c in text)
         assert "<script" not in text
 
@@ -75,3 +75,18 @@ def test_dependency_direction_has_no_lower_imports_of_auth_web_patients() -> Non
                     in [["sanad", "auth"], ["sanad", "web"], ["sanad", "patients"]]
                     for m in modules
                 )
+
+
+def test_admin_api_imports_only_account_service_and_web_plumbing() -> None:
+    file = Path(__file__).parents[1] / "src/sanad/web/api_admin.py"
+    for node in ast.walk(ast.parse(file.read_text())):
+        modules = (
+            [node.module]
+            if isinstance(node, ast.ImportFrom)
+            else [n.name for n in node.names]
+            if isinstance(node, ast.Import)
+            else []
+        )
+        for module in modules:
+            if module and module.startswith("sanad."):
+                assert module == "sanad.accounts.service" or module.startswith("sanad.web")

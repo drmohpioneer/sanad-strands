@@ -46,6 +46,15 @@ def displayed(
 ) -> tuple[ReviewSnapshot, ...]:
     if intent.template_id == "liaison_inbox":
         return intent.review_listing
+    if intent.template_id == "doctor_question_digest":
+        from sanad.contact.question_digest import due, payload_snapshot
+
+        assert type(intent.scope) is TenantScope
+        if payload_snapshot(store, intent, now)[1] != basis:
+            raise NoticeChanged("bundle_changed")
+        return tuple(
+            snapshot(store, r) for _, _, r in due(store, intent.scope)[: policy.max_named_items]
+        )
     if intent.scope_kind == "doctor":
         from sanad.contact.bundle import eligible
         from sanad.contact.policy import DRAFT_CONTACT_POLICY
@@ -455,18 +464,20 @@ def issued_records(resolution: "DeliveryResolution") -> tuple["StoredRecord", ..
     change fails issuance_guards and its CAS. Action-time checks never adapt it.
     """
     assert resolution.notice is not None
-    stamp = resolution.obligation_stamp
+    stamps = resolution.question_stamps + (
+        (resolution.obligation_stamp,) if resolution.obligation_stamp else ()
+    )
     request = resolution.notice
 
     def stamped(s: ReviewSnapshot) -> ReviewSnapshot:
-        if (
-            stamp is not None
-            and s.scope == model_scope(from_record(stamp, ReviewObligation))
-            and s.review_ref.id == stamp.id
-        ):
-            if stamp.version != s.review_ref.version + 1:
-                raise NoticeChanged("notice_stamp_changed")
-            return s.model_copy(update={"review_ref": stamp.ref})
+        for stamp in stamps:
+            if (
+                s.scope == model_scope(from_record(stamp, ReviewObligation))
+                and s.review_ref.id == stamp.id
+            ):
+                if stamp.version != s.review_ref.version + 1:
+                    raise NoticeChanged("notice_stamp_changed")
+                return s.model_copy(update={"review_ref": stamp.ref})
         return s
 
     rows = []

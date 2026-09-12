@@ -58,6 +58,9 @@ SUPPORTED = frozenset(
         "AssociateEvidence",
         "RejectEvidence",
         "AnswerQuestion",
+        "SendQuestion",
+        "DeferQuestion",
+        "ReuseAnswer",
         "AcceptTask",
         "ReopenTask",
     }
@@ -346,6 +349,16 @@ class Steward:
                 return command_result(self.store.commit(request))
             if kind == "SetContactPreference":
                 return self._preference(command, profile)
+            if kind in {"SendQuestion", "DeferQuestion", "ReuseAnswer"}:
+                from sanad.concierge.reuse import prepare as prepare_reuse
+                from sanad.concierge.reuse import remember
+
+                builder = CommitBuilder(scope, command, now, policy, self.store)
+                reason = prepare_reuse(builder, profile)
+                remember(builder)
+                return command_result(
+                    self.store.commit(builder.finish().model_copy(update={"reason_code": reason}))
+                )
             if kind in {"AnswerQuestion", "AcceptTask", "ReopenTask"}:
                 from sanad.concierge.answer_command import prepare_answer, prepare_task
 
@@ -355,6 +368,10 @@ class Steward:
                     if kind == "AnswerQuestion"
                     else prepare_task(builder, profile)
                 )
+                if kind == "AnswerQuestion":
+                    from sanad.concierge.reuse import remember
+
+                    remember(builder)
                 return command_result(
                     self.store.commit(builder.finish().model_copy(update={"reason_code": reason}))
                 )

@@ -78,5 +78,7 @@ class CapturedTransport:
         return outcome
 
     def answer_callback(self, callback_query_id: str, text: str) -> CallbackOutcome:
+        if not callback_query_id:
+            return CallbackOutcome(status="accepted")
         self.callback_calls.append(CapturedCallback(callback_query_id=callback_query_id, text=text))
         return CallbackOutcome(status="accepted")

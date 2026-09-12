@@ -4,6 +4,7 @@ import logging
 import re
 from typing import TYPE_CHECKING
 
+from sanad.domain.language import effective
 from sanad.scribe.change_binding import SourcePartition
 
 if TYPE_CHECKING:
@@ -268,9 +269,9 @@ def prepare_clinical(
                     code="clinical_unclear",
                     question=(
                         f'I heard "{fragment}" for a test; which test did you mean?'
-                        if language == "en" and fragment
+                        if effective(language, audience="doctor") == "en" and fragment
                         else "Which test did you mean?"
-                        if language == "en"
+                        if effective(language, audience="doctor") == "en"
                         else f'سمعت "{fragment}" كتحليل، قصدك إيه؟'
                         if fragment
                         else "قصدك تحليل إيه؟"

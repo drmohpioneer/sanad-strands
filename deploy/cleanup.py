@@ -3,11 +3,23 @@
 import argparse
 import json
 import os
+import time
+from collections import Counter
+from collections.abc import Iterator
 from typing import Any
+from urllib.parse import quote, unquote
 
 from botocore.exceptions import ClientError  # type: ignore[import-untyped]
 
-from deploy.common import OperationError, client, command, environment, session
+from deploy.common import (
+    OperationError,
+    client,
+    command,
+    environment,
+    outputs,
+    parameter_values,
+    session,
+)
 
 
 def absent_ok(call: Any, **kwargs: Any) -> Any:
@@ -97,14 +109,214 @@ def delete_spikes(aws: Any) -> dict[str, Any]:
     }
 
 
+def scan_rows(
+    ddb: Any, table: str, field: str, value: str, *, prefix: bool = True
+) -> Iterator[dict[str, Any]]:
+    """DynamoDB filters run before client-side decoding of the stored JSON body."""
+    request: dict[str, Any] = {
+        "TableName": table,
+        "ConsistentRead": True,
+        "FilterExpression": "begins_with(#field, :value)" if prefix else "#field = :value",
+        "ExpressionAttributeNames": {"#field": field},
+        "ExpressionAttributeValues": {":value": {"S": value}},
+    }
+    while True:
+        page = ddb.scan(**request)
+        yield from page.get("Items", [])
+        if not page.get("LastEvaluatedKey"):
+            return
+        request["ExclusiveStartKey"] = page["LastEvaluatedKey"]
+
+
+def row_body(row: dict[str, Any]) -> dict[str, Any]:
+    value = json.loads(row.get("body", {}).get("S", "{}"))
+    if not isinstance(value, dict):
+        raise OperationError("Invalid stored record body; no cleanup performed")
+    return value
+
+
+def dev_selection(ddb: Any, table: str, bot: str) -> tuple[list[dict[str, Any]], set[str]]:
+    doctors = {
+        row["PK"]["S"]
+        for row in scan_rows(ddb, table, "SK", "DOCTOR", prefix=False)
+        if row_body(row).get("telegram_bot_id") == bot
+    }
+    doctor_ids = {unquote(pk.removeprefix("D#")) for pk in doctors}
+    selected: list[dict[str, Any]] = []
+    prefixes: set[str] = set()
+    account = "ACCT#" + quote(bot, safe="-_.:")
+    for pk_prefix in (
+        "D#",
+        account,
+        "SUBJECT#" + quote(bot, safe="-_.:") + "#",
+        "TOKEN#",
+        "SESSION#",
+        "IN#",
+    ):
+        for row in scan_rows(ddb, table, "PK", pk_prefix):
+            pk, sk = row["PK"]["S"], row["SK"]["S"]
+            # Always keep shared vocabulary caches, regardless of partition class.
+            if (
+                sk == "NAME_CACHE"
+                or sk.startswith("NAME_CACHE#")
+                or row.get("entity_type", {}).get("S") == "name_cache"
+            ):
+                continue
+            take = False
+            if pk.startswith("D#"):
+                parts = pk.split("#")
+                tenant = "#".join(parts[:2])
+                if tenant not in doctors:
+                    continue
+                if len(parts) == 4 and parts[2] in {"P", "INTAKE"}:
+                    owner, subject = (
+                        quote(unquote(parts[1]), safe=""),
+                        quote(unquote(parts[3]), safe=""),
+                    )
+                    prefixes.add(
+                        f"{owner}/" + ("intake/" if parts[2] == "INTAKE" else "") + f"{subject}/"
+                    )
+                    take = True
+                elif pk == tenant:
+                    take = sk not in {"DOCTOR", "PROFILE"} and not sk.startswith(
+                        ("POLICY#", "APPLICATION#")
+                    )
+            elif pk == account:
+                take = not sk.startswith(("ADMIN_ACCOUNT#", "APPLICATION#", "ACK#"))
+                if sk.startswith("TOKEN_HEAD#") and row_body(row).get("purpose") in {
+                    "doctor_login",
+                    "admin_login",
+                }:
+                    take = False
+            elif pk.startswith("SUBJECT#"):
+                take = set(row_body(row).get("role_set", [])) == {"patient"}
+            elif pk.startswith(("TOKEN#", "SESSION#", "IN#")):
+                scope = row_body(row).get("scope", {})
+                if pk.startswith("IN#"):
+                    take = scope.get("doctor_id") in doctor_ids or scope.get("bot_id") == bot
+                else:
+                    take = scope.get("bot_id") == bot
+            if take:
+                selected.append(row)
+    return selected, prefixes
+
+
+def versioned_objects(s3: Any, bucket: str, prefix: str) -> list[dict[str, str]]:
+    objects: list[dict[str, str]] = []
+    request: dict[str, Any] = {"Bucket": bucket, "Prefix": prefix, "MaxKeys": 1000}
+    while True:
+        page = s3.list_object_versions(**request)
+        objects.extend(
+            {"Key": x["Key"], "VersionId": x["VersionId"]}
+            for x in page.get("Versions", []) + page.get("DeleteMarkers", [])
+        )
+        if not page.get("IsTruncated"):
+            return objects
+        request["KeyMarker"] = page["NextKeyMarker"]
+        if "NextVersionIdMarker" in page:
+            request["VersionIdMarker"] = page["NextVersionIdMarker"]
+        else:
+            request.pop("VersionIdMarker", None)
+
+
+def selection_counts(rows: list[dict[str, Any]], objects: int) -> dict[str, Any]:
+    partitions: Counter[str] = Counter()
+    sk_prefixes: dict[str, Counter[str]] = {}
+    globals_: Counter[str] = Counter()
+    for row in rows:
+        pk, sk = row["PK"]["S"], row["SK"]["S"]
+        parts = pk.split("#")
+        kind = (
+            ("patient" if parts[2] == "P" else "intake")
+            if len(parts) == 4 and parts[0] == "D"
+            else "doctor"
+            if parts[0] == "D"
+            else "account"
+            if parts[0] == "ACCT"
+            else "global"
+        )
+        partitions[kind] += 1
+        sk_prefixes.setdefault(kind, Counter())[sk.split("#", 1)[0]] += 1
+        if kind == "global":
+            globals_[parts[0] + "#"] += 1
+    return {
+        "rows": len(rows),
+        "partition_classes": dict(partitions),
+        "sk_prefixes": {k: dict(v) for k, v in sk_prefixes.items()},
+        "global_pk_prefixes": dict(globals_),
+        "s3_objects": objects,
+    }
+
+
+def delete_rows(ddb: Any, table: str, rows: list[dict[str, Any]]) -> None:
+    for start in range(0, len(rows), 25):
+        pending = [
+            {"DeleteRequest": {"Key": {k: row[k] for k in ("PK", "SK")}}}
+            for row in rows[start : start + 25]
+        ]
+        for attempt in range(8):
+            result = ddb.batch_write_item(RequestItems={table: pending})
+            pending = result.get("UnprocessedItems", {}).get(table, [])
+            if not pending:
+                break
+            if attempt == 7:
+                raise OperationError("Unprocessed row deletions remain; rerun dev-data")
+            time.sleep(min(0.1 * 2**attempt, 2))
+
+
+def dev_data(aws: Any, env: str, *, yes: bool = False) -> dict[str, Any]:
+    if env != "dev":
+        raise OperationError("dev-data requires --env dev")
+    out = outputs(client(aws, "cloudformation"), env)
+    if out.get("TableName") != "sanad-dev-data":
+        raise OperationError("dev-data requires stack TableName sanad-dev-data")
+    values, _ = parameter_values(client(aws, "ssm"), env)
+    token = values.get("bot-token", "")
+    bot, separator, secret = token.partition(":")
+    if not bot.isascii() or not bot.isdigit() or not separator or not secret:
+        raise OperationError("Invalid dev bot parameter; cleanup refused")
+    ddb, s3 = client(aws, "dynamodb"), client(aws, "s3")
+    rows, prefixes = dev_selection(ddb, out["TableName"], bot)
+    objects = [
+        obj
+        for prefix in sorted(prefixes)
+        for obj in versioned_objects(s3, out["BucketName"], prefix)
+    ]
+    objects = list({(obj["Key"], obj["VersionId"]): obj for obj in objects}.values())
+    counts = selection_counts(rows, len(objects))
+    print(json.dumps({"mode": "execute" if yes else "dry-run", **counts}, sort_keys=True))
+    if yes:
+        # Leave every scope row intact until all its media prefixes have been cleared.
+        for start in range(0, len(objects), 1000):
+            result = s3.delete_objects(
+                Bucket=out["BucketName"],
+                Delete={"Objects": objects[start : start + 1000], "Quiet": True},
+            )
+            if result.get("Errors"):
+                raise OperationError("S3 deletion failed; rows retained; rerun dev-data")
+        delete_rows(ddb, out["TableName"], rows)
+        remaining, _ = dev_selection(ddb, out["TableName"], bot)
+        if remaining:
+            print(json.dumps({"reappeared": selection_counts(remaining, 0)}, sort_keys=True))
+            raise OperationError("Rows reappeared during cleanup; rerun dev-data")
+    return counts
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="action", required=True)
     sub.add_parser("spikes")
     environment(sub.add_parser("retained-bucket"))
+    reset = sub.add_parser("dev-data")
+    reset.add_argument("--env", required=True, choices=("dev", "judge"))
+    reset.add_argument("--yes", action="store_true")
     args = parser.parse_args()
+    if args.action == "dev-data" and args.env != "dev":
+        raise OperationError("dev-data requires --env dev")
     aws = session()
-    if args.action == "spikes":
+    if args.action == "dev-data":
+        dev_data(aws, args.env, yes=args.yes)
+    elif args.action == "spikes":
         print(json.dumps(delete_spikes(aws), sort_keys=True))
     else:
         try:

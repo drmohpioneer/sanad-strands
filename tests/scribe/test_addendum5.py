@@ -107,7 +107,7 @@ def test_duplicate_history_uses_cleaned_spoken_name_and_logs_one_redacted_line(
 
 
 def test_v6_requests_model_knowledge_separately_from_the_spoken_drug() -> None:
-    assert PROMPT_VERSION == "scribe-v8"
+    assert PROMPT_VERSION == "scribe-v10"
     for prompt in (SYSTEM_PROMPT, CORRECTION_PROMPT):
         assert "Keep drug as spoken" in prompt
         assert "name_latin is an optional recognized" in prompt

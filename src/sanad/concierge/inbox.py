@@ -10,6 +10,7 @@ from sanad.liaison import policy, templates
 from sanad.liaison.records import Notice, ReviewOffer
 from sanad.liaison.snapshot import snapshot
 from sanad.presentation.context import PresentationContext, resolve
+from sanad.presentation.inbox import due_row
 from sanad.store.records import CommandEnvelope, Doctor, Patient, from_record, model_scope
 
 if TYPE_CHECKING:
@@ -77,12 +78,11 @@ def listing_text(
         kind = (ENGLISH_KINDS if context.locale == "en" else KINDS)[review.review_kind]
         lines.append(
             f"{n}. "
-            + templates.render(
-                "row",
+            + due_row(
                 context,
                 name=name,
                 kind=kind,
-                source=f"{review.source_type}:{review.source_id[:60]}",
+                due=review.review_at.isoformat(),
                 hours=str(max(0, int((now - review.created_at).total_seconds() // 3600))),
                 state=templates.render(review.state, context),
             )
@@ -105,6 +105,8 @@ def reply(
     status: str,
     **fields: str,
 ) -> "RouteResult":
+    if key == "invalid_action":
+        fields = {}
     if key == "stale":
         fields["reason"] = templates.stale_reason(fields.get("reason", "default"), doctor.language)
     return turn._reply(
@@ -161,7 +163,7 @@ def act(
         actor,
         claim,
         doctor,
-        "stale",
+        "invalid_action" if result.status == "invalid_action" else "stale",
         result.status,
         reason=result.reason_code or "authority_or_snapshot_changed",
     )

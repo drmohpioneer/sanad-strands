@@ -166,6 +166,9 @@ def route_receipt(
     verdict = ScreenVerdict.model_validate(receipt.safety_result)
     # Screening was done before authorize at ingress. Revalidate roles for every action.
     auth = store.authorize(runtime.settings.bot_id, receipt.source_subject)
+    if verdict.level != "danger" and auth.principal.actor_kind == "doctor":
+        if runtime.accounts.doctor_name(receipt, auth.principal):
+            return RouteResult(route="doctor", status="name_recorded")
     if verdict.level != "danger" and runtime.identity_route is not None:
         identity_result = runtime.identity_route(receipt, auth)
         if identity_result is not None:
@@ -295,6 +298,7 @@ def route_receipt(
                 command_id="apply:" + receipt.id,
                 actor=auth.principal,
                 private_chat_id=receipt.source_chat,
+                claimed_name=str(payload.get("sender_name", "")),
                 restart_rejected=isinstance(raw_text, str) and raw_text.strip() == "/start",
             )
         )

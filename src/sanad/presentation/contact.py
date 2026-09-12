@@ -60,7 +60,7 @@ CATALOG: Catalog = {
         "en": "The start date is uncertain.",
     },
     "contact.doctor_medication_barrier": {
-        "ar": "عائق: {type} — «{text}»",
+        "ar": "عائق: {type}: «{text}»",
         "en": 'Barrier: {type} - "{text}"',
     },
     "contact.doctor_barrier_attempt": {

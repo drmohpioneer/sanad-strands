@@ -55,8 +55,8 @@ CATALOG: Catalog = {
         ),
     },
     "resolver.place": {
-        "ar": "{name} — {distance} م{details}",
-        "en": "{name} — {distance} m{details}",
+        "ar": "{name}: {distance} م{details}",
+        "en": "{name}: {distance} m{details}",
     },
 }
 

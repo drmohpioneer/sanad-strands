@@ -204,7 +204,28 @@ def test_two_hundred_questions_page_and_stable_mapping(store: StoreBase, clock: 
     m = question(w)
     for index in range(199):
         w.seed(m.model_copy(update={"id": f"ticket-{index:03d}"}))
+    from sanad.concierge.text import normalized
+    from sanad.domain.entities import QuestionDetails
+    from sanad.liaison.records import ReusableAnswer
+
+    assert isinstance(m.details, QuestionDetails)
+
+    w.seed(
+        ReusableAnswer(
+            id="bound-proposal",
+            scope=w.doctor.scope,
+            question_text=m.details.question_text,
+            normalized_question=normalized(m.details.question_text),
+            answer_text="Bring your diary. " * 35,
+            source_mission_id=m.id,
+            source_patient_id=m.patient_id,
+            created_at=clock(),
+            updated_at=clock(),
+        )
+    )
     listing = doctor(w, "/questions")
+    assert listing.payload and "Proposed reply:" in str(listing.payload["text"])
+    assert "…" in str(listing.payload["text"])
     assert listing.payload and len(str(listing.payload["text"])) < 3500
     assert "page 1/34" in str(listing.payload["text"])
     assert len(listing.question_listing_targets) == 6 and listing.question_listing_targets[0] == (

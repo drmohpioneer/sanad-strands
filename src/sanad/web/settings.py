@@ -13,6 +13,12 @@ class WebSettings(_BoundaryValue):
     model_config = ConfigDict(
         frozen=True, extra="forbid", hide_input_in_errors=True, populate_by_name=True
     )
+    consent_retention: str = Field(
+        default="Development environment: synthetic data only, reset at any time.",
+        alias="SANAD_CONSENT_RETENTION",
+        min_length=1,
+        max_length=160,
+    )
     public_base_url: str = Field(alias="SANAD_PUBLIC_BASE_URL")
     bot_username: Annotated[str, Field(pattern=r"^[A-Za-z][A-Za-z0-9_]{4,31}$")] = Field(
         alias="SANAD_TELEGRAM_BOT_USERNAME"
@@ -53,4 +59,6 @@ class WebSettings(_BoundaryValue):
             if not value:
                 raise ValueError(f"Missing environment variable: {name}")
             data[name] = value
+        if value := os.environ.get("SANAD_CONSENT_RETENTION"):
+            data["SANAD_CONSENT_RETENTION"] = value
         return cls.model_validate(data)

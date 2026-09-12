@@ -59,10 +59,17 @@ def test_every_accepted_key_and_locale_is_byte_identical(
 
 @pytest.mark.parametrize("surface", SURFACES)
 def test_no_keys_renamed_or_new_prose_created(surface: str) -> None:
-    # Addendum 1 grandfathers ALL legacy fragments. This slice creates no prose;
-    # an added key cannot silently become another grandfathered fragment.
+    # Keep the grandfathered fragment set exact. Contract 17c explicitly adds
+    # these three catalogs; they are not legacy prose.
     catalog = import_module("sanad.presentation." + surface).CATALOG
-    assert set(catalog) == {surface + "." + key for key in legacy(surface)}
+    added = (
+        {"doctor.scribe_digest", "doctor.scribe_digest_usage", "doctor.doctor_question_digest"}
+        if surface == "doctor"
+        else set()
+    )
+    if surface == "concierge":
+        added |= {"concierge.doctor_question_deferred", "concierge.doctor_answer_reused"}
+    assert set(catalog) == {surface + "." + key for key in legacy(surface)} | added
     assert all(set(locales) == {"ar", "en"} for locales in catalog.values())
 
 

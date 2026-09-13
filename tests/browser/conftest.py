@@ -7,6 +7,7 @@ import time
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import httpx
 import pytest
@@ -106,7 +107,7 @@ def rendered(
         assert browser_login(client, admin_path(world)).status_code == 303
         cookies[ADMIN] = dict(client.cookies)
     entry_paths = []
-    if request.node.name.startswith("test_depth_entry"):
+    if request.node.name.startswith(("test_depth_entry", "test_aurora_entry")):
         entry_paths = [
             world.login_path(world.owner.subject, id=9801),
             world.login_path(PATIENT, id=9802),
@@ -174,6 +175,11 @@ def rendered(
                         color_scheme=request.param[1],
                         timezone_id="UTC",
                     ) as context:
+                        if not request.node.name.startswith("test_aurora_themes"):
+                            context.add_init_script(
+                                "if(!localStorage.getItem('sanad-theme'))localStorage.setItem("
+                                "'sanad-theme'," + repr(request.param[1]) + ");"
+                            )
                         errors: list[str] = []
 
                         def local_only(route: Route) -> None:
@@ -207,3 +213,36 @@ def depth_english_surface(request: pytest.FixtureRequest, monkeypatch: pytest.Mo
     """18e measures the released English surface; older bilingual cases retain their locale."""
     if request.node.name.startswith("test_depth_"):
         monkeypatch.setenv("SANAD_CONTEST_ENGLISH", "1")
+
+
+@pytest.fixture
+def aurora_monitor() -> dict[str, Any]:
+    """Slot order, compound systolic readings, an extra, and a missing slot."""
+    return {
+        "id": "trend-monitor",
+        "title": "Blood pressure",
+        "state": "open",
+        "due_at": "2026-09-14T12:00:00Z",
+        "details": {
+            "kind": "MONITOR",
+            "metric": "blood_pressure",
+            "unit": "mmHg",
+            "slots": [f"2026-09-12T{hour}:00:00Z" for hour in ("08", "12", "16", "20")],
+            "readings": [
+                {"slot": slot, "value": value, "received_at": "2026-09-12T12:00:00Z"}
+                for slot, value in ((2, "160/82"), (0, "120/80"), (None, "999/99"), (1, "130/90"))
+            ],
+        },
+    }
+
+
+@pytest.fixture(autouse=True)
+def owner_review_subtests(subtests: pytest.Subtests) -> Iterator[None]:
+    """Let R1.2 owner-review pairs fail individually without hiding other rails."""
+    from browser.aurora18h import OWNER_SUBTESTS
+
+    token = OWNER_SUBTESTS.set(subtests)
+    try:
+        yield
+    finally:
+        OWNER_SUBTESTS.reset(token)

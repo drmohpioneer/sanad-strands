@@ -8,7 +8,6 @@ import pytest
 from PIL import Image
 from playwright.sync_api import Page, Route, expect
 from store.account_fixtures import ADMIN, PATIENT
-from test_dashboard18_contrast import contrast
 
 from browser.conftest import RenderedApp
 
@@ -53,27 +52,25 @@ def identity(page: Page) -> None:
 
 @RETINA
 def test_depth_screenshots_and_computed_surfaces(rendered: RenderedApp, tmp_path: Path) -> None:
-    ready(rendered)  # Warm the shipped optional fonts for the visual comparison.
+    ready(rendered)  # Load the shipped swap fonts before the visual comparison.
     page = ready(rendered)
-    assert page.locator(".identity").evaluate(
-        "e=>getComputedStyle(e).fontFamily.startsWith('Playfair')"
-    )
-    values = page.evaluate("""() => {
-      const s=getComputedStyle(document.documentElement);
-      return Object.fromEntries(['s0','s2','s3'].map(k=>[k,s.getPropertyValue('--'+k).trim()]));
-    }""")
-    assert contrast(values["s0"], values["s2"]) >= 1.12
+    expect(page.locator(".identity > svg.sanad-lockup")).to_have_count(1)
+    expect(page.locator(".identity > .visually-hidden")).to_have_text("Sanad")
     theme = page.locator("html").get_attribute("data-theme")
-    if theme == "dark":
-        assert contrast(values["s2"], values["s3"]) > 1
-        assert "inset" in page.locator(".top-bar").evaluate("e=>getComputedStyle(e).boxShadow")
+    assert theme in {"dark", "light"}
     assert page.locator(".work-surface").evaluate("e=>getComputedStyle(e).boxShadow") != "none"
-    expect(page.locator(".page-heading")).to_have_count(0)
-    assert page.locator(".top-bar").evaluate("e=>e.getBoundingClientRect().height") == 56
+    assert (
+        page.locator(".work-surface").evaluate("e=>getComputedStyle(e).backdropFilter")
+        == "blur(18px)"
+    )
+    expect(page.locator(".top-bar")).to_have_count(0)
+    expect(page.locator(".page-heading")).to_have_count(1)
     expect(page.locator(".summary-tile").first).to_contain_text("Needs you now")
-    expect(page.locator(".summary-tile").first).to_have_class("summary-tile danger")
+    expect(page.locator(".summary-tile").first).to_have_class(
+        __import__("re").compile(r"\bsummary-tile\b.*\bdanger\b")
+    )
     expect(page.locator(".sort-chevron")).to_have_count(4)
-    assert page.locator("body,.summary-tile strong,td,time").evaluate_all(
+    assert page.locator(".summary-tile strong,.patient-row time,.kv b").evaluate_all(
         "es=>es.every(e=>getComputedStyle(e).fontVariantNumeric.includes('tabular-nums'))"
     )
     assert page.locator(".rail").evaluate("e=>getComputedStyle(e).boxShadow") == "none"
@@ -108,19 +105,21 @@ def test_depth_summary_filters_chips_and_primary(rendered: RenderedApp) -> None:
     expect(page.locator("#refresh")).not_to_have_class("primary")
     for key in ("danger", "overdue", "pending_review", "due_today"):
         tile = page.locator(f'[data-summary="{key}"]')
-        number = int(tile.locator("strong").inner_text())
+        number = int(tile.locator("strong").get_attribute("data-count") or "0")
         assert str(number) in (tile.get_attribute("aria-label") or "")
         tile.click()
         expect(tile).to_have_attribute("aria-pressed", "true")
         expect(tile).to_be_focused()
-        expect(page.locator("#filter")).to_have_value(key)
+        expect(page.locator('#filter [aria-pressed="true"]')).to_have_attribute("data-filter", key)
         rows = page.locator(".clinical tbody tr.patient-row")
         assert rows.count() > 0 if number else rows.count() == 0
         if key == "danger":
             assert rows.count() == page.locator(".clinical tbody tr.patient-row.urgent").count()
         tile.click()
         expect(tile).to_have_attribute("aria-pressed", "false")
-        expect(page.locator("#filter")).to_have_value("all")
+        expect(page.locator('#filter [aria-pressed="true"]')).to_have_attribute(
+            "data-filter", "all"
+        )
     for path in ("/a", "/a/inbox", "/a/history", "/a/preferences"):
         ready(rendered, path)
         if path == "/a":
@@ -161,18 +160,34 @@ def test_depth_font_and_theme_layout_stability(rendered: RenderedApp) -> None:
             route.fulfill(path=ROOT / "src/sanad/web/static" / route.request.url.rsplit("/", 1)[1])
         page.evaluate("document.fonts.ready")
         page.wait_for_timeout(250)
-        assert page.evaluate("window.fontShifts") == [], page.evaluate(
-            "JSON.stringify(window.fontShifts)"
+        assert page.evaluate("""() => [...document.fonts].filter(f=>
+          ['Inter','Playfair'].includes(f.family)).every(f=>f.status==='loaded'&&f.display==='swap')""")
+        assert page.evaluate("document.documentElement.style.getPropertyValue('--font-ui')") == ""
+        assert (
+            page.evaluate("document.documentElement.style.getPropertyValue('--font-display')") == ""
         )
+        page.evaluate("window.shiftObserver.takeRecords();window.fontShifts=[]")
+        page.wait_for_function("""() => [...document.querySelectorAll('.rv.in')].every(e=>
+          !e.getAnimations().some(a=>a.playState==='running' &&
+            ['transform','opacity','filter'].includes(a.transitionProperty)))""")
         # Theme changes must not resize any rendered element, including native controls.
-        geometry = """() => [...document.querySelectorAll('body *')].map(e=>{
-          const r=e.getBoundingClientRect();return [r.x,r.y,r.width,r.height];
-        })"""
+        geometry = """() => [...document.querySelectorAll('body *')].filter(e=>{
+          if(e.matches('.aurora i'))return false;
+          for(let p=e;p;p=p.parentElement)if(p.matches('.rv') &&
+            p.getAnimations().some(a=>
+              a.playState==='running' && ['transform','opacity','filter']
+                .includes(a.transitionProperty)))return false;
+          return true;
+        }).map(e=>{const r=e.getBoundingClientRect();return [r.x,r.y,r.width,r.height];})"""
         before = page.evaluate(geometry)
         for theme in ("dark", "light"):
-            page.locator("#theme").select_option(theme)
+            page.locator(f'[data-theme-set="{theme}"]').click()
             page.wait_for_timeout(250)
-            assert page.evaluate(geometry) == before
+            after = page.evaluate(geometry)
+            assert after == before, page.locator("body *").evaluate_all(
+                "(es,changes)=>changes.map(([i,a,b])=>[es[i].tagName,es[i].className,a,b])",
+                [[i, a, b] for i, (a, b) in enumerate(zip(before, after, strict=True)) if a != b],
+            )
             assert page.evaluate("window.fontShifts") == [], page.evaluate(
                 "JSON.stringify(window.fontShifts)"
             )
@@ -216,18 +231,28 @@ def test_depth_keyboard_and_motion(rendered: RenderedApp) -> None:
         assert (
             page.evaluate("""() => [...document.querySelectorAll('body *')].flatMap(e=>
           [null,'::before','::after'].map(p=>getComputedStyle(e,p))).filter(s=>
-          s.transitionProperty!=='none'||s.animationName!=='none').length""")
+          s.transitionDuration.split(',').some(d=>parseFloat(d)>.001)||
+          s.animationDuration.split(',').some(d=>parseFloat(d)>.001)).length""")
             == 0
         )
 
     motionless()
     if page.viewport_size and page.viewport_size["width"] == 390:
-        disclosure = page.locator(".nav-disclosure")
-        disclosure.click()
-        expect(disclosure).to_have_attribute("aria-expanded", "true")
+        ready(rendered, "/a/preferences")
         expect(page.locator("#navigation")).to_be_visible()
-        disclosure.click()
-        expect(page.locator("#navigation")).not_to_be_visible()
+        page.locator(".rail nav a").last.scroll_into_view_if_needed()
+        assert page.locator(".rail nav").evaluate("e=>e.scrollLeft") > 0
+        page.get_by_role("link", name="Patients", exact=True).click()
+        expect(page).to_have_url(rendered.origin + "/a")
+        for selector, count in ((".rail .foot", 1), (".toggle", 1), (".toggle button", 2)):
+            expect(page.locator(selector)).to_have_count(count)
+            assert page.locator(selector).evaluate_all(
+                """es=>es.every(e=>{const r=e.getBoundingClientRect();
+                  return r.left>=0 && r.right<=innerWidth &&
+                    r.top>=0 && r.bottom<=innerHeight})"""
+            )
+        assert page.locator(".rail").evaluate("e=>getComputedStyle(e).flexDirection") == "row"
+        ready(rendered)
     page.locator(".skip").focus()
     page.keyboard.press("Enter")
     expect(page.locator("#workspace")).to_be_focused()
@@ -265,62 +290,31 @@ def test_depth_keyboard_and_motion(rendered: RenderedApp) -> None:
     expect(opener).to_be_focused()
 
 
-@RETINA
-def test_depth_rendered_text_contrast(rendered: RenderedApp) -> None:
-    """Measure actual foregrounds over their composited ancestor surfaces, not class names."""
-    for path in ("/demo", "/a", "/a/inbox", "/a/history", "/a/preferences"):
-        page = ready(rendered, path)
-        text_contrast(page)
-
-
-def text_contrast(page: Page) -> None:
-    failures = page.evaluate(r"""() => {
-          const rgb=s=>{
-            const a=s.match(/[\d.]+/g).map(Number);
-            return s.startsWith('color(srgb')?a.map((v,i)=>i<3?v*255:v):a;
-          };
-          const blend=(a,b)=>a.slice(0,3).map((v,i)=>v*(a[3]??1)+b[i]*(1-(a[3]??1)));
-          const lum=a=>a.map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4)
-            .reduce((n,v,i)=>n+v*[.2126,.7152,.0722][i],0);
-          const ratio=(a,b)=>(Math.max(lum(a),lum(b))+.05)/(Math.min(lum(a),lum(b))+.05);
-          const background=e=>{
-            const chain=[];for(let p=e;p;p=p.parentElement)chain.unshift(p);
-            return chain.reduce((color,p)=>
-              blend(rgb(getComputedStyle(p).backgroundColor),color),[255,255,255]);
-          };
-          const failed=[],walk=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);
-          while(walk.nextNode()){
-            const node=walk.currentNode,e=node.parentElement;
-            if(!node.textContent.trim()||e.closest('script,style,details.support,option')||
-               !e.checkVisibility({checkOpacity:true,checkVisibilityCSS:true}))continue;
-            const fg=rgb(getComputedStyle(e).color), bg=background(e);
-            const minimum=e.closest(':disabled')?2:4.5;
-            if(ratio(fg,bg)<minimum)failed.push({text:node.textContent.trim().slice(0,60),
-              element:e.tagName+'.'+e.className,foreground:fg,background:bg,ratio:ratio(fg,bg)});
-          }
-          return failed;
-        }""")
-    assert failures == [], failures
-
-
 def fits(page: Page) -> None:
     """Inspect rendered boxes as well as document width; clipping is not a pass."""
-    page.wait_for_timeout(300)
-    if not page.evaluate("matchMedia('(forced-colors:active)').matches"):
-        text_contrast(page)
+    from browser.aurora18h import reveal_all, settle_paint
+
+    page.evaluate("document.fonts.ready")
+    reveal_all(page)
+    settle_paint(page)
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
     failures = page.evaluate("""() => [...document.querySelectorAll('body *')].flatMap(e=>{
-      if(!e.checkVisibility({checkVisibilityCSS:true})||e.closest('.skip,.icon-sprite'))return [];
+      if(!e.checkVisibility({checkVisibilityCSS:true})||
+         e.closest('.skip,.icon-sprite,.aurora,.spark,.beacon'))return [];
       const r=e.getBoundingClientRect();if(!r.width||!r.height)return [];
-      const scroll=e.closest('.tabs,.rail nav,table');
+      const scroll=e.closest('.tabs,.rail nav,table,.seg');
       if(scroll&&scroll!==e&&getComputedStyle(scroll).overflowX==='auto')return [];
       return r.left<-.5||r.right>innerWidth+.5?[e.tagName,e.className,r.left,r.right]:[];
     })""")
     assert failures == [], failures
-    for selector in (".tabs", ".rail nav"):
-        assert page.locator(selector).evaluate_all(
-            "es=>es.every(e=>getComputedStyle(e).overflowX==='auto')"
-        )
+    assert page.locator(".tabs").evaluate_all(
+        "es=>es.every(e=>getComputedStyle(e).overflowX==='auto')"
+    )
+    # As in the sample, the rail nav scrolls only at <=900px; wider, it paints the active bar.
+    nav = "auto" if page.evaluate("innerWidth") <= 900 else "visible"
+    assert page.locator(".rail nav").evaluate_all(
+        f"es=>es.every(e=>getComputedStyle(e).overflowX==='{nav}')"
+    )
 
 
 @RETINA
@@ -336,19 +330,29 @@ def test_depth_queue_density_and_groups(rendered: RenderedApp) -> None:
         Math.abs(e.scrollHeight-parseFloat(s.lineHeight))<=.5&&e.scrollWidth<=e.clientWidth;
     })""")
     assert "Missing" not in values.all_text_contents()
-    assert page.locator("main").evaluate("e=>getComputedStyle(e).maxInlineSize") == "1280px"
+    assert page.locator("main").evaluate("e=>getComputedStyle(e).maxInlineSize") == "1180px"
     assert page.locator(".clinical").evaluate("e=>getComputedStyle(e).tableLayout") == "fixed"
     if page.viewport_size and page.viewport_size["width"] == 1440:
-        table = page.locator(".clinical").bounding_box()
-        age = page.locator(".clinical col").nth(1).bounding_box()
-        assert table and age and abs(age["width"] / table["width"] - 0.08) < 0.001
         assert (
-            page.locator(".patient-row td").first.evaluate("e=>getComputedStyle(e).fontSize")
-            == "14px"
+            page.locator(".patient-row").first.evaluate("e=>getComputedStyle(e).display") == "grid"
+        )
+        name = page.locator(".patient-row td").first.bounding_box()
+        age = page.locator(".patient-row td.age").first.bounding_box()
+        assert name and age and age["y"] >= name["y"] + name["height"]
+        assert (
+            page.locator(".patient-row td a").first.evaluate("e=>getComputedStyle(e).fontSize")
+            == "14.5px"
         )
     else:
-        first = page.locator(".patient-row").first.bounding_box()
-        assert first and first["y"] < 844, first
+        from browser.aurora18h import normalized_fold
+
+        normalized_fold(page)
+        assert (
+            page.locator(".patient-row td:nth-child(3)").first.evaluate(
+                "e=>getComputedStyle(e).gridColumn"
+            )
+            == "1 / -1"
+        )
     fits(page)
     page.locator('[data-sort="urgency"]').click()
     expect(page.locator('th[aria-sort="descending"]')).to_contain_text("urgency")
@@ -381,13 +385,13 @@ def test_depth_route_geometry_and_empty_anatomy(rendered: RenderedApp) -> None:
         identity(page)
         assert page.locator(".tabs").evaluate("e=>getComputedStyle(e).display") == "flex"
         assert page.locator(".record-item .provenance,.record-item .record-meta").evaluate_all(
-            "es=>es.every(e=>getComputedStyle(e).fontSize==='13px')"
+            "es=>es.every(e=>getComputedStyle(e).fontSize==='12.5px')"
         )
     rendered.login(PATIENT)
     ready(rendered, "/pp")
     page.locator('#patient-stop[aria-checked="true"]').wait_for()
     fits(page)
-    assert page.locator("main").evaluate("e=>getComputedStyle(e).maxInlineSize") == "760px"
+    assert page.locator("main").evaluate("e=>getComputedStyle(e).maxInlineSize") == "1180px"
     track = page.locator(".switch-track").bounding_box()
     thumb = page.locator(".switch-track>span").bounding_box()
     assert track and thumb and (track["width"], track["height"]) == (44, 26)
@@ -445,6 +449,7 @@ def test_depth_lightbox_anatomy_and_both_openers(rendered: RenderedApp) -> None:
     for anchor in page.locator("[data-media]").all():
         anchor.click()
         expect(page.locator(".lightbox img")).to_be_visible()
+        expect(page.locator(".app")).to_have_css("visibility", "visible")
         expect(page.locator(".lightbox-footer")).to_contain_text(
             "Original document", ignore_case=True
         )
@@ -459,6 +464,7 @@ def test_depth_lightbox_anatomy_and_both_openers(rendered: RenderedApp) -> None:
     page.route("**/media/*", lambda r: r.fulfill(status=403, body=""))
     anchor.click()
     expect(page.locator(".lightbox .empty-title")).to_have_text("Original unavailable.")
+    expect(page.locator(".app")).to_have_css("visibility", "visible")
     fits(page)
     page.locator('[aria-label="Close original document"]').click()
     expect(anchor).to_be_focused()
@@ -476,6 +482,8 @@ def test_depth_entry_shells(rendered: RenderedApp) -> None:
         assert response and response.status == 200
         page.evaluate("document.fonts.ready")
         expect(page.locator("script")).to_have_count(0)
+        expect(page.locator("html")).to_have_attribute("data-theme", "dark")
+        expect(page.locator('meta[name="color-scheme"]')).to_have_attribute("content", "dark")
         fits(page)
         identity(page)
 
@@ -499,7 +507,7 @@ def test_depth_entry_shells(rendered: RenderedApp) -> None:
         if "<script" not in html:
             expect(page.locator("script")).to_have_count(0)
         for button in page.locator('button[type="submit"]').all():
-            assert button.evaluate("e=>getComputedStyle(e).backgroundColor") == "rgb(94, 106, 210)"
+            assert "linear-gradient" in button.evaluate("e=>getComputedStyle(e).backgroundImage")
         page.unroute("**/entry-proof")
 
 

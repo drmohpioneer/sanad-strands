@@ -12,6 +12,7 @@ from sanad.scribe.extract import (
     REQUEST_MISSING_QUESTION,
     OrderCandidate,
     PatientCandidate,
+    anchored_ambiguity,
     placeholder_ambiguity,
 )
 from sanad.scribe.policy import DRAFT_SCRIBE_POLICY
@@ -748,7 +749,11 @@ def dictation_questions(proposal: Proposal) -> tuple[str, ...]:
         if number not in numbers_asked and number not in consumed:
             questions.append(f'سمعت "{number}"، الرقم ده صح؟')
     questions.extend(
-        f'سمعت "{supported_text(a, proposal)}"، توضح المقصود؟'
+        (
+            f'سمعت "{supported_text(a, proposal)}"، توضح المقصود؟'
+            if anchored_ambiguity(a, proposal.source_text)
+            else REASONS["clarification"]
+        )
         for i, a in enumerate(proposal.candidate.ambiguities)
         if not placeholder_ambiguity(a)
         and not any(x.item == f"ambiguity:{i}" and x.code == "unsafe_text" for x in proposal.issues)
@@ -1059,7 +1064,9 @@ def render_dictation(proposal: Proposal) -> tuple[str, ...]:
         lines.append("عدّلت الكارت حسب كلامك")
     elif proposal.supersedes_id:
         lines.append("الكارت ده بدّل الكارت اللي قبله؛ الأزرار القديمة مش شغالة.")
-    lines.extend((_BUTTONS, "صالح 30 دقيقة"))
+    from sanad.scribe.proposal import card_footer
+
+    lines.extend((card_footer(proposal, "ar"), "صالح 30 دقيقة"))
     text = "\n".join(lines)
     if (
         not oversized

@@ -29,6 +29,7 @@ from scribe.test_grounding_invariant import world_for
 
 ORACLE: list[dict[str, Any]] = json.loads(Path(__file__).with_name("oracle_11j.json").read_text())
 SIX_D: dict[str, list[str]] = json.loads(Path(__file__).with_name("oracle_20_6d.json").read_text())
+SIX_J: dict[str, list[str]] = json.loads(Path(__file__).with_name("oracle_20_6j.json").read_text())
 CHANGED_BY_11J = {
     "long-quote:e0a88a8c7d62": "C.1: bound the 300-character verification quote at a word boundary",
 }
@@ -61,6 +62,8 @@ def test_frozen_oracle(row: dict[str, Any]) -> None:
     # and its source/candidate hashes alongside explicit new card snapshots.
     if row["id"] in SIX_D:
         expected = tuple(SIX_D[row["id"]])
+    if row["id"] in SIX_J:
+        expected = tuple(SIX_J[row["id"]])
     assert render_card(p) == expected
 
 
@@ -294,6 +297,10 @@ def test_every_quoted_question_branch_is_bounded(branch: str) -> None:
     p = p.model_copy(update={"issues": () if branch == "ambiguities" else (issue,)})
     before = p.model_dump_json()
     quotes = re.findall(r'"([^"]*)"', "\n".join(questions(p)))
-    assert quotes and any(q.endswith("…") for q in quotes)
-    assert all(len(q) <= 120 for q in quotes)
+    if branch == "ambiguities":
+        assert quotes == []
+        assert questions(p) == ("Please clarify the patient and instructions.",)
+    else:
+        assert quotes and any(q.endswith("…") for q in quotes)
+        assert all(len(q) <= 120 for q in quotes)
     assert p.model_dump_json() == before

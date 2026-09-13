@@ -18,7 +18,7 @@ from sanad.concierge.records import PatientAction
 from sanad.concierge.text import asks_doctor, asks_history, contains, is_question, plan_command
 from sanad.domain import FollowUpTask, ObservationRef, PatientScope, Principal, Provenance
 from sanad.domain.language import effective
-from sanad.media.retrieve import MediaRetriever, fetch_telegram_file
+from sanad.media.retrieve import MediaRetriever, fetch_telegram_file, invoked
 from sanad.media.speech import SpeechAdapter, Transcript, transcribe
 from sanad.media.telegram import MediaFailure
 from sanad.media.vision import VisionAdapter
@@ -53,6 +53,7 @@ class ConciergeTurn:
         *,
         synthetic: bool = False,
         model_factory: Callable[[ModelRegistry, ModelRole], Model] = bedrock_model,
+        barrier_model_factory: Callable[[ModelRegistry, ModelRole], Model] | None = None,
         speech_factory: Callable[[Provenance], SpeechAdapter] | None = None,
         media_factory: Callable[[InboundReceipt, Principal], MediaRetriever] | None = None,
         vision_factory: Callable[[Provenance], VisionAdapter] | None = None,
@@ -62,6 +63,7 @@ class ConciergeTurn:
     ):
         self.runtime, self.store = runtime, runtime.store
         self.synthetic, self.model_factory = synthetic, model_factory
+        self.barrier_model_factory = barrier_model_factory
         self.speech_factory, self.media_factory = speech_factory, media_factory
         self.observe, self.checkpoint = observe, checkpoint
         self.places_provider = places_provider
@@ -566,11 +568,57 @@ class ConciergeTurn:
                 return reply("patient_task_choose")
             question.open_ticket(tx, text)
             return reply("patient_task_missing")
+        from sanad.concierge import barriers
+        from sanad.concierge.barrier_evidence import category
+        from sanad.concierge.barrier_reading import outcome_for, read
+        from sanad.resolver.attempts import resolved_words
+        from sanad.resolver.turn import pending_reply
+
+        selected_problem = barriers.web_choice(tx, text, source)
+        if selected_problem:
+            return reply(selected_problem[0], **selected_problem[1])
+        deterministic = (
+            (not is_question(text) and (reading.incomplete_bp or reading.values))
+            or plan_command(text)
+            or text.strip().casefold() in {"plan", "الخطة"}
+            or reports.is_start(text)
+            or reports.is_stop(text)
+            or reports.is_change(text)
+            or reports.date_only(text)
+            or resolved_words(text)
+            or asks_history(text)
+        )
+        outcome = outcome_for(tx)
+        has_barrier_path = bool(barriers.eligible(tx.snapshot)) or any(
+            f.kind == "MEDICATION_DAY3"
+            and f.state == "waiting_response"
+            and all(ref in tx.snapshot.order_refs for ref in f.order_refs)
+            for f in tx.snapshot.followups
+        )
+        if not deterministic:
+            outcome = read(self, tx, text, source)
+        # Without an eligible target an unclear reading keeps today's unclassified routing.
+        if has_barrier_path and outcome and outcome.status in {"uncertain", "failure"}:
+            day3 = next(
+                (
+                    f
+                    for f in tx.snapshot.followups
+                    if f.kind == "MEDICATION_DAY3"
+                    and f.state == "waiting_response"
+                    and all(ref in tx.snapshot.order_refs for ref in f.order_refs)
+                ),
+                None,
+            )
+            if day3 and reports.record_day3(tx, text, source=source, verdict=verdict):
+                key, fields = barriers.choice_buttons(tx, day3, text)
+                return reply(key, **fields)
+            if pending_reply(tx, text):
+                return "patient_resolver_reply", "", "resolver"
+            key, fields = barriers.route(tx, text, source)
+            return reply(key, **fields)
         if not is_question(text) and reports.record_day3(tx, text, source=source, verdict=verdict):
             return reply("patient_day3_recorded")
-        if reports.recognize_barrier(text) and reports.record_day3(
-            tx, text, source=source, verdict=verdict
-        ):
+        if category(outcome) and reports.record_day3(tx, text, source=source, verdict=verdict):
             return reply("patient_day3_recorded")
         medication_reply = reports.medication_reply(tx, text, source=source)
         if medication_reply:
@@ -733,6 +781,7 @@ class ConciergeTurn:
             )
         return key, text, "start"
 
+    @invoked("tick")
     def sweep(self, row: StoredRecord) -> None:
         """Recover persisted media and screen evidence before association."""
         if row.entity_type != "media_work" or not self.media_factory:

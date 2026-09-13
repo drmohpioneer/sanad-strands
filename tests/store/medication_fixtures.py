@@ -5,11 +5,13 @@ from typing import NoReturn
 from uuid import uuid4
 
 from harness import FakeClock
+from strands.models import Model
 
 from sanad.auth.service import revise
 from sanad.concierge.plan import Snapshot, load
 from sanad.domain import MissionKind, Provenance
 from sanad.domain.deadlines import ResolvedTiming, resolve_timing
+from sanad.models.registry import ModelRegistry, ModelRole
 from sanad.scribe.amend import prepare
 from sanad.scribe.extract import DictationCandidate
 from sanad.scribe.proposal import ItemTiming, Proposal, ScribeCallback, ScribeState
@@ -31,6 +33,7 @@ def world(store: StoreBase, clock: FakeClock) -> PatientWorld:
     w.seed(revise(w.doctor, clock(), language="en"))
     w.seed(revise(patient, clock(), language="en"))
     w.concierge.model_factory = no_model
+    w.concierge.barrier_model_factory = scripted_barrier_factory
     w.scribe.model_factory = no_model
     return w
 
@@ -138,3 +141,60 @@ def send(w: PatientWorld, text: str) -> OutboundIntent:
     ]
     assert replies
     return replies[-1]
+
+
+# Explicit scripted interpretations of the synthetic regression messages. This
+# fixture supplies reader responses independently of the answer/help model.
+def scripted_barrier_factory(registry: ModelRegistry, role: ModelRole) -> Model:
+    import json
+
+    from providers.fixtures import ScriptedModel, candidate
+
+    def respond(request: dict[str, object]) -> dict[str, object]:
+        messages = request["messages"]
+        assert isinstance(messages, list)
+        prompt = messages[-1]["content"][0]["text"]
+        text = json.loads(prompt.split("Source JSON:\n", 1)[1])["source_text"]
+        interpretations = {
+            "I can't afford it": "cost",
+            "I cannot afford it": "cost",
+            "غالي": "cost",
+            "معيش فلوس": "cost",
+            "not available": "availability",
+            "مش لاقي": "availability",
+            "مش موجود": "availability",
+            "خلص من الصيدلية": "availability",
+            "I forgot": "forgot",
+            "نسيت": "forgot",
+            "I forgot the lab": "forgot",
+            "I don't understand": "confusion",
+            "مش فاهم": "confusion",
+            "ازاي اخده": "confusion",
+            "dizzy": "side_effect_experience",
+            "nausea": "side_effect_experience",
+            "بيتعبني": "side_effect_experience",
+            "دوخة": "side_effect_experience",
+            "غثيان": "side_effect_experience",
+            "I can't do it": "other",
+            "مش هقدر": "other",
+            "The lab is too expensive": "cost",
+            "The lab is too expensive in Synthetic Quarter": "cost",
+            "The Potassium lab is too expensive": "cost",
+            "I still cannot afford the lab": "cost",
+            "CBC is too expensive": "cost",
+            "LDL is too expensive": "cost",
+            "I can't afford Atorvastatin": "cost",
+            "I can't afford Forxiga": "cost",
+        }
+        kind = interpretations.get(text)
+        return candidate(
+            {
+                "problems": [
+                    {"category": kind, "quote": text, "asserted": True, "subject": "patient"}
+                ]
+                if kind
+                else []
+            }
+        )
+
+    return ScriptedModel(respond)

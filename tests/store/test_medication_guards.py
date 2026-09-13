@@ -117,6 +117,24 @@ def test_barrier_and_scoped_suppression_guards(
                 if r.entity_type == "mission" and r.body.get("state") == "blocked"
             )
             mission = from_record(row, Mission)
+            from sanad.concierge.records import BarrierOutcome
+
+            raw = request.command.payload.get("barrier_outcome")
+            assert raw
+            reading = BarrierOutcome.model_validate(raw)
+            assert reading.citations and reading.category == "cost"
+            altered = reading.model_copy(update={"category": "forgot"})
+            forged_command = request.command.model_copy(
+                update={
+                    "payload": {
+                        **request.command.payload,
+                        "barrier_outcome": altered.model_dump(mode="json"),
+                    }
+                }
+            )
+            assert (
+                actual(request.model_copy(update={"command": forged_command})).status == "forbidden"
+            )
             for field, value in (
                 ("resume_at", clock() + timedelta(days=2)),
                 ("barrier_reason", "fabricated"),

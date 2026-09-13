@@ -264,6 +264,56 @@ def delete_rows(ddb: Any, table: str, rows: list[dict[str, Any]]) -> None:
             time.sleep(min(0.1 * 2**attempt, 2))
 
 
+def due_leftovers(ddb: Any, table: str, selected: list[dict[str, Any]], bot: str) -> dict[str, Any]:
+    """Read-only census of projected due keys; never widen reset selection."""
+    removed = {(row["PK"]["S"], row["SK"]["S"]) for row in selected}
+    counts: dict[str, dict[str, int]] = {}
+    receipts = 0
+    surviving_receipts = 0
+    rows = list(scan_rows(ddb, table, "PK", ""))
+    doctors = {
+        row_body(row).get("scope", {}).get("doctor_id")
+        for row in rows
+        if row["SK"]["S"] == "DOCTOR" and row_body(row).get("telegram_bot_id") == bot
+    }
+    for row in rows:
+        if (row["PK"]["S"], row["SK"]["S"]) in removed:
+            continue
+        body = row_body(row)
+        scope = body.get("scope") or {}
+        if body.get("entity_type") == "inbound_receipt" and (
+            scope.get("bot_id") == bot
+            or (scope.get("doctor_id") is not None and scope.get("doctor_id") in doctors)
+        ):
+            surviving_receipts += 1
+        lane = row.get("due_lane_shard", {}).get("S")
+        if not lane or not row.get("due_sort"):
+            continue
+        pk = row["PK"]["S"]
+        kind = (
+            "account"
+            if pk.startswith("ACCT#")
+            else "operational"
+            if pk.startswith("OPS#")
+            else "patient"
+            if "#P#" in pk
+            else "intake"
+            if "#INTAKE#" in pk
+            else "doctor"
+            if pk.startswith("D#")
+            else "global"
+        )
+        by_class = counts.setdefault(lane, {})
+        by_class[kind] = by_class.get(kind, 0) + 1
+        if row_body(row).get("entity_type") == "inbound_receipt":
+            receipts += 1
+    return {
+        "by_lane_partition_class": counts,
+        "surviving_due_receipts": receipts,
+        "surviving_current_bot_receipts": surviving_receipts,
+    }
+
+
 def dev_data(aws: Any, env: str, *, yes: bool = False) -> dict[str, Any]:
     if env != "dev":
         raise OperationError("dev-data requires --env dev")
@@ -284,6 +334,7 @@ def dev_data(aws: Any, env: str, *, yes: bool = False) -> dict[str, Any]:
     ]
     objects = list({(obj["Key"], obj["VersionId"]): obj for obj in objects}.values())
     counts = selection_counts(rows, len(objects))
+    counts["due_leftovers"] = due_leftovers(ddb, out["TableName"], rows, bot)
     print(json.dumps({"mode": "execute" if yes else "dry-run", **counts}, sort_keys=True))
     if yes:
         # Leave every scope row intact until all its media prefixes have been cleared.

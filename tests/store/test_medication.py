@@ -205,7 +205,7 @@ def test_future_and_expired_clarifications(w: PatientWorld) -> None:
         ("I forgot", "forgot"),
         ("I don't understand", "confusion"),
         ("nausea", "side_effect_experience"),
-        ("I can't do it", "other"),
+        ("I can't do it", "uncertain"),
     ],
 )
 def test_barrier_pauses_contact_without_changing_deadline(
@@ -213,6 +213,15 @@ def test_barrier_pauses_contact_without_changing_deadline(
 ) -> None:
     before = medication(w)
     reply = send(w, text)
+    if kind == "uncertain":
+        assert reply.template_id == "patient_barrier_uncertain"
+        assert medication(w).state == before.state and not medication(w).barrier_attempts
+        assert (
+            medication(w).due_at == before.due_at
+            and medication(w).escalation_at == before.escalation_at
+        )
+        assert not done(w)
+        return
     assert reply.template_id == "patient_barrier_recorded"
     blocked = medication(w)
     assert blocked.state == "blocked" and blocked.barrier_type == kind
@@ -524,6 +533,27 @@ def test_voice_choice_retains_screened_words_without_a_provider(
     confirm(w, {"action": "start", "drug": "Forxiga", "dose": "10 mg"})
 
     def voice(receipt: InboundReceipt, principal: Principal, source: Provenance) -> Transcript:
+        from sanad.store import keys
+        from sanad.store.records import MediaWork, OperationalClock
+
+        w.seed(
+            MediaWork(
+                id=keys.digest(receipt.id),
+                scope=w.patient_scope,
+                receipt_id=receipt.id,
+                provider_handle_ref=receipt.provider_media_handle or "synthetic-voice",
+                created_at=w.clock(),
+                updated_at=w.clock(),
+                transcript_ref="synthetic-transcript",
+                stage="associate",
+                source_blob_ref="synthetic-source",
+                normalized_blob_ref="synthetic-normalized",
+                byte_hash="a" * 64,
+                mime="audio/mpeg",
+                size=100,
+                work_clock=OperationalClock(next_action_at=w.clock(), work_lane="media"),
+            )
+        )
         return Transcript(
             text=text,
             spans=(),

@@ -64,6 +64,15 @@ class PatientTurnCommit:
             steward.policy_provider(snapshot.scope),
             self.store,
         )
+        if receipt.barrier_outcome:
+            self.builder.command = self.builder.command.model_copy(
+                update={
+                    "payload": {
+                        **self.builder.command.payload,
+                        "barrier_outcome": receipt.barrier_outcome.model_dump(mode="json"),
+                    }
+                }
+            )
         self.buttons: list[JsonValue] = []
 
     def put(self, model: BaseModel) -> None:
@@ -77,7 +86,7 @@ class PatientTurnCommit:
 
     def button(
         self,
-        action: Literal["resume", "start", "quiet_slot"],
+        action: Literal["resume", "start", "quiet_slot", "barrier_category", "barrier_target"],
         label: str,
         *,
         target: VersionRef | None = None,

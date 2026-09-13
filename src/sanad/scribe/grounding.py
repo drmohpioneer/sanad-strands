@@ -20,7 +20,7 @@ from sanad.scribe.change_binding import (
     partition_for,
     untouched,
 )
-from sanad.scribe.names import normalize
+from sanad.scribe.names import normalize as normalize
 
 if TYPE_CHECKING:
     from sanad.scribe.extract import DictationCandidate, OrderCandidate, ProposalIssue
@@ -785,7 +785,154 @@ def _correction_record(
     return False, None
 
 
+def instruction_fact_blocks(proposal: Proposal) -> tuple[int, ...]:
+    """R5: only a fact's own instruction verb can trigger the segment block."""
+    from sanad.scribe.terms import instruction_verb
+
+    boundaries = sorted(
+        {
+            0,
+            len(proposal.source_text),
+            *(
+                point
+                for match in _BOUNDARY.finditer(proposal.source_text)
+                for point in (match.start(), match.end())
+            ),
+            *(
+                point
+                for match in re.finditer(r"[,،]|\band\b|(?<= )و(?= )", proposal.source_text, re.I)
+                for point in (match.start(), match.end())
+            ),
+        }
+    )
+    instructions = tuple(
+        span
+        for evidence in proposal.evidence
+        if (
+            (evidence.item.startswith("order:") and evidence.field in {"drug", "dose", "action"})
+            or (
+                evidence.item.startswith("mission:")
+                and (evidence.field == "text" or evidence.field.startswith("name:"))
+            )
+        )
+        for span in evidence.offsets
+    )
+    blocked = []
+    for i, fact in enumerate(proposal.candidate.facts):
+        if fact.category not in {
+            "condition",
+            "history",
+            "medication_history",
+        } or not instruction_verb(fact.text):
+            continue
+        spans = tuple(
+            span
+            for e in proposal.evidence
+            if e.item == f"fact:{i}"
+            and e.field == "text"
+            and e.origin in {"transcript_span", "vocabulary_alias"}
+            for span in e.offsets
+        )
+        if any(
+            a < right and b > left and c < right and d > left
+            for left, right in zip(boundaries, boundaries[1:], strict=False)
+            for a, b in spans
+            for c, d in instructions
+        ):
+            blocked.append(i)
+    return tuple(blocked)
+
+
 def seal(proposal: Proposal, ctx: Context, previous: Proposal | None = None) -> Proposal:
+    """Build evidence, filter/reindex, rebuild, then seal the final candidate."""
+    from sanad.scribe.extract import ProposalIssue
+    from sanad.scribe.terms import drop_instruction_fact
+
+    if proposal.photo:
+        return proposal
+    built = _seal_evidence(proposal, ctx, previous)
+    dropped = {
+        i
+        for i, fact in enumerate(built.candidate.facts)
+        if not (set(numbers_in(fact.text)) - set(numbers_in(built.source_text)))
+        and drop_instruction_fact(fact, built.candidate, built.source_text)
+    }
+    if dropped:
+        mapping = {
+            old: new
+            for new, old in enumerate(
+                i for i in range(len(built.candidate.facts)) if i not in dropped
+            )
+        }
+
+        def remap(item: str) -> str | None:
+            if not item.startswith("fact:"):
+                return item
+            index = int(item.split(":")[1])
+            return f"fact:{mapping[index]}" if index in mapping else None
+
+        candidate = built.candidate.model_copy(
+            update={
+                "facts": tuple(f for i, f in enumerate(built.candidate.facts) if i not in dropped)
+            }
+        )
+        candidate._dropped_facts = (
+            *candidate._dropped_facts,
+            *("fact_instruction_content" for _ in dropped),
+        )
+        candidate._merge_issues = tuple(
+            issue.model_copy(update={"item": item})
+            for issue in candidate._merge_issues
+            if (item := remap(issue.item)) is not None
+        )
+        built = built.model_copy(
+            update={
+                "candidate": candidate,
+                "names": tuple(
+                    n.model_copy(update={"item": item})
+                    for n in built.names
+                    if (item := remap(n.item)) is not None
+                ),
+                "issues": tuple(
+                    i.model_copy(update={"item": item})
+                    for i in built.issues
+                    if not i.grounding_issue and (item := remap(i.item)) is not None
+                ),
+                "single_source": tuple(
+                    item for i in built.single_source if (item := remap(i)) is not None
+                ),
+                "evidence": (),
+                "evidence_fingerprint": "",
+            }
+        )
+        built = _seal_evidence(built, ctx, previous)
+    blocked = instruction_fact_blocks(built)
+    if blocked:
+        issue = ProposalIssue(
+            item="all",
+            code="clinical_unclear",
+            field="fact_instruction",
+            grounding_issue=True,
+            question=(
+                f'I heard "{built.candidate.facts[blocked[0]].text}"; what should I record?'
+                if built.language == "en"
+                else f'سمعت "{built.candidate.facts[blocked[0]].text}"؛ أسجل إيه؟'
+            ),
+        )
+        built = built.model_copy(
+            update={
+                "issues": (*built.issues, issue),
+                "evidence": tuple(
+                    e
+                    for e in built.evidence
+                    if not (e.field == "category" and e.item in {f"fact:{i}" for i in blocked})
+                ),
+            }
+        )
+    return built.model_copy(update={"evidence_fingerprint": _fingerprint(built)})
+
+
+def _seal_evidence(proposal: Proposal, ctx: Context, previous: Proposal | None = None) -> Proposal:
     """Run after code has resolved names, corrections, stored orders and deadlines."""
     from sanad.scribe.extract import ProposalIssue
 
@@ -1402,7 +1549,12 @@ def valid_record(record: FieldEvidence, claim: Claim, proposal: Proposal) -> boo
         and claim.item.startswith("fact:")
         and history_source(proposal, claim.value) is not None,
         "resolved_timing": claim.field == "deadline",
-        "candidate_classification": claim.field in {"kind", "category"},
+        "candidate_classification": claim.field in {"kind", "category"}
+        and not (
+            claim.item.startswith("fact:")
+            and claim.field == "category"
+            and int(claim.item.split(":")[1]) in instruction_fact_blocks(proposal)
+        ),
         "resolved_test_list": claim.field == "text" and claim.item.startswith("mission:"),
         "existing_order_reconciliation": claim.field == "action"
         and claim.item.startswith("order:"),

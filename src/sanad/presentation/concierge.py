@@ -177,6 +177,37 @@ CATALOG: Catalog = {
             "Your difficulty with {drug} is recorded for your doctor. Message me if things change."
         ),
     },
+    "concierge.patient_barrier_uncertain": {
+        "en": (
+            "I want to be sure I understood. Which fits best: the cost, it is not availa"
+            "ble, you forgot, you are not sure how to do it, something you felt after it"
+            ", or something else?\n1. Cost\n2. Not available\n3. Forgot\n4. Not sure how\n5. "
+            "Felt something after it\n6. Something else"
+        ),
+        "ar": (
+            "عايز أتأكد إني فهمتك. أنهي اختيار أقرب للمشكلة؟\n1. التكلفة\n2. مش متوفر\n3. ن"
+            "سيت\n4. مش عارف أعمله إزاي\n5. حاجة حسيت بيها بعده\n6. حاجة تانية"
+        ),
+    },
+    "concierge.patient_barrier_targets": {
+        "en": (
+            "Which of your doctor's requests does this difficulty concern? Reply with it"
+            "s number.\n{options}"
+        ),
+        "ar": "المشكلة تخص أنهي طلب من طلبات الدكتور؟ ابعت رقمه.\n{options}",
+    },
+    "concierge.patient_barrier_option_cost": {"en": "Cost", "ar": "التكلفة"},
+    "concierge.patient_barrier_option_availability": {"en": "Not available", "ar": "مش متوفر"},
+    "concierge.patient_barrier_option_forgot": {"en": "Forgot", "ar": "نسيت"},
+    "concierge.patient_barrier_option_confusion": {
+        "en": "Not sure how",
+        "ar": "مش عارف أعمله إزاي",
+    },
+    "concierge.patient_barrier_option_side_effect_experience": {
+        "en": "Felt something after it",
+        "ar": "حاجة حسيت بيها بعده",
+    },
+    "concierge.patient_barrier_option_other": {"en": "Something else", "ar": "حاجة تانية"},
     "concierge.patient_barrier_choose": {
         "ar": "العائق ده مع أنهي دوا من اللي الدكتور طلب تبدأهم؟",
         "en": "Which medicine your doctor asked you to start does this difficulty concern?",

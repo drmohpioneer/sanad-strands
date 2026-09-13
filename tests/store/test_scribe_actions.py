@@ -519,7 +519,10 @@ def test_nonnumeric_malformed_item_does_not_become_a_silent_patient_lookup(
         },
     )
     assert "فيه بند مش واضح" not in render_card(proposal)[0]
-    assert 'سمعت "wrong الدوا"، توضح المقصود؟' in render_card(proposal)[0]
+    assert (
+        "مش واضح المطلوب؛ وضّح المريض والتعليمات." in render_card(proposal)[0]
+        and "wrong" not in render_card(proposal)[0]
+    )
     assert proposal.candidate.orders == () and proposal.blocked("all")
     assert world.claims.patient(world.doctor.id, own.id) == own
 

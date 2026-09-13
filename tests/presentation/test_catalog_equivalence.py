@@ -73,6 +73,17 @@ def test_no_keys_renamed_or_new_prose_created(surface: str) -> None:
             "concierge.doctor_answer_reused",
             "concierge.patient_education_unavailable",  # Contract 20 addendum 6f.
         }
+        # Contract 28 part 1.
+        added |= {
+            "concierge.patient_barrier_uncertain",
+            "concierge.patient_barrier_targets",
+            "concierge.patient_barrier_option_cost",
+            "concierge.patient_barrier_option_availability",
+            "concierge.patient_barrier_option_forgot",
+            "concierge.patient_barrier_option_confusion",
+            "concierge.patient_barrier_option_side_effect_experience",
+            "concierge.patient_barrier_option_other",
+        }
     assert set(catalog) == {surface + "." + key for key in legacy(surface)} | added
     assert all(set(locales) == {"ar", "en"} for locales in catalog.values())
 

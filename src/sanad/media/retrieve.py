@@ -4,9 +4,13 @@ Nothing is wired into inbound turns in 08. Later extractors consume the pending
 extract stage and own explicit association; a fetched blob is never evidence acceptance.
 """
 
+import json
+import logging
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from contextvars import ContextVar
+from dataclasses import dataclass, field, replace
 from datetime import timedelta
+from functools import wraps
 from hashlib import sha256
 from typing import Literal
 from uuid import uuid4
@@ -45,6 +49,45 @@ from sanad.store.records import (
     to_record,
 )
 
+type Invocation = Literal["direct", "tick", "recovery"]
+_INVOCATION: ContextVar[Invocation] = ContextVar("media_invocation", default="direct")
+type ClaimIdentity = tuple[keys.Key, str | None, int | None, int | None]
+type Outcome = Literal["applied", "deferred", "logged"]
+_OUTCOMES: ContextVar[dict[ClaimIdentity, Outcome] | None] = ContextVar(
+    "media_outcomes", default=None
+)
+logger = logging.getLogger(__name__)
+
+
+def operation[**P, R](function: Callable[P, R]) -> Callable[P, R]:
+    @wraps(function)
+    def wrapped(*args: P.args, **kwargs: P.kwargs) -> R:
+        token = _OUTCOMES.set({}) if _OUTCOMES.get() is None else None
+        try:
+            return function(*args, **kwargs)
+        finally:
+            if token is not None:
+                _OUTCOMES.reset(token)
+
+    return wrapped
+
+
+def invoked[**P, R](kind: Invocation) -> Callable[[Callable[P, R]], Callable[P, R]]:
+    def decorate(function: Callable[P, R]) -> Callable[P, R]:
+        @operation
+        @wraps(function)
+        def wrapped(*args: P.args, **kwargs: P.kwargs) -> R:
+            token = _INVOCATION.set(kind)
+            try:
+                return function(*args, **kwargs)
+            finally:
+                _INVOCATION.reset(token)
+
+        return wrapped
+
+    return decorate
+
+
 RESEND_TEXT = "مش قادر أقرا الملف. ابعته تاني أو اكتب المحتوى في رسالة."
 
 
@@ -77,6 +120,7 @@ class MediaRetriever:
     failure_template: str = "media:resend-v1"
     failure_text: str = RESEND_TEXT
     failure_renderer: Callable[[str], str] | None = None
+    invocation: Invocation = field(default_factory=_INVOCATION.get)
 
     # Protected tests still inspect and replace .telegram; no second byte path.
     @property
@@ -87,6 +131,7 @@ class MediaRetriever:
     def telegram(self, source: MediaSource) -> None:
         self.source = source
 
+    @operation
     def fetch_telegram_file(self, handle: str, *, receipt_id: str) -> StoredMedia | MediaFailure:
         """Deprecated spelling retained for protected callers."""
         return self.fetch_media(handle, receipt_id=receipt_id)
@@ -120,7 +165,95 @@ class MediaRetriever:
         row = self.steward.store.get(self.scope, "media_work", id)
         return from_record(row, MediaWork) if row else None
 
+    def _identity(self, id: str, claim: Claim | None) -> ClaimIdentity:
+        if claim is not None:
+            return (claim.record_key.key, claim.owner, claim.generation, claim.version)
+        return (
+            keys.Key(keys.partition(self.scope), "MEDIA#" + keys.component(id)),
+            None,
+            None,
+            None,
+        )
+
+    def _outcome(self, id: str, claim: Claim | None) -> Outcome | None:
+        outcomes = _OUTCOMES.get()
+        return outcomes.get(self._identity(id, claim)) if outcomes is not None else None
+
+    def _record_outcome(self, id: str, claim: Claim | None, outcome: Outcome) -> None:
+        outcomes = _OUTCOMES.get()
+        if outcomes is not None:
+            outcomes[self._identity(id, claim)] = outcome
+
+    def _conflict(
+        self,
+        id: str,
+        stage: str,
+        expected: int | None,
+        claim: Claim | None,
+        cause: str | None = None,
+    ) -> None:
+        current = None
+        failed = False
+        try:
+            current = self._get(id)
+        except Exception:
+            failed = True
+        current_claim = current.processing_claim if current else None
+        if cause is None:
+            cause = (
+                "claim_conflict"
+                if not failed
+                and claim
+                and (
+                    current_claim is None
+                    or current_claim.owner != claim.owner
+                    or current_claim.generation != claim.generation
+                )
+                else "version_conflict"
+            )
+        logger.info(
+            "media_commit_conflict %s",
+            json.dumps(
+                {
+                    "cause": cause,
+                    "stage": stage,
+                    "expected_version": expected,
+                    "current_version": current.version if current else None,
+                    "current_claim_owner": current_claim.owner if current_claim else None,
+                    "current_claim_generation": current_claim.generation if current_claim else None,
+                    "losing_claim_owner": claim.owner if claim else None,
+                    "losing_claim_generation": claim.generation if claim else None,
+                    "invocation": self.invocation,
+                    "reread_failed": failed,
+                },
+                sort_keys=True,
+            ),
+        )
+        self._record_outcome(id, claim, "logged")
+
+    @operation
     def _commit(
+        self, work: MediaWork, claim: Claim | None = None, *, failure: str | None = None
+    ) -> bool:
+        from sanad.api.failures import store_busy
+        from sanad.store.retry import transient_conflict
+
+        try:
+            return self._commit_attempt(work, claim, failure=failure)
+        except Exception as error:
+            if (store_busy(error) or transient_conflict(error)) and self._outcome(
+                work.id, claim
+            ) is None:
+                self._conflict(
+                    work.id,
+                    work.stage,
+                    work.version - 1 or None,
+                    claim,
+                    "store_busy" if store_busy(error) else "transient_conflict",
+                )
+            raise
+
+    def _commit_attempt(
         self,
         work: MediaWork,
         claim: Claim | None = None,
@@ -128,6 +261,9 @@ class MediaRetriever:
         failure: str | None = None,
     ) -> bool:
         if not self._valid():
+            self._conflict(
+                work.id, work.stage, work.version - 1 or None, claim, "authority_invalid"
+            )
             return False
         now, store = self.steward.clock(), self.steward.store
         # Only operational timing is used for intake; no patient is synthesized.
@@ -140,6 +276,9 @@ class MediaRetriever:
             else None
         )
         if isinstance(self.scope, PatientScope) and lease is None:
+            self._conflict(
+                work.id, work.stage, work.version - 1 or None, claim, "lease_unavailable"
+            )
             return False
         try:
             id = f"media:{work.id}:{work.version}"
@@ -179,13 +318,26 @@ class MediaRetriever:
                 ).aggregate
                 doctor_row = store.get(self.scope, "doctor_authority", self.scope.doctor_id)
                 if doctor_row is None:
+                    self._conflict(
+                        work.id, work.stage, work.version - 1 or None, claim, "authority_invalid"
+                    )
                     return False
                 doctor = from_record(doctor_row, DoctorAuthority)
                 if not doctor.approved:
+                    self._conflict(
+                        work.id, work.stage, work.version - 1 or None, claim, "authority_invalid"
+                    )
                     return False
                 if isinstance(self.scope, PatientScope):
                     profile = store.get_patient_profile(self.scope)
                     if profile is None:
+                        self._conflict(
+                            work.id,
+                            work.stage,
+                            work.version - 1 or None,
+                            claim,
+                            "authority_invalid",
+                        )
                         return False
                     intent = make_intent(
                         self.scope,
@@ -267,20 +419,44 @@ class MediaRetriever:
                     expected=tuple(r.ref for r in all_records),
                 )
             )
-            return result.status in {"accepted", "duplicate"}
+            applied = result.status in {"accepted", "duplicate"}
+            if applied:
+                self._record_outcome(work.id, claim, "applied")
+            else:
+                self._conflict(
+                    work.id,
+                    work.stage,
+                    work.version - 1 or None,
+                    claim,
+                    "authority_invalid" if result.status == "forbidden" else None,
+                )
+            return applied
         finally:
             if lease:
                 store.release_patient(lease)
 
+    @operation
     def _defer(self, claim: Claim, reason: str) -> None:
         from sanad.api.failures import store_busy
         from sanad.store.retry import transient_conflict
 
+        id = claim.record_key.sk.removeprefix("MEDIA#")
         try:
-            self.steward.store.defer_media(claim, self.steward.clock(), reason)
+            if self.steward.store.defer_media(claim, self.steward.clock(), reason):
+                self._record_outcome(id, claim, "deferred")
+            elif self._outcome(id, claim) is None:
+                self._conflict(id, "deferral", claim.version, claim)
         except Exception as error:
             if not store_busy(error) and not transient_conflict(error):
                 raise
+            if self._outcome(id, claim) is None:
+                self._conflict(
+                    id,
+                    "deferral",
+                    claim.version,
+                    claim,
+                    "store_busy" if store_busy(error) else "transient_conflict",
+                )
             # Leave the fenced ten-minute claim durable; recovery returns its attempt.
 
     def _failure(self, work: MediaWork, claim: Claim, reason: str) -> MediaFailure:
@@ -332,6 +508,7 @@ class MediaRetriever:
             resend_intent_id=saved.resend_intent_id,
         )
 
+    @operation
     def extraction_result(
         self,
         receipt_id: str,
@@ -402,6 +579,7 @@ class MediaRetriever:
         finally:
             self._defer(claim, "extraction_commit_failed")
 
+    @operation
     def fetch_media(self, handle: str, *, receipt_id: str) -> StoredMedia | MediaFailure:
         if not self._valid():
             return MediaFailure(reason="scope_unavailable", request_resend=False)
@@ -575,7 +753,12 @@ class MediaRetriever:
             | {"work_id": saved.id}
         )
 
+    @operation
     def sweep(self, *, limit: int = 20) -> int:
+        retriever = replace(self, invocation="recovery") if self.invocation == "direct" else self
+        return retriever._sweep(limit=limit)
+
+    def _sweep(self, *, limit: int = 20) -> int:
         """Scoped bounded recovery; callers own the global due-index dispatch."""
         store, now = self.steward.store, self.steward.clock()
         cap = WorkerCapability(
@@ -629,6 +812,7 @@ class MediaRetriever:
         return handled
 
 
+@operation
 def fetch_media(
     handle: str, *, retriever: MediaRetriever, receipt_id: str
 ) -> StoredMedia | MediaFailure:

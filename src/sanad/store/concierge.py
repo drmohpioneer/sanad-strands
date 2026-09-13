@@ -196,6 +196,11 @@ def guards(store: "StoreBase", request: CommitRequest, now: datetime) -> list["C
     if session_checks is None:
         return None
     checks.extend(session_checks)
+    try:
+        if not barrier_guard(store, snap, request, receipt, checks):
+            return None
+    except (ValueError, TypeError, KeyError):
+        return None
     for row in request.puts:
         if row.entity_type == "outbound_intent" and command.payload.get("resolver_action"):
             from sanad.resolver.guard import suppression as resolver_suppression
@@ -237,13 +242,19 @@ def guards(store: "StoreBase", request: CommitRequest, now: datetime) -> list["C
             action = from_record(row, PatientAction)
             if action.actor_subject != actor.subject:
                 return None
+            if not action.consumed_at and action.action in {"barrier_category", "barrier_target"}:
+                if not new_barrier_choice(store, snap, request, receipt, action, checks):
+                    return None
             if action.consumed_at:
                 previous = store.get(snap.scope, "patient_action", row.id)
                 payload = receipt.body.get("payload")
                 if (
                     not previous
                     or not isinstance(payload, dict)
-                    or payload.get("callback_token_hash") != row.id
+                    or (
+                        payload.get("callback_token_hash") != row.id
+                        and not web_choice_matches(action, receipt)
+                    )
                 ):
                     return None
                 prior_action = from_record(previous, PatientAction)
@@ -451,8 +462,10 @@ def _start_clarification_revision(
 def _medication_barrier_projection(
     snap: "Snapshot", request: CommitRequest, row: StoredRecord, now: datetime
 ) -> bool:
+    from sanad.concierge.barrier_evidence import category
     from sanad.concierge.policy import DRAFT_CONCIERGE_POLICY
-    from sanad.concierge.reports import is_start, medication_missions, recognize_barrier
+    from sanad.concierge.records import BarrierOutcome
+    from sanad.concierge.reports import is_start, medication_missions
     from sanad.domain import DRAFT_POLICY_2026_09, Mission, TransitionResult, transition_mission
     from sanad.domain.events import BarrierRecorded, BarrierResolved
 
@@ -474,7 +487,9 @@ def _medication_barrier_projection(
         if (
             payload.report_kind == "barrier"
             and payload.barrier_type
-            and payload.barrier_type == recognize_barrier(payload.text)
+            and request.command.payload.get("barrier_outcome")
+            and payload.barrier_type
+            == category(BarrierOutcome.model_validate(request.command.payload["barrier_outcome"]))
         ):
             event = BarrierRecorded(
                 event_id=request.command.command_id + ":barrier:" + original.id,
@@ -575,3 +590,249 @@ def _medication_suppression(
                 checks.append(Check(previous.key, previous.version))
                 return True
     return False
+
+
+def new_barrier_choice(
+    store: "StoreBase",
+    snap: "Snapshot",
+    request: CommitRequest,
+    receipt: StoredRecord,
+    action: PatientAction,
+    checks: list["Check"],
+) -> bool:
+    from datetime import timedelta
+
+    from sanad.concierge.barriers import eligible
+    from sanad.concierge.policy import BARRIER_CATEGORIES
+    from sanad.store._base import Check
+    from sanad.store.records import InboundReceipt, to_record
+
+    if (
+        action.version != 1
+        or action.source_receipt_id != receipt.id
+        or action.slot_id != "barrier_28"
+        or action.target_ref is None
+        or action.expires_at != request.command.requested_at + timedelta(minutes=30)
+        or action.delivery_epoch != snap.profile.delivery_epoch
+        or action.binding_epoch != snap.profile.binding_epoch
+        or action.consent_version != snap.consent.version
+        or not action.medication_report_text
+        or not action.choice_number
+    ):
+        return False
+    if action.action == "barrier_category":
+        if (
+            action.barrier_category not in BARRIER_CATEGORIES
+            or action.choice_number != BARRIER_CATEGORIES.index(action.barrier_category) + 1
+        ):
+            return False
+    elif action.barrier_category is not None:
+        return False
+    targets = [to_record(m, snap.scope).ref for m in eligible(snap)]
+    targets.extend(
+        to_record(f, snap.scope).ref
+        for f in snap.followups
+        if f.kind == "MEDICATION_DAY3" and f.state == "waiting_response"
+    )
+    valid_refs = set(targets)
+    valid_refs.update(
+        r.ref
+        for r in request.puts
+        if any(t.entity_type == r.entity_type and t.id == r.id for t in targets)
+    )
+    if action.target_ref not in valid_refs:
+        return False
+    inbound = from_record(receipt, InboundReceipt)
+    original_text = inbound.barrier_reservation.text if inbound.barrier_reservation else None
+    if original_text is None:
+        # Choosing a target can create category options for that same saved message.
+        for row in request.puts:
+            if row.entity_type != "patient_action" or not row.body.get("consumed_at"):
+                continue
+            token = from_record(row, PatientAction)
+            old = store.get(snap.scope, "patient_action", token.id)
+            if not old or token.target_ref is None or token.target_ref.id != action.target_ref.id:
+                continue
+            saved = from_record(old, PatientAction)
+            if saved.action not in {"barrier_target", "start"}:
+                continue
+            original_text = saved.medication_report_text
+            checks.append(Check(old.key, old.version))
+            if not original_text and saved.slot_id == "medication_barrier":
+                original = store.get(snap.scope, "inbound_receipt", saved.source_receipt_id)
+                if original:
+                    original_text = str(
+                        (from_record(original, InboundReceipt).payload or {}).get("text", "")
+                    )
+                    checks.append(Check(original.key, original.version))
+            break
+    return action.medication_report_text == original_text
+
+
+def web_choice_matches(action: PatientAction, receipt: StoredRecord) -> bool:
+    from sanad.concierge import templates
+
+    if receipt.body.get("channel") != "web" or action.action not in {
+        "barrier_category",
+        "barrier_target",
+    }:
+        return False
+    payload = receipt.body.get("payload")
+    if not isinstance(payload, dict):
+        return False
+    options = {str(action.choice_number)}
+    if action.barrier_category:
+        options.update(
+            templates.render("patient_barrier_option_" + action.barrier_category, lang).casefold()
+            for lang in ("en", "ar")
+        )
+    return str(payload.get("text", "")).strip().casefold() in options
+
+
+def barrier_guard(
+    store: "StoreBase",
+    snap: "Snapshot",
+    request: CommitRequest,
+    receipt: StoredRecord,
+    checks: list["Check"],
+) -> bool:
+    """Reproduce citations and choices from stored sources before accepting effects."""
+    from sanad.concierge.barrier_evidence import category, mission_names, verify
+    from sanad.concierge.records import BarrierOutcome
+    from sanad.steward.types import records
+    from sanad.store._base import Check
+    from sanad.store.records import InboundReceipt
+
+    raw = request.command.payload.get("barrier_outcome")
+    current = from_record(receipt, InboundReceipt)
+    outcome = BarrierOutcome.model_validate(raw) if raw else current.barrier_outcome
+    reported = [
+        from_record(r, ClinicalFact).payload
+        for r in request.puts
+        if r.entity_type == "clinical_fact"
+    ]
+    barriers = [
+        p for p in reported if isinstance(p, ReportFactPayload) and p.report_kind == "barrier"
+    ]
+    if not outcome:
+        return not barriers
+    if any(p.barrier_type != category(outcome) for p in barriers):
+        return False
+    source_id = outcome.source_receipt_id or current.id
+    source_row = (
+        receipt if source_id == current.id else store.get(snap.scope, "inbound_receipt", source_id)
+    )
+    if source_row is None:
+        return False
+    source = from_record(source_row, InboundReceipt)
+    if source.source_subject != current.source_subject:
+        return False
+    if source_row != receipt:
+        checks.append(Check(source_row.key, source_row.version))
+    if current.barrier_outcome:
+        if current.barrier_outcome != outcome:
+            return False
+        if outcome.provenance == "patient_choice":
+            saved_choice = store.get(snap.scope, "patient_action", outcome.choice_id or "")
+            if not saved_choice:
+                return False
+            selected = from_record(saved_choice, PatientAction)
+            checks.append(Check(saved_choice.key, saved_choice.version))
+            return bool(
+                selected.consumed_at
+                and selected.source_receipt_id == source.id
+                and selected.actor_subject == current.source_subject
+                and selected.barrier_category == outcome.category
+                and outcome.status == "accepted"
+                and not barriers
+            )
+    if outcome.provenance == "patient_choice" or (
+        source.id != current.id and not current.barrier_outcome
+    ):
+        chosen = next(
+            (
+                from_record(r, PatientAction)
+                for r in request.puts
+                if r.entity_type == "patient_action"
+                and r.body.get("consumed_at")
+                and (
+                    r.id == outcome.choice_id
+                    if outcome.provenance == "patient_choice"
+                    else r.id == request.command.payload.get("barrier_choice_id")
+                )
+            ),
+            None,
+        )
+        if not chosen or chosen.source_receipt_id != source.id or chosen.target_ref is None:
+            return False
+        resolver_action = request.command.payload.get("resolver_action")
+        if (
+            isinstance(resolver_action, dict)
+            and resolver_action.get("phase") == "begin"
+            and (
+                resolver_action.get("words") != chosen.medication_report_text
+                or resolver_action.get("mission_id") != chosen.target_ref.id
+            )
+        ):
+            return False
+        if any(
+            p.text != chosen.medication_report_text or p.target_ref != chosen.target_ref
+            for p in barriers
+        ):
+            return False
+        from sanad.domain import FollowUpTask, Mission
+
+        all_targets: tuple[Mission | FollowUpTask, ...] = (*snap.missions, *snap.followups)
+        target = next(
+            (
+                m
+                for m in all_targets
+                if m.id == chosen.target_ref.id and m.version == chosen.target_ref.version
+            ),
+            None,
+        )
+        if target is None or target.state not in {
+            "open",
+            "waiting_patient",
+            "blocked",
+            "overdue",
+            "unreachable",
+            "waiting_response",
+        }:
+            return False
+        for row in records(store, snap.scope, "patient_action"):
+            token = from_record(row, PatientAction)
+            if token.source_receipt_id == source.id and token.action == chosen.action:
+                if token.consumed_at:
+                    return False
+                checks.append(Check(row.key, row.version))
+        if outcome.provenance == "patient_choice":
+            return bool(
+                outcome.status == "accepted"
+                and outcome.category == chosen.barrier_category
+                and not outcome.readers
+                and not outcome.citations
+                and chosen.action == "barrier_category"
+            )
+        if source.barrier_outcome != outcome:
+            return False
+    reservation = source.barrier_reservation
+    from sanad.store import keys
+
+    if not reservation or reservation.text_version != keys.digest(reservation.text):
+        return False
+    if source.kind == "text" and reservation.text != str((source.payload or {}).get("text", "")):
+        return False
+    if source.kind == "voice":
+        from sanad.store import keys
+
+        media = store.get(snap.scope, "media_work", keys.digest(source.id))
+        if not media or media.body.get("transcript_ref") != reservation.transcript_ref:
+            return False
+        checks.append(Check(media.key, media.version))
+    if any(p.text != reservation.text for p in barriers):
+        return False
+    if outcome.status in {"failure", "uncertain"} and not outcome.readers:
+        return not outcome.category and not outcome.citations
+    expected = verify(reservation.text, outcome.readers, mission_names(snap), outcome.model_ids)
+    return expected.model_copy(update={"source_receipt_id": outcome.source_receipt_id}) == outcome

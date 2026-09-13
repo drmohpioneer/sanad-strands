@@ -104,6 +104,9 @@ def education_reply(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
 
 def test_bound_turns_both_channels(browser: UploadWorld, monkeypatch: pytest.MonkeyPatch) -> None:
     w = browser.world
+    from store.medication_fixtures import scripted_barrier_factory
+
+    w.concierge.barrier_model_factory = scripted_barrier_factory
     value = education_reply(monkeypatch)
     model, answer = w.send("what is Exforge for?", value)
     assert model.script.calls and "Source:" in str(answer.payload)

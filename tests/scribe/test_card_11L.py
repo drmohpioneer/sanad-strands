@@ -193,7 +193,12 @@ def test_indexed_unsafe_ambiguity_is_excluded_in_both_languages() -> None:
     for language in ("en", "ar"):
         questions = "\n".join(dictation_questions(p.model_copy(update={"language": language})))
         assert "unsafe disputed phrase" not in questions
-        assert "safe disputed phrase" in questions
+        assert "safe disputed phrase" not in questions
+        assert (
+            "Please clarify the patient and instructions."
+            if language == "en"
+            else "مش واضح المطلوب؛ وضّح المريض والتعليمات."
+        ) in questions
 
 
 @pytest.mark.usefixtures("legacy_dictation_schema")

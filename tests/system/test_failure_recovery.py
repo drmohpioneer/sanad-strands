@@ -234,6 +234,9 @@ def test_t53_provider_timeout_keeps_ticket_and_urgent_route_on_restart(
 ) -> None:
     w = setup(store, clock)
     model = ScriptedModel(TimeoutError())
+    from store.concierge_fixtures import no_problem_readers
+
+    w.concierge.barrier_model_factory = no_problem_readers
     w.concierge.model_factory = lambda registry, role: model
     assert (
         w.post(

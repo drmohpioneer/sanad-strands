@@ -15,6 +15,7 @@ from sanad.steward.service import Steward, system_command
 from sanad.store.keys import Scope
 from sanad.store.records import (
     Cursor,
+    DueItem,
     ReconcileReport,
     StoredRecord,
     WorkerCapability,
@@ -24,6 +25,7 @@ from sanad.store.records import (
 
 
 class SweepBudget(_BoundaryValue):
+    max_discovery_rows: NonnegativeInt = 200
     max_items: NonnegativeInt = 100
     max_seconds: Annotated[float, Field(ge=0, allow_inf_nan=False)] = 10.0
     page_size: Annotated[PositiveVersion, Field(le=1000)] = 25
@@ -139,6 +141,62 @@ class Sweeper:
             errors=tuple(errors),
             budget_exhausted=True,
             cursor=cursor,
+        )
+
+    def sweep_hints(
+        self, lane: str, now: datetime, hints: tuple[DueItem, ...], budget: SweepBudget
+    ) -> SweepReport:
+        """Handle only discovered hints; index data confers no authority."""
+        start = self.elapsed_clock()
+        examined = handled = skipped = deferred = 0
+        errors: list[str] = []
+        for hit in hints:
+            if examined >= budget.max_items or self.elapsed_clock() - start >= budget.max_seconds:
+                return SweepReport(
+                    examined=examined,
+                    handled=handled,
+                    skipped=skipped,
+                    deferred=deferred,
+                    errors=tuple(errors),
+                    budget_exhausted=True,
+                )
+            if (
+                lane not in self.capability.permitted_lanes
+                or self.capability.auth_expiry <= self.steward.clock()
+                or not scope_owns(self.capability.resolved_scope, hit.record_key.scope)
+            ):
+                skipped += 1
+                continue
+            fresh = self.store.get(hit.record_key.scope, hit.entity_type, hit.id)
+            if (
+                fresh is None
+                or fresh.key != hit.record_key.key
+                or next_work(fresh) != hit.next_action_at
+                or hit.next_action_at > now
+            ):
+                skipped += 1
+                continue
+            handler = self.lane_handlers.get(lane)
+            if handler is None:
+                deferred += 1
+                continue
+            examined += 1
+            try:
+                handler(fresh)
+            except Exception:
+                errors.append("worker_exception")
+            latest = self.store.get(hit.record_key.scope, hit.entity_type, hit.id)
+            next_at = next_work(latest) if latest else None
+            if latest is not None and (next_at is None or next_at > now):
+                handled += 1
+            else:
+                deferred += 1
+        return SweepReport(
+            examined=examined,
+            handled=handled,
+            skipped=skipped,
+            deferred=deferred,
+            errors=tuple(errors),
         )
 
     def accountability(self, fresh: StoredRecord, now: datetime) -> None:

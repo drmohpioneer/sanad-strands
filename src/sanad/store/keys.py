@@ -214,3 +214,7 @@ def evidence(scope: PatientScope, id: str, version: int) -> Key:
 
 def evidence_head(scope: PatientScope, id: str) -> Key:
     return Key(partition(scope), f"EVIDENCE_HEAD#{component(id)}")
+
+
+def sweep_position(scope: AccountScope, lane: str, shard: str) -> Key:
+    return Key(partition(scope), f"SWEEP_POSITION#{component(lane)}#{component(shard)}")

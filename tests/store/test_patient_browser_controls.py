@@ -97,7 +97,7 @@ def test_stop_quiet_and_two_step_resume_keep_session(browser: UploadWorld) -> No
     assert browser.world.profile.version == version
 
 
-@pytest.mark.parametrize("action", ["message", "stop", "quiet", "resume"])
+@pytest.mark.parametrize("action", ["message", "stop", "quiet", "resume", "barrier"])
 def test_mapped_telegram_business_equivalence(
     store: StoreBase, clock: FakeClock, action: str
 ) -> None:
@@ -107,9 +107,14 @@ def test_mapped_telegram_business_equivalence(
     from sanad.store._base import Write
     from sanad.store.memory import MemoryStore
     from store.concierge_fixtures import PatientWorld
+    from store.resolver_fixtures import add, get
+    from store.test_barrier_meaning import install
+    from store.test_barrier_meaning import response as reading_response
 
     seed = MemoryStore(clock=clock)
     initial = evidence.world(seed, clock)
+    if action == "barrier":
+        add(initial)
     if action == "resume":
         initial.send("stop reminders")
     with initial.client() as client:
@@ -125,12 +130,21 @@ def test_mapped_telegram_business_equivalence(
         world = cast(PatientWorld, PatientWorld.create(target, clock))
         world.patient_scope = initial.patient_scope
         world.next_message = 3000
+        if action == "barrier":
+            words = "it costs more than I can pay this month"
+            readers = install(
+                world, reading_response("cost", words), reading_response("cost", words)
+            )
+            world.concierge.model_factory = lambda registry, role: ScriptedModel(
+                RuntimeError("synthetic unavailable")
+            )
         before = {r.id for r in world.rows("audit_event")}
         text = {
             "message": "/plan",
             "stop": "stop reminders",
             "quiet": "quiet hours 22:00 07:00",
             "resume": "resume reminders",
+            "barrier": "it costs more than I can pay this month",
         }[action]
         if channel == "telegram":
             _, intent = world.send(text)
@@ -141,11 +155,13 @@ def test_mapped_telegram_business_equivalence(
                 client.cookies.update(cookies)
                 csrf = {"origin": ORIGIN, "x-csrf-token": client.cookies["sanad_csrf"]}
                 path = (
-                    "/api/patient/messages" if action == "message" else "/api/patient/preferences"
+                    "/api/patient/messages"
+                    if action in {"message", "barrier"}
+                    else "/api/patient/preferences"
                 )
                 body: dict[str, Any] = (
                     {"text": text}
-                    if action == "message"
+                    if action in {"message", "barrier"}
                     else {"quiet_hours": ["22:00", "07:00"]}
                     if action == "quiet"
                     else {"reminders": action}
@@ -167,6 +183,13 @@ def test_mapped_telegram_business_equivalence(
                     assert result.status_code == 200 and result.json()["status"] == "accepted"
         patient = world.rows("patient")[0].body
         profile = world.profile
+        if action == "barrier":
+            assert len(readers.script.calls) == 2
+            mission = get(world)
+            assert mission.barrier_type == "cost" and mission.state == "blocked"
+            attempt = mission.barrier_attempts[-1]
+            assert attempt.reasoning_spent == attempt.questions_spent == 1
+            assert attempt.searches_spent == 0 and attempt.outcome == "asked"
         outcomes.append(
             {
                 "patient": {

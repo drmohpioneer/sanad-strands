@@ -1,0 +1,29 @@
+{
+  "14-omitted-request:0b365cc307f1": [
+    "New patient: Synthetic Person\nNeeds confirmation:\nTEST: CBC: due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nI heard \"call the clinic\" for a test; which test did you mean?\nI heard \"call the clinic\"; what should I record?\n✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "choices:0b365cc307f1": [
+    "Patient: Synthetic Person\n• Synthetic Person, last activity: Sun 6 Sep, 15:00\n• Synthetic Person, last activity: Sun 6 Sep, 15:00\nRequested:\nTEST: CBC: due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nSynthetic Person | Synthetic Person | New patient | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "patient-conflict:e0a88a8c7d62": [
+    "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00): due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile: due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nConfirm start of Forxiga: Wed 9 Sep, 10:00 (default 3 days); if unconfirmed I will notify you at the same time.\nDay-three follow-up runs from the start date reported by the patient; confirmation here does not establish that treatment started.\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nI heard the patient as \"Synthetic Person\" and as \"Synthetic Pearson\"; which is right?\n✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "patient-missing-skipped:179a6812d9c1": [
+    "New patient: Who is the patient?, \n✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "verification:e0a88a8c7d62": [
+    "New patient: Ahmed Saad, 53\nNeeds confirmation:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00): due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile: due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nPlease verify \"the original statement\".\n✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "monitor-request-missing:e0a88a8c7d62": [
+    "New patient: Ahmed Saad, 53\nNeeds confirmation:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00): due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile: due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nI heard a monitoring request missing from the card; what should I record?\n✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "ambiguities:f9748b15ba7b": [
+    "New patient: , \nNeeds confirmation:\nWhat dose of Forxiga did you intend?\nPlease clarify the patient and instructions.\n✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "filtered-alerts:047358408a20": [
+    "New patient: , \nNotify me if:\nNeeds confirmation:\nThis item needs review because of a danger signal.\n✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ],
+  "long-quote:e0a88a8c7d62": [
+    "New patient: Ahmed Saad, 53\nNeeds confirmation:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00): due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile: due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nPlease verify \"word word word word word word word word word word word word word word word word word word word word word word word word…\".\n✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+  ]
+}

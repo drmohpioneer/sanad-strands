@@ -69,6 +69,7 @@ from sanad.store.records import (
     StaleVersion,
     StoredRecord,
     SubjectBinding,
+    SweepPosition,
     TooLarge,
     UploadStage,
     WebSession,
@@ -1258,6 +1259,8 @@ class StoreBase(ABC):
                     "result_event_ids",
                     "review_obligation_id",
                 }
+                if concierge and command.payload.get("barrier_outcome"):
+                    mutable.add("barrier_outcome")
                 if model.model_dump(exclude=mutable) != old_receipt.model_dump(exclude=mutable):
                     return Forbidden()
             if current is not None:
@@ -1375,6 +1378,9 @@ class StoreBase(ABC):
                 work_clock=None,
                 processing_claim=None,
                 result_event_ids=completion.result_event_ids,
+                barrier_outcome=command.payload.get("barrier_outcome", inbound.barrier_outcome)
+                if concierge
+                else inbound.barrier_outcome,
             )
             records.append(completed)
             writes.append(Write(record_item(completed), receipt.version))
@@ -1560,6 +1566,63 @@ class StoreBase(ABC):
                 "processing_claim": record.processing_claim,
                 "claim_generation": record.claim_generation,
             }
+        )
+
+    def reserve_barrier_reading(
+        self, claim: Claim, lease: Lease, text: str
+    ) -> InboundReceipt | None:
+        """Charge a read before providers; only its live patient/receipt owner may reserve."""
+        from sanad.concierge.records import BarrierReservation
+
+        now = utc_instant(self._clock())
+        row = self._owned(claim.record_key.scope, claim.record_key.key)
+        fenced = self._lease_record(lease, now)
+        if (
+            not row
+            or not fenced
+            or row.version != claim.version
+            or lease.scope != claim.record_key.scope
+        ):
+            return None
+        receipt = from_record(row, InboundReceipt)
+        token = ProcessingClaim.model_validate(claim.model_dump(exclude={"record_key", "version"}))
+        if (
+            receipt.state != "processing"
+            or receipt.processing_claim != token
+            or claim.expires_at <= now
+        ):
+            return None
+        if receipt.barrier_outcome:
+            return receipt
+        transcript_ref = None
+        checks = [Check(fenced.key, fenced.version)]
+        if receipt.kind == "voice":
+            media_row = self.get(receipt.scope, "media_work", keys.digest(receipt.id))
+            if not media_row:
+                return None
+            media = from_record(media_row, MediaWork)
+            if not media.transcript_ref:
+                return None
+            transcript_ref = media.transcript_ref
+            checks.append(Check(media_row.key, media_row.version))
+        elif receipt.kind != "text" or text != str((receipt.payload or {}).get("text", "")):
+            return None
+        previous = receipt.barrier_reservation
+        if previous and (previous.text != text or previous.transcript_ref != transcript_ref):
+            return None
+        if previous and previous.attempts == 2:
+            return receipt
+        reservation = BarrierReservation(
+            attempts=previous.attempts + 1 if previous else 1,
+            text=text,
+            text_version=keys.digest(text),
+            transcript_ref=transcript_ref,
+        )
+        revised = self._revision(row, now, barrier_reservation=reservation)
+        return (
+            from_record(revised, InboundReceipt)
+            if self._atomic([Write(record_item(revised), row.version)], checks)
+            else None
         )
 
     def claim_work(
@@ -1766,6 +1829,37 @@ class StoreBase(ABC):
             if self._update(record_item(updated), record.version):
                 return
 
+    def read_sweep_position(
+        self, scope: AccountScope, lane: str, shard: str
+    ) -> SweepPosition | None:
+        item = self._read(keys.sweep_position(scope, lane, shard))
+        return from_record(item_record(item), SweepPosition) if item else None
+
+    def save_sweep_position(self, position: SweepPosition, expected_version: int | None) -> bool:
+        if position.version != (expected_version or 0) + 1:
+            return False
+        return self._atomic(
+            [Write(record_item(to_record(position, position.scope)), expected_version)], []
+        )
+
+    def due_resume_cursor(
+        self, lane: str, shard: str, through: datetime, position: SweepPosition
+    ) -> Cursor | None:
+        """Bind a saved GSI key to this query's current time in either adapter."""
+        if position.lane != lane or position.shard != shard or position.due_sort is None:
+            return None
+        return Cursor(
+            query=query_identity(
+                f"{lane}#{shard}", "GSI_DUE", "", keys.instant(through) + "#\uffff"
+            ),
+            position={
+                "due_lane_shard": f"{lane}#{shard}",
+                "due_sort": position.due_sort,
+                "PK": position.due_pk or "",
+                "SK": position.due_sk or "",
+            },
+        )
+
     def query_due(
         self,
         lane: str,
@@ -1808,8 +1902,9 @@ class StoreBase(ABC):
         )
         hints = []
         for item in items:
-            record = self._owned(capability.resolved_scope, Key(item["PK"], item["SK"]))
-            if record is None:
+            record = item_record(item)
+            projected_scope = model_scope(from_record(record, MODELS[record.entity_type]))
+            if not scope_owns(capability.resolved_scope, projected_scope):
                 continue
             hints.append(
                 DueItem(

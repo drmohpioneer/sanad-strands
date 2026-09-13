@@ -6,14 +6,29 @@ import pytest
 from live.check08 import SpendGuard
 from live.check10 import EVIDENCE, MESSAGES, FiveRequests, run_check
 from providers.fixtures import ScriptedConverse, ScriptedModel, candidate, response
+from store.concierge_fixtures import PatientWorld, no_problem_readers
 
 from sanad.concierge.education import retrieve
 from sanad.models.registry import ModelRegistry
+from sanad.store.records import Patient
+
+
+def scripted_readers(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Hermetic runs get separate no-problem readers beside their answer models."""
+    enroll = PatientWorld.enroll
+
+    def with_readers(self: PatientWorld, *, medication: bool = True) -> Patient:
+        patient = enroll(self, medication=medication)
+        self.concierge.barrier_model_factory = no_problem_readers
+        return patient
+
+    monkeypatch.setattr(PatientWorld, "enroll", with_readers)
 
 
 def test_live_runner_hermetic_five_messages_and_refuses_second_allowance(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    scripted_readers(monkeypatch)
     assert EVIDENCE.name == "live-10-2026-09-07b.json"
     target = tmp_path / EVIDENCE.name
     previous = tmp_path / "live-10-2026-09-07.json"
@@ -55,6 +70,7 @@ def test_live_runner_hermetic_five_messages_and_refuses_second_allowance(
 
 
 def test_live_gate_results_are_per_turn(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    scripted_readers(monkeypatch)
     monkeypatch.setenv("SANAD_LIVE", "1")
     replies = ["التحاليل سليمة ومفيش أي خطر عليك"] + [
         retrieve(query, synthetic=True)[0].lines("ar")[0] for query in MESSAGES[1:]

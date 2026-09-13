@@ -2,8 +2,9 @@
 
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, StrictBool
 
+from sanad.concierge.policy import BarrierType
 from sanad.domain import PatientScope, VersionRef
 from sanad.domain.boundaries import NonblankStr, PositiveVersion, UtcInstant, _BoundaryValue
 
@@ -64,6 +65,8 @@ class PatientAction(_BoundaryValue):
         "evidence_other",
         "visit_report",
         "task_report",
+        "barrier_category",
+        "barrier_target",
     ]
     evidence_id: str | None = None
     evidence_version: PositiveVersion | None = None
@@ -79,3 +82,43 @@ class PatientAction(_BoundaryValue):
     monitor_reading_text: NonblankStr | None = Field(default=None, repr=False)
     monitor_observed_at: UtcInstant | None = None
     monitor_received_at: UtcInstant | None = None
+    barrier_category: BarrierType | None = None
+    choice_number: int | None = None
+
+
+class ProblemReading(_BoundaryValue):
+    category: BarrierType | Literal["uncertain"]
+    quote: str = Field(max_length=4096, repr=False)
+    asserted: StrictBool
+    subject: Literal["patient", "someone_else"]
+
+
+class BarrierReading(_BoundaryValue):
+    problems: tuple[ProblemReading, ...] = Field(max_length=3)
+
+
+class BarrierCitation(_BoundaryValue):
+    quote: str = Field(repr=False)
+    start: int = Field(ge=0)
+    end: int = Field(gt=0)
+    asserted: Literal[True] = True
+    subject: Literal["patient"] = "patient"
+
+
+class BarrierOutcome(_BoundaryValue):
+    status: Literal["accepted", "none", "uncertain", "failure"]
+    category: BarrierType | None = None
+    citations: tuple[BarrierCitation, ...] = ()
+    readers: tuple[BarrierReading, ...] = Field(default=(), repr=False)
+    model_ids: tuple[str, ...] = ()
+    prompt_version: str = "barrier-meaning-v1"
+    provenance: Literal["model", "patient_choice"] = "model"
+    choice_id: str | None = None
+    source_receipt_id: str | None = None
+
+
+class BarrierReservation(_BoundaryValue):
+    attempts: int = Field(ge=1, le=2)
+    text: str = Field(repr=False)
+    text_version: str
+    transcript_ref: str | None = None

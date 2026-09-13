@@ -619,7 +619,7 @@ def test_18g_click_anywhere_back_and_counts(rendered: RenderedApp) -> None:
     )
     for key in ("danger", "pending_review", "overdue", "due_today"):
         page.locator(f'[data-summary="{key}"]').click()
-        expect(page.locator("#filter")).to_have_value(key)
+        expect(page.locator('#filter [aria-pressed="true"]')).to_have_attribute("data-filter", key)
         expect(page.locator(".patient-row")).to_have_count(1)
         page.locator(f'[data-summary="{key}"]').click()
     for selector in ("td.age", ".patient-sentence", "[data-record]"):
@@ -738,11 +738,19 @@ def test_18g_admin_counts_reasons_and_results(rendered: RenderedApp) -> None:
     page.goto(app.origin + "/admin")
     page.locator("#admin-applications .summary-strip").wait_for()
     cards = page.locator(".application-card")
+    page.wait_for_function(
+        "() => [...document.querySelectorAll('.summary-tile strong')]"
+        ".every(e=>e.textContent===e.dataset.count)"
+    )
     assert sum(map(int, page.locator(".summary-tile strong").all_text_contents())) == cards.count()
     identity(page)
     page.goto(app.origin + "/demo/admin")
     expect(cards).to_have_count(4)
     expect(page.locator(".summary-tile strong")).to_have_text(["1", "1", "1", "1"])
+    page.wait_for_function(
+        "() => [...document.querySelectorAll('.summary-tile strong')]"
+        ".every(e=>e.textContent===e.dataset.count)"
+    )
     assert (
         sum(map(int, page.locator(".summary-tile strong").all_text_contents()))
         == cards.count()
@@ -774,6 +782,10 @@ def test_18g_admin_counts_reasons_and_results(rendered: RenderedApp) -> None:
     page.goto(app.origin + "/admin")
     expect(cards).to_have_count(5)
     expect(cards.nth(4).locator("button")).to_have_count(0)
+    page.wait_for_function(
+        "() => [...document.querySelectorAll('.summary-tile strong')]"
+        ".every(e=>e.textContent===e.dataset.count)"
+    )
     assert sum(map(int, page.locator(".summary-tile strong").all_text_contents())) == 5
     for code, label in [
         ("unverified", "Identity could not be verified"),

@@ -1,0 +1,81 @@
+%%{init: {"theme":"base","fontFamily":"Arial","themeVariables":{"fontFamily":"Arial","fontSize":"18px","primaryColor":"#e8f4f2","primaryTextColor":"#153b43","primaryBorderColor":"#33757d","lineColor":"#526b75","clusterBkg":"#f5f8fa","clusterBorder":"#8196a3"},"flowchart":{"htmlLabels":false,"curve":"linear"},"deterministicIds":true,"deterministicIDSeed":"sanad-architecture"}}%%
+flowchart TB
+  accTitle: Sanad architecture and trust boundaries
+  accDescr: Authenticated Telegram and browser inputs reach Lambda workers, deterministic validation and private storage. Models propose; current access and consent are checked before delivery. EventBridge drives recovery every minute.
+
+  %% CLIENTS: src/sanad/channels/telegram/webhook.py; src/sanad/web/browser.py
+  subgraph CLIENTS[Untrusted messages and browser input]
+    %% TG: src/sanad/channels/telegram/webhook.py
+    TG[Telegram doctor and patient chats]
+    %% DASH: src/sanad/web/browser.py; src/sanad/web/routes.py
+    DASH[Doctor dashboard /a]
+    %% PAT: src/sanad/web/routes.py; src/sanad/web/patient_controls.py
+    PAT[Patient page /pp]
+    %% ADMIN: src/sanad/web/api_admin.py
+    ADMIN[Admin page /admin<br/>Account access only]
+  end
+
+  %% AWS: deploy/stack.yaml AppRole, Table, Bucket, AppFunction, RelayFunction
+  subgraph AWS[AWS application boundary]
+    %% APP: deploy/stack.yaml AppFunction, AppUrl; src/sanad/api/lambda_entry.py
+    subgraph APP[Lambda app and workers: same function and image]
+      %% IN: src/sanad/channels/telegram/webhook.py
+      IN[Telegram webhook /tg<br/>Verify and save receipt]
+      %% AUTH: src/sanad/web/security.py; src/sanad/web/routes.py
+      AUTH[Browser API<br/>Session, scope and CSRF checks]
+      %% SAFE: src/sanad/safety/kernel.py; src/sanad/steward/urgent.py
+      SAFE[Immediate text and caption safety]
+      %% WORK: src/sanad/ops/worker.py; src/sanad/api/internal.py
+      WORK[Saved receipt workers<br/>Signed async processing]
+      %% AG: src/sanad/agents/factory.py; src/sanad/agents/tools.py
+      AG[Strands agents<br/>Scoped tools and typed proposals]
+      %% GATE: src/sanad/steward/service.py; src/sanad/steward/patient.py
+      GATE[Validate and commit<br/>Doctor confirms instructions]
+      %% OUT: src/sanad/steward/dispatch.py; src/sanad/liaison/decorator.py
+      OUT[Delivery and doctor notifications<br/>Recheck access, consent and orders]
+      %% TICK: src/sanad/api/internal.py; src/sanad/ops/sweep.py
+      TICK[Authenticated minute tick<br/>Due work, reminders and recovery]
+    end
+    %% RULE: deploy/stack.yaml TickRule
+    RULE[EventBridge<br/>Every minute]
+    %% RELAY: deploy/stack.yaml RelayFunction; deploy/relay.py
+    RELAY[Private Lambda relay<br/>Signed tick with replay protection]
+    %% DB: deploy/stack.yaml Table; src/sanad/store/dynamodb.py
+    DB[(DynamoDB single table<br/>Scoped records, work and outbox)]
+    %% S3: deploy/stack.yaml Bucket; src/sanad/media/storage.py
+    S3[(Private encrypted S3<br/>Original and normalized media)]
+    %% NOVA: src/sanad/agents/factory.py; src/sanad/models/registry.py
+    NOVA[Amazon Bedrock: Nova<br/>Reasoning and classification]
+  end
+
+  %% GOOGLE: src/sanad/models/gemini.py
+  subgraph GOOGLE[External Google API boundary]
+    %% GEM: src/sanad/models/gemini.py; src/sanad/models/registry.py; src/sanad/media/vision.py
+    GEM[Gemini<br/>Voice, photos and independent cross-checks]
+  end
+
+  %% SEND: src/sanad/channels/telegram/transport.py; src/sanad/steward/dispatch.py
+  SEND[Telegram delivery or stored patient reply]
+
+  %% Layout constraint only: place the application below its input surfaces.
+  CLIENTS ~~~ RULE
+  TG --> IN
+  DASH & PAT & ADMIN --> AUTH
+  IN & AUTH -->|Readable input| SAFE
+  SAFE -->|Saved receipts| WORK
+  SAFE -->|Immediate danger| GATE
+  WORK --> AG
+  AG <-->|Reasoning| NOVA
+  WORK <-->|Media extraction| GEM
+  WORK <-->|Scoped media| S3
+  AG -->|Untrusted proposals| GATE
+  GATE -->|Atomic records, audit and outgoing intent| DB
+  DB -->|Queued messages| OUT
+  OUT --> SEND
+  RULE --> RELAY --> TICK
+  TICK --> WORK
+
+  style CLIENTS fill:#fff8ec,stroke:#b89555,stroke-dasharray:5 5
+  style GOOGLE fill:#fff8ec,stroke:#b89555,stroke-dasharray:5 5
+  style AWS fill:#f2f7fb,stroke:#527a98,stroke-width:2px
+  style APP fill:#ffffff,stroke:#8196a3,stroke-dasharray:5 5

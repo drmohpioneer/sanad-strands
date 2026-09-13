@@ -29,6 +29,10 @@ check-js:
 test-browser:
 	uv run --offline --no-sync pytest tests/browser/corrections19.py
 
+.PHONY: readability-report
+readability-report:
+	uv run --offline --no-sync python tests/browser/readability_report.py
+
 build: check-js
 	uv build --offline --no-build-isolation
 

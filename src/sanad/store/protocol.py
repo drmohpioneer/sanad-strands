@@ -42,6 +42,7 @@ from sanad.store.records import (
     ReviewCreation,
     SessionSnapshot,
     StoredRecord,
+    SweepPosition,
     UploadStage,
     WebSession,
     WorkerCapability,
@@ -130,6 +131,16 @@ class Store(Protocol):
     def defer_media(self, claim: Claim, now: datetime, error: str) -> bool: ...
 
     def defer_inbound(self, claim: Claim, now: datetime) -> bool: ...
+    def read_sweep_position(
+        self, scope: AccountScope, lane: str, shard: str
+    ) -> SweepPosition | None: ...
+    def save_sweep_position(
+        self, position: SweepPosition, expected_version: int | None
+    ) -> bool: ...
+    def due_resume_cursor(
+        self, lane: str, shard: str, through: datetime, position: SweepPosition
+    ) -> Cursor | None: ...
+
     def query_due(
         self,
         lane: str,

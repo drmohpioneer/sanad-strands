@@ -23,7 +23,7 @@ from sanad.domain import DRAFT_POLICY_2026_09, PatientScope, Principal, Provenan
 from sanad.domain.language import effective as contest_language
 from sanad.media.audio import ConvertedAudio
 from sanad.media.numbers import numbers_in
-from sanad.media.retrieve import MediaRetriever, fetch_telegram_file
+from sanad.media.retrieve import MediaRetriever, fetch_telegram_file, invoked
 from sanad.media.speech import SpeechAdapter, Transcript
 from sanad.media.telegram import MediaFailure
 from sanad.models.io import CallMetadata, ModelUnavailable
@@ -1328,11 +1328,51 @@ class ScribeTurn:
             single_source=candidate._single_source,
             resolved_numbers=resolved_numbers,
         )
+        if candidate.ambiguities:
+            from sanad.scribe.extract import anchored_patient_name
+            from sanad.scribe.grounding import normalize
+            from sanad.store.records import Patient
+
+            other_names = []
+            patient_cursor = None
+            while True:
+                profiles, patient_cursor = self.repo.store.list_patients(
+                    doctor.scope, cursor=patient_cursor
+                )
+                for profile in profiles:
+                    if profile.id == proposal.selected_patient_id:
+                        continue
+                    patient_row = self.repo.store.get(
+                        PatientScope(doctor_id=doctor.id, patient_id=profile.id),
+                        "patient",
+                        profile.id,
+                    )
+                    if patient_row:
+                        name = from_record(patient_row, Patient).display_name
+                        if normalize(name) != normalize(candidate.patient.name_as_spoken or ""):
+                            other_names.append(name)
+                if patient_cursor is None:
+                    break
+            multiple = any(
+                anchored_patient_name(name, ambiguity, source_text)
+                for name in other_names
+                for ambiguity in candidate.ambiguities
+            )
+            if multiple:
+                proposal = proposal.model_copy(
+                    update={
+                        "issues": (
+                            *proposal.issues,
+                            ProposalIssue(item="all", code="multiple_patients"),
+                        )
+                    }
+                )
         if not photo:
             from sanad.scribe.grounding import seal
             from sanad.scribe.resolver import context
 
             proposal = seal(proposal, context(service), previous if correction else None)
+            logger.info("scribe_turn dropped_facts=%d", len(proposal.candidate._dropped_facts))
         if any(
             len(part) > DRAFT_SCRIBE_POLICY.card_max_chars
             for part in render_card(proposal, contest_language(doctor.language))
@@ -1398,25 +1438,16 @@ class ScribeTurn:
         from sanad.domain.language import default_language
 
         language = contest_language(doctor.language) if doctor else default_language
-        choices: list[tuple[str, str, str | None]] = []
-        if proposal.pending_reply:
-            choices.extend(
-                (("correct_reply", "تعديل للكارت", None), ("new_reply", "مريض جديد", None))
+        from sanad.scribe.proposal import card_actions
+
+        choices = [
+            (
+                action,
+                next((c.display_name for c in proposal.choices if c.patient_id == patient_id), ""),
+                patient_id,
             )
-        elif (
-            proposal.choices and not proposal.selected_patient_id and not proposal.creating_patient
-        ):
-            choices.extend(("select", c.display_name, c.patient_id) for c in proposal.choices)
-            choices.append(("new", "مريض جديد", None))
-        else:
-            if (
-                not proposal.blocked("all")
-                and not proposal.blocked("patient")
-                and self.photos.confirmable(proposal)
-            ):
-                choices.append(("confirm", "✅ تمام", None))
-            choices.append(("edit", "✏️ تعديل", None))
-        choices.append(("reject", "❌ إلغاء", None))
+            for action, patient_id in card_actions(proposal)
+        ]
         tokens: list[ScribeCallback] = []
         buttons: list[JsonValue] = []
         for action, label, patient_id in choices:
@@ -1765,6 +1796,7 @@ class ScribeTurn:
             (revise(work, self.repo.clock(), status=status, work_clock=None),),
         )
 
+    @invoked("tick")
     def sweep(self, row: StoredRecord) -> None:
         if row.entity_type == "photo_association_work":
             self.photos.finish_association(from_record(row, PhotoAssociationWork))

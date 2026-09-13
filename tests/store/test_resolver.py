@@ -256,9 +256,15 @@ def test_selection_buttons_and_terminal_named_mission(store: StoreBase, clock: F
 
 def test_no_candidate_and_quoted_barrier(store: StoreBase, clock: FakeClock) -> None:
     w, _ = setup(store, clock)
+    problem = {"category": "cost", "quote": "too expensive", "asserted": True, "subject": "patient"}
+    readers = ScriptedModel(*(candidate({"problems": [problem]}) for _ in range(2)))
+    w.concierge.barrier_model_factory = lambda registry, role: readers
     model, reply = w.send("The lab is too expensive")
     assert reply.template_id == "patient_barrier_missing" and not model.script.calls
+    assert len(readers.script.calls) == 2
     add(w)
+    no_problem = ScriptedModel(*(candidate({"problems": []}) for _ in range(2)))
+    w.concierge.barrier_model_factory = lambda registry, role: no_problem
     w.send("What does 'too expensive' mean?")
     assert not get(w).barrier_attempts
 

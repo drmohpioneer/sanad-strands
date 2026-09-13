@@ -1,6 +1,7 @@
 """One draft instance; these are operational limits, not clinical approval."""
 
 from datetime import timedelta
+from typing import Literal
 
 from sanad.domain.boundaries import _BoundaryValue
 
@@ -15,7 +16,6 @@ class ConciergePolicy(_BoundaryValue):
     start_clarification_window: timedelta = timedelta(hours=24)
     start_anchor_max_age: timedelta = timedelta(days=7)
     barrier_resume_after: timedelta = timedelta(days=1)
-    barrier_seed: str = "concierge/barriers.yaml"
     # Contract 15 draft policy: OWNER_REVIEW_PENDING.
     visit_brief_offset: timedelta = timedelta(days=1)
     task_reopen_offset: timedelta = timedelta(days=3)
@@ -25,3 +25,15 @@ class ConciergePolicy(_BoundaryValue):
 DRAFT_CONCIERGE_POLICY = ConciergePolicy()
 
 OWNER_REVIEW_PENDING = True
+
+type BarrierType = Literal[
+    "cost", "availability", "forgot", "confusion", "side_effect_experience", "other"
+]
+BARRIER_CATEGORIES: tuple[BarrierType, ...] = (
+    "cost",
+    "availability",
+    "forgot",
+    "confusion",
+    "side_effect_experience",
+    "other",
+)

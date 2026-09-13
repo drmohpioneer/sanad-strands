@@ -233,6 +233,12 @@ def internal_router(
             result = await run_in_threadpool(run_sweep, runtime, sweep)
         except (EffectsRejected, ReviewRefused, InvalidCommandPayload):
             raise RequestFailure("ingress_exception") from None
+        logger.info(
+            "tick result skipped=%s oldest_due=%s lane_capped=%s",
+            result.get("skipped", {}),
+            result.get("oldest_due", {}),
+            result.get("lane_capped", []),
+        )
         return {"accepted": True, "nonce": nonce, "sweep": result}
 
     @router.post("/events")

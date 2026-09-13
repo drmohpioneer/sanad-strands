@@ -1,12 +1,14 @@
 """Synthetic bound patients and captured transport through the actual patient turn."""
 
-from typing import cast
+from typing import Any, cast
 
 from providers.fixtures import ScriptedModel, candidate
 from pydantic import BaseModel
+from strands.models import Model
 
 from sanad.concierge.turn import ConciergeTurn
 from sanad.domain import PatientScope
+from sanad.models.registry import ModelRegistry, ModelRole
 from sanad.store._base import Write
 from sanad.store.records import (
     OutboundIntent,
@@ -20,6 +22,16 @@ from sanad.store.records import (
 )
 from store.account_fixtures import PATIENT, callback, update
 from store.scribe_fixtures import ScribeWorld
+
+
+def no_problem(request: dict[str, Any]) -> dict[str, Any]:
+    """The default problem reading: the message states no problem."""
+    return candidate({"problems": []})
+
+
+def no_problem_readers(registry: ModelRegistry, role: ModelRole) -> Model:
+    """Problem readers scripted apart from the answer model, so answers are never consumed."""
+    return ScriptedModel(lambda request: no_problem(request))
 
 
 class PatientWorld(ScribeWorld):
@@ -76,6 +88,9 @@ class PatientWorld(ScribeWorld):
                 }
             )
         )
+        if self.concierge.barrier_model_factory is None:
+            # Readers a test installed explicitly are kept.
+            self.concierge.barrier_model_factory = no_problem_readers
         self.concierge.model_factory = lambda registry, role: model
         assert self.post(update(PATIENT, text, id)).status_code == 200
         receipt = self.receipt(id)

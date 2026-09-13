@@ -5,8 +5,9 @@ from typing import TYPE_CHECKING
 
 from pydantic import ValidationError
 
+from sanad.concierge.barrier_evidence import category, mission_names
 from sanad.concierge.plan import Snapshot
-from sanad.concierge.records import ReportFactPayload
+from sanad.concierge.records import BarrierOutcome, ReportFactPayload
 from sanad.domain import DRAFT_POLICY_2026_09, Mission, TransitionResult, transition_mission
 from sanad.domain.events import BarrierRecorded
 from sanad.resolver.attempts import Action, evolve, resolved_words
@@ -35,13 +36,16 @@ def permits(snap: Snapshot, request: CommitRequest, row: StoredRecord, now: date
         if action.mission_id != original.id:
             # Keeping an unresolved attempt blocked on an unrelated patient turn.
             return hold(original, row, now)
+        outcome = request.command.payload.get("barrier_outcome")
+        reading = BarrierOutcome.model_validate(outcome) if outcome else None
+        if action.phase == "begin" and action.barrier_type != category(reading):
+            return False
         revised = from_record(row, Mission)
         base = original
         if action.phase == "begin" and not original.barrier_attempts:
             from sanad.concierge.policy import DRAFT_CONCIERGE_POLICY
-            from sanad.concierge.reports import recognize_barrier
 
-            kind = recognize_barrier(action.words)
+            kind = action.barrier_type
             if not kind:
                 return False
             report = next(
@@ -108,6 +112,7 @@ def permits(snap: Snapshot, request: CommitRequest, row: StoredRecord, now: date
             str(request.command.payload["receipt_id"]),
             now,
             contact=snap.profile.routine_contact_enabled,
+            names=tuple(n for names in mission_names(snap).values() for n in names),
         )
         expected = Mission.model_validate(
             base.model_dump()
@@ -158,7 +163,13 @@ def checkpoint_guards(
         or new
         != InboundReceipt.model_validate(
             old.model_dump()
-            | {"version": old.version + 1, "updated_at": request.command.requested_at}
+            | {
+                "version": old.version + 1,
+                "updated_at": request.command.requested_at,
+                "barrier_outcome": request.command.payload.get(
+                    "barrier_outcome", old.barrier_outcome
+                ),
+            }
         )
     ):
         return None
@@ -170,6 +181,7 @@ def checkpoint_guards(
         action.phase == "begin"
         and old.kind == "text"
         and action.words != str((old.payload or {}).get("text", ""))
+        and not request.command.payload.get("barrier_choice_id")
     ):
         return None
     # The outer StoreBase enforces the *real* request's receipt write, claim,

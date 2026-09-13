@@ -200,9 +200,9 @@ def test_demo_admin_controls(rendered: RenderedApp, tmp_path: Path) -> None:
     check_demo(rendered, traffic)
     page.reload()
     expect(rows.nth(0).locator(".application-state")).to_contain_text("Waiting for your decision")
-    page.locator("#theme").select_option("dark")
+    page.locator('[data-theme-set="dark"]').click()
     expect(page.locator("html")).to_have_attribute("data-theme", "dark")
-    page.locator("#theme").select_option("light")
+    page.locator('[data-theme-set="light"]').click()
     expect(page.locator("html")).to_have_attribute("data-theme", "light")
     for name, path in [
         ("Doctor demo", "/demo"),

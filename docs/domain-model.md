@@ -186,10 +186,25 @@ revision, originating receipt, patient words, stated area and its receipt source
 expiry, durable reasoning/question/search counters, attempted steps and outcomes,
 cached source-backed place fields, and resolved/unresolved/handed-to-doctor state.
 Expiry stops further work; it does not delete the record or resolve the mission.
-Only a new barrier type or an answer to the fact requested by the prior attempt
-opens another attempt. Repeated words append to the existing attempt. A receipt
-checkpoint advances only receipt revision metadata while preserving its processing
-claim and work clock; completion remains the final patient-turn transaction.
+Only a different accepted problem category or an accepted answer to the requested
+fact opens another attempt. The same category appends without resetting the budget
+or pause. A rejected area ends the complete/asked attempt through the existing
+unresolved and handoff path; it cannot spend a second question. Area exclusions
+reuse the danger normalizer and clinical vocabularies solely to reject search
+terms, never to choose a category. A receipt checkpoint retains its processing
+claim and work clock and may atomically add the verified problem outcome;
+completion remains the final patient-turn transaction.
+
+Contract 28 adds a receipt-bound `BarrierReservation` (at most two attempts,
+screened text digest and optional transcript reference) and `BarrierOutcome`
+(accepted/none/uncertain/failure, two typed readings, verified quote offsets,
+model IDs, prompt version and model/patient_choice provenance). Both readers
+return zero to three problems; only one agreeing, asserted patient problem with
+two valid citations is accepted. Empty lists from both readers mean none. Any
+failed citation, negation/experiencer check, disagreement or multiple targets
+means uncertain. Category and target `PatientAction` tokens preserve the message,
+receipt, target version, epochs, 30-minute expiry and single-use selection. Web
+messages select targets by number and categories by exact option words or number.
 
 Contract 14 adds `medication_stop`, `medication_change`, `start_date` and `barrier` to `ReportFactPayload`, with optional `barrier_type`, `effective_start` and `anchor_unknown`. They retain patient provenance and the exact target version. `PatientProfile.pending_start_clarification` contains `mission_ref`, `asked_at` and `expires_at`; a patient reply can change only that field and normal revision metadata, without changing consent, recipient, epochs or lease data. Medication `PatientAction` choices retain the screened `medication_report_text`, including for voice input, and keep the existing receipt, single-use and authority bindings.
 

@@ -10,6 +10,8 @@ from pydantic import Field
 from sanad.agents.factory import Proposal, make_agent
 from sanad.agents.tools import AgentScope, scoped_tool
 from sanad.concierge import plan
+from sanad.concierge.barrier_evidence import category, mission_names
+from sanad.concierge.barrier_reading import outcome_for
 from sanad.domain import Mission, Provenance
 from sanad.domain.boundaries import _BoundaryValue
 from sanad.resolver import templates
@@ -48,7 +50,10 @@ def pending_reply(tx: PatientTurnCommit, text: str) -> bool:
         for m in tx.snapshot.missions
         if m.barrier_attempts
         and m.barrier_reason
-        and (material(m.barrier_attempts[-1], text, tx.now) or resolved_words(text))
+        and (
+            material(m.barrier_attempts[-1], text, tx.now, category(outcome_for(tx)))
+            or resolved_words(text)
+        )
     ]
     if len(choices) != 1:
         return False
@@ -118,7 +123,12 @@ class ResolverTurn:
                 raise ResolverUnavailable("resolution_refused")
             base = resolved.aggregate
         attempts = evolve(
-            original, action, tx.receipt.id, tx.now, contact=tx.profile.routine_contact_enabled
+            original,
+            action,
+            tx.receipt.id,
+            tx.now,
+            contact=tx.profile.routine_contact_enabled,
+            names=tuple(n for names in mission_names(tx.snapshot).values() for n in names),
         )
         mission = Mission.model_validate(
             base.model_dump()
@@ -148,7 +158,12 @@ class ResolverTurn:
             )
             tx.builder.events[event_id] = to_record(event, tx.snapshot.scope)
         saved = InboundReceipt.model_validate(
-            tx.receipt.model_dump() | {"version": tx.receipt.version + 1, "updated_at": tx.now}
+            tx.receipt.model_dump()
+            | {
+                "version": tx.receipt.version + 1,
+                "updated_at": tx.now,
+                "barrier_outcome": outcome_for(tx),
+            }
         )
         tx.put(saved)
         tx.builder.audit(
@@ -279,7 +294,12 @@ class ResolverTurn:
             return templates.patient_reply(
                 already, tx.snapshot.patient.language, self.concierge.runtime.safety_policy
             )
-        mission = self.persist(tx, Action(phase="begin", mission_id=id, words=words))
+        mission = self.persist(
+            tx,
+            Action(
+                phase="begin", mission_id=id, words=words, barrier_type=category(outcome_for(tx))
+            ),
+        )
         attempt = mission.barrier_attempts[-1]
         if attempt.phase == "complete":
             return (

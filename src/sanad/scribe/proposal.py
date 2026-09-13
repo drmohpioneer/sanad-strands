@@ -118,6 +118,43 @@ class Proposal(ScribeRecord):
         return any(i.blocked and i.item in {"all", item} for i in self.issues)
 
 
+def card_actions(proposal: Proposal) -> tuple[tuple[str, str | None], ...]:
+    """One issue/identity predicate supplies both the footer and callback actions."""
+    from sanad.scribe.crosscheck import unreadable_read
+
+    if proposal.photo and unreadable_read(proposal.photo.reads):
+        return ()
+    if proposal.pending_reply:
+        return (("correct_reply", None), ("new_reply", None), ("reject", None))
+    if proposal.choices and not proposal.selected_patient_id and not proposal.creating_patient:
+        return (
+            *(("select", c.patient_id) for c in proposal.choices),
+            ("new", None),
+            ("reject", None),
+        )
+    photo_confirmable = not proposal.photo or any(
+        not proposal.blocked(f"{family}:{i}")
+        for family, values in (
+            ("order", proposal.candidate.orders),
+            ("fact", proposal.candidate.facts),
+        )
+        for i, _ in enumerate(values)
+    )
+    confirm = not proposal.blocked("all") and not proposal.blocked("patient") and photo_confirmable
+    return (*((("confirm", None),) if confirm else ()), ("edit", None), ("reject", None))
+
+
+def card_footer(proposal: Proposal, language: str) -> str:
+    from sanad.channels.telegram import wording
+
+    return " | ".join(
+        next(c.display_name for c in proposal.choices if c.patient_id == patient_id)
+        if action == "select"
+        else wording.button(action, language)
+        for action, patient_id in card_actions(proposal)
+    )
+
+
 class ScribeState(ScribeRecord):
     entity_type: Literal["scribe_state"] = "scribe_state"
     scope: TenantScope

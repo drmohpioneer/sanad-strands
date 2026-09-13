@@ -1,7 +1,16 @@
 """Align proposed terms to spoken fragments; never render a free model rewrite."""
 
+from __future__ import annotations
+
 import re
 import unicodedata
+from functools import lru_cache
+from typing import TYPE_CHECKING
+
+from sanad.media.numbers import numbers_in
+
+if TYPE_CHECKING:
+    from sanad.scribe.extract import DictationCandidate
 
 from sanad.scribe.extract import ClinicalKind, FactCandidate, FactTerm
 from sanad.scribe.lookup import DrugLookupService
@@ -130,4 +139,91 @@ def aligned_facts(
             ),
             readings,
         ),
+    )
+
+
+INSTRUCTION_VERBS_EN = (
+    "request order check measure start stop hold continue send give take do repeat"
+)
+INSTRUCTION_VERBS_AR = (
+    "اطلب اعمل اعمله يعمل حلل يحلل ابدأ ابدا يبدأ وقف اوقف يوقف كمل يكمل قيس يقيس ابعت يبعت خد ياخد"
+)
+INSTRUCTION_WORDS = (
+    "for now today daily and or to of in on with at from until then "
+    "his her him their it a an the once twice times day days week weeks month months "
+    "morning evening night one two three four five six seven eight nine ten "
+    "و او في على علي من ل مع هو هي "
+    "مرة مرتين مرات يوم يومين ايام أيام اسبوع أسبوع الصبح بالليل النهارده دلوقتي"
+)
+INSTRUCTION_EXCLUSIONS = (
+    "diabetes diabetic sugar blood sugar سكر thyroid liver kidney renal gout inflammation "
+    "count salts protein glycated lipid lipids cholesterol ضغط الضغط ضغطه ضغط الدم "
+    "high low raised elevated uncontrolled controlled known pregnancy pregnant ca cancer "
+    "gas gases clotting coagulation زمان قديم من زمان"
+)
+
+
+def instruction_tokens(text: str) -> frozenset[str]:
+    from sanad.scribe.grounding import _TOKEN, normalize
+
+    return frozenset(_TOKEN.findall(normalize(text)))
+
+
+@lru_cache(maxsize=1)
+def instruction_vocabulary() -> frozenset[str]:
+    from sanad.safety.labs import ALIASES, PANEL_ANALYTES
+    from sanad.scribe.names import dictionary
+
+    phrases = [
+        *ALIASES.keys(),
+        *ALIASES.values(),
+        *PANEL_ANALYTES.keys(),
+        *(v for values in PANEL_ANALYTES.values() for v in values),
+        "bp blood pressure glucose blood glucose weight pulse heart rate",
+        INSTRUCTION_VERBS_EN,
+        INSTRUCTION_VERBS_AR,
+        INSTRUCTION_WORDS,
+    ]
+    for entry in dictionary():
+        if entry.kind == "drug":
+            phrases.extend(
+                (entry.latin, entry.generic, *entry.arabic_spellings, *entry.latin_spellings)
+            )
+    return instruction_tokens(" ".join(phrases)) - instruction_tokens(INSTRUCTION_EXCLUSIONS)
+
+
+def instruction_content(text: str, candidate: DictationCandidate) -> bool:
+    """Closed token vocabulary, with condition exclusions winning over every source."""
+    drugs = " ".join(
+        value
+        for order in candidate.orders
+        for value in (order.drug, order.name_latin, order.generic)
+        if value
+    )
+    tokens = instruction_tokens(text)
+    excluded = instruction_tokens(INSTRUCTION_EXCLUSIONS)
+    vocabulary = (instruction_vocabulary() | instruction_tokens(drugs)) - excluded
+    return (
+        bool(tokens)
+        and not (tokens & excluded)
+        and all(token in vocabulary or token.isdecimal() for token in tokens)
+    )
+
+
+def instruction_verb(text: str) -> bool:
+    return bool(
+        instruction_tokens(text)
+        & instruction_tokens(INSTRUCTION_VERBS_EN + " " + INSTRUCTION_VERBS_AR)
+    )
+
+
+def drop_instruction_fact(fact: FactCandidate, candidate: DictationCandidate, source: str) -> bool:
+    return (
+        fact.category in {"condition", "history", "medication_history"}
+        and not (set(numbers_in(fact.text)) - set(numbers_in(source)))
+        and instruction_content(fact.text, candidate)
+        and (
+            instruction_verb(fact.text)
+            or bool(instruction_tokens(fact.text) - instruction_tokens(source))
+        )
     )

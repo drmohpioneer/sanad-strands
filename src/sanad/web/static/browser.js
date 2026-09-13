@@ -71,6 +71,32 @@
       watch.observe(button,{attributes:true,attributeFilter:['disabled']});
     });
   });
+  const revealSeen=new WeakSet(), counted=new WeakSet();
+  const reduceMotion=matchMedia('(prefers-reduced-motion: reduce)');
+  function countUp(el){
+    if(counted.has(el))return;counted.add(el);
+    const target=Number(el.dataset.count), start=performance.now();
+    if(!Number.isFinite(target))return;
+    const step=now=>{if(!el.isConnected)return;const p=reduceMotion.matches?1:Math.min(1,(now-start)/1000);
+      el.textContent=String(Math.round(target*(1-Math.pow(1-p,3))));if(p<1)requestAnimationFrame(step);};
+    if(reduceMotion.matches)el.textContent=String(target);else requestAnimationFrame(step);
+  }
+  const revealObserver=new IntersectionObserver(entries=>entries.forEach(en=>{
+    if(!en.isIntersecting||(!(en.intersectionRatio>=.15)&&en.boundingClientRect.height<=innerHeight))return;
+    en.target.classList.add('in');revealObserver.unobserve(en.target);
+    en.target.querySelectorAll('[data-count]').forEach(countUp);
+  }),{threshold:[0,.15],rootMargin:'0px 0px -8% 0px'});
+  const trendObserver=new IntersectionObserver(entries=>entries.forEach(en=>{
+    if(en.isIntersecting){en.target.classList.add('in');trendObserver.unobserve(en.target);}
+  }),{threshold:.3});
+  function reveal(root=document){
+    root.querySelectorAll('.rv,.trend').forEach(el=>{
+      if(revealSeen.has(el))return;revealSeen.add(el);
+      if(reduceMotion.matches){el.classList.add('in');el.querySelectorAll('[data-count]').forEach(countUp);}
+      else (el.matches('.trend')?trendObserver:revealObserver).observe(el);
+    });
+  }
+  reduceMotion.addEventListener('change',()=>{if(reduceMotion.matches){document.querySelectorAll('.rv,.trend').forEach(el=>el.classList.add('in'));document.querySelectorAll('[data-count]').forEach(el=>el.textContent=el.dataset.count);}});
   if (document.getElementById('admin-applications')) {
     const target = document.getElementById('admin-applications');
     const status = document.getElementById('admin-result');
@@ -97,19 +123,20 @@
       if (!response.ok) { const result=await response.json().catch(()=>({}));status.textContent = failureReasons[result.reason] || 'Sign in again.'; return; }
       const rows = await response.json();
       target.replaceChildren();
-      const summary=document.createElement('div');summary.className='summary-strip';
+      const summary=document.createElement('div');summary.className='summary-strip rv';summary.style.setProperty('--d','180ms');
       const labels={pending:'Waiting for your decision',approved:'Approved',suspended:'Suspended',rejected:'Rejected',revoked:'Access revoked'};
       for(const [key,label] of Object.entries(labels)){
         const count=rows.filter(r=>r.status===key).length;if(!count&&!['pending','approved','suspended'].includes(key))continue;
-        const tile=document.createElement('article');tile.className='summary-tile';const caption=document.createElement('span');caption.textContent=label;const value=document.createElement('strong');value.textContent=String(count);tile.append(caption,value);summary.append(tile);
+        const tile=document.createElement('article');tile.className='summary-tile';const caption=document.createElement('span');caption.textContent=label;const value=document.createElement('strong');value.textContent='0';value.dataset.count=String(count);tile.append(caption,value);summary.append(tile);
       }target.append(summary);
       if(!rows.length){const empty=document.createElement('div');empty.className='empty';empty.innerHTML='<svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2h8v12H4zM6 5h4M6 8h4M6 11h2"/></svg><p class="empty-title">No applications are waiting.</p><p class="empty-next">New applications will appear here.</p>';target.append(empty);}
       for (const row of rows) {
-        const item=document.createElement('section');item.className='section application-card';
+        const item=document.createElement('section');item.className='section application-card rv';item.style.setProperty('--d',`${240+rows.indexOf(row)*60}ms`);
+        const av=document.createElement('span');av.className='av';av.setAttribute('aria-hidden','true');av.textContent=String(row.name).replace(/^Dr\.?\s+/i,'').trim().split(/\s+/).slice(0,2).map(word=>Array.from(word)[0]).join('').toUpperCase();item.append(av);
         const name=document.createElement('h2');name.textContent=row.name;
         const info=document.createElement('p');const date=new Date(row.applied_at);
         info.textContent=`${row.specialty} · ${row.city} · applied on ${Number.isFinite(+date)?new Intl.DateTimeFormat('en',{dateStyle:'medium',timeZone:'UTC'}).format(date):'date not recorded'}`;
-        const line=document.createElement('p');line.className='application-state';line.textContent={pending:'Waiting for your decision',approved:'Approved and working',suspended:'Suspended: their patients need cover arranged',rejected:'Rejected',revoked:'Access revoked'}[row.status];item.append(name,info,line);
+        const line=document.createElement('p');line.className='application-state status '+({pending:'warning',approved:'success',suspended:'warning',rejected:'danger',revoked:'danger'}[row.status]||'quiet');line.textContent={pending:'Waiting for your decision',approved:'Approved and working',suspended:'Suspended: their patients need cover arranged',rejected:'Rejected',revoked:'Access revoked'}[row.status];item.append(name,info,line);const acts=document.createElement('div');acts.className='acts';item.append(acts);
         for(const verb of {pending:['approve','reject'],approved:['suspend'],suspended:['reinstate'],rejected:[],revoked:[]}[row.status]||[]){
           const button=document.createElement('button');button.textContent=verb[0].toUpperCase()+verb.slice(1);
           button.onclick=async()=>{
@@ -122,7 +149,7 @@
             if(confirmation&&!window.confirm(confirmation))return;
             await perform(verb,verb==='suspend'?'coverage':null,button);
           };
-          item.append(button);
+          acts.append(button);
         }
         async function perform(verb,reason,button){
           button.disabled=true;const clinical=verb==='suspend'||verb==='reinstate';
@@ -131,6 +158,8 @@
         }
         target.append(item);
       }
+      const firstPending=[...target.querySelectorAll('.application-card')].find((el,i)=>rows[i].status==='pending');firstPending?.querySelector('button')?.classList.add('primary');
+      document.querySelectorAll('.page-heading,main>h1,main>h1+p').forEach((el,i)=>{el.classList.add('rv');el.style.setProperty('--d',`${i*60}ms`);});reveal();
     };
     if (!demo) document.getElementById('admin-logout').onclick = async () => {
       try { const response = await send('/api/admin/logout', {}); if (response.ok) { target.replaceChildren(); status.textContent = 'Signed out everywhere.'; } }
@@ -431,10 +460,10 @@
   function list() {
     const rows=tableRows();state.page=Math.min(state.page,Math.max(1,Math.ceil(rows.length/50)));
     const columns=['patient','age','urgency','last_activity'];
-    $('content').innerHTML=`<div class="toolbar"><label class="search">${t('search')}<input id="search" type="search" value="${esc(state.query)}" autocomplete="off"></label><label>${t('filter')}<select id="filter">${['all','danger','pending_review','overdue','due_today'].map(k=>`<option value="${k}" ${state.filter===k?'selected':''}>${summaryLabels[k]||t(k)}</option>`).join('')}</select></label><span class="muted">${t('timezone')}: ${bdi(state.zone)}</span></div><div class="filter-summary"><span id="result-count">${rows.length} ${t('results')} · ${summaryLabels[state.filter]||t(state.filter)}${state.query?' · '+bdi(state.query):''}</span><button id="clear">${t('clear')}</button></div><div class="work-surface"><table class="clinical" role="table"><caption>${t(view==='patients'?'outstanding':view)}. ${t('sort_help')}</caption><colgroup>${columns.map(()=>'<col>').join('')}</colgroup><thead><tr role="row">${columns.map(k=>`<th role="columnheader" scope="col" ${state.sort===k?`aria-sort="${state.descending?'descending':'ascending'}"`:''}><button data-sort="${k}">${k==='last_activity'?'Last activity':k==='urgency'?'What to do and why (urgency)':t(k)} <svg class="icon sort-chevron" viewBox="0 0 16 16" aria-hidden="true"><use href="#chevron-icon"/></svg></button></th>`).join('')}</tr></thead><tbody>${rows.slice((state.page-1)*50,state.page*50).map(({record,item,count})=>`<tr role="row" class="patient-row ${item?.urgent?'danger urgent':item?.due&&+new Date(item.due)<Date.now()?'warning':'calm'}"><td role="cell"><span class="stack-label">${t('patient')}</span>${record.patient_id?`<a data-record href="${esc(link(record))}">${bdi(record.display_name)}</a>`:`<span>${t('unassigned')}</span>`}</td><td role="cell" class="age"><span class="stack-label">${t('age')}</span><span class="age-value ${record.age==null?'muted':''}">${bdi(record.age??t('not_recorded'))}</span></td><td role="cell"><span class="stack-label">${t('outstanding')}</span><span class="patient-sentence">${esc(sentence(item,record))}</span>${count>1?`<small>and ${count-1} more</small>`:''}</td><td role="cell" class="muted"><span class="stack-label">Last activity</span>${activity(record.last_activity_at)}</td></tr>`).join('')}</tbody></table>${!rows.length?`${emptyState(t(state.records.length?'empty':'no_patients'),t('refresh'),Boolean(state.query||state.filter!=='all'))}`:''}</div><div class="pager"><button id="previous" ${state.page<=1?'disabled':''}><span class="turn-arrow" aria-hidden="true">←</span> ${t('previous')}</button><span>${t('page')} ${state.page} ${t('of')} ${Math.max(1,Math.ceil(rows.length/50))}</span><button id="next" ${state.page*50>=rows.length?'disabled':''}>${t('next')} <span class="turn-arrow" aria-hidden="true">→</span></button></div>`;
+    $('content').innerHTML=`<div class="toolbar"><label class="search">${t('search')}<input id="search" type="search" value="${esc(state.query)}" autocomplete="off"></label><div class="filter-control"><span id="filter-label" class="visually-hidden">${t('filter')}</span><div id="filter" class="seg" role="group" aria-labelledby="filter-label">${['all','danger','pending_review','overdue','due_today'].map(k=>`<button type="button" data-filter="${k}" aria-pressed="${state.filter===k}">${summaryLabels[k]||t(k)}</button>`).join('')}</div></div><span class="muted">${t('timezone')}: ${bdi(state.zone)}</span></div><div class="filter-summary"><span id="result-count">${rows.length} ${t('results')} · ${summaryLabels[state.filter]||t(state.filter)}${state.query?' · '+bdi(state.query):''}</span><button id="clear">${t('clear')}</button></div><div class="work-surface"><table class="clinical" role="table"><caption>${t(view==='patients'?'outstanding':view)}. ${t('sort_help')}</caption><colgroup>${columns.map(()=>'<col>').join('')}</colgroup><thead><tr role="row">${columns.map(k=>`<th role="columnheader" scope="col" ${state.sort===k?`aria-sort="${state.descending?'descending':'ascending'}"`:''}><button data-sort="${k}">${k==='last_activity'?'Last activity':k==='urgency'?'What to do and why (urgency)':t(k)} <svg class="icon sort-chevron" viewBox="0 0 16 16" aria-hidden="true"><use href="#chevron-icon"/></svg></button></th>`).join('')}</tr></thead><tbody>${rows.slice((state.page-1)*50,state.page*50).map(({record,item,count})=>`<tr role="row" class="patient-row ${item?.urgent?'danger urgent':item?.due&&+new Date(item.due)<Date.now()?'warning':'calm'}"><td role="cell"><span class="stack-label">${t('patient')}</span>${record.patient_id?`<a data-record href="${esc(link(record))}">${bdi(record.display_name)}</a>`:`<span>${t('unassigned')}</span>`}</td><td role="cell" class="age"><span class="stack-label">${t('age')}</span><span class="age-value ${record.age==null?'muted':''}">${bdi(record.age??t('not_recorded'))}</span></td><td role="cell"><span class="stack-label">${t('outstanding')}</span><span class="patient-sentence">${esc(sentence(item,record))}</span>${count>1?`<small>and ${count-1} more</small>`:''}</td><td role="cell" class="muted"><span class="stack-label">Last activity</span>${activity(record.last_activity_at)}</td></tr>`).join('')}</tbody></table>${!rows.length?`${emptyState(t(state.records.length?'empty':'no_patients'),t('refresh'),Boolean(state.query||state.filter!=='all'))}`:''}</div><div class="pager"><button id="previous" ${state.page<=1?'disabled':''}><span class="turn-arrow" aria-hidden="true">←</span> ${t('previous')}</button><span>${t('page')} ${state.page} ${t('of')} ${Math.max(1,Math.ceil(rows.length/50))}</span><button id="next" ${state.page*50>=rows.length?'disabled':''}>${t('next')} <span class="turn-arrow" aria-hidden="true">→</span></button></div>`;
     $('search').addEventListener('input',e=>{const start=e.target.selectionStart;state.query=e.target.value;state.page=1;list();$('search').focus();$('search').setSelectionRange(start,start);});
     document.querySelector('[data-clear]')?.addEventListener('click',()=>$('clear').click());
-    $('filter').onchange=e=>{state.filter=e.target.value;state.page=1;list();$('filter').focus();};
+    $('filter').onclick=e=>{const button=e.target.closest('[data-filter]');if(!button)return;state.filter=button.dataset.filter;state.page=1;list();document.querySelector('#filter [aria-pressed=true]').focus();};
     $('clear').onclick=()=>{state.query='';state.filter='all';state.page=1;list();$('search').focus();};
     for(const button of document.querySelectorAll('[data-sort]'))button.onclick=()=>{state.descending=state.sort===button.dataset.sort?!state.descending:false;state.sort=button.dataset.sort;state.page=1;list();document.querySelector(`[data-sort="${state.sort}"]`).focus();};
     $('previous').onclick=()=>{state.page--;list();$('next').focus();};$('next').onclick=()=>{state.page++;list();$('previous').focus();};remember();
@@ -447,6 +476,7 @@
       row.onclick=follow;row.onauxclick=follow;
     }
     if(view==='inbox'){questions();bindEvidenceActions();}
+    auroraPresentation();
   }
   function activity(value){
     if(!value)return t('not_recorded');
@@ -565,6 +595,58 @@
     target.innerHTML=`${esc(message)} ${href?`<a href="${esc(href)}">Open record</a>`:''} <button type="button" aria-label="Dismiss notification">×</button>`;
     target.querySelector('button').onclick=()=>target.remove();
   }
+  function avatar(name){return `<span class="av" aria-hidden="true">${esc(String(name||'').trim().split(/\s+/).filter(Boolean).slice(0,2).map(word=>Array.from(word)[0]).join('').toUpperCase())}</span>`;}
+  let presentedQueue=null;
+  function auroraPresentation(){
+    if(patient){
+      document.querySelectorAll('[data-doctor-avatar] .av').forEach(el=>el.textContent=doctorInitial());
+      updatePatientColumns();
+      document.querySelectorAll('.page-heading,#content>section,#patient-controls>section,#content a.summary-tile').forEach((el,i)=>{
+        el.classList.add('rv');el.style.setProperty('--d',`${el.matches('.page-heading')?60:180+(i%4)*60}ms`);
+      });
+      reveal();return;
+    }
+    document.querySelectorAll('.page-heading,#content>.toolbar,#content>section,#content>.work-surface,#content>.inbox-groups>section,button.summary-tile,details.inbox-item,.tab-panel,.record-heading,.preferences').forEach(el=>{el.classList.add('rv');
+      const delay=el.matches('.page-heading')?60:el.matches('button.summary-tile')?180+[...el.parentElement.children].indexOf(el)*60:el.matches('.toolbar')?420:el.matches('.work-surface')?480:el.matches('.record-heading')?140:180;
+      el.style.setProperty('--d',`${delay}ms`);
+    });
+    const queue=document.querySelector('#content>.work-surface');
+    if(queue&&queue!==presentedQueue){
+      // Paging and filtering update the already-entered queue in place visually.
+      if(presentedQueue)queue.classList.add('in');
+      presentedQueue=queue;
+    }
+    document.querySelectorAll('.patient-row').forEach(row=>{
+      const link=row.querySelector('[data-record]');if(link&&!row.querySelector('.av'))link.insertAdjacentHTML('beforebegin',avatar(link.textContent));
+      const last=row.lastElementChild;if(!last.querySelector('.go'))last.insertAdjacentHTML('beforeend','<span class="go" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M8 5l7 7-7 7"/></svg></span>');
+    });
+    reveal();
+  }
+  function recordDecorations(record){
+    const heading=document.querySelector('.record-heading');heading.insertAdjacentHTML('afterbegin',avatar(record.display_name));
+    heading.classList.add('profile');
+    const copy=document.createElement('div');copy.className='profile-copy';
+    [...heading.children].filter(el=>!el.matches('.av')).forEach(el=>copy.append(el));heading.append(copy);
+    $('back').classList.add('button','acts');heading.append($('back'));
+    document.querySelectorAll('[data-order],[data-held-order]').forEach(el=>{
+      const copy=document.createElement('div');copy.className='plan-copy';copy.append(...el.childNodes);el.append(copy);
+      el.classList.add('plan-item');const miss=el.hasAttribute('data-held-order');
+      el.insertAdjacentHTML('afterbegin',`<span class="tick ${miss?'miss':''}" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="${miss?'M6 6l12 12M18 6L6 18':'M5 12l4.5 4.5L19 7'}"/></svg></span>`);
+    });
+    document.querySelectorAll('[data-fact],.consent-binding p').forEach(el=>el.classList.add('kv'));
+    document.querySelectorAll('[data-evidence-actions],.record-item:has([data-validate],[data-response])').forEach(el=>el.classList.add('ask'));
+    const comparisons={gt:(a,b)=>a>b,ge:(a,b)=>a>=b,lt:(a,b)=>a<b,le:(a,b)=>a<=b};
+    for(const mission of record.missions||[]){
+      const d=mission.details;if(d?.kind!=='MONITOR')continue;
+      const table=document.getElementById(mission.id)?.querySelector('.reading-table');if(!table)continue;
+      const readings=(d.slots||[]).flatMap((slot,i)=>{const r=(d.readings||[]).findLast(r=>r.slot===i);return r&&Number.isFinite(parseFloat(r.value))?[parseFloat(r.value)]:[];});
+      if(!readings.length)continue;
+      const alerts=(record.orders||[]).filter(o=>o.status==='active'&&o.current_version?.type==='value_alert').map(o=>o.current_version.structured_instruction).filter(a=>a.metric===d.metric&&a.unit===d.unit);
+      const maximum=Math.max(...readings), bars=document.createElement('div');bars.className='trend';bars.setAttribute('aria-hidden','true');
+      readings.forEach((value,i)=>{const bar=document.createElement('span');bar.style.height=`${maximum>0?value/maximum*100:0}%`;bar.style.setProperty('--bd',`${i*60}ms`);bar.classList.toggle('hot',alerts.some(a=>comparisons[a.comparator]?.(value,parseFloat(a.threshold))));bars.append(bar);});table.before(bars);
+    }
+    auroraPresentation();
+  }
   function correctionProse(c){
     const labels={text:'Recorded text',value:'Reading',unit:'Unit',dose:'Dose',frequency:'Frequency',duration:'Duration',timing:'Timing',drug:'Medication',route:'Route',state:'Document use'};
     const date=c.created_at?new Intl.DateTimeFormat(lang,{dateStyle:'medium',timeZone:state.zone}).format(new Date(c.created_at)):'an unrecorded date';
@@ -588,7 +670,7 @@
       const clause=key==='danger'?(n?`${n} ${n===1?'needs':'need'} a response`:'nothing urgent right now'):key==='due_today'?(n?`${n} due today`:'none today'):n?(oldest===undefined?`${n} ${key==='overdue'?'late':'waiting for you'}`:`oldest has waited ${days} ${days===1?'day':'days'}`):(key==='overdue'?'no patient is late':'nothing waiting on you');
       const weight=n&&(key==='danger'||key==='overdue')?(key==='danger'?'danger':'warning'):'';
       const tag=interactive?'button':'article';
-      return `<${tag} class="summary-tile ${weight}"${interactive?` type="button" data-summary="${key}" aria-pressed="${state.filter===key}" aria-label="${n} ${label}"`:''}><span class="tile-label">${icon(key==='danger'?'status-icon':key==='pending_review'?'review-icon':'clock-icon')}${label}</span><strong>${n}</strong><span class="tile-clause">${clause}</span></${tag}>`;
+      return `<${tag} class="summary-tile ${weight}"${interactive?` type="button" data-summary="${key}" aria-pressed="${state.filter===key}" aria-label="${n} ${label}"`:''}><span class="tile-label">${icon(key==='danger'?'status-icon':key==='pending_review'?'review-icon':'clock-icon')}${label}</span><strong data-count="${n}">${n}</strong><span class="tile-clause">${clause}</span>${interactive?'<span class="spark" aria-hidden="true"></span>':''}${interactive&&weight==='danger'?'<span class="beacon" aria-hidden="true"></span>':''}</${tag}>`;
     }).join('')}</div>`;
   }
   function listPresentation(rows){
@@ -623,6 +705,7 @@
     const support=document.createElement('details');support.className='support';support.innerHTML='<summary>Details for support</summary><pre></pre>';support.querySelector('pre').textContent=JSON.stringify({record,evidence:state.evidence},null,2);$('content').append(support);
     document.querySelectorAll('[data-media]').forEach(a=>{if(a.dataset.media==='application/pdf'){a.target='_blank';a.rel='noopener noreferrer';return;}a.onclick=e=>{e.preventDefault();lightbox(e.currentTarget);};});
     // Pair each evidence card with its existing scoped original, without inventing a URL.
+    recordDecorations(record);
     state.evidence.forEach((e,i)=>{const media=(record.media||[]).find(m=>m.media_id===e.media_id);if(!media){sections[4].querySelectorAll('article')[i]?.insertAdjacentHTML('beforeend','<p class="muted">Original unavailable.</p>');return;}const original=document.querySelector(`[data-media][href$="/${encodeURIComponent(media.media_id)}"]`);if(original){const copy=original.cloneNode(true);sections[4].querySelectorAll('article')[i]?.append(copy);copy.onclick=original.onclick;}});
   }
   function lightbox(anchor){
@@ -642,16 +725,60 @@
     if(!data.questions.length)root.insertAdjacentHTML('beforeend',emptyState('No questions are waiting for an answer.',t('refresh')));$('content').querySelector('.summary-strip').after(root);
   }
 
+  // Separate visual columns without moving the word-safe section/label boundaries.
+  let updatePatientColumns=()=>{};
+  function patientColumns(){
+    const stage=document.querySelector('.two');if(!stage)return;
+    let pending=false;const observed=new Set();
+    const schedule=()=>{if(pending)return;pending=true;requestAnimationFrame(layout);};
+    const observer=new ResizeObserver(schedule);
+    function layout(){
+      pending=false;
+      const content=$('content'), controls=$('patient-controls');
+      const sections=[...content.querySelectorAll(':scope>section')];
+      const top=[...content.children].filter(el=>!el.matches('section'));
+      const left=[sections[0],sections[1],controls.querySelector('.patient-talk'),controls.querySelector('.patient-upload'),sections[2]].filter(Boolean);
+      const right=[controls.querySelector('.remind'),sections[3],sections[4],sections[5]].filter(Boolean);
+      const result=$('patient-action-result');
+      const elements=[...top,...left,...right,result].filter(Boolean);
+      for(const el of observed)if(!elements.includes(el)){observer.unobserve(el);observed.delete(el);}
+      for(const el of elements)if(!observed.has(el)){observed.add(el);observer.observe(el);}
+      if(innerWidth<=900){
+        stage.style.minBlockSize='';
+        elements.forEach(el=>['position','inline-size','inset-inline-start','inset-block-start','grid-area'].forEach(p=>el.style.removeProperty(p)));
+        return;
+      }
+      const style=getComputedStyle(stage), gap=parseFloat(style.columnGap);
+      const widths=style.gridTemplateColumns.split(' ').map(Number.parseFloat), width=stage.clientWidth;
+      function place(el,x,y,w){
+        el.style.position='absolute';el.style.gridArea='auto';el.style.inlineSize=`${w}px`;
+        el.style.insetInlineStart=`${x}px`;el.style.insetBlockStart=`${y}px`;
+        const cs=getComputedStyle(el);
+        return y+el.offsetHeight+parseFloat(cs.marginBlockStart)+parseFloat(cs.marginBlockEnd)+gap;
+      }
+      let start=0;top.forEach(el=>{start=place(el,0,start,width);});
+      let a=start,b=start;
+      left.forEach(el=>{a=place(el,0,a,widths[0]);});
+      right.forEach(el=>{b=place(el,widths[0]+gap,b,widths[1]);});
+      const end=result?place(result,0,Math.max(a,b),width):Math.max(a,b);
+      stage.style.minBlockSize=`${end-gap}px`;
+    }
+    observer.observe(stage);
+    new MutationObserver(schedule).observe($('content'),{childList:true});
+    window.addEventListener('resize',schedule);
+    updatePatientColumns=schedule;schedule();
+  }
+  function doctorInitial(){return Array.from((state.data?.plan?.doctor_name||'').replace(/^Dr\.?\s+/i,'').trim())[0]?.toUpperCase()||'S';}
   let patientPreferences=null;
   function patientView(data){
     const plan=data.plan||data;$('title').textContent=t('yourcare');
     // Explicit projection allow-list. No ids, kind names, raw objects or internal statuses.
-    const orderHTML=(plan.orders||[]).map(o=>`<article class="record-item"><p>${[o.drug,o.dose,o.frequency,o.timing,o.route,o.duration].filter(Boolean).map(bdi).join(' · ')}</p></article>`).join('')||empty('no_plan');
-    const requests=(plan.next_missions||[]).map(m=>`<article class="record-item"><p>${bdi(m.title)}</p><p>${t('due')}: ${time(m.due_at,plan.preferences?.timezone||'UTC')}</p></article>`).join('')||empty('no_requests');
+    const orderHTML=(plan.orders||[]).map(o=>`<article class="record-item dose"><span class="pill" aria-hidden="true">${esc(Array.from(o.drug||'')[0]?.toUpperCase()||'')}</span><div class="dose-copy"><b>${bdi(o.drug)}</b><small>${[o.dose,o.timing,o.route,o.duration].filter(Boolean).map(bdi).join(' · ')}</small></div>${o.frequency?`<span class="status tag">${bdi(o.frequency)}</span>`:''}</article>`).join('')||empty('no_plan');
+    const requests=(plan.next_missions||[]).map(m=>`<article class="record-item dose"><div class="dose-copy"><b>${bdi(m.title)}</b><small>${t('due')}: ${time(m.due_at,plan.preferences?.timezone||'UTC')}</small></div></article>`).join('')||empty('no_requests');
     const reports=(plan.medication_reports||[]).map(r=>`<article class="record-item"><p>${bdi(r.text)}</p><small>${t('self_report')}</small></article>`).join('')||empty('no_reports');
     const prefs=patientPreferences||{...plan.preferences,reminders:plan.preferences?.routine_contact_enabled?"enabled":"paused"};
     const patientWords=JSON.parse($('patient-controls')?.dataset.words||'{}');
-    $('content').innerHTML=`<div class="summary-strip" aria-label="Your recorded plan">${[[t('your_plan'),(plan.orders||[]).length,'patient-medicines'],[t('your_requests'),(plan.next_missions||[]).length,'patient-requests'],[t('questions'),(plan.open_questions||[]).length,'patient-questions']].map(([label,n,id])=>`<a class="summary-tile" href="#${id}"><span>${esc(label)}</span><strong>${n}</strong></a>`).join('')}</div><p>${t('doctor')}: ${bdi(plan.doctor_name)}</p>${section('your_plan',orderHTML)}${section('your_requests',requests)}${section('reports',reports)}${section('last_reading',plan.last_reading?`<p class="record-item">${bdi(plan.last_reading.text)}</p>`:badge('missing'))}${section('reminders',`<p id="patient-reminder-summary">${esc(patientWords[prefs.reminders]||t(prefs.reminders))}</p><p id="patient-quiet-summary">${t('quiet')}: ${bdi((prefs.quiet_hours||[]).join(', '))} · ${bdi(prefs.timezone)}</p>${prefs.resume_at?`<p>${t('resume')}: ${time(prefs.resume_at,prefs.timezone)}</p>`:''}`)}${section('questions',(plan.open_questions||[]).map(q=>`<article class="record-item"><p>${bdi(q.question)}</p><small>${t('waiting')}</small></article>`).join('')||empty('no_questions'))}`;
+    $('content').innerHTML=`<div class="summary-strip" aria-label="Your recorded plan">${[[t('your_plan'),(plan.orders||[]).length,'patient-medicines'],[t('your_requests'),(plan.next_missions||[]).length,'patient-requests'],[t('questions'),(plan.open_questions||[]).length,'patient-questions']].map(([label,n,id])=>`<a class="summary-tile" href="#${id}"><span>${esc(label)}</span><strong data-count="${n}">0</strong></a>`).join('')}</div><p>${t('doctor')}: ${bdi(plan.doctor_name)}</p>${section('your_plan',orderHTML)}${section('your_requests',requests)}${section('reports',reports)}${section('last_reading',plan.last_reading?`<p class="record-item">${bdi(plan.last_reading.text)}</p>`:badge('missing'))}${section('reminders',`<p id="patient-reminder-summary">${esc(patientWords[prefs.reminders]||t(prefs.reminders))}</p><p id="patient-quiet-summary">${t('quiet')}: ${bdi((prefs.quiet_hours||[]).join(', '))} · ${bdi(prefs.timezone)}</p>${prefs.resume_at?`<p>${t('resume')}: ${time(prefs.resume_at,prefs.timezone)}</p>`:''}`)}${section('questions',(plan.open_questions||[]).map(q=>`<article class="record-item"><p>${bdi(q.question)}</p><small>${t('waiting')}</small></article>`).join('')||empty('no_questions'))}`;
   }
   function focusPatientSections(){
     const sections=$('content').querySelectorAll(':scope > section');
@@ -667,7 +794,7 @@
     $('digest-form').onsubmit=async e=>{e.preventDefault();const input=$('digest-time'),result=$('digest-result');if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(input.value)){input.setAttribute('aria-invalid','true');result.textContent='Choose a valid daily time.';return;}input.removeAttribute('aria-invalid');const button=e.target.querySelector('button');button.disabled=true;try{await api('/api/preferences',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':decodeURIComponent(document.cookie.split('; ').find(x=>x.startsWith('sanad_csrf='))?.slice(11)||'')},body:JSON.stringify({digest_time:input.value,digest_packing:$('digest-packing').value,expected_version:p.version,command_id:crypto.randomUUID()})});await load();toast('Digest preferences saved.');}catch(error){result.textContent=error.message;button.disabled=false;}};
     $('language-form').onsubmit=async e=>{e.preventDefault();const button=e.target.querySelector('button');button.disabled=true;const token=document.cookie.split('; ').find(s=>s.startsWith('sanad_csrf='))?.split('=')[1]||'';try{await api('/api/preferences',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':decodeURIComponent(token)},body:JSON.stringify({language:$('language').value,expected_version:p.version,command_id:crypto.randomUUID()})});$('save-result').textContent=t('saved');location.reload();}catch(error){$('save-result').className='error';$('save-result').textContent=error.message;button.disabled=false;}};
   }
-  function render(){document.querySelector('.record-heading')?.remove();const heading=document.querySelector('.top-bar h1');heading.id=view==='detail'?'page-title':'title';heading.textContent=patient?t('yourcare'):t(view);$('refresh').className='ghost icon-button';if(patient){patientView(state.data);focusPatientSections();}else if(view==='preferences')preferences();else if(view==='detail')detail(state.records[0]);else {window.onhashchange=null;list();}}
+  function render(){document.querySelector('.record-heading')?.remove();const heading=document.querySelector('.page-heading h1');heading.id=view==='detail'?'page-title':'title';heading.textContent=patient?t('yourcare'):t(view);$('refresh').className='ghost icon-button';if(patient){patientView(state.data);focusPatientSections();}else if(view==='preferences')preferences();else if(view==='detail')detail(state.records[0]);else {window.onhashchange=null;list();}auroraPresentation();}
   async function load(){
     const request=++generation;currentAbort?.abort();currentAbort=new AbortController();const signal=currentAbort.signal;
     const first=!state.records.length&&!state.data&&!state.pref;
@@ -694,17 +821,12 @@
     const sprite=document.querySelector('.icon-sprite');
     sprite.insertAdjacentHTML('beforeend',`<symbol id="patients-icon" viewBox="0 0 16 16"><circle cx="6" cy="5" r="2.5"/><path d="M1 14v-2a5 5 0 0 1 10 0v2M11 3a2.5 2.5 0 0 1 0 5m1 2a4 4 0 0 1 3 4"/></symbol><symbol id="review-icon" viewBox="0 0 16 16"><path d="M4 2h8v12H4zM6 5h4M6 8h4M6 11h2"/></symbol><symbol id="clock-icon" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="M8 4v4l3 2"/></symbol><symbol id="appearance-icon" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="M8 2v12M8 2a6 6 0 0 1 0 12z"/></symbol><symbol id="refresh-icon" viewBox="0 0 16 16"><path d="M13 6A5 5 0 1 0 13 10M13 2v4H9"/></symbol><symbol id="menu-icon" viewBox="0 0 16 16"><path d="M2 4h12M2 8h12M2 12h12"/></symbol><symbol id="chevron-icon" viewBox="0 0 16 16"><path d="m4 10 4-4 4 4"/></symbol>`);
     const heading=document.querySelector('.page-heading'), refresh=document.querySelector('.refresh-bar'), rail=document.querySelector('.rail');
-    heading.className='top-bar';$('eyebrow').remove();$('subtitle').remove();
-    const appearance=document.createElement('label');appearance.className='appearance';
-    appearance.innerHTML=`${icon('appearance-icon')}<span class="visually-hidden">${document.querySelector('label[for=theme]').textContent}</span>`;
-    appearance.append($('theme'));document.querySelector('label[for=theme]').remove();
-    refresh.insertBefore(appearance,$('refresh'));heading.append(refresh);$('workspace').prepend(heading);
+    $('eyebrow').remove();$('subtitle').remove();
+    heading.append(refresh);$('workspace').prepend(heading);
+    if(patient){heading.append($('appearance-label'),$('theme'));}
+    else {const account=rail.querySelector('.account');if(account){account.insertAdjacentHTML('afterbegin',avatar(account.textContent));rail.querySelector('.foot').prepend(account);}}
     $('refresh').className='ghost icon-button';$('refresh').innerHTML=`${icon('refresh-icon')}<span class="visually-hidden">${t('refresh')}</span>`;
-    const menu=document.createElement('button');menu.className='ghost icon-button nav-disclosure';menu.type='button';menu.setAttribute('aria-label',$('navigation').getAttribute('aria-label'));menu.setAttribute('aria-controls','navigation');menu.setAttribute('aria-expanded','false');menu.innerHTML=icon('menu-icon');menu.onclick=()=>menu.setAttribute('aria-expanded',String(menu.getAttribute('aria-expanded')!=='true'));
-    rail.insertBefore(menu,$('navigation'));
-    const mobile=matchMedia('(max-width:959px)');const place=()=>{if(mobile.matches)rail.insertBefore(appearance,$('navigation'));else refresh.insertBefore(appearance,$('refresh'));};mobile.addEventListener('change',place);place();
   }
-  $('theme').value=document.documentElement.dataset.themeChoice;
   chrome();
   $('title').textContent=patient?t('yourcare'):t(view);
   if(demo){$('navigation').innerHTML=`<a href="${patient?'/demo/patient':'/demo'}" aria-current="page">${icon('patients-icon')}${t(patient?'yourcare':'patients')}</a>`;}
@@ -754,7 +876,7 @@
       const clock=new Intl.DateTimeFormat('en-GB',{timeZone:zone,hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(instant);
       return today?'Today '+clock:date+', '+clock;
     }
-    async function history(older=false){viewingOlder=older;const data=await get('/api/patient/conversation'+(older&&cursor?'?cursor='+encodeURIComponent(cursor):''));const target=$('patient-conversation'),fragment=document.createDocumentFragment();const latest=new Set(data.items.filter(i=>i.direction==='outbound').map(i=>i.id));if(waitingFor&&[...latest].some(id=>!waitingFor.has(id))){waitingSince=null;waitingFor=null;result.textContent=w('sent');}else if(waitingSince!==null&&Date.now()-waitingSince>=20000){result.textContent=w('still_working');}outgoing=latest;for(const item of data.items){const article=document.createElement('article');article.className='record-item'+(item.direction==='outbound'?' outbound':'');line(article,item.credential?w('credential')+' '+patientTime(item.at):item.legacy?w('legacy')+' '+patientTime(item.at):item.text||'');if(item.upload)line(article,uploadText(item.upload));const time=document.createElement('small');time.textContent=patientTime(item.at);article.append(time);fragment.append(article);}if(older)target.prepend(fragment);else target.replaceChildren(fragment);if(!target.childNodes.length)target.innerHTML=emptyState(w('no_messages'),t('patient_note'));cursor=data.cursor;hide($('patient-older'),!cursor);}
+    async function history(older=false){viewingOlder=older;const data=await get('/api/patient/conversation'+(older&&cursor?'?cursor='+encodeURIComponent(cursor):''));const target=$('patient-conversation'),fragment=document.createDocumentFragment();const latest=new Set(data.items.filter(i=>i.direction==='outbound').map(i=>i.id));if(waitingFor&&[...latest].some(id=>!waitingFor.has(id))){waitingSince=null;waitingFor=null;result.textContent=w('sent');}else if(waitingSince!==null&&Date.now()-waitingSince>=20000){result.textContent=w('still_working');}outgoing=latest;for(const item of data.items){const article=document.createElement('article');article.className='record-item msg '+(item.direction==='outbound'?'outbound doc':'pat');const doctorAnswer=item.direction==='outbound'&&/^(?:Your doctor's answer to your question:|رد الدكتور على سؤالك:)/.test(item.text||'');if(doctorAnswer)article.dataset.doctorAvatar='true';const name=item.direction==='outbound'?(doctorAnswer?doctorInitial():'S'):document.querySelector('.account bdi')?.textContent;article.insertAdjacentHTML('afterbegin',avatar(name));const copy=document.createElement('div');copy.className='b';article.append(copy);line(copy,item.credential?w('credential')+' '+patientTime(item.at):item.legacy?w('legacy')+' '+patientTime(item.at):item.text||'');if(item.upload)line(copy,uploadText(item.upload));const time=document.createElement('small');time.textContent=patientTime(item.at);copy.append(time);fragment.append(article);}if(older)target.prepend(fragment);else target.replaceChildren(fragment);if(!target.childNodes.length)target.innerHTML=emptyState(w('no_messages'),t('patient_note'));cursor=data.cursor;hide($('patient-older'),!cursor);}
     function renderPreferences(prefs,forceInputs=false){
       const quietChanged=!patientPreferences||JSON.stringify(patientPreferences.quiet_hours)!==JSON.stringify(prefs.quiet_hours);
       patientPreferences=prefs;state.zone=prefs.timezone;
@@ -815,5 +937,6 @@
     const timer=setInterval(()=>{if(stopped){clearInterval(timer);return;}if(!busy&&!document.hidden&&!viewingOlder)refresh().catch(failure);},5000);
   }
   patientControls();
+  if(patient)patientColumns();
   load();
 })();

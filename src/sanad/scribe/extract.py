@@ -335,6 +335,7 @@ class DictationCandidate(_CandidateValue):
     # Local validation metadata, never a field requested from or trusted to the model.
     # The turn persists these as ProposalIssues before discarding the raw reply.
     _dropped_numbers: tuple[str, ...] = PrivateAttr(default=())
+    _dropped_facts: tuple[str, ...] = PrivateAttr(default=())
     _malformed_items: bool = PrivateAttr(default=False)
     _single_source: tuple[str, ...] = PrivateAttr(default=())
     _merge_issues: tuple["ProposalIssue", ...] = PrivateAttr(default=())
@@ -554,6 +555,7 @@ def candidate_issues(
     disputed_numbers: tuple[str, ...] = (),
     *,
     policy: ScribePolicy = DRAFT_SCRIBE_POLICY,
+    other_patient_names: tuple[str, ...] = (),
 ) -> tuple[ProposalIssue, ...]:
     """All supplied clinical numbers need source support, including nested prose."""
     present, disputed = set(numbers_in(source_text)), set(disputed_numbers)
@@ -623,9 +625,29 @@ def candidate_issues(
             words = set(ambiguity.casefold().split())
             if words and words <= name:
                 continue
-            # An extractor's drug/test uncertainty is not evidence of another person.
-            identity = "not found as drugs" not in ambiguity.casefold()
+            from sanad.scribe.grounding import normalize
+
+            identity = any(
+                normalize(other) != normalize(candidate.patient.name_as_spoken or "")
+                and anchored_patient_name(other, ambiguity, source_text)
+                for other in other_patient_names
+            )
             issues.append(
                 ProposalIssue(item="all", code="multiple_patients" if identity else "clarification")
             )
     return tuple(dict.fromkeys(issues))
+
+
+def anchored_ambiguity(text: str, source: str) -> bool:
+    from sanad.scribe.grounding import grounded
+
+    return bool(grounded(text, source))
+
+
+def anchored_patient_name(name: str, ambiguity: str, source: str) -> bool:
+    from sanad.scribe.grounding import grounded, normalize
+
+    return all(
+        any(normalize(text[start:end]) == normalize(name) for start, end in grounded(name, text))
+        for text in (ambiguity, source)
+    )

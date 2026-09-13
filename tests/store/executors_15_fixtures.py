@@ -12,7 +12,7 @@ from sanad.domain.entities import TaskDetails, VisitDetails
 from sanad.store._base import StoreBase
 from sanad.store.records import OutboundIntent, Patient, from_record
 from store.account_fixtures import APPLICANT, update
-from store.concierge_fixtures import PatientWorld
+from store.concierge_fixtures import PatientWorld, no_problem_readers
 
 
 def no_provider(*args: Any, **kwargs: Any) -> Any:
@@ -29,6 +29,7 @@ def world(store: StoreBase, clock: FakeClock) -> PatientWorld:
     w.seed(revise(from_record(row, Patient), clock(), language="en"))
     w.scribe.model_factory = no_provider
     w.concierge.model_factory = no_provider
+    w.concierge.barrier_model_factory = no_problem_readers
     return w
 
 

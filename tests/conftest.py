@@ -2,6 +2,7 @@
 
 import os
 import socket
+from collections.abc import Iterator
 
 import pytest
 import pytest_socket
@@ -136,3 +137,34 @@ def legacy_dictation_schema(monkeypatch: pytest.MonkeyPatch) -> None:
         missions: tuple[EnglishMissionCandidate, ...] = ()
 
     monkeypatch.setattr(turn, "EnglishDictationCandidate", LegacyEnglishDictationCandidate)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def shared_local_tools() -> "Iterator[None]":
+    """Isolated worktrees reuse the installed Local binaries, never another store."""
+    from pathlib import Path
+
+    from sanad.store.dynamodb_local import DynamoDBLocal
+
+    root = Path(__file__).resolve().parents[1]
+    sibling = root.parent / "sanad-strands"
+    if (root / ".tools").exists() or not (sibling / ".tools").is_dir():
+        yield
+        return
+    original = DynamoDBLocal.__init__
+    patch = pytest.MonkeyPatch()
+
+    def initialize(
+        self: DynamoDBLocal,
+        *,
+        repo_root: Path | None = None,
+        java: Path | None = None,
+        jar: Path | None = None,
+    ) -> None:
+        original(self, repo_root=repo_root or sibling, java=java, jar=jar)
+
+    patch.setattr(DynamoDBLocal, "__init__", initialize)
+    try:
+        yield
+    finally:
+        patch.undo()

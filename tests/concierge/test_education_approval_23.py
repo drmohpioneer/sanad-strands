@@ -57,6 +57,9 @@ def test_approved_source_reaches_patient_in_contest_english(
     )
     value = {"reply": expected, "kind": "education", "needs_doctor": False}
     w = browser.world
+    from store.medication_fixtures import scripted_barrier_factory
+
+    w.concierge.barrier_model_factory = scripted_barrier_factory
     assert w.concierge.synthetic is False
     if channel == "telegram":
         model, reply = w.send(question, value)

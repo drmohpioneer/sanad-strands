@@ -25,6 +25,9 @@ def test_education_source_or_honest_question(
     browser: UploadWorld, monkeypatch: pytest.MonkeyPatch, channel: str, approved: bool
 ) -> None:
     w = browser.world
+    from store.medication_fixtures import scripted_barrier_factory
+
+    w.concierge.barrier_model_factory = scripted_barrier_factory
     w.concierge.synthetic = approved
     question = "what is Exforge for?"
     if not approved:

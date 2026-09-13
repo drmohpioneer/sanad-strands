@@ -11,7 +11,7 @@ from sanad.auth.claim import ClaimService
 from sanad.auth.login import LoginService
 from sanad.domain.language import Audience, effective
 from sanad.store.records import WebSession
-from sanad.web.pages import admin_home, demo_banner
+from sanad.web.pages import admin_home, demo_banner, inline_logo
 from sanad.web.patient_controls import controls
 from sanad.web.routes import require_session
 
@@ -33,22 +33,28 @@ def patient_content(data: dict[str, object], locale: str) -> str:
         return '<section class="section"><h2>' + title + "</h2>" + content + "</section>"
 
     orders = "".join(
-        '<article class="record-item"><p>'
-        + " · ".join(
-            text(o.get(k))
-            for k in ("drug", "dose", "frequency", "timing", "route", "duration")
-            if o.get(k)
+        '<article class="record-item dose"><span class="pill" aria-hidden="true">'
+        + escape(str(o.get("drug") or "")[:1].upper())
+        + '</span><div class="dose-copy"><b>'
+        + text(o.get("drug"))
+        + "</b><small>"
+        + " · ".join(text(o.get(k)) for k in ("dose", "timing", "route", "duration") if o.get(k))
+        + "</small></div>"
+        + (
+            '<span class="status tag">' + text(o.get("frequency")) + "</span>"
+            if o.get("frequency")
+            else ""
         )
-        + "</p></article>"
+        + "</article>"
         for o in rows("orders")
     )
     requests = "".join(
-        '<article class="record-item"><p>'
+        '<article class="record-item dose"><div class="dose-copy"><b>'
         + text(m.get("title"))
-        + "</p><p>"
+        + "</b><small>"
         + ("Due: " if en else "الموعد: ")
         + text(m.get("due_at"))
-        + "</p></article>"
+        + "</small></div></article>"
         for m in rows("next_missions")
     )
     reports = "".join(
@@ -150,7 +156,8 @@ def surface(
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="color-scheme" content="light dark">
+<meta name="color-scheme" content="dark">
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
 <title>{title} · Sanad</title>
 <script src="/assets/theme.js">
 </script>
@@ -161,25 +168,30 @@ def surface(
 </script>
 </head>
 <body {data}>
+<div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
 <svg class="icon-sprite" aria-hidden="true"><symbol id="status-icon" viewBox="0 0 16 16">
 <circle cx="8" cy="8" r="6"/><path d="M8 4v5m0 2v1"/></symbol></svg>
 <a class="skip" href="#workspace">{"انتقل للمحتوى" if locale == "ar" else "Skip to content"}</a>
 <div class="app">
 <aside class="rail">
-<a class="identity" href="{home}">{"سند" if locale == "ar" else "Sanad"}
+<a class="identity mark" href="{home}">
+{inline_logo("rail")}
+<span class="visually-hidden">{"سند" if locale == "ar" else "Sanad"}</span>
 </a>
 <p class="account">
 <bdi>{escape(name)}</bdi>
 </p>
 <nav id="navigation" aria-label="{"التنقل" if locale == "ar" else "Navigation"}">
 </nav>
-<div class="rail-bottom">
-<label for="theme">{"المظهر" if locale == "ar" else "Appearance"}</label>
-<select id="theme">
-<option value="system">{"النظام" if locale == "ar" else "System"}</option>
-<option value="light">{"فاتح" if locale == "ar" else "Light"}</option>
-<option value="dark">{"داكن" if locale == "ar" else "Dark"}</option>
-</select>
+<div class="rail-bottom foot">
+<span id="appearance-label" class="visually-hidden">
+{"المظهر" if locale == "ar" else "Appearance"}</span>
+<div id="theme" class="toggle" role="group" aria-labelledby="appearance-label">
+<button type="button" data-theme-set="dark" aria-pressed="true">
+{"داكن" if locale == "ar" else "Dark"}</button>
+<button type="button" data-theme-set="light" aria-pressed="false">
+{"فاتح" if locale == "ar" else "Light"}</button>
+</div>
 </div>
 </aside>
 <main id="workspace" tabindex="-1">
@@ -200,10 +212,12 @@ def surface(
 </div>
 <div id="feedback" role="status" aria-live="polite">
 </div>
+{'<div class="two">' if audience == "patient" else ""}
 <div id="content" aria-busy="true">
 {initial}
 </div>
 {controls(locale) if audience == "patient" else ""}
+{"</div>" if audience == "patient" else ""}
 <noscript>
 <p>{noscript}</p>
 </noscript>
@@ -223,12 +237,14 @@ def browser_router(login: LoginService, claims: ClaimService) -> APIRouter:
             p.name
             for p in ASSETS.iterdir()
             if p.suffix in {".css", ".js", ".ttf"}
-            or p.name in {"demo.json", "demo-patient.json", "demo-admin.json"}
+            or p.name in {"demo.json", "demo-patient.json", "demo-admin.json", "favicon.svg"}
         }
         if name not in allowed:
             raise HTTPException(404)
         mime = (
-            "font/ttf"
+            "image/svg+xml"
+            if name == "favicon.svg"
+            else "font/ttf"
             if name.endswith(".ttf")
             else (
                 "application/json"

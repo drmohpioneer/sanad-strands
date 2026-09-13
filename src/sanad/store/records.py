@@ -14,7 +14,7 @@ from typing import Annotated, Any, Generic, Literal, Self
 from pydantic import BaseModel, Field, JsonValue, StrictBool, model_validator
 from typing_extensions import TypeVar
 
-from sanad.concierge.records import PatientAction
+from sanad.concierge.records import BarrierOutcome, BarrierReservation, PatientAction
 from sanad.corrections import Correction, CorrectionOffer, FactHead
 from sanad.domain import (
     FollowUpTask,
@@ -69,6 +69,26 @@ class _Metadata(_BoundaryValue):
     def times(self) -> Self:
         if self.updated_at < self.created_at:
             raise ValueError("updated_at precedes created_at")
+        return self
+
+
+class SweepPosition(_Metadata):
+    entity_type: Literal["sweep_position"] = "sweep_position"
+    scope: AccountScope
+    lane: NonblankStr
+    shard: NonblankStr
+    due_sort: str | None = None
+    due_pk: str | None = None
+    due_sk: str | None = None
+
+    @model_validator(mode="after")
+    def position_key(self) -> Self:
+        if self.id != keys.component(self.lane) + "#" + keys.component(self.shard):
+            raise ValueError("position identity must bind lane and shard")
+        if (self.due_sort is None) != (self.due_pk is None) or (self.due_sort is None) != (
+            self.due_sk is None
+        ):
+            raise ValueError("position key must be complete or reset")
         return self
 
 
@@ -816,6 +836,8 @@ class InboundReceipt(_Metadata):
     principal: Principal | None = None
     safety_result: dict[str, JsonValue] | None = None
     review_obligation_id: NonblankStr | None = None
+    barrier_reservation: BarrierReservation | None = Field(default=None, repr=False)
+    barrier_outcome: BarrierOutcome | None = Field(default=None, repr=False)
 
     @model_validator(mode="after")
     def recoverable(self) -> Self:
@@ -1330,6 +1352,7 @@ type InboundReceiptRecord = StoredRecord
 
 
 MODELS: dict[str, type[BaseModel]] = {
+    "sweep_position": SweepPosition,
     "correction": Correction,
     "correction_offer": CorrectionOffer,
     "fact_head": FactHead,
@@ -1397,6 +1420,8 @@ MODELS: dict[str, type[BaseModel]] = {
 
 
 def model_scope(model: BaseModel) -> Scope:
+    if isinstance(model, SweepPosition):
+        return model.scope
     if isinstance(
         model,
         (
@@ -1495,6 +1520,8 @@ def scope_owns(scope: Scope, other: Scope) -> bool:
 
 
 def model_key(model: BaseModel, scope: Scope) -> Key:
+    if isinstance(model, SweepPosition):
+        return keys.sweep_position(model.scope, model.lane, model.shard)
     if isinstance(
         model,
         (Correction, CorrectionOffer, FactHead, Notice, ReviewOffer, ReuseOffer, ReusableAnswer),

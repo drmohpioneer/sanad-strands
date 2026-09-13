@@ -13,12 +13,13 @@ from sanad.domain import Mission, MissionState, WorkClock
 from sanad.ops.sweep import sweep_due
 from sanad.store._base import StoreBase
 from sanad.store.records import OutboundIntent, from_record, to_record
-from store.concierge_fixtures import PatientWorld
+from store.concierge_fixtures import PatientWorld, no_problem_readers
 
 
 def world(store: StoreBase, clock: FakeClock, *, medication: bool = False) -> PatientWorld:
     value = cast(PatientWorld, PatientWorld.create(store, clock))
     value.enroll(medication=medication)
+    value.concierge.barrier_model_factory = no_problem_readers
     tick(value)
     return value
 

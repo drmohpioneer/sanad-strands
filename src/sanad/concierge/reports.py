@@ -1,16 +1,13 @@
 """Explicit reports are observations, never diagnoses or inferred adherence."""
 
-import json
 import re
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from functools import lru_cache
-from pathlib import Path
 from typing import Literal
 from zoneinfo import ZoneInfo
 
-from pydantic import TypeAdapter
-
+from sanad.concierge.barrier_evidence import category
+from sanad.concierge.barrier_reading import outcome_for
 from sanad.concierge.plan import Snapshot
 from sanad.concierge.policy import DRAFT_CONCIERGE_POLICY as POLICY
 from sanad.concierge.records import PatientAction, Reading, ReportFactPayload
@@ -353,7 +350,7 @@ def record_day3(
         and all(ref in tx.snapshot.order_refs for ref in f.order_refs)
     ]
     if len(candidates) != 1 or (
-        is_question(text) and not treatment_change and recognize_barrier(text) is None
+        is_question(text) and not treatment_change and category(outcome_for(tx)) is None
     ):
         return False
     task = candidates[0]
@@ -366,7 +363,7 @@ def record_day3(
         source=source,
     )
     danger = verdict is not None and verdict.level != "none"
-    obstacle = recognize_barrier(text)
+    obstacle = category(outcome_for(tx))
     report_ids: tuple[str, ...] = (value.id,)
     if obstacle:
         barrier_fact = fact(
@@ -613,29 +610,6 @@ def date_only(text: str) -> bool:
     return not re.search(r"\w", re.sub(r"(?<!\w)(?:on|يوم)(?!\w)", "", _date_text(text)))
 
 
-@lru_cache(maxsize=1)
-def barrier_seeds() -> dict[BarrierType, tuple[str, ...]]:
-    path = Path(__file__).parents[1] / POLICY.barrier_seed
-    values = json.loads(path.read_text(encoding="utf-8"))
-    values = TypeAdapter(dict[BarrierType, dict[Literal["en", "ar"], list[str]]]).validate_python(
-        {k: v for k, v in values.items() if k != "OWNER_REVIEW_PENDING"}
-    )
-    return {kind: tuple((*phrases["en"], *phrases["ar"])) for kind, phrases in values.items()}
-
-
-def recognize_barrier(text: str) -> BarrierType | None:
-    # A personal confusion report is a barrier; a question quoting a barrier is not.
-    question_text = re.sub(r"\bcan['’]t\b", "cannot", text, flags=re.I)
-    if is_question(question_text) and normalized(text) not in {
-        normalized("ازاي اخده"),
-        "how to take it",
-    }:
-        return None
-    return next(
-        (kind for kind, phrases in barrier_seeds().items() if contains(text, *phrases)), None
-    )
-
-
 def pending_start(tx: PatientTurnCommit, mission: Mission | None) -> None:
     pending = (
         PendingStartClarification(
@@ -852,7 +826,7 @@ def medication_reply(
         if pending and tx.profile.pending_start_clarification:
             pending_start(tx, None)
         return "patient_start_date_expired", {}
-    obstacle = recognize_barrier(text)
+    obstacle = category(outcome_for(tx))
     if obstacle:
         from sanad.concierge.barriers import route
 
@@ -902,7 +876,7 @@ def medication_callback(
     if not text.strip():
         return "patient_callback_stale", {}
     if action == "barrier":
-        obstacle = recognize_barrier(text)
+        obstacle = category(outcome_for(tx))
         if obstacle is None:
             return "patient_callback_stale", {}
         record_barrier(tx, mission, text, obstacle, source=source)

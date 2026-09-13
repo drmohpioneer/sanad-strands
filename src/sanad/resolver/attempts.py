@@ -4,10 +4,11 @@ import re
 from datetime import datetime
 from typing import Literal
 
-from sanad.concierge.reports import recognize_barrier
+from sanad.concierge.policy import BarrierType
 from sanad.concierge.text import is_question, normalized
 from sanad.domain.boundaries import _BoundaryValue
 from sanad.domain.entities import BarrierAttempt, BarrierStep, Mission
+from sanad.resolver.area_exclusions import excluded
 from sanad.resolver.places import PlacesResult
 from sanad.resolver.policy import POLICY
 
@@ -16,6 +17,7 @@ class Action(_BoundaryValue):
     phase: Literal["begin", "choose", "reserve_search", "result", "finish", "hold"]
     mission_id: str
     words: str = ""
+    barrier_type: BarrierType | None = None
     choice: Literal["ask_patient", "find_places", "hand_to_doctor", "resume_chase"] | None = None
     question: str = ""
     outcome: Literal[
@@ -32,7 +34,7 @@ class Action(_BoundaryValue):
     result: PlacesResult | None = None
 
 
-def area_in(text: str, *, answering: bool = False) -> str | None:
+def area_in(text: str, *, answering: bool = False, names: tuple[str, ...] = ()) -> str | None:
     from unicodedata import name
 
     # Explicit location framing, or the answer to this attempt's area question only.
@@ -62,7 +64,7 @@ def area_in(text: str, *, answering: bool = False) -> str | None:
             re.I,
         ):
             return None
-    if not area or len(area) > 120 or is_question(text) or recognize_barrier(area):
+    if not area or len(area) > 120 or is_question(text) or excluded(area, names):
         return None
     if re.search(r"[<>\[\]{}\d]|https?://", area) or len(area.split()) > 12:
         return None
@@ -95,14 +97,15 @@ def resolved_words(text: str) -> bool:
     }
 
 
-def material(previous: BarrierAttempt, text: str, now: datetime) -> bool:
-    kind = recognize_barrier(text)
+def material(
+    previous: BarrierAttempt, text: str, now: datetime, kind: BarrierType | None = None
+) -> bool:
     if kind and kind != previous.barrier_type:
         return True
     if previous.expires_at <= now or previous.phase != "complete" or previous.outcome != "asked":
         return False
     if previous.requested_fact == "area":
-        return area_in(text, answering=True) is not None
+        return bool(text.strip())
     return bool(
         text.strip()
         and not is_question(text)
@@ -114,7 +117,13 @@ def material(previous: BarrierAttempt, text: str, now: datetime) -> bool:
 
 
 def evolve(
-    mission: Mission, action: Action, receipt_id: str, now: datetime, *, contact: bool
+    mission: Mission,
+    action: Action,
+    receipt_id: str,
+    now: datetime,
+    *,
+    contact: bool,
+    names: tuple[str, ...] = (),
 ) -> tuple[BarrierAttempt, ...]:
     history = mission.barrier_attempts
     previous = history[-1] if history else None
@@ -145,8 +154,44 @@ def evolve(
                     }
                 ),
             )
-        kind = recognize_barrier(action.words)
-        new = previous is None or material(previous, action.words, now)
+        kind = action.barrier_type
+        new = previous is None or (
+            kind != previous.barrier_type and material(previous, action.words, now, kind)
+        )
+        if (
+            previous
+            and not kind
+            and previous.requested_fact == "area"
+            and previous.phase == "complete"
+            and previous.outcome == "asked"
+            and previous.expires_at > now
+            and area_in(action.words, answering=True, names=names) is None
+        ):
+            # The first question already spent the allowance. A receipt-bound reply
+            # ends this attempt without reopening it or reserving another question.
+            return (
+                *history[:-1],
+                BarrierAttempt.model_validate(
+                    previous.model_dump()
+                    | {
+                        "version": previous.version + 1,
+                        "updated_at": now,
+                        "state": "handed_to_doctor",
+                        "outcome": "handed_to_doctor",
+                        "patient_words": (*previous.patient_words, action.words),
+                        "receipt_ids": (*previous.receipt_ids, receipt_id),
+                        "steps": (
+                            *previous.steps,
+                            BarrierStep(
+                                receipt_id=receipt_id,
+                                at=now,
+                                action="patient_reply",
+                                outcome="handed_to_doctor",
+                            ),
+                        ),
+                    }
+                ),
+            )
         if not new:
             assert previous
             step = BarrierStep(
@@ -193,7 +238,7 @@ def evolve(
         answering = bool(
             previous and previous.requested_fact == "area" and previous.outcome == "asked"
         )
-        area = area_in(action.words, answering=answering)
+        area = area_in(action.words, answering=answering, names=names)
         requested: Literal["area", "detail"] = (
             "area"
             if (kind or previous and previous.barrier_type) in {"cost", "availability", "other"}

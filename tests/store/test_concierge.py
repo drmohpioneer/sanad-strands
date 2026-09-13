@@ -25,6 +25,9 @@ def world(store: StoreBase, clock: FakeClock) -> PatientWorld:
     world = PatientWorld.create(store, clock)
     assert isinstance(world, PatientWorld)
     world.enroll()
+    from store.medication_fixtures import scripted_barrier_factory
+
+    world.concierge.barrier_model_factory = scripted_barrier_factory
     return world
 
 

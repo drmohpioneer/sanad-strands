@@ -10,6 +10,23 @@ from store import evidence_fixtures as f
 from store.account_fixtures import ADMIN, PATIENT
 from store.concierge_fixtures import PatientWorld
 
+from browser.aurora18h import test_aurora_keyboard_focus as test_aurora_keyboard_focus
+from browser.aurora18h import (
+    test_aurora_motion_layout_and_staging as test_aurora_motion_layout_and_staging,
+)
+from browser.aurora18h import (
+    test_aurora_performance as test_aurora_performance,
+)
+from browser.aurora18h import (
+    test_aurora_sample_details as test_aurora_sample_details,
+)
+from browser.aurora18h import (
+    test_aurora_themes as test_aurora_themes,
+)
+from browser.aurora18h import test_aurora_tokens as test_aurora_tokens
+from browser.aurora18h import (
+    test_aurora_trends as test_aurora_trends,
+)
 from browser.conftest import RenderedApp
 from browser.demo18f import test_demo_admin_controls as test_demo_admin_controls
 from browser.demo18f import (
@@ -43,7 +60,6 @@ from browser.depth18e import (
 from browser.depth18e import (
     test_depth_record_loading_and_retry as test_depth_record_loading_and_retry,
 )
-from browser.depth18e import test_depth_rendered_text_contrast as test_depth_rendered_text_contrast
 from browser.depth18e import (
     test_depth_route_geometry_and_empty_anatomy as test_depth_route_geometry_and_empty_anatomy,
 )
@@ -54,6 +70,8 @@ from browser.depth18e import (
 from browser.depth18e import (
     test_depth_summary_filters_chips_and_primary as test_depth_summary_filters_chips_and_primary,
 )
+from browser.logo18h import test_aurora_entry_logo as test_aurora_entry_logo
+from browser.logo18h import test_logo_pages as test_logo_pages
 from browser.walkthrough20_6e import (
     test_6e_reply_and_immediate_danger as test_6e_reply_and_immediate_danger,
 )
@@ -300,6 +318,11 @@ IDENTITY_WALK = Path(__file__).with_name("identity_walk.js").read_text()
 
 def assert_identity(page: Page) -> None:
     assert page.evaluate(IDENTITY_WALK) == []
+    expect(page.locator(".identity > svg.sanad-lockup")).to_have_count(1)
+    expect(page.locator(".identity > svg.sanad-lockup")).to_have_attribute("aria-hidden", "true")
+    expect(page.locator(".identity > .visually-hidden")).to_have_text(
+        "سند" if page.locator("html").get_attribute("lang") == "ar" else "Sanad"
+    )
 
 
 @pytest.mark.parametrize("world", ["monitor"], indirect=True)
@@ -348,7 +371,15 @@ def test_keyboard_record_sort_and_reduced_motion(rendered: RenderedApp) -> None:
     expect(page.locator('th[aria-sort="descending"]')).to_contain_text("Patient")
     page.emulate_media(reduced_motion="reduce")
     assert rows.first.evaluate("e => getComputedStyle(e).animationName") == "none"
-    assert page.locator("#refresh").evaluate("e => getComputedStyle(e).transitionDuration") == "0s"
+    assert (
+        float(
+            page.locator("#refresh")
+            .evaluate("e => getComputedStyle(e).transitionDuration")
+            .split(",")[0]
+            .removesuffix("s")
+        )
+        <= 0.000001
+    )
 
 
 def test_identity_walk_rejects_accessible_and_hidden_leaks(rendered: RenderedApp) -> None:
@@ -377,7 +408,7 @@ def test_admin_surface_identity_and_theme(rendered: RenderedApp) -> None:
     assert_identity(page)
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
     for choice in ("dark", "light"):
-        page.locator("#theme").select_option(choice)
+        page.locator(f'[data-theme-set="{choice}"]').click()
         expect(page.locator("html")).to_have_attribute("data-theme", choice)
 
 
@@ -456,10 +487,10 @@ def test_patient_upload_rejection_and_theme_choice(rendered: RenderedApp) -> Non
     page = rendered.page
     page.goto(rendered.origin + "/pp")
     page.locator('#content[aria-busy="false"]').wait_for()
-    page.locator("#theme").select_option("dark")
+    page.locator('[data-theme-set="dark"]').click()
     page.reload()
     expect(page.locator("html")).to_have_attribute("data-theme", "dark")
-    expect(page.locator("#theme")).to_have_value("dark")
+    expect(page.locator('[data-theme-set="dark"]')).to_have_attribute("aria-pressed", "true")
     page.locator("#patient-file").set_input_files(
         {"name": "unsupported.txt", "mimeType": "text/plain", "buffer": b"Synthetic"}
     )

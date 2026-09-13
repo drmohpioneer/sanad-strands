@@ -455,7 +455,34 @@ def health_report(aws: Any, env: str, *, now: datetime | None = None) -> dict[st
     )
     for name, threshold in THRESHOLDS.items():
         measures[name]["target"] = threshold
+    values, _ = parameter_values(client(aws, "ssm"), env)
+    bot = values["bot-token"].split(":", 1)[0]
+    doctor_bots = {
+        b.get("id"): b.get("telegram_bot_id") for b in bodies if b.get("entity_type") == "doctor"
+    }
+    foreign_due: dict[str, dict[str, Any]] = {}
+    for row, body in zip(rows, bodies, strict=True):
+        lane = row.get("due_lane_shard", {}).get("S")
+        due = row.get("due_sort", {}).get("S", "").split("#", 1)[0]
+        if not lane or not due or parse_instant(due) > now:
+            continue
+        scope = body.get("scope") or {}
+        own = (
+            scope.get("bot_id") == bot
+            if "bot_id" in scope
+            else doctor_bots.get(
+                scope.get("doctor_id") or body.get("doctor_id") or body.get("owner_doctor_id")
+            )
+            == bot
+        )
+        summary = foreign_due.setdefault(lane, {"count": 0, "oldest_due": None})
+        if not own:
+            summary["count"] += 1
+            summary["oldest_due"] = (
+                min(summary["oldest_due"], due) if summary["oldest_due"] else due
+            )
     return {
+        "unowned_due_by_lane": foreign_due,
         "mode": "read-only",
         "measured_at": now.isoformat(),
         "rows_scanned": len(rows),

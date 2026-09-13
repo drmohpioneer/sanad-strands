@@ -1,6 +1,7 @@
 """Single-language forms, with stdlib templates and escaping at every substitution."""
 
 from html import escape
+from pathlib import Path
 from string import Template
 
 from sanad.domain.language import effective
@@ -26,20 +27,72 @@ PAGE_STRINGS = {
     "patient_home": {"ar": "حساب المريض", "en": "Patient account"},
     "consent_label": {"ar": "نسخة الموافقة", "en": "Consent version"},
 }
+
+
+def inline_logo(instance: str) -> str:
+    """Embed the locked outlines; only namespace and approved theme paint vary."""
+    source = (
+        Path(__file__).with_name("static") / "logo" / "sanad-lockup-compact-navy.svg"
+    ).read_text()
+    return (
+        source.replace("<svg ", '<svg class="sanad-lockup" aria-hidden="true" ', 1)
+        .replace(' role="img" aria-label="Sanad"', "")
+        .replace('id="g2"', f'id="{instance}-g2"')
+        .replace("url(#g2)", f"url(#{instance}-g2)")
+        .replace("#6D7BFF", "var(--logo-a)")
+        .replace("#22D3EE", "var(--logo-b)")
+        .replace("#EEF1FA", "var(--logo-ink)")
+    )
+
+
 ADMIN_SHELL = Template("""<!doctype html>
-<html lang="$language" dir="$direction"><head><meta charset="utf-8">
+<html lang="$language" dir="$direction" data-theme="dark"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
 <title>$title</title><script src="/assets/theme.js"></script>
 <link rel="stylesheet" href="/assets/browser.css"></head>
-<body class="standalone"$demo><main><header class="page-heading"><span class="identity">Sanad</span>
-<label>Appearance <select id="theme"><option value="system">System</option>
-<option value="dark">Dark</option><option value="light">Light</option></select></label></header>
+<body class="standalone"$demo>
+<div class="aurora" aria-hidden="true">
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+</div>
+<main>
+<header class="page-heading">
+<span class="identity mark">
+$logo
+<span class="visually-hidden">$service</span></span>
+<span id="appearance-label" class="visually-hidden">Appearance</span>
+<div id="theme" class="toggle" role="group" aria-labelledby="appearance-label">
+<button type="button" data-theme-set="dark"
+aria-pressed="true">Dark</button>
+<button type="button" data-theme-set="light"
+aria-pressed="false">Light</button></div></header>
 $content</main></body></html>""")
 SHELL = Template("""<!doctype html>
-<html lang="$language" dir="$direction"><head><meta charset="utf-8">
+<html lang="$language" dir="$direction" data-theme="dark"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<link rel="icon" type="image/svg+xml" href="/assets/favicon.svg">
 <title>$title</title><link rel="stylesheet" href="/assets/browser.css"></head>
-<body class="standalone"><main><header class="page-heading"><span class="identity">Sanad</span>
+<body class="standalone">
+<div class="aurora" aria-hidden="true">
+<i>
+</i>
+<i>
+</i>
+<i>
+</i>
+</div>
+<main>
+<header class="page-heading">
+<span class="identity mark">
+$logo
+<span class="visually-hidden">$service</span></span>
 </header>$content</main></body></html>""")
 CONTINUE = Template("""<h1>$title</h1><p>$message</p>
 <form method="post" action="$action"><input type="hidden" name="csrf" value="$csrf">
@@ -76,6 +129,8 @@ def shell(
     return (ADMIN_SHELL if interactive else SHELL).substitute(
         title=escape(title, quote=True),
         content=content,
+        logo=inline_logo("entry"),
+        service=PAGE_STRINGS["service"][locale],
         language=locale,
         direction="rtl" if locale == "ar" else "ltr",
         demo=' data-demo="true"' if demo else "",

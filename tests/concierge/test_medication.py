@@ -71,19 +71,40 @@ def test_negative_reports(text: str, action: str) -> None:
         ("بيتعبني", "side_effect_experience"),
         ("دوخة", "side_effect_experience"),
         ("غثيان", "side_effect_experience"),
-        ("I can't do it", "other"),
-        ("مش هقدر", "other"),
+        ("I can't do it", "uncertain"),
+        ("مش هقدر", "uncertain"),
     ],
 )
 def test_barrier_seeds(text: str, kind: str) -> None:
-    assert reports.recognize_barrier(text) == kind
+    from sanad.concierge.barrier_evidence import verify
+    from sanad.concierge.records import BarrierReading
+
+    reading = BarrierReading.model_validate(
+        {
+            "problems": [
+                {
+                    "category": "other" if kind == "uncertain" else kind,
+                    "quote": text,
+                    "asserted": True,
+                    "subject": "patient",
+                }
+            ]
+        }
+    )
+    outcome = verify(text, (reading, reading))
+    assert (outcome.category or outcome.status) == kind
 
 
 @pytest.mark.parametrize(
     "text", ["Why is it not available?", "what if I forgot?", "هل الدوا غالي؟"]
 )
 def test_barrier_inside_question_is_not_a_report(text: str) -> None:
-    assert reports.recognize_barrier(text) is None
+    from sanad.concierge.barrier_evidence import verify
+    from sanad.concierge.records import BarrierReading
+
+    reading = BarrierReading(problems=())
+    outcome = verify(text, (reading, reading))
+    assert outcome.status == "none" and outcome.category is None
 
 
 @pytest.mark.parametrize(

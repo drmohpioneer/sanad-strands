@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 from pydantic import BaseModel, ConfigDict
 
 from sanad.scribe.policy import DRAFT_SCRIBE_POLICY
-from sanad.scribe.proposal import Proposal
+from sanad.scribe.proposal import Proposal, card_footer
 
 REASONS = {
     "request_missing": (
@@ -99,7 +99,7 @@ def _bounded_quotes(question: str) -> str:
 
 def questions(proposal: Proposal) -> tuple[str, ...]:
     from sanad.scribe.card import consumed_question_numbers, plain, unsupported_order_fields
-    from sanad.scribe.extract import placeholder_ambiguity
+    from sanad.scribe.extract import anchored_ambiguity, placeholder_ambiguity
 
     result: list[str] = []
     consumed = consumed_question_numbers(proposal)
@@ -195,7 +195,11 @@ def questions(proposal: Proposal) -> tuple[str, ...]:
         if n not in asked and n not in consumed
     )
     result.extend(
-        f'I heard "{plain(a)}"; please clarify.'
+        (
+            f'I heard "{plain(a)}"; please clarify.'
+            if anchored_ambiguity(a, proposal.source_text)
+            else REASONS["clarification"]
+        )
         for i, a in enumerate(proposal.candidate.ambiguities)
         if not placeholder_ambiguity(a)
         and not any(x.item == f"ambiguity:{i}" and x.code == "unsafe_text" for x in proposal.issues)
@@ -380,7 +384,7 @@ def build_view(proposal: Proposal) -> CardView:
         alerts=alerts,
         questions=tuple(filter(None, blocked_lines)) + questions(proposal),
         notices=notices,
-        buttons="✅ Confirm | ✏️ Edit | ❌ Cancel",
+        buttons=card_footer(proposal, "en"),
         validity="valid 30 minutes",
     )
     from sanad.scribe.english import _lines

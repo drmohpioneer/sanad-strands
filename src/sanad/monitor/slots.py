@@ -44,6 +44,33 @@ def requested_metric(text: str) -> str | None:
     return next(iter(matches)) if len(matches) == 1 else None
 
 
+_LEGACY_HOURS = {1: (8,), 2: (8, 20), 3: (8, 14, 20), 4: (8, 12, 16, 20)}
+
+
+def generate_legacy(
+    confirmed_at: datetime,
+    timezone: str,
+    times_per_day: int,
+    days: int,
+    *,
+    start: date | None = None,
+) -> tuple[datetime, ...]:
+    confirmed_at = utc_instant(confirmed_at)
+    if type(times_per_day) is not int or times_per_day not in _LEGACY_HOURS:
+        raise ValueError("monitor_frequency_unclear")
+    if type(days) is not int or not 1 <= days <= policy.max_days:
+        raise ValueError("monitor_duration_unclear")
+    zone = ZoneInfo(timezone)
+    first = start or (confirmed_at.astimezone(zone).date() + timedelta(days=1))
+    # As with computed contact clocks, a fold/gap chooses the later UTC instant.
+    return tuple(
+        max(local.replace(tzinfo=zone, fold=f).astimezone(UTC) for f in (0, 1))
+        for day in range(days)
+        for hour in _LEGACY_HOURS[times_per_day]
+        for local in (datetime.combine(first + timedelta(days=day), time(hour)),)
+    )
+
+
 def generate(
     confirmed_at: datetime,
     timezone: str,
@@ -58,24 +85,55 @@ def generate(
     if type(days) is not int or not 1 <= days <= policy.max_days:
         raise ValueError("monitor_duration_unclear")
     zone = ZoneInfo(timezone)
-    first = start or (confirmed_at.astimezone(zone).date() + timedelta(days=1))
-    # As with computed contact clocks, a fold/gap chooses the later UTC instant.
-    return tuple(
-        max(local.replace(tzinfo=zone, fold=f).astimezone(UTC) for f in (0, 1))
-        for day in range(days)
-        for hour in policy.slot_hours[times_per_day]
-        for local in (datetime.combine(first + timedelta(days=day), time(hour)),)
-    )
+    today = confirmed_at.astimezone(zone).date()
+    if start is not None and start < today:
+        raise ValueError("monitor_start_past")
+    day = start or today
+    slots: list[datetime] = []
+    while len(slots) < times_per_day * days:
+        for hour in policy.slot_hours[times_per_day]:
+            local = datetime.combine(day, time(hour))
+            instant = max(local.replace(tzinfo=zone, fold=f).astimezone(UTC) for f in (0, 1))
+            if instant >= confirmed_at:
+                slots.append(instant)
+                if len(slots) == times_per_day * days:
+                    break
+        day += timedelta(days=1)
+    return tuple(slots)
+
+
+def window_for(details: MonitorDetails, observed_at: datetime) -> int | None:
+    """Half-open stored windows; pre-start readings belong to slot zero."""
+    instant = utc_instant(observed_at)
+    assert details.timezone is not None and details.times_per_day is not None
+    zone = ZoneInfo(details.timezone)
+    last = details.slots[-1].astimezone(zone)
+    hours = policy.slot_hours[details.times_per_day]
+    following = next((h for h in hours if h > last.hour), None)
+    day = last.date() + timedelta(days=following is None)
+    local = datetime.combine(day, time(hours[0] if following is None else following))
+    end = max(local.replace(tzinfo=zone, fold=f).astimezone(UTC) for f in (0, 1))
+    if instant >= end:
+        return None
+    return max((i for i, at in enumerate(details.slots) if at <= instant), default=0)
 
 
 def slot_for(details: MonitorDetails, observed_at: datetime) -> int | None:
     instant = utc_instant(observed_at)
     if not details.slots:
         return None
+    if details.slot_rule == "window-next-v1":
+        index = window_for(details, instant)
+        occupied = filled(details)
+        if index is None:
+            return None
+        return next(
+            (i for i in (index, index + 1) if i < len(details.slots) and i not in occupied), None
+        )
     # Consider occupied slots too: a duplicate must replace its closest slot,
     # never overflow into the next empty one. Ties choose the earlier slot.
     index = min(range(len(details.slots)), key=lambda i: (abs(details.slots[i] - instant), i))
-    return index if abs(details.slots[index] - instant) <= policy.slot_tolerance else None
+    return index if abs(details.slots[index] - instant) <= timedelta(hours=3) else None
 
 
 def value_for(details: MonitorDetails, reading: Reading) -> str | None:
@@ -114,7 +172,7 @@ def attach(
                 reading_index=index,
                 observed_at=observed_at,
                 received_at=received_at,
-                slot=slot_for(details, observed_at),
+                slot=slot_for(details.model_copy(update={"readings": tuple(entries)}), observed_at),
                 value=value,
             )
         )

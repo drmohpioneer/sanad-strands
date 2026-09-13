@@ -164,7 +164,21 @@ def candidate_timings(
             ):
                 monitor_result = monitor_timing(mission.text, expression, anchor, policy)
                 if isinstance(monitor_result, NeedsClarification):
-                    issues.append(ProposalIssue(item=item, code="timing_unclear"))
+                    issues.append(
+                        ProposalIssue(
+                            item=item,
+                            code="monitor_start_past"
+                            if monitor_result.reason_code == "monitor_start_past"
+                            else "timing_unclear",
+                            question=(
+                                "The start date "
+                                + next(iter(re.findall(r"\d{4}-\d{2}-\d{2}", mission.text)), "")
+                                + "."
+                            )
+                            if monitor_result.reason_code == "monitor_start_past"
+                            else None,
+                        )
+                    )
                 else:
                     timings.append(ItemTiming(item=item, resolved=monitor_result))
                 continue

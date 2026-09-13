@@ -635,7 +635,7 @@ def test_five_day_fixture_card_prompt_reply_and_done(world: PatientWorld, tmp_pa
     world.tap("✅ Confirm")
     m = from_record(world.rows("mission")[0], Mission)
     assert isinstance(m.details, MonitorDetails) and len(m.details.slots) == 15
-    world.send("BP 110/70")  # outside every confirmed slot, retained as an extra
+    world.send("BP 110/70")  # before the first slot, fills that slot under rule 2
     slots = m.details.slots
     world.clock.now = slots[0]
     current_m = current(world, m.id)
@@ -643,12 +643,10 @@ def test_five_day_fixture_card_prompt_reply_and_done(world: PatientWorld, tmp_pa
         schedule(world.runtime.steward, to_record(current_m, world.patient_scope)).status
         == "accepted"
     )
-    prompt = next(i for i in world.patient_intents() if i.template_id == "patient_monitor_prompt")
-    from sanad.contact.delivery import payload
-
-    prompt_text = payload(world.store, prompt)["text"]
+    assert not any(i.template_id == "patient_monitor_prompt" for i in world.patient_intents())
+    prompt_text = "No prompt: the first slot is already filled."
     replies = []
-    for i, at in enumerate(slots):
+    for i, at in enumerate(slots[:-1]):
         world.clock.now = at
         _, reply = world.send(f"BP {120 + i}/80")
         replies.append(str((reply.payload or {})["text"]))
@@ -660,8 +658,8 @@ def test_five_day_fixture_card_prompt_reply_and_done(world: PatientWorld, tmp_pa
         if r.body.get("notification_purpose") == "DONE:FULFILLMENT"
     )
     done = str(doctor_payload(world.store, notice)["text"])
-    assert "Extra readings: 1" in done and "range 120, 134 mmHg" in done
-    assert "14 readings left" in replies[0] and "0 readings left" in replies[-1]
+    assert "Extra readings: 0" in done and "range 110, 133 mmHg" in done
+    assert "13 readings left" in replies[0] and "0 readings left" in replies[-1]
     (tmp_path / "monitor-example.json").write_text(
         json.dumps(
             {
@@ -760,14 +758,16 @@ def test_confirmed_schedule_cannot_move_from_the_card(world: PatientWorld, case:
         world.clock.advance(timedelta(minutes=15))
     world.tap("✅ Confirm")
     missions = world.rows("mission")
-    if case == "explicit_past":
+    if case in {"explicit_past", "midnight"}:
         assert len(missions) == 1
         m = from_record(missions[0], Mission)
-        assert isinstance(m.details, MonitorDetails) and m.details.slots[0] < world.clock()
+        assert isinstance(m.details, MonitorDetails) and m.details.slots[0] == datetime(
+            2026, 9, 7, 7, tzinfo=UTC
+        )
         assert not m.details.readings
     else:
         persisted = world.scribe.repo.load(
             proposal.scope, "scribe_proposal", proposal.id, type(proposal)
         )
         assert not missions and persisted and persisted.status == "rejected"
-        assert any(i.template_id == "scribe_stale" for i in world.cards())
+        assert any(i.template_id == "monitor_schedule_changed" for i in world.cards())

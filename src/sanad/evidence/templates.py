@@ -35,16 +35,17 @@ TEXT = {
         "Which doctor's request is this photo for?",
     ),
     "patient_evidence_kept": (
-        "حفظت الصورة في ملفك وهعرضها على الدكتور",
-        "I saved the photo in your record for the doctor.",
+        "حفظت الصورة في ملفك وهعرضها على الدكتور{reading_ack}",
+        "I saved the photo in your record for the doctor.{reading_ack}",
     ),
     "patient_evidence_name_check": (
         "الاسم المكتوب على الورقة مش هو اسمك، دي بتاعتك؟",
         "The name on the paper does not match yours. Is this your document?",
     ),
     "patient_evidence_accepted": (
-        "وصل تحليل {title} وسجلته للدكتور؛ الدكتور هو اللي بيقيّم النتيجة",
-        "I received {title} and recorded it for the doctor; the doctor evaluates the result.",
+        "وصل تحليل {title} وسجلته للدكتور؛ الدكتور هو اللي بيقيّم النتيجة{reading_ack}",
+        "I received {title} and recorded it for the doctor; the doctor evaluates the result."
+        "{reading_ack}",
     ),
     "patient_evidence_partial": ("لسه ناقص: {missing}", "Still missing: {missing}"),
     "patient_evidence_one_per_photo": (
@@ -182,9 +183,11 @@ def render(key: str, language: str | PresentationContext = default_language, **f
 
     context = resolve(language, "patient" if key.startswith("patient_") else "doctor")
     catalog_key = "evidence." + key
+    if key in {"patient_evidence_kept", "patient_evidence_accepted"}:
+        fields.setdefault("reading_ack", "")
     wanted = evidence.FIELDS[catalog_key]
     if wanted != fields.keys() or any(
-        not v.strip() or "{" in v or "}" in v for v in fields.values()
+        (not v.strip() and k != "reading_ack") or "{" in v or "}" in v for k, v in fields.items()
     ):
         raise ValueError("evidence_template_fields")
     return catalog_render(evidence.CATALOG, catalog_key, context, **opaque_fields(fields))

@@ -27,6 +27,7 @@ REASONS = {
     "dose_missing": "What dose did you intend?",
     "disputed_number": "Please confirm the number heard.",
     "amendment_pending_09b": "This medication amendment needs review.",
+    "monitor_start_past": "The start date has passed. When should it start?",
     "timing_unclear": "Please specify the intended deadline.",
     "patient_missing": "Who is the patient?",
     "multiple_patients": "Please send each patient's instructions separately.",
@@ -105,6 +106,15 @@ def questions(proposal: Proposal) -> tuple[str, ...]:
     consumed = consumed_question_numbers(proposal)
     asked = {n for i in proposal.issues if i.code == "extraction_conflict" for n in i.numbers}
     for issue in proposal.issues:
+        if issue.code == "monitor_start_past":
+            match = re.search(r"\d{4}-\d{2}-\d{2}", issue.question or "")
+            day = match[0] if match else ""
+            result.append(
+                f"The start date {day} has passed. When should it start?"
+                if day
+                else REASONS[issue.code]
+            )
+            continue
         before = len(result)
         if issue.field == "verification" and issue.question:
             result.append(plain(issue.question))

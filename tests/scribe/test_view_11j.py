@@ -68,7 +68,7 @@ def test_frozen_oracle(row: dict[str, Any]) -> None:
 
 
 def test_oracle_inventory_and_exercised_branches() -> None:
-    assert len(ORACLE) == 71
+    assert len(ORACLE) == 72
     names = {r["id"].split(":")[0] for r in ORACLE}
     assert len(names) == len(ORACLE)
     assert len([n for n in names if re.match(r"\d\d-", n)]) == 28

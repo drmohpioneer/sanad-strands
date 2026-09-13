@@ -299,9 +299,13 @@ Treatment-changing answers are retained only on the doctor's question record. A 
 ### Monitoring
 
 Contract 13 compiles supported repeated vital requests into confirmed MONITOR
-schedules. A pure executor assigns each accepted reading to its nearest dated
-slot within three hours, including replacements of an occupied slot; readings
-outside the window remain extras. Coverage counts distinct filled slots only.
+schedules. New plans retain timezone, cadence and the window-next-v1 rule:
+assign once to the observed window's empty slot, else its empty successor, else
+extra. Legacy plans retain nearest-slot replacement within three hours. Restores
+use current assignments; value-only corrections retain their slot. Cards store
+the displayed instants and refuse changed schedules before evidence validation,
+after the existing instruction-fact and authentication guards. Coverage counts
+distinct filled slots only.
 The existing safety screen runs first. Text facts and photo acceptance share
 the same slot predicate and atomic Steward transaction, including fulfillment
 and independent result review. Immutable source references retain values and

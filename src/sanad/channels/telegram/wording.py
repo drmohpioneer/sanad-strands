@@ -195,6 +195,10 @@ SCRIBE_TEMPLATES = {
     ),
     "scribe_card": ("{body}", "{body}"),
     "scribe_confirmed": ("اتسجل:\n{body}", "Recorded:\n{body}"),
+    "monitor_schedule_changed": (
+        "مواعيد القياس اتغيرت. ابعت التعليمات من جديد.",
+        "The reading times changed. Please send the instruction again.",
+    ),
     "scribe_stale": (
         "الكارت اتغير أو مبقاش صالح. ابعت التعليمات من جديد.",
         "The card changed or is no longer valid. Send the instructions again.",

@@ -1,6 +1,7 @@
 """Deterministic patient reading attachment after the accepted danger screen."""
 
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from sanad.concierge import reports
 from sanad.concierge.records import PatientAction
@@ -129,7 +130,17 @@ def attach_reading(
             continue
         result = project(mission, details, tx.id, tx.now, tx.builder.policy.timing, danger=danger)
         tx.builder.add(result)
-        lines.append(patient_reply(details, row.ref, language, tx.snapshot.patient.timezone))
+        lines.append(
+            patient_reply(
+                details,
+                row.ref,
+                language,
+                tx.snapshot.patient.timezone,
+                today=tx.now.astimezone(
+                    ZoneInfo(details.timezone or tx.snapshot.patient.timezone)
+                ).date(),
+            )
+        )
     if ambiguous:
         lines.append(render("choose", language))
     return "monitor_recorded", "\n".join(lines)

@@ -1,5 +1,6 @@
 """Literal bilingual monitoring wording and descriptive doctor tables."""
 
+from datetime import date
 from decimal import Decimal
 from string import Formatter
 from zoneinfo import ZoneInfo
@@ -65,7 +66,46 @@ def render(key: str, language: str, **fields: str) -> str:
     return template.format(**fields)
 
 
-def patient_reply(details: MonitorDetails, source: VersionRef, language: str, timezone: str) -> str:
+def assignment_ack(details: MonitorDetails, source: VersionRef, language: str, today: date) -> str:
+    language = effective(language, audience="patient")
+    assert details.timezone is not None
+    zone = ZoneInfo(details.timezone)
+    days = (
+        ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+        if language == "en"
+        else ("الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد")
+    )
+    lines = []
+    for entry in details.readings:
+        if entry.source_ref != source:
+            continue
+        if entry.slot is None:
+            lines.append(
+                "Recorded as an additional reading."
+                if language == "en"
+                else "سجلتها كقراءة إضافية."
+            )
+        else:
+            local = details.slots[entry.slot].astimezone(zone)
+            time = f"{local.hour:02d}:{local.minute:02d}"
+            if local.date() != today:
+                time = f"{days[local.weekday()]} {local:%Y-%m-%d} {time}"
+            lines.append(
+                f"Recorded as your {time} reading."
+                if language == "en"
+                else f"سجلتها كقراءة موعد {time}."
+            )
+    return "\n".join(lines)
+
+
+def patient_reply(
+    details: MonitorDetails,
+    source: VersionRef,
+    language: str,
+    timezone: str,
+    *,
+    today: date | None = None,
+) -> str:
     language = effective(language, audience="patient")
     from sanad.safety import validate_patient_output
     from sanad.safety.models import OutputContext
@@ -83,6 +123,19 @@ def patient_reply(details: MonitorDetails, source: VersionRef, language: str, ti
             )
         allowed.extend(fields.values())
         lines.append(render("recorded" if entry.slot is not None else "extra", language, **fields))
+    if details.slot_rule == "window-next-v1" and entries:
+        local_today = (
+            today
+            or max(e.received_at for e in entries)
+            .astimezone(ZoneInfo(details.timezone or timezone))
+            .date()
+        )
+        acknowledgement = assignment_ack(details, source, language, local_today)
+        lines = [
+            acknowledgement,
+            f"{remaining} readings left." if language == "en" else f"باقي {remaining} قراءة.",
+        ]
+        allowed.append(acknowledgement)
     text = "\n".join(lines)
     checked = validate_patient_output(
         text,

@@ -1215,6 +1215,7 @@ class PhotoTurn:
             timings=timings,
             confirmation_nonce_hash=nonce.hash,
         )
+        changed = changed.with_displayed_schedules()
         tokens, markup = self.turn.buttons(changed, actor, nonce.secret.get_secret_value())
         intents = self.card_intents(changed, doctor, markup)
         result = self.repo.commit(

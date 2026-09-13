@@ -525,6 +525,7 @@ class ProposalIssue(_BoundaryValue):
         "disputed_number",
         "amendment_pending_09b",
         "timing_unclear",
+        "monitor_start_past",
         "patient_missing",
         "multiple_patients",
         "unsafe_text",

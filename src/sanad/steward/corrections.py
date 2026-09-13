@@ -198,6 +198,57 @@ def monitor_revision(
     # Retained links recover a removed slot without making the old observation new.
     originals = tuple(r for r in details.readings if r.source_ref == old.ref) or prior_links
     kept = [r for r in details.readings if r.source_ref != old.ref]
+    if details.slot_rule == "window-next-v1":
+        from sanad.monitor.executor import reading_time
+        from sanad.monitor.slots import slot_for, value_for
+
+        restored = not any(r.source_ref == old.ref for r in details.readings)
+        window_replacements: list[MonitorReading] = []
+        for entry in sorted(originals, key=lambda r: (r.observed_at, r.reading_index)):
+            if detached or entry.reading_index >= len(values):
+                continue
+            value = value_for(details, values[entry.reading_index])
+            if value is None:
+                continue
+            observed = entry.observed_at
+            if isinstance(new, ClinicalFact) and isinstance(new.payload, ReportFactPayload):
+                previous = from_record(old, ClinicalFact)
+                if isinstance(previous.payload, ReportFactPayload):
+                    before = reading_time(
+                        previous.payload.text,
+                        entry.received_at,
+                        details.timezone or mission.timezone,
+                    )
+                    after = reading_time(
+                        new.payload.text, entry.received_at, details.timezone or mission.timezone
+                    )
+                    if before != after:
+                        if after is None:
+                            raise EffectsRejected("monitor_time_unclear")
+                        observed = after
+            elif new.provenance.observed_at is not None:
+                observed = new.provenance.observed_at
+            slot = entry.slot
+            if restored or observed != entry.observed_at:
+                slot = slot_for(
+                    details.model_copy(update={"readings": tuple([*kept, *window_replacements])}),
+                    observed,
+                )
+            window_replacements.append(
+                entry.model_copy(
+                    update={
+                        "source_ref": to_record(new, new.scope).ref,
+                        "value": value,
+                        "observed_at": observed,
+                        "slot": slot,
+                    }
+                )
+            )
+        # Retain acceptance order; surviving readings and extras never move.
+        window_updated = tuple([*kept, *window_replacements])
+        return mission.model_copy(
+            update={"details": details.model_copy(update={"readings": window_updated})}
+        )
     replacements: list[MonitorReading] = []
     if not detached:
         for entry in originals:

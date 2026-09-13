@@ -235,7 +235,11 @@ Contract 13 adds a backward-compatible `MonitorDetails.readings` projection.
 Each `MonitorReading` references an immutable clinical fact or evidence version,
 its row index, observed and received instants, the normalized reported value,
 and one slot index or null for an extra. Replacements retain prior source links
-and never fill another slot. Distinct occupied indices establish coverage;
+and never fill another slot on legacy tolerance-3h plans. New window-next-v1
+plans store timezone and cadence; acceptance fills the observed window's slot,
+else its empty successor, else an extra. Value-only corrections preserve assignment;
+detach frees it and restore assigns against current occupancy without displacement.
+Distinct occupied indices establish coverage;
 missing values are never synthesized. The store admits a patient MONITOR
 revision only when its exact projection follows from accepted sources and the
 current receipt. Patient choices retain the screened reading and original time.

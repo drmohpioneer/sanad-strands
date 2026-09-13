@@ -204,6 +204,10 @@ CATALOG: Catalog = {
     },
     "doctor.scribe_card": {"ar": "{body}", "en": "{body}"},
     "doctor.scribe_confirmed": {"ar": "اتسجل:\n{body}", "en": "Recorded:\n{body}"},
+    "doctor.monitor_schedule_changed": {
+        "ar": "مواعيد القياس اتغيرت. ابعت التعليمات من جديد.",
+        "en": "The reading times changed. Please send the instruction again.",
+    },
     "doctor.scribe_stale": {
         "ar": "الكارت اتغير أو مبقاش صالح. ابعت التعليمات من جديد.",
         "en": "The card changed or is no longer valid. Send the instructions again.",

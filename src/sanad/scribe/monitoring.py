@@ -141,7 +141,7 @@ class Schedule:
     days: int
     spoken_text: str
 
-    def details(self, anchor: datetime, timezone: str) -> MonitorDetails:
+    def details(self, anchor: datetime, timezone: str, *, legacy: bool = False) -> MonitorDetails:
         from datetime import timedelta
         from zoneinfo import ZoneInfo
 
@@ -159,9 +159,21 @@ class Schedule:
                 if expression in {"today", "tomorrow"}
                 else date.fromisoformat(expression)
             )
-        slots = generate(anchor, timezone, self.times_per_day, self.days, start=start)
-        return MonitorDetails(
-            metric=self.metric, unit=self.unit, slots=slots, required_coverage=len(slots)
+        from sanad.monitor.slots import generate_legacy
+
+        slots = (generate_legacy if legacy else generate)(
+            anchor, timezone, self.times_per_day, self.days, start=start
+        )
+        return MonitorDetails.model_validate(
+            dict(
+                metric=self.metric,
+                unit=self.unit,
+                slots=slots,
+                required_coverage=len(slots),
+                slot_rule="tolerance-3h" if legacy else "window-next-v1",
+                timezone=None if legacy else timezone,
+                times_per_day=None if legacy else self.times_per_day,
+            )
         )
 
 
@@ -218,18 +230,21 @@ def timing(
         and _FREQUENCY.search(normalize(expression))
         and _DURATION.search(normalize(expression))
     )
+    try:
+        details = schedule.details(anchor, clock_policy.timezone)
+    except ValueError as exc:
+        return NeedsClarification(
+            reason_code="monitor_start_past"
+            if str(exc) == "monitor_start_past"
+            else "monitor_start_unclear",
+            message="Clarify the start date.",
+        )
     if (
         expression
         and not schedule_expression
         and _bare_duration(expression) != _bare_duration(duration_expression(text) or "")
     ):
         return resolve_expression(expression, MissionKind.MONITOR, anchor, clock_policy)
-    try:
-        details = schedule.details(anchor, clock_policy.timezone)
-    except ValueError:
-        return NeedsClarification(
-            reason_code="monitor_start_unclear", message="Clarify the start date."
-        )
     return resolve_timing(
         MissionKind.MONITOR,
         anchor,
@@ -251,14 +266,13 @@ def card_line(text: str, anchor: datetime, timezone: str, language: str) -> str:
         return "MONITOR: " + text
     from zoneinfo import ZoneInfo
 
-    first = details.slots[0].astimezone(ZoneInfo(timezone)).strftime("%a %H:%M")
-    if language == "ar":
-        first = first.replace(
-            details.slots[0].astimezone(ZoneInfo(timezone)).strftime("%a"),
-            ("الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد")[
-                details.slots[0].astimezone(ZoneInfo(timezone)).weekday()
-            ],
-        )
+    local = details.slots[0].astimezone(ZoneInfo(timezone))
+    weekdays = (
+        ("الاثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد")
+        if language == "ar"
+        else ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+    )
+    first = f"{weekdays[local.weekday()]} {local.hour:02d}:{local.minute:02d}"
     return render(
         "card",
         language,

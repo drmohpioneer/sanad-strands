@@ -36,17 +36,18 @@ CATALOG: Catalog = {
         "en": "Which doctor's request is this photo for?",
     },
     "evidence.patient_evidence_kept": {
-        "ar": "حفظت الصورة في ملفك وهعرضها على الدكتور",
-        "en": "I saved the photo in your record for the doctor.",
+        "ar": "حفظت الصورة في ملفك وهعرضها على الدكتور{reading_ack}",
+        "en": "I saved the photo in your record for the doctor.{reading_ack}",
     },
     "evidence.patient_evidence_name_check": {
         "ar": "الاسم المكتوب على الورقة مش هو اسمك، دي بتاعتك؟",
         "en": "The name on the paper does not match yours. Is this your document?",
     },
     "evidence.patient_evidence_accepted": {
-        "ar": "وصل تحليل {title} وسجلته للدكتور؛ الدكتور هو اللي بيقيّم النتيجة",
+        "ar": "وصل تحليل {title} وسجلته للدكتور؛ الدكتور هو اللي بيقيّم النتيجة{reading_ack}",
         "en": (
             "I received {title} and recorded it for the doctor; the doctor evaluates the result."
+            "{reading_ack}"
         ),
     },
     "evidence.patient_evidence_partial": {

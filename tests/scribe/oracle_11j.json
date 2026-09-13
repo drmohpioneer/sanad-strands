@@ -7455,7 +7455,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00)",
+          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -7471,7 +7471,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الاثنين 08:00)",
+          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الأحد 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -7487,10 +7487,33 @@
           "correction_id": null
         }
       ],
-      "evidence_fingerprint": "eac1c55e5efb7b48575692e328b3832d6b36d6988a548d7ed0310b8eb69ebf0b"
+      "evidence_fingerprint": "266e30909d8f1560435909c020a5106e85ca872d33aa2c14e5da1c31b2df7cb8",
+      "displayed_schedules": [
+        {
+          "item": "mission:0",
+          "slots": [
+            "2026-09-06T17:00:00Z",
+            "2026-09-07T05:00:00Z",
+            "2026-09-07T11:00:00Z",
+            "2026-09-07T17:00:00Z",
+            "2026-09-08T05:00:00Z",
+            "2026-09-08T11:00:00Z",
+            "2026-09-08T17:00:00Z",
+            "2026-09-09T05:00:00Z",
+            "2026-09-09T11:00:00Z",
+            "2026-09-09T17:00:00Z",
+            "2026-09-10T05:00:00Z",
+            "2026-09-10T11:00:00Z",
+            "2026-09-10T17:00:00Z",
+            "2026-09-11T05:00:00Z",
+            "2026-09-11T11:00:00Z"
+          ],
+          "slot_rule": "window-next-v1"
+        }
+      ]
     },
     "rendered": [
-      "New patient: Synthetic Person\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+      "New patient: Synthetic Person\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
     ]
   },
   {
@@ -10464,7 +10487,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00)",
+          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -10480,7 +10503,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الاثنين 08:00)",
+          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الأحد 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -10561,10 +10584,33 @@
           "correction_id": null
         }
       ],
-      "evidence_fingerprint": "5cd2b9d613d58e7fd1212b506af17491eb4c18722294cbcb7c8f5ad6e7aa4138"
+      "evidence_fingerprint": "853f7852df6804f2b8180b9aa719ca4ddef91cbb9c27a6dfdf430385ea40a94b",
+      "displayed_schedules": [
+        {
+          "item": "mission:0",
+          "slots": [
+            "2026-09-06T17:00:00Z",
+            "2026-09-07T05:00:00Z",
+            "2026-09-07T11:00:00Z",
+            "2026-09-07T17:00:00Z",
+            "2026-09-08T05:00:00Z",
+            "2026-09-08T11:00:00Z",
+            "2026-09-08T17:00:00Z",
+            "2026-09-09T05:00:00Z",
+            "2026-09-09T11:00:00Z",
+            "2026-09-09T17:00:00Z",
+            "2026-09-10T05:00:00Z",
+            "2026-09-10T11:00:00Z",
+            "2026-09-10T17:00:00Z",
+            "2026-09-11T05:00:00Z",
+            "2026-09-11T11:00:00Z"
+          ],
+          "slot_rule": "window-next-v1"
+        }
+      ]
     },
     "rendered": [
-      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nWhat dose of Forxiga did you intend?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nWhat dose of Forxiga did you intend?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
     ]
   },
   {
@@ -11651,7 +11697,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00)",
+          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -11667,7 +11713,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الاثنين 08:00)",
+          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الأحد 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -11748,10 +11794,33 @@
           "correction_id": null
         }
       ],
-      "evidence_fingerprint": "e2ccf73bbd5cfb636d49eb2296087336f96618fbfb52cfacca1737f202ce62bb"
+      "evidence_fingerprint": "e9d1c2221f6989e89143982a6e8167f89addd2ba1b9bb952b34d99a55eaed69d",
+      "displayed_schedules": [
+        {
+          "item": "mission:0",
+          "slots": [
+            "2026-09-06T17:00:00Z",
+            "2026-09-07T05:00:00Z",
+            "2026-09-07T11:00:00Z",
+            "2026-09-07T17:00:00Z",
+            "2026-09-08T05:00:00Z",
+            "2026-09-08T11:00:00Z",
+            "2026-09-08T17:00:00Z",
+            "2026-09-09T05:00:00Z",
+            "2026-09-09T11:00:00Z",
+            "2026-09-09T17:00:00Z",
+            "2026-09-10T05:00:00Z",
+            "2026-09-10T11:00:00Z",
+            "2026-09-10T17:00:00Z",
+            "2026-09-11T05:00:00Z",
+            "2026-09-11T11:00:00Z"
+          ],
+          "slot_rule": "window-next-v1"
+        }
+      ]
     },
     "rendered": [
-      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga 10 (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nConfirm start of Forxiga: Wed 9 Sep, 10:00 (default 3 days); if unconfirmed I will notify you at the same time.\nDay-three follow-up runs from the start date reported by the patient; confirmation here does not establish that treatment started.\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nCard updated from your reply\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga 10 (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nConfirm start of Forxiga: Wed 9 Sep, 10:00 (default 3 days); if unconfirmed I will notify you at the same time.\nDay-three follow-up runs from the start date reported by the patient; confirmation here does not establish that treatment started.\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nCard updated from your reply\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
     ]
   },
   {
@@ -42448,7 +42517,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00)",
+          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -42464,7 +42533,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الاثنين 08:00)",
+          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الأحد 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -42512,10 +42581,33 @@
           "correction_id": null
         }
       ],
-      "evidence_fingerprint": "930c1b146c6bb4e56430ad40232254bff322229f430bdf559ea6e841470f75c9"
+      "evidence_fingerprint": "ae5be886126a2ba40fa607c6382bce7e29b084998792978b98cc533b25dc34c4",
+      "displayed_schedules": [
+        {
+          "item": "mission:0",
+          "slots": [
+            "2026-09-06T17:00:00Z",
+            "2026-09-07T05:00:00Z",
+            "2026-09-07T11:00:00Z",
+            "2026-09-07T17:00:00Z",
+            "2026-09-08T05:00:00Z",
+            "2026-09-08T11:00:00Z",
+            "2026-09-08T17:00:00Z",
+            "2026-09-09T05:00:00Z",
+            "2026-09-09T11:00:00Z",
+            "2026-09-09T17:00:00Z",
+            "2026-09-10T05:00:00Z",
+            "2026-09-10T11:00:00Z",
+            "2026-09-10T17:00:00Z",
+            "2026-09-11T05:00:00Z",
+            "2026-09-11T11:00:00Z"
+          ],
+          "slot_rule": "window-next-v1"
+        }
+      ]
     },
     "rendered": [
-      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00) — due Sat 12 Sep, 10:00 (explicit: tomorrow); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nWhat dose of Forxiga did you intend?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00) — due Sat 12 Sep, 10:00 (explicit: tomorrow); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nWhat dose of Forxiga did you intend?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
     ]
   },
   {
@@ -43507,7 +43599,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00)",
+          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -43523,7 +43615,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الاثنين 08:00)",
+          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الأحد 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -43571,10 +43663,33 @@
           "correction_id": null
         }
       ],
-      "evidence_fingerprint": "5cba34bbc9dc80882e32f24fdd5c50a8e588d92d681ca383c1a70e9c75fee68b"
+      "evidence_fingerprint": "d27b8b09c9ecdf3487f08e0b0d26507b1e6bb7080ef1ead79abe3607200e6342",
+      "displayed_schedules": [
+        {
+          "item": "mission:0",
+          "slots": [
+            "2026-09-06T17:00:00Z",
+            "2026-09-07T05:00:00Z",
+            "2026-09-07T11:00:00Z",
+            "2026-09-07T17:00:00Z",
+            "2026-09-08T05:00:00Z",
+            "2026-09-08T11:00:00Z",
+            "2026-09-08T17:00:00Z",
+            "2026-09-09T05:00:00Z",
+            "2026-09-09T11:00:00Z",
+            "2026-09-09T17:00:00Z",
+            "2026-09-10T05:00:00Z",
+            "2026-09-10T11:00:00Z",
+            "2026-09-10T17:00:00Z",
+            "2026-09-11T05:00:00Z",
+            "2026-09-11T11:00:00Z"
+          ],
+          "slot_rule": "window-next-v1"
+        }
+      ]
     },
     "rendered": [
-      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nWhat dose of Forxiga did you intend?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nWhat dose of Forxiga did you intend?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
     ]
   },
   {
@@ -44566,7 +44681,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00)",
+          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -44582,7 +44697,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الاثنين 08:00)",
+          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الأحد 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -44630,10 +44745,33 @@
           "correction_id": null
         }
       ],
-      "evidence_fingerprint": "0afc606660f835c6d3584fde653658442145b4b33eb49db994a40f431a345359"
+      "evidence_fingerprint": "ecd31e00ebd452a4709f1ca6eee41ad655dcf4572e88cc97f22b9150d6195cde",
+      "displayed_schedules": [
+        {
+          "item": "mission:0",
+          "slots": [
+            "2026-09-06T17:00:00Z",
+            "2026-09-07T05:00:00Z",
+            "2026-09-07T11:00:00Z",
+            "2026-09-07T17:00:00Z",
+            "2026-09-08T05:00:00Z",
+            "2026-09-08T11:00:00Z",
+            "2026-09-08T17:00:00Z",
+            "2026-09-09T05:00:00Z",
+            "2026-09-09T11:00:00Z",
+            "2026-09-09T17:00:00Z",
+            "2026-09-10T05:00:00Z",
+            "2026-09-10T11:00:00Z",
+            "2026-09-10T17:00:00Z",
+            "2026-09-11T05:00:00Z",
+            "2026-09-11T11:00:00Z"
+          ],
+          "slot_rule": "window-next-v1"
+        }
+      ]
     },
     "rendered": [
-      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00) — due Sat 12 Sep, 10:00 (suggested deadline); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nWhat dose of Forxiga did you intend?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00) — due Sat 12 Sep, 10:00 (suggested deadline); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nWhat dose of Forxiga did you intend?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
     ]
   },
   {
@@ -45681,7 +45819,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00)",
+          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -45697,7 +45835,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الاثنين 08:00)",
+          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الأحد 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -45778,10 +45916,33 @@
           "correction_id": null
         }
       ],
-      "evidence_fingerprint": "5cd2b9d613d58e7fd1212b506af17491eb4c18722294cbcb7c8f5ad6e7aa4138"
+      "evidence_fingerprint": "853f7852df6804f2b8180b9aa719ca4ddef91cbb9c27a6dfdf430385ea40a94b",
+      "displayed_schedules": [
+        {
+          "item": "mission:0",
+          "slots": [
+            "2026-09-06T17:00:00Z",
+            "2026-09-07T05:00:00Z",
+            "2026-09-07T11:00:00Z",
+            "2026-09-07T17:00:00Z",
+            "2026-09-08T05:00:00Z",
+            "2026-09-08T11:00:00Z",
+            "2026-09-08T17:00:00Z",
+            "2026-09-09T05:00:00Z",
+            "2026-09-09T11:00:00Z",
+            "2026-09-09T17:00:00Z",
+            "2026-09-10T05:00:00Z",
+            "2026-09-10T11:00:00Z",
+            "2026-09-10T17:00:00Z",
+            "2026-09-11T05:00:00Z",
+            "2026-09-11T11:00:00Z"
+          ],
+          "slot_rule": "window-next-v1"
+        }
+      ]
     },
     "rendered": [
-      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nI heard a request for tests or an examination; which items did you request?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nI heard a request for tests or an examination; which items did you request?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
     ]
   },
   {
@@ -46829,7 +46990,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00)",
+          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -46845,7 +47006,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الاثنين 08:00)",
+          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الأحد 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -46926,10 +47087,33 @@
           "correction_id": null
         }
       ],
-      "evidence_fingerprint": "5cd2b9d613d58e7fd1212b506af17491eb4c18722294cbcb7c8f5ad6e7aa4138"
+      "evidence_fingerprint": "853f7852df6804f2b8180b9aa719ca4ddef91cbb9c27a6dfdf430385ea40a94b",
+      "displayed_schedules": [
+        {
+          "item": "mission:0",
+          "slots": [
+            "2026-09-06T17:00:00Z",
+            "2026-09-07T05:00:00Z",
+            "2026-09-07T11:00:00Z",
+            "2026-09-07T17:00:00Z",
+            "2026-09-08T05:00:00Z",
+            "2026-09-08T11:00:00Z",
+            "2026-09-08T17:00:00Z",
+            "2026-09-09T05:00:00Z",
+            "2026-09-09T11:00:00Z",
+            "2026-09-09T17:00:00Z",
+            "2026-09-10T05:00:00Z",
+            "2026-09-10T11:00:00Z",
+            "2026-09-10T17:00:00Z",
+            "2026-09-11T05:00:00Z",
+            "2026-09-11T11:00:00Z"
+          ],
+          "slot_rule": "window-next-v1"
+        }
+      ]
     },
     "rendered": [
-      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nI heard \"uncertain dose\" for Forxiga; which dose did you mean?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nI heard \"uncertain dose\" for Forxiga; which dose did you mean?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
     ]
   },
   {
@@ -47977,7 +48161,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00)",
+          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -47993,7 +48177,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الاثنين 08:00)",
+          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الأحد 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -48074,10 +48258,33 @@
           "correction_id": null
         }
       ],
-      "evidence_fingerprint": "5cd2b9d613d58e7fd1212b506af17491eb4c18722294cbcb7c8f5ad6e7aa4138"
+      "evidence_fingerprint": "853f7852df6804f2b8180b9aa719ca4ddef91cbb9c27a6dfdf430385ea40a94b",
+      "displayed_schedules": [
+        {
+          "item": "mission:0",
+          "slots": [
+            "2026-09-06T17:00:00Z",
+            "2026-09-07T05:00:00Z",
+            "2026-09-07T11:00:00Z",
+            "2026-09-07T17:00:00Z",
+            "2026-09-08T05:00:00Z",
+            "2026-09-08T11:00:00Z",
+            "2026-09-08T17:00:00Z",
+            "2026-09-09T05:00:00Z",
+            "2026-09-09T11:00:00Z",
+            "2026-09-09T17:00:00Z",
+            "2026-09-10T05:00:00Z",
+            "2026-09-10T11:00:00Z",
+            "2026-09-10T17:00:00Z",
+            "2026-09-11T05:00:00Z",
+            "2026-09-11T11:00:00Z"
+          ],
+          "slot_rule": "window-next-v1"
+        }
+      ]
     },
     "rendered": [
-      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nI heard \"uncertain dose\"; please clarify.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nI heard \"uncertain dose\"; please clarify.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
     ]
   },
   {
@@ -49125,7 +49332,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00)",
+          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -49141,7 +49348,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الاثنين 08:00)",
+          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الأحد 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -49222,10 +49429,33 @@
           "correction_id": null
         }
       ],
-      "evidence_fingerprint": "5cd2b9d613d58e7fd1212b506af17491eb4c18722294cbcb7c8f5ad6e7aa4138"
+      "evidence_fingerprint": "853f7852df6804f2b8180b9aa719ca4ddef91cbb9c27a6dfdf430385ea40a94b",
+      "displayed_schedules": [
+        {
+          "item": "mission:0",
+          "slots": [
+            "2026-09-06T17:00:00Z",
+            "2026-09-07T05:00:00Z",
+            "2026-09-07T11:00:00Z",
+            "2026-09-07T17:00:00Z",
+            "2026-09-08T05:00:00Z",
+            "2026-09-08T11:00:00Z",
+            "2026-09-08T17:00:00Z",
+            "2026-09-09T05:00:00Z",
+            "2026-09-09T11:00:00Z",
+            "2026-09-09T17:00:00Z",
+            "2026-09-10T05:00:00Z",
+            "2026-09-10T11:00:00Z",
+            "2026-09-10T17:00:00Z",
+            "2026-09-11T05:00:00Z",
+            "2026-09-11T11:00:00Z"
+          ],
+          "slot_rule": "window-next-v1"
+        }
+      ]
     },
     "rendered": [
-      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nPlease confirm the drug name as heard.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nPlease confirm the drug name as heard.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
     ]
   },
   {
@@ -50273,7 +50503,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00)",
+          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -50289,7 +50519,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الاثنين 08:00)",
+          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الأحد 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -50370,10 +50600,33 @@
           "correction_id": null
         }
       ],
-      "evidence_fingerprint": "5cd2b9d613d58e7fd1212b506af17491eb4c18722294cbcb7c8f5ad6e7aa4138"
+      "evidence_fingerprint": "853f7852df6804f2b8180b9aa719ca4ddef91cbb9c27a6dfdf430385ea40a94b",
+      "displayed_schedules": [
+        {
+          "item": "mission:0",
+          "slots": [
+            "2026-09-06T17:00:00Z",
+            "2026-09-07T05:00:00Z",
+            "2026-09-07T11:00:00Z",
+            "2026-09-07T17:00:00Z",
+            "2026-09-08T05:00:00Z",
+            "2026-09-08T11:00:00Z",
+            "2026-09-08T17:00:00Z",
+            "2026-09-09T05:00:00Z",
+            "2026-09-09T11:00:00Z",
+            "2026-09-09T17:00:00Z",
+            "2026-09-10T05:00:00Z",
+            "2026-09-10T11:00:00Z",
+            "2026-09-10T17:00:00Z",
+            "2026-09-11T05:00:00Z",
+            "2026-09-11T11:00:00Z"
+          ],
+          "slot_rule": "window-next-v1"
+        }
+      ]
     },
     "rendered": [
-      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nShould I record the current medication as continue?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nShould I record the current medication as continue?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
     ]
   },
   {
@@ -51421,7 +51674,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00)",
+          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -51437,7 +51690,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الاثنين 08:00)",
+          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الأحد 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -51518,10 +51771,33 @@
           "correction_id": null
         }
       ],
-      "evidence_fingerprint": "5cd2b9d613d58e7fd1212b506af17491eb4c18722294cbcb7c8f5ad6e7aa4138"
+      "evidence_fingerprint": "853f7852df6804f2b8180b9aa719ca4ddef91cbb9c27a6dfdf430385ea40a94b",
+      "displayed_schedules": [
+        {
+          "item": "mission:0",
+          "slots": [
+            "2026-09-06T17:00:00Z",
+            "2026-09-07T05:00:00Z",
+            "2026-09-07T11:00:00Z",
+            "2026-09-07T17:00:00Z",
+            "2026-09-08T05:00:00Z",
+            "2026-09-08T11:00:00Z",
+            "2026-09-08T17:00:00Z",
+            "2026-09-09T05:00:00Z",
+            "2026-09-09T11:00:00Z",
+            "2026-09-09T17:00:00Z",
+            "2026-09-10T05:00:00Z",
+            "2026-09-10T11:00:00Z",
+            "2026-09-10T17:00:00Z",
+            "2026-09-11T05:00:00Z",
+            "2026-09-11T11:00:00Z"
+          ],
+          "slot_rule": "window-next-v1"
+        }
+      ]
     },
     "rendered": [
-      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nWhich item does your correction refer to?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nWhich item does your correction refer to?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
     ]
   },
   {
@@ -52569,7 +52845,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00)",
+          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -52585,7 +52861,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الاثنين 08:00)",
+          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الأحد 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -52666,10 +52942,33 @@
           "correction_id": null
         }
       ],
-      "evidence_fingerprint": "5cd2b9d613d58e7fd1212b506af17491eb4c18722294cbcb7c8f5ad6e7aa4138"
+      "evidence_fingerprint": "853f7852df6804f2b8180b9aa719ca4ddef91cbb9c27a6dfdf430385ea40a94b",
+      "displayed_schedules": [
+        {
+          "item": "mission:0",
+          "slots": [
+            "2026-09-06T17:00:00Z",
+            "2026-09-07T05:00:00Z",
+            "2026-09-07T11:00:00Z",
+            "2026-09-07T17:00:00Z",
+            "2026-09-08T05:00:00Z",
+            "2026-09-08T11:00:00Z",
+            "2026-09-08T17:00:00Z",
+            "2026-09-09T05:00:00Z",
+            "2026-09-09T11:00:00Z",
+            "2026-09-09T17:00:00Z",
+            "2026-09-10T05:00:00Z",
+            "2026-09-10T11:00:00Z",
+            "2026-09-10T17:00:00Z",
+            "2026-09-11T05:00:00Z",
+            "2026-09-11T11:00:00Z"
+          ],
+          "slot_rule": "window-next-v1"
+        }
+      ]
     },
     "rendered": [
-      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nThe readings differ; please edit the item.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nThe readings differ; please edit the item.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
     ]
   },
   {
@@ -53717,7 +54016,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00)",
+          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -53733,7 +54032,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الاثنين 08:00)",
+          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الأحد 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -53814,10 +54113,33 @@
           "correction_id": null
         }
       ],
-      "evidence_fingerprint": "5cd2b9d613d58e7fd1212b506af17491eb4c18722294cbcb7c8f5ad6e7aa4138"
+      "evidence_fingerprint": "853f7852df6804f2b8180b9aa719ca4ddef91cbb9c27a6dfdf430385ea40a94b",
+      "displayed_schedules": [
+        {
+          "item": "mission:0",
+          "slots": [
+            "2026-09-06T17:00:00Z",
+            "2026-09-07T05:00:00Z",
+            "2026-09-07T11:00:00Z",
+            "2026-09-07T17:00:00Z",
+            "2026-09-08T05:00:00Z",
+            "2026-09-08T11:00:00Z",
+            "2026-09-08T17:00:00Z",
+            "2026-09-09T05:00:00Z",
+            "2026-09-09T11:00:00Z",
+            "2026-09-09T17:00:00Z",
+            "2026-09-10T05:00:00Z",
+            "2026-09-10T11:00:00Z",
+            "2026-09-10T17:00:00Z",
+            "2026-09-11T05:00:00Z",
+            "2026-09-11T11:00:00Z"
+          ],
+          "slot_rule": "window-next-v1"
+        }
+      ]
     },
     "rendered": [
-      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nThe values may be shifted between rows; please edit them.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nThe values may be shifted between rows; please edit them.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
     ]
   },
   {
@@ -54865,7 +55187,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00)",
+          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -54881,7 +55203,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الاثنين 08:00)",
+          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الأحد 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -54962,10 +55284,33 @@
           "correction_id": null
         }
       ],
-      "evidence_fingerprint": "5cd2b9d613d58e7fd1212b506af17491eb4c18722294cbcb7c8f5ad6e7aa4138"
+      "evidence_fingerprint": "853f7852df6804f2b8180b9aa719ca4ddef91cbb9c27a6dfdf430385ea40a94b",
+      "displayed_schedules": [
+        {
+          "item": "mission:0",
+          "slots": [
+            "2026-09-06T17:00:00Z",
+            "2026-09-07T05:00:00Z",
+            "2026-09-07T11:00:00Z",
+            "2026-09-07T17:00:00Z",
+            "2026-09-08T05:00:00Z",
+            "2026-09-08T11:00:00Z",
+            "2026-09-08T17:00:00Z",
+            "2026-09-09T05:00:00Z",
+            "2026-09-09T11:00:00Z",
+            "2026-09-09T17:00:00Z",
+            "2026-09-10T05:00:00Z",
+            "2026-09-10T11:00:00Z",
+            "2026-09-10T17:00:00Z",
+            "2026-09-11T05:00:00Z",
+            "2026-09-11T11:00:00Z"
+          ],
+          "slot_rule": "window-next-v1"
+        }
+      ]
     },
     "rendered": [
-      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nThere is no current order for this drug; please clarify the change.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nThere is no current order for this drug; please clarify the change.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
     ]
   },
   {
@@ -56013,7 +56358,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00)",
+          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -56029,7 +56374,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الاثنين 08:00)",
+          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الأحد 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -56110,10 +56455,33 @@
           "correction_id": null
         }
       ],
-      "evidence_fingerprint": "5cd2b9d613d58e7fd1212b506af17491eb4c18722294cbcb7c8f5ad6e7aa4138"
+      "evidence_fingerprint": "853f7852df6804f2b8180b9aa719ca4ddef91cbb9c27a6dfdf430385ea40a94b",
+      "displayed_schedules": [
+        {
+          "item": "mission:0",
+          "slots": [
+            "2026-09-06T17:00:00Z",
+            "2026-09-07T05:00:00Z",
+            "2026-09-07T11:00:00Z",
+            "2026-09-07T17:00:00Z",
+            "2026-09-08T05:00:00Z",
+            "2026-09-08T11:00:00Z",
+            "2026-09-08T17:00:00Z",
+            "2026-09-09T05:00:00Z",
+            "2026-09-09T11:00:00Z",
+            "2026-09-09T17:00:00Z",
+            "2026-09-10T05:00:00Z",
+            "2026-09-10T11:00:00Z",
+            "2026-09-10T17:00:00Z",
+            "2026-09-11T05:00:00Z",
+            "2026-09-11T11:00:00Z"
+          ],
+          "slot_rule": "window-next-v1"
+        }
+      ]
     },
     "rendered": [
-      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nPlease clarify the document.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nPlease clarify the document.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
     ]
   },
   {
@@ -57161,7 +57529,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00)",
+          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -57177,7 +57545,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الاثنين 08:00)",
+          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الأحد 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -57258,10 +57626,33 @@
           "correction_id": null
         }
       ],
-      "evidence_fingerprint": "5cd2b9d613d58e7fd1212b506af17491eb4c18722294cbcb7c8f5ad6e7aa4138"
+      "evidence_fingerprint": "853f7852df6804f2b8180b9aa719ca4ddef91cbb9c27a6dfdf430385ea40a94b",
+      "displayed_schedules": [
+        {
+          "item": "mission:0",
+          "slots": [
+            "2026-09-06T17:00:00Z",
+            "2026-09-07T05:00:00Z",
+            "2026-09-07T11:00:00Z",
+            "2026-09-07T17:00:00Z",
+            "2026-09-08T05:00:00Z",
+            "2026-09-08T11:00:00Z",
+            "2026-09-08T17:00:00Z",
+            "2026-09-09T05:00:00Z",
+            "2026-09-09T11:00:00Z",
+            "2026-09-09T17:00:00Z",
+            "2026-09-10T05:00:00Z",
+            "2026-09-10T11:00:00Z",
+            "2026-09-10T17:00:00Z",
+            "2026-09-11T05:00:00Z",
+            "2026-09-11T11:00:00Z"
+          ],
+          "slot_rule": "window-next-v1"
+        }
+      ]
     },
     "rendered": [
-      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nA proposed number was not in your dictation; please edit the item.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nA proposed number was not in your dictation; please edit the item.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
     ]
   },
   {
@@ -58309,7 +58700,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00)",
+          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -58325,7 +58716,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الاثنين 08:00)",
+          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الأحد 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -58406,10 +58797,33 @@
           "correction_id": null
         }
       ],
-      "evidence_fingerprint": "5cd2b9d613d58e7fd1212b506af17491eb4c18722294cbcb7c8f5ad6e7aa4138"
+      "evidence_fingerprint": "853f7852df6804f2b8180b9aa719ca4ddef91cbb9c27a6dfdf430385ea40a94b",
+      "displayed_schedules": [
+        {
+          "item": "mission:0",
+          "slots": [
+            "2026-09-06T17:00:00Z",
+            "2026-09-07T05:00:00Z",
+            "2026-09-07T11:00:00Z",
+            "2026-09-07T17:00:00Z",
+            "2026-09-08T05:00:00Z",
+            "2026-09-08T11:00:00Z",
+            "2026-09-08T17:00:00Z",
+            "2026-09-09T05:00:00Z",
+            "2026-09-09T11:00:00Z",
+            "2026-09-09T17:00:00Z",
+            "2026-09-10T05:00:00Z",
+            "2026-09-10T11:00:00Z",
+            "2026-09-10T17:00:00Z",
+            "2026-09-11T05:00:00Z",
+            "2026-09-11T11:00:00Z"
+          ],
+          "slot_rule": "window-next-v1"
+        }
+      ]
     },
     "rendered": [
-      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nI heard \"uncertain dose\" for Forxiga; which dose did you mean?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nI heard \"uncertain dose\" for Forxiga; which dose did you mean?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
     ]
   },
   {
@@ -59457,7 +59871,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00)",
+          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -59473,7 +59887,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الاثنين 08:00)",
+          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الأحد 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -59554,10 +59968,33 @@
           "correction_id": null
         }
       ],
-      "evidence_fingerprint": "5cd2b9d613d58e7fd1212b506af17491eb4c18722294cbcb7c8f5ad6e7aa4138"
+      "evidence_fingerprint": "853f7852df6804f2b8180b9aa719ca4ddef91cbb9c27a6dfdf430385ea40a94b",
+      "displayed_schedules": [
+        {
+          "item": "mission:0",
+          "slots": [
+            "2026-09-06T17:00:00Z",
+            "2026-09-07T05:00:00Z",
+            "2026-09-07T11:00:00Z",
+            "2026-09-07T17:00:00Z",
+            "2026-09-08T05:00:00Z",
+            "2026-09-08T11:00:00Z",
+            "2026-09-08T17:00:00Z",
+            "2026-09-09T05:00:00Z",
+            "2026-09-09T11:00:00Z",
+            "2026-09-09T17:00:00Z",
+            "2026-09-10T05:00:00Z",
+            "2026-09-10T11:00:00Z",
+            "2026-09-10T17:00:00Z",
+            "2026-09-11T05:00:00Z",
+            "2026-09-11T11:00:00Z"
+          ],
+          "slot_rule": "window-next-v1"
+        }
+      ]
     },
     "rendered": [
-      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nWhat dose of Forxiga did you intend?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nWhat dose of Forxiga did you intend?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
     ]
   },
   {
@@ -60605,7 +61042,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00)",
+          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -60621,7 +61058,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الاثنين 08:00)",
+          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الأحد 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -60702,10 +61139,33 @@
           "correction_id": null
         }
       ],
-      "evidence_fingerprint": "5cd2b9d613d58e7fd1212b506af17491eb4c18722294cbcb7c8f5ad6e7aa4138"
+      "evidence_fingerprint": "853f7852df6804f2b8180b9aa719ca4ddef91cbb9c27a6dfdf430385ea40a94b",
+      "displayed_schedules": [
+        {
+          "item": "mission:0",
+          "slots": [
+            "2026-09-06T17:00:00Z",
+            "2026-09-07T05:00:00Z",
+            "2026-09-07T11:00:00Z",
+            "2026-09-07T17:00:00Z",
+            "2026-09-08T05:00:00Z",
+            "2026-09-08T11:00:00Z",
+            "2026-09-08T17:00:00Z",
+            "2026-09-09T05:00:00Z",
+            "2026-09-09T11:00:00Z",
+            "2026-09-09T17:00:00Z",
+            "2026-09-10T05:00:00Z",
+            "2026-09-10T11:00:00Z",
+            "2026-09-10T17:00:00Z",
+            "2026-09-11T05:00:00Z",
+            "2026-09-11T11:00:00Z"
+          ],
+          "slot_rule": "window-next-v1"
+        }
+      ]
     },
     "rendered": [
-      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nI heard \"999\"; is that correct?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nI heard \"999\"; is that correct?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
     ]
   },
   {
@@ -61753,7 +62213,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00)",
+          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -61769,7 +62229,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الاثنين 08:00)",
+          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الأحد 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -61850,10 +62310,33 @@
           "correction_id": null
         }
       ],
-      "evidence_fingerprint": "5cd2b9d613d58e7fd1212b506af17491eb4c18722294cbcb7c8f5ad6e7aa4138"
+      "evidence_fingerprint": "853f7852df6804f2b8180b9aa719ca4ddef91cbb9c27a6dfdf430385ea40a94b",
+      "displayed_schedules": [
+        {
+          "item": "mission:0",
+          "slots": [
+            "2026-09-06T17:00:00Z",
+            "2026-09-07T05:00:00Z",
+            "2026-09-07T11:00:00Z",
+            "2026-09-07T17:00:00Z",
+            "2026-09-08T05:00:00Z",
+            "2026-09-08T11:00:00Z",
+            "2026-09-08T17:00:00Z",
+            "2026-09-09T05:00:00Z",
+            "2026-09-09T11:00:00Z",
+            "2026-09-09T17:00:00Z",
+            "2026-09-10T05:00:00Z",
+            "2026-09-10T11:00:00Z",
+            "2026-09-10T17:00:00Z",
+            "2026-09-11T05:00:00Z",
+            "2026-09-11T11:00:00Z"
+          ],
+          "slot_rule": "window-next-v1"
+        }
+      ]
     },
     "rendered": [
-      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nThis medication amendment needs review.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nThis medication amendment needs review.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
     ]
   },
   {
@@ -62901,7 +63384,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00)",
+          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -62917,7 +63400,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الاثنين 08:00)",
+          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الأحد 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -62998,10 +63481,33 @@
           "correction_id": null
         }
       ],
-      "evidence_fingerprint": "5cd2b9d613d58e7fd1212b506af17491eb4c18722294cbcb7c8f5ad6e7aa4138"
+      "evidence_fingerprint": "853f7852df6804f2b8180b9aa719ca4ddef91cbb9c27a6dfdf430385ea40a94b",
+      "displayed_schedules": [
+        {
+          "item": "mission:0",
+          "slots": [
+            "2026-09-06T17:00:00Z",
+            "2026-09-07T05:00:00Z",
+            "2026-09-07T11:00:00Z",
+            "2026-09-07T17:00:00Z",
+            "2026-09-08T05:00:00Z",
+            "2026-09-08T11:00:00Z",
+            "2026-09-08T17:00:00Z",
+            "2026-09-09T05:00:00Z",
+            "2026-09-09T11:00:00Z",
+            "2026-09-09T17:00:00Z",
+            "2026-09-10T05:00:00Z",
+            "2026-09-10T11:00:00Z",
+            "2026-09-10T17:00:00Z",
+            "2026-09-11T05:00:00Z",
+            "2026-09-11T11:00:00Z"
+          ],
+          "slot_rule": "window-next-v1"
+        }
+      ]
     },
     "rendered": [
-      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nPlease specify the intended deadline.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nPlease specify the intended deadline.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
     ]
   },
   {
@@ -64049,7 +64555,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00)",
+          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -64065,7 +64571,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الاثنين 08:00)",
+          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الأحد 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -64146,10 +64652,33 @@
           "correction_id": null
         }
       ],
-      "evidence_fingerprint": "5cd2b9d613d58e7fd1212b506af17491eb4c18722294cbcb7c8f5ad6e7aa4138"
+      "evidence_fingerprint": "853f7852df6804f2b8180b9aa719ca4ddef91cbb9c27a6dfdf430385ea40a94b",
+      "displayed_schedules": [
+        {
+          "item": "mission:0",
+          "slots": [
+            "2026-09-06T17:00:00Z",
+            "2026-09-07T05:00:00Z",
+            "2026-09-07T11:00:00Z",
+            "2026-09-07T17:00:00Z",
+            "2026-09-08T05:00:00Z",
+            "2026-09-08T11:00:00Z",
+            "2026-09-08T17:00:00Z",
+            "2026-09-09T05:00:00Z",
+            "2026-09-09T11:00:00Z",
+            "2026-09-09T17:00:00Z",
+            "2026-09-10T05:00:00Z",
+            "2026-09-10T11:00:00Z",
+            "2026-09-10T17:00:00Z",
+            "2026-09-11T05:00:00Z",
+            "2026-09-11T11:00:00Z"
+          ],
+          "slot_rule": "window-next-v1"
+        }
+      ]
     },
     "rendered": [
-      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nWho is the patient?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nWho is the patient?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
     ]
   },
   {
@@ -65197,7 +65726,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00)",
+          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -65213,7 +65742,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الاثنين 08:00)",
+          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الأحد 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -65294,10 +65823,33 @@
           "correction_id": null
         }
       ],
-      "evidence_fingerprint": "5cd2b9d613d58e7fd1212b506af17491eb4c18722294cbcb7c8f5ad6e7aa4138"
+      "evidence_fingerprint": "853f7852df6804f2b8180b9aa719ca4ddef91cbb9c27a6dfdf430385ea40a94b",
+      "displayed_schedules": [
+        {
+          "item": "mission:0",
+          "slots": [
+            "2026-09-06T17:00:00Z",
+            "2026-09-07T05:00:00Z",
+            "2026-09-07T11:00:00Z",
+            "2026-09-07T17:00:00Z",
+            "2026-09-08T05:00:00Z",
+            "2026-09-08T11:00:00Z",
+            "2026-09-08T17:00:00Z",
+            "2026-09-09T05:00:00Z",
+            "2026-09-09T11:00:00Z",
+            "2026-09-09T17:00:00Z",
+            "2026-09-10T05:00:00Z",
+            "2026-09-10T11:00:00Z",
+            "2026-09-10T17:00:00Z",
+            "2026-09-11T05:00:00Z",
+            "2026-09-11T11:00:00Z"
+          ],
+          "slot_rule": "window-next-v1"
+        }
+      ]
     },
     "rendered": [
-      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nPlease send each patient's instructions separately.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nPlease send each patient's instructions separately.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
     ]
   },
   {
@@ -66345,7 +66897,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00)",
+          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -66361,7 +66913,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الاثنين 08:00)",
+          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الأحد 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -66442,10 +66994,33 @@
           "correction_id": null
         }
       ],
-      "evidence_fingerprint": "5cd2b9d613d58e7fd1212b506af17491eb4c18722294cbcb7c8f5ad6e7aa4138"
+      "evidence_fingerprint": "853f7852df6804f2b8180b9aa719ca4ddef91cbb9c27a6dfdf430385ea40a94b",
+      "displayed_schedules": [
+        {
+          "item": "mission:0",
+          "slots": [
+            "2026-09-06T17:00:00Z",
+            "2026-09-07T05:00:00Z",
+            "2026-09-07T11:00:00Z",
+            "2026-09-07T17:00:00Z",
+            "2026-09-08T05:00:00Z",
+            "2026-09-08T11:00:00Z",
+            "2026-09-08T17:00:00Z",
+            "2026-09-09T05:00:00Z",
+            "2026-09-09T11:00:00Z",
+            "2026-09-09T17:00:00Z",
+            "2026-09-10T05:00:00Z",
+            "2026-09-10T11:00:00Z",
+            "2026-09-10T17:00:00Z",
+            "2026-09-11T05:00:00Z",
+            "2026-09-11T11:00:00Z"
+          ],
+          "slot_rule": "window-next-v1"
+        }
+      ]
     },
     "rendered": [
-      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nThis item needs review because of a danger signal.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nThis item needs review because of a danger signal.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
     ]
   },
   {
@@ -67493,7 +68068,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00)",
+          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -67509,7 +68084,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الاثنين 08:00)",
+          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الأحد 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -67590,10 +68165,33 @@
           "correction_id": null
         }
       ],
-      "evidence_fingerprint": "5cd2b9d613d58e7fd1212b506af17491eb4c18722294cbcb7c8f5ad6e7aa4138"
+      "evidence_fingerprint": "853f7852df6804f2b8180b9aa719ca4ddef91cbb9c27a6dfdf430385ea40a94b",
+      "displayed_schedules": [
+        {
+          "item": "mission:0",
+          "slots": [
+            "2026-09-06T17:00:00Z",
+            "2026-09-07T05:00:00Z",
+            "2026-09-07T11:00:00Z",
+            "2026-09-07T17:00:00Z",
+            "2026-09-08T05:00:00Z",
+            "2026-09-08T11:00:00Z",
+            "2026-09-08T17:00:00Z",
+            "2026-09-09T05:00:00Z",
+            "2026-09-09T11:00:00Z",
+            "2026-09-09T17:00:00Z",
+            "2026-09-10T05:00:00Z",
+            "2026-09-10T11:00:00Z",
+            "2026-09-10T17:00:00Z",
+            "2026-09-11T05:00:00Z",
+            "2026-09-11T11:00:00Z"
+          ],
+          "slot_rule": "window-next-v1"
+        }
+      ]
     },
     "rendered": [
-      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nPlease clarify the empty item.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nPlease clarify the empty item.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
     ]
   },
   {
@@ -68641,7 +69239,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00)",
+          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -68657,7 +69255,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الاثنين 08:00)",
+          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الأحد 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -68738,10 +69336,33 @@
           "correction_id": null
         }
       ],
-      "evidence_fingerprint": "5cd2b9d613d58e7fd1212b506af17491eb4c18722294cbcb7c8f5ad6e7aa4138"
+      "evidence_fingerprint": "853f7852df6804f2b8180b9aa719ca4ddef91cbb9c27a6dfdf430385ea40a94b",
+      "displayed_schedules": [
+        {
+          "item": "mission:0",
+          "slots": [
+            "2026-09-06T17:00:00Z",
+            "2026-09-07T05:00:00Z",
+            "2026-09-07T11:00:00Z",
+            "2026-09-07T17:00:00Z",
+            "2026-09-08T05:00:00Z",
+            "2026-09-08T11:00:00Z",
+            "2026-09-08T17:00:00Z",
+            "2026-09-09T05:00:00Z",
+            "2026-09-09T11:00:00Z",
+            "2026-09-09T17:00:00Z",
+            "2026-09-10T05:00:00Z",
+            "2026-09-10T11:00:00Z",
+            "2026-09-10T17:00:00Z",
+            "2026-09-11T05:00:00Z",
+            "2026-09-11T11:00:00Z"
+          ],
+          "slot_rule": "window-next-v1"
+        }
+      ]
     },
     "rendered": [
-      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nThis batch exceeds the confirmation limit; edit it into smaller batches.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nThis batch exceeds the confirmation limit; edit it into smaller batches.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
     ]
   },
   {
@@ -69789,7 +70410,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00)",
+          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -69805,7 +70426,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الاثنين 08:00)",
+          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الأحد 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -69886,10 +70507,33 @@
           "correction_id": null
         }
       ],
-      "evidence_fingerprint": "5cd2b9d613d58e7fd1212b506af17491eb4c18722294cbcb7c8f5ad6e7aa4138"
+      "evidence_fingerprint": "853f7852df6804f2b8180b9aa719ca4ddef91cbb9c27a6dfdf430385ea40a94b",
+      "displayed_schedules": [
+        {
+          "item": "mission:0",
+          "slots": [
+            "2026-09-06T17:00:00Z",
+            "2026-09-07T05:00:00Z",
+            "2026-09-07T11:00:00Z",
+            "2026-09-07T17:00:00Z",
+            "2026-09-08T05:00:00Z",
+            "2026-09-08T11:00:00Z",
+            "2026-09-08T17:00:00Z",
+            "2026-09-09T05:00:00Z",
+            "2026-09-09T11:00:00Z",
+            "2026-09-09T17:00:00Z",
+            "2026-09-10T05:00:00Z",
+            "2026-09-10T11:00:00Z",
+            "2026-09-10T17:00:00Z",
+            "2026-09-11T05:00:00Z",
+            "2026-09-11T11:00:00Z"
+          ],
+          "slot_rule": "window-next-v1"
+        }
+      ]
     },
     "rendered": [
-      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nPlease clarify the patient and instructions.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nPlease clarify the patient and instructions.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
     ]
   },
   {
@@ -70937,7 +71581,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00)",
+          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -70953,7 +71597,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الاثنين 08:00)",
+          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الأحد 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -71034,10 +71678,33 @@
           "correction_id": null
         }
       ],
-      "evidence_fingerprint": "5cd2b9d613d58e7fd1212b506af17491eb4c18722294cbcb7c8f5ad6e7aa4138"
+      "evidence_fingerprint": "853f7852df6804f2b8180b9aa719ca4ddef91cbb9c27a6dfdf430385ea40a94b",
+      "displayed_schedules": [
+        {
+          "item": "mission:0",
+          "slots": [
+            "2026-09-06T17:00:00Z",
+            "2026-09-07T05:00:00Z",
+            "2026-09-07T11:00:00Z",
+            "2026-09-07T17:00:00Z",
+            "2026-09-08T05:00:00Z",
+            "2026-09-08T11:00:00Z",
+            "2026-09-08T17:00:00Z",
+            "2026-09-09T05:00:00Z",
+            "2026-09-09T11:00:00Z",
+            "2026-09-09T17:00:00Z",
+            "2026-09-10T05:00:00Z",
+            "2026-09-10T11:00:00Z",
+            "2026-09-10T17:00:00Z",
+            "2026-09-11T05:00:00Z",
+            "2026-09-11T11:00:00Z"
+          ],
+          "slot_rule": "window-next-v1"
+        }
+      ]
     },
     "rendered": [
-      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nThere is more than one order for this drug; please clarify one order.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nThere is more than one order for this drug; please clarify one order.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
     ]
   },
   {
@@ -72085,7 +72752,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00)",
+          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -72101,7 +72768,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الاثنين 08:00)",
+          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الأحد 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -72182,10 +72849,33 @@
           "correction_id": null
         }
       ],
-      "evidence_fingerprint": "5cd2b9d613d58e7fd1212b506af17491eb4c18722294cbcb7c8f5ad6e7aa4138"
+      "evidence_fingerprint": "853f7852df6804f2b8180b9aa719ca4ddef91cbb9c27a6dfdf430385ea40a94b",
+      "displayed_schedules": [
+        {
+          "item": "mission:0",
+          "slots": [
+            "2026-09-06T17:00:00Z",
+            "2026-09-07T05:00:00Z",
+            "2026-09-07T11:00:00Z",
+            "2026-09-07T17:00:00Z",
+            "2026-09-08T05:00:00Z",
+            "2026-09-08T11:00:00Z",
+            "2026-09-08T17:00:00Z",
+            "2026-09-09T05:00:00Z",
+            "2026-09-09T11:00:00Z",
+            "2026-09-09T17:00:00Z",
+            "2026-09-10T05:00:00Z",
+            "2026-09-10T11:00:00Z",
+            "2026-09-10T17:00:00Z",
+            "2026-09-11T05:00:00Z",
+            "2026-09-11T11:00:00Z"
+          ],
+          "slot_rule": "window-next-v1"
+        }
+      ]
     },
     "rendered": [
-      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nI heard \"999\"; which item does it belong to?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nI heard \"999\"; which item does it belong to?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
     ]
   },
   {
@@ -73234,7 +73924,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00)",
+          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -73250,7 +73940,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الاثنين 08:00)",
+          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الأحد 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -73331,10 +74021,33 @@
           "correction_id": null
         }
       ],
-      "evidence_fingerprint": "5cd2b9d613d58e7fd1212b506af17491eb4c18722294cbcb7c8f5ad6e7aa4138"
+      "evidence_fingerprint": "853f7852df6804f2b8180b9aa719ca4ddef91cbb9c27a6dfdf430385ea40a94b",
+      "displayed_schedules": [
+        {
+          "item": "mission:0",
+          "slots": [
+            "2026-09-06T17:00:00Z",
+            "2026-09-07T05:00:00Z",
+            "2026-09-07T11:00:00Z",
+            "2026-09-07T17:00:00Z",
+            "2026-09-08T05:00:00Z",
+            "2026-09-08T11:00:00Z",
+            "2026-09-08T17:00:00Z",
+            "2026-09-09T05:00:00Z",
+            "2026-09-09T11:00:00Z",
+            "2026-09-09T17:00:00Z",
+            "2026-09-10T05:00:00Z",
+            "2026-09-10T11:00:00Z",
+            "2026-09-10T17:00:00Z",
+            "2026-09-11T05:00:00Z",
+            "2026-09-11T11:00:00Z"
+          ],
+          "slot_rule": "window-next-v1"
+        }
+      ]
     },
     "rendered": [
-      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nConfirm start of Forxiga: Wed 9 Sep, 10:00 (default 3 days); if unconfirmed I will notify you at the same time.\nDay-three follow-up runs from the start date reported by the patient; confirmation here does not establish that treatment started.\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nI heard the patient as \"Synthetic Person\" and as \"Synthetic Pearson\"; which is right?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nConfirm start of Forxiga: Wed 9 Sep, 10:00 (default 3 days); if unconfirmed I will notify you at the same time.\nDay-three follow-up runs from the start date reported by the patient; confirmation here does not establish that treatment started.\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nI heard the patient as \"Synthetic Person\" and as \"Synthetic Pearson\"; which is right?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
     ]
   },
   {
@@ -75526,7 +76239,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00)",
+          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -75542,7 +76255,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الاثنين 08:00)",
+          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الأحد 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -75623,10 +76336,33 @@
           "correction_id": null
         }
       ],
-      "evidence_fingerprint": "5cd2b9d613d58e7fd1212b506af17491eb4c18722294cbcb7c8f5ad6e7aa4138"
+      "evidence_fingerprint": "853f7852df6804f2b8180b9aa719ca4ddef91cbb9c27a6dfdf430385ea40a94b",
+      "displayed_schedules": [
+        {
+          "item": "mission:0",
+          "slots": [
+            "2026-09-06T17:00:00Z",
+            "2026-09-07T05:00:00Z",
+            "2026-09-07T11:00:00Z",
+            "2026-09-07T17:00:00Z",
+            "2026-09-08T05:00:00Z",
+            "2026-09-08T11:00:00Z",
+            "2026-09-08T17:00:00Z",
+            "2026-09-09T05:00:00Z",
+            "2026-09-09T11:00:00Z",
+            "2026-09-09T17:00:00Z",
+            "2026-09-10T05:00:00Z",
+            "2026-09-10T11:00:00Z",
+            "2026-09-10T17:00:00Z",
+            "2026-09-11T05:00:00Z",
+            "2026-09-11T11:00:00Z"
+          ],
+          "slot_rule": "window-next-v1"
+        }
+      ]
     },
     "rendered": [
-      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nPlease verify \"the original statement\".\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nPlease verify \"the original statement\".\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
     ]
   },
   {
@@ -76672,7 +77408,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00)",
+          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -76688,7 +77424,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الاثنين 08:00)",
+          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الأحد 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -76769,10 +77505,33 @@
           "correction_id": null
         }
       ],
-      "evidence_fingerprint": "5cd2b9d613d58e7fd1212b506af17491eb4c18722294cbcb7c8f5ad6e7aa4138"
+      "evidence_fingerprint": "853f7852df6804f2b8180b9aa719ca4ddef91cbb9c27a6dfdf430385ea40a94b",
+      "displayed_schedules": [
+        {
+          "item": "mission:0",
+          "slots": [
+            "2026-09-06T17:00:00Z",
+            "2026-09-07T05:00:00Z",
+            "2026-09-07T11:00:00Z",
+            "2026-09-07T17:00:00Z",
+            "2026-09-08T05:00:00Z",
+            "2026-09-08T11:00:00Z",
+            "2026-09-08T17:00:00Z",
+            "2026-09-09T05:00:00Z",
+            "2026-09-09T11:00:00Z",
+            "2026-09-09T17:00:00Z",
+            "2026-09-10T05:00:00Z",
+            "2026-09-10T11:00:00Z",
+            "2026-09-10T17:00:00Z",
+            "2026-09-11T05:00:00Z",
+            "2026-09-11T11:00:00Z"
+          ],
+          "slot_rule": "window-next-v1"
+        }
+      ]
     },
     "rendered": [
-      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nI heard a monitoring request missing from the card; what should I record?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nI heard a monitoring request missing from the card; what should I record?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
     ]
   },
   {
@@ -78969,7 +79728,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00)",
+          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -78985,7 +79744,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الاثنين 08:00)",
+          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الأحد 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -79066,10 +79825,33 @@
           "correction_id": null
         }
       ],
-      "evidence_fingerprint": "5cd2b9d613d58e7fd1212b506af17491eb4c18722294cbcb7c8f5ad6e7aa4138"
+      "evidence_fingerprint": "853f7852df6804f2b8180b9aa719ca4ddef91cbb9c27a6dfdf430385ea40a94b",
+      "displayed_schedules": [
+        {
+          "item": "mission:0",
+          "slots": [
+            "2026-09-06T17:00:00Z",
+            "2026-09-07T05:00:00Z",
+            "2026-09-07T11:00:00Z",
+            "2026-09-07T17:00:00Z",
+            "2026-09-08T05:00:00Z",
+            "2026-09-08T11:00:00Z",
+            "2026-09-08T17:00:00Z",
+            "2026-09-09T05:00:00Z",
+            "2026-09-09T11:00:00Z",
+            "2026-09-09T17:00:00Z",
+            "2026-09-10T05:00:00Z",
+            "2026-09-10T11:00:00Z",
+            "2026-09-10T17:00:00Z",
+            "2026-09-11T05:00:00Z",
+            "2026-09-11T11:00:00Z"
+          ],
+          "slot_rule": "window-next-v1"
+        }
+      ]
     },
     "rendered": [
-      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nWhat dose of Forxiga did you intend? Heard once.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nWhat dose of Forxiga did you intend? Heard once.\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
     ]
   },
   {
@@ -81263,7 +82045,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00)",
+          "value": "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -81279,7 +82061,7 @@
             ]
           ],
           "transformation": "monitor_request_compiler",
-          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الاثنين 08:00)",
+          "value": "MONITOR: ضغط الدم، 3 مرات في اليوم لمدة 5 أيام (15 قراءة، أول قياس الأحد 20:00)",
           "correction_version": null,
           "correction_id": null
         },
@@ -81360,10 +82142,233 @@
           "correction_id": null
         }
       ],
-      "evidence_fingerprint": "5cd2b9d613d58e7fd1212b506af17491eb4c18722294cbcb7c8f5ad6e7aa4138"
+      "evidence_fingerprint": "853f7852df6804f2b8180b9aa719ca4ddef91cbb9c27a6dfdf430385ea40a94b",
+      "displayed_schedules": [
+        {
+          "item": "mission:0",
+          "slots": [
+            "2026-09-06T17:00:00Z",
+            "2026-09-07T05:00:00Z",
+            "2026-09-07T11:00:00Z",
+            "2026-09-07T17:00:00Z",
+            "2026-09-08T05:00:00Z",
+            "2026-09-08T11:00:00Z",
+            "2026-09-08T17:00:00Z",
+            "2026-09-09T05:00:00Z",
+            "2026-09-09T11:00:00Z",
+            "2026-09-09T17:00:00Z",
+            "2026-09-10T05:00:00Z",
+            "2026-09-10T11:00:00Z",
+            "2026-09-10T17:00:00Z",
+            "2026-09-11T05:00:00Z",
+            "2026-09-11T11:00:00Z"
+          ],
+          "slot_rule": "window-next-v1"
+        }
+      ]
     },
     "rendered": [
-      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nPlease verify \"word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word wordx\".\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+      "New patient: Ahmed Saad, 53\nMedications:\nExforge 5/160 → Exforge HCT 10/160/25 (change)\nForxiga (start)\nRequested:\nMONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00) — due Sat 12 Sep, 10:00 (default 1 days); if not done I will notify you: Sat 12 Sep, 10:00\nTEST: CBC, Na, K, lipid profile — due Sun 20 Sep, 10:00 (default 14 days); if not done I will notify you: Sun 20 Sep, 10:00\nHistory:\nDx: diabetes, hypertension\nECG: T wave inversion, lateral leads\nEcho: EF 45%\nNeeds confirmation:\nPlease verify \"word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word word wordx\".\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
+    ]
+  },
+  {
+    "id": "question-monitor_start_past:9faaa6eebdc4",
+    "source_sha256": "268f4794e5b557b3c8e30dbf9daea74e7aa6b96c2e4e3856b0e1aa8a0247f892",
+    "candidate_sha256": "9faaa6eebdc4bbcc3522a337af4b4ddebcdee53093eab261f9f14151e2d66138",
+    "proposal": {
+      "id": "24a186e044ec459997a09e89c5d20867",
+      "version": 1,
+      "created_at": "2026-09-06T12:00:00Z",
+      "updated_at": "2026-09-06T12:00:00Z",
+      "entity_type": "scribe_proposal",
+      "scope": {
+        "doctor_id": "d95bf1cdc11d42fc8ce42131a117e487"
+      },
+      "doctor_id": "d95bf1cdc11d42fc8ce42131a117e487",
+      "timezone": "Africa/Cairo",
+      "language": "en",
+      "selected_patient_id": null,
+      "selected_display_name": null,
+      "creating_patient": true,
+      "candidate": {
+        "patient": {
+          "name_as_spoken": "Synthetic Person",
+          "identifiers": [],
+          "age": null,
+          "sex": null
+        },
+        "facts": [],
+        "orders": [],
+        "missions": [
+          {
+            "kind": "MONITOR",
+            "text": "Blood pressure chart, 3 times a day for 5 days starting 2026-09-05",
+            "clinical_en": null,
+            "timing_expression": null
+          }
+        ],
+        "alerts": [],
+        "ambiguities": [],
+        "correction_edits": []
+      },
+      "intent": "create_patient",
+      "issues": [
+        {
+          "item": "mission:0",
+          "occurrence": null,
+          "grounding_issue": false,
+          "field": null,
+          "code": "monitor_start_past",
+          "blocked": true,
+          "question": "2026-09-05",
+          "alternatives": null,
+          "numbers": []
+        }
+      ],
+      "base_versions": [],
+      "choices": [],
+      "timings": [],
+      "source_receipt_id": "IN#telegram#235042613aefef6cb3c97f172c2fbc6ab54035665becb2951cda80321b709261",
+      "source_transcript_ref": null,
+      "source_text": "New patient Synthetic Person. Blood pressure chart, 3 times a day for 5 days. starting 2026-09-05",
+      "source_partition": {
+        "original_end": 77,
+        "corrections": [],
+        "lexicon": []
+      },
+      "source_provenance": [
+        {
+          "source_observation_id": "IN#telegram#235042613aefef6cb3c97f172c2fbc6ab54035665becb2951cda80321b709261",
+          "actor_kind": "doctor",
+          "actor_id": "20002",
+          "source_kind": "doctor_statement",
+          "received_at": "2026-09-06T12:00:00Z",
+          "model_id": "us.amazon.nova-lite-v1:0",
+          "prompt_version": "scribe-v10",
+          "extraction_version": "08-v2",
+          "validation_rule_ids": []
+        },
+        {
+          "source_observation_id": "IN#telegram#235042613aefef6cb3c97f172c2fbc6ab54035665becb2951cda80321b709261",
+          "actor_kind": "doctor",
+          "actor_id": "20002",
+          "source_kind": "doctor_statement",
+          "received_at": "2026-09-06T12:00:00Z",
+          "model_id": "us.amazon.nova-lite-v1:0",
+          "prompt_version": "scribe-v10",
+          "extraction_version": "08-v2",
+          "validation_rule_ids": []
+        }
+      ],
+      "disputed_numbers": [],
+      "heard_numbers": [],
+      "expires_at": "2026-09-06T12:30:00Z",
+      "confirmation_nonce_hash": "07f959c71cff8346e84abd8fb4dde0a0a4eeb88a792b28d5f8c1e4571fe0230c",
+      "status": "pending",
+      "reason": null,
+      "review_at": "2026-09-06T12:30:00Z",
+      "work_clock": {
+        "next_action_at": "2026-09-06T12:30:00Z",
+        "work_lane": "scribe",
+        "work_shard": "0",
+        "work_generation": 1,
+        "attempt_count": 0,
+        "last_error_code": null
+      },
+      "editing": false,
+      "supersedes_id": null,
+      "invitation_requested": false,
+      "prompt_version": "scribe-v10",
+      "photo": null,
+      "amendments": [],
+      "names": [],
+      "rxnorm_calls": 0,
+      "corrected": false,
+      "resolved_numbers": [],
+      "single_source": [],
+      "pending_reply": null,
+      "evidence": [
+        {
+          "item": "mission:0",
+          "field": "kind",
+          "origin": "code_computed",
+          "source_ref": "IN#telegram#235042613aefef6cb3c97f172c2fbc6ab54035665becb2951cda80321b709261",
+          "offsets": [],
+          "transformation": "candidate_classification",
+          "value": "MONITOR",
+          "correction_version": null,
+          "correction_id": null
+        },
+        {
+          "item": "mission:0",
+          "field": "text",
+          "origin": "transcript_span",
+          "source_ref": "IN#telegram#235042613aefef6cb3c97f172c2fbc6ab54035665becb2951cda80321b709261",
+          "offsets": [
+            [
+              30,
+              97
+            ]
+          ],
+          "transformation": "normalized_words",
+          "value": "Blood pressure chart, 3 times a day for 5 days starting 2026-09-05",
+          "correction_version": null,
+          "correction_id": null
+        },
+        {
+          "item": "patient",
+          "field": "name_as_spoken",
+          "origin": "transcript_span",
+          "source_ref": "IN#telegram#235042613aefef6cb3c97f172c2fbc6ab54035665becb2951cda80321b709261",
+          "offsets": [
+            [
+              12,
+              28
+            ]
+          ],
+          "transformation": "normalized_words",
+          "value": "Synthetic Person",
+          "correction_version": null,
+          "correction_id": null
+        },
+        {
+          "item": "mission:0",
+          "field": "schedule:en",
+          "origin": "code_computed",
+          "source_ref": "IN#telegram#235042613aefef6cb3c97f172c2fbc6ab54035665becb2951cda80321b709261",
+          "offsets": [
+            [
+              30,
+              97
+            ]
+          ],
+          "transformation": "monitor_request_compiler",
+          "value": "MONITOR: Blood pressure chart, 3 times a day for 5 days starting 2026-09-05",
+          "correction_version": null,
+          "correction_id": null
+        },
+        {
+          "item": "mission:0",
+          "field": "schedule:ar",
+          "origin": "code_computed",
+          "source_ref": "IN#telegram#235042613aefef6cb3c97f172c2fbc6ab54035665becb2951cda80321b709261",
+          "offsets": [
+            [
+              30,
+              97
+            ]
+          ],
+          "transformation": "monitor_request_compiler",
+          "value": "MONITOR: Blood pressure chart, 3 times a day for 5 days starting 2026-09-05",
+          "correction_version": null,
+          "correction_id": null
+        }
+      ],
+      "evidence_fingerprint": "d023c8c61dcf99d5eaf18a5786dd2632b5ace7eed15312faf2a9a8d3d33fab7b",
+      "displayed_schedules": []
+    },
+    "rendered": [
+      "New patient: Synthetic Person\nNeeds confirmation:\nMONITOR: Blood pressure chart, 3 times a day for 5 days starting 2026-09-05\nThe start date 2026-09-05 has passed. When should it start?\n✅ Confirm | ✏️ Edit | ❌ Cancel\nvalid 30 minutes"
     ]
   }
 ]

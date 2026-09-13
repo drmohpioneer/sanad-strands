@@ -41,7 +41,15 @@ def evaluate(
             evaluated_at=now,
         )
     details = mission.details
-    for e in sorted((*prior, candidate), key=lambda e: (e.provenance.received_at, e.id)):
+    for e in sorted(
+        (*prior, candidate),
+        key=lambda e: (
+            (e.provenance.observed_at or e.provenance.received_at)
+            if details.slot_rule == "window-next-v1"
+            else e.provenance.received_at,
+            e.provenance.source_observation_id if details.slot_rule == "window-next-v1" else e.id,
+        ),
+    ):
         if (
             e.scope != candidate.scope
             or e.mission_id not in {None, mission.id}
@@ -228,6 +236,24 @@ def prepare(
         )
     if builder.command.principal.actor_kind == "doctor":
         resolve_reviews(builder, evidence)
+    fields = {}
+    if details.slot_rule == "window-next-v1":
+        from zoneinfo import ZoneInfo
+
+        from sanad.monitor.report import assignment_ack
+        from sanad.store.records import Patient
+
+        patient_row = builder.store.get(builder.scope, "patient", builder.scope.patient_id)
+        assert patient_row is not None and details.timezone is not None
+        patient = from_record(patient_row, Patient)
+        ack = assignment_ack(
+            details,
+            to_record(evidence, builder.scope).ref,
+            patient.language,
+            builder.now.astimezone(ZoneInfo(details.timezone)).date(),
+        )
+        if ack:
+            fields["reading_ack"] = "\n" + ack
     if predicate.satisfied:
-        return evidence, "patient_evidence_accepted", {"title": chosen.title}, []
-    return evidence, "patient_evidence_kept", {}, []
+        return evidence, "patient_evidence_accepted", {"title": chosen.title, **fields}, []
+    return evidence, "patient_evidence_kept", fields, []

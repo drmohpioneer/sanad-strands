@@ -34,6 +34,7 @@ REASONS = {
     "drug_unclear": "اسم الدوا مش واضح؛ قول الاسم كامل.",
     "disputed_number": "الرقم محتاج تأكيد؛ ابعت تعديل بالرقم المقصود.",
     "amendment_pending_09b": "تعديل أمر دوا موجود لسه مش متاح.",
+    "monitor_start_past": "The start date has passed. When should it start?",
     "timing_unclear": "الموعد مش واضح؛ حدده في التعديل.",
     "patient_missing": "مين المريض؟",
     "multiple_patients": "الكلام محتاج توضيح؛ لو فيه مريضين ابعت كل واحد لوحده.",
@@ -377,11 +378,15 @@ def render_card(proposal: Proposal, language: str | None = None) -> tuple[str, .
                 for r in proposal.photo.single_rows
                 if r < len(proposal.photo.row_targets)
             )
+            from sanad.scribe.monitoring import card_line
+
             lines.append(
                 "• "
-                + mission.kind
-                + ": "
-                + supported_text(mission.text, proposal)
+                + (
+                    card_line(mission.text, proposal.created_at, proposal.timezone, language)
+                    if mission.kind == "MONITOR"
+                    else mission.kind + ": " + supported_text(mission.text, proposal)
+                )
                 + (" (one reader)" if single else "")
                 + (label("confirmation") if proposal.blocked(f"mission:{i}") else "")
             )
@@ -659,6 +664,15 @@ def dictation_questions(proposal: Proposal) -> tuple[str, ...]:
         n for i in proposal.issues if i.code == "extraction_conflict" for n in i.numbers
     }
     for issue in proposal.issues:
+        if issue.code == "monitor_start_past":
+            match = re.search(r"\d{4}-\d{2}-\d{2}", issue.question or "")
+            day = match[0] if match else ""
+            questions.append(
+                f"The start date {day} has passed. When should it start?"
+                if day
+                else REASONS[issue.code]
+            )
+            continue
         before = len(questions)
         if issue.field == "verification" and issue.question:
             questions.append(plain(issue.question))

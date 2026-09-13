@@ -22,7 +22,7 @@ def test_english_card_and_monitoring_confirmation(store: StoreBase, clock: FakeC
     assert text.splitlines()[0] == "New patient: Ahmed Saad, 53"
     assert all(line in text.splitlines() for line in (*MEDICATIONS, *HISTORY))
     assert (
-        "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Mon 08:00)" in text
+        "MONITOR: blood pressure, 3 times a day for 5 days (15 readings, first Sun 20:00)" in text
     )
     assert "TEST: CBC, Na, K, lipid profile: due" in text
     assert "What dose of Forxiga did you intend?" in text

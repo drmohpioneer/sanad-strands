@@ -41,6 +41,7 @@ def test_every_doctor_template_has_real_english_and_literal_arabic(key: str) -> 
             "account_suspended": "حسابك موقوف. تواصل مع الإدارة.",
             "patient_not_linked": "لسه مش مرتبط بدكتور. افتح رابط الدعوة اللي بعته الدكتور.",
             "login_refused": "تعذر الدخول. تواصل مع الإدارة.",
+            "monitor_schedule_changed": "مواعيد القياس اتغيرت. ابعت التعليمات من جديد.",
         }
     )[key]
     # Addendum 6a supersedes bilingual account entries and long-dash prose.

@@ -48,9 +48,9 @@ def test_supported_request_and_default(name: str, unit: str) -> None:
 @pytest.mark.parametrize(
     "zone,start",
     [
-        ("Africa/Cairo", "2026-09-07T05:00:00+00:00"),
-        ("America/New_York", "2026-09-07T12:00:00+00:00"),
-        ("Asia/Kolkata", "2026-09-08T02:30:00+00:00"),
+        ("Africa/Cairo", "2026-09-07T07:00:00+00:00"),
+        ("America/New_York", "2026-09-07T02:00:00+00:00"),
+        ("Asia/Kolkata", "2026-09-07T04:30:00+00:00"),
     ],
 )
 def test_local_dates(zone: str, start: str) -> None:
@@ -67,7 +67,9 @@ def test_local_dates(zone: str, start: str) -> None:
 def test_dst_keeps_local_hours(zone: str, anchor: str, expected: int) -> None:
     slots = generate(datetime.fromisoformat(anchor), zone, 1, 3)
     assert [s.astimezone(ZoneInfo(zone)).hour for s in slots] == [8, 8, 8]
-    assert (slots[1] - slots[0]) == timedelta(hours=expected)
+    assert [slots[1] - slots[0], slots[2] - slots[1]] == [
+        timedelta(hours=h) for h in ((expected, 24) if zone == "Africa/Cairo" else (24, expected))
+    ]
 
 
 @pytest.mark.parametrize("times,days", [(0, 5), (5, 5), (1, 31), (1, 0), (True, 1)])
@@ -100,7 +102,7 @@ def test_explicit_deadline_and_start() -> None:
     text = "Measure pulse 2 times a day for 5 days starting today"
     schedule = compile_schedule(text)
     assert schedule
-    assert schedule.details(NOW, "Africa/Cairo").slots[0] < NOW
+    assert schedule.details(NOW, "Africa/Cairo").slots[0] == datetime(2026, 9, 7, 7, tzinfo=UTC)
     result = timing(text, "in 4 hours", NOW, DRAFT_POLICY_2026_09)
     assert isinstance(result, ResolvedTiming) and result.due_at == NOW + timedelta(hours=4)
     assert result.due_source == "doctor"

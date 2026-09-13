@@ -1367,6 +1367,7 @@ class ScribeTurn:
                         )
                     }
                 )
+        proposal = proposal.with_displayed_schedules()
         if not photo:
             from sanad.scribe.grounding import seal
             from sanad.scribe.resolver import context
@@ -1696,6 +1697,7 @@ class ScribeTurn:
             issues=tuple(issues),
             intent="create_patient" if token.action == "new" else "update_record",
         )
+        changed = changed.with_displayed_schedules()
         if not changed.photo:
             from sanad.scribe.grounding import seal
             from sanad.scribe.resolver import context

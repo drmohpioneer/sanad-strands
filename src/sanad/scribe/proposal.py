@@ -40,6 +40,12 @@ class ItemTiming(_BoundaryValue):
     resolved: ResolvedTiming
 
 
+class DisplayedSchedule(_BoundaryValue):
+    item: str
+    slots: tuple[UtcInstant, ...]
+    slot_rule: Literal["tolerance-3h", "window-next-v1"]
+
+
 class PendingReply(_BoundaryValue):
     text: str = Field(repr=False)
     source: Provenance
@@ -90,6 +96,28 @@ class Proposal(ScribeRecord):
     pending_reply: PendingReply | None = Field(default=None, repr=False)
     evidence: tuple[FieldEvidence, ...] = Field(default=(), repr=False)
     evidence_fingerprint: str = ""
+    displayed_schedules: tuple[DisplayedSchedule, ...] = ()
+
+    def with_displayed_schedules(self) -> "Proposal":
+        from sanad.scribe.monitoring import compile_schedule
+
+        previews = []
+        for i, mission in enumerate(self.candidate.missions):
+            if mission.kind != "MONITOR":
+                continue
+            schedule = compile_schedule(mission.text)
+            if schedule is None:
+                continue
+            try:
+                details = schedule.details(self.created_at, self.timezone)
+            except ValueError:
+                continue
+            previews.append(
+                DisplayedSchedule(
+                    item=f"mission:{i}", slots=details.slots, slot_rule=details.slot_rule
+                )
+            )
+        return self.model_copy(update={"displayed_schedules": tuple(previews)})
 
     @model_validator(mode="after")
     def lifecycle(self) -> Self:

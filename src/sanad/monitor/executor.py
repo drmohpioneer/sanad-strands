@@ -126,7 +126,10 @@ def current_details(store: Store, scope: PatientScope, mission: Mission) -> Moni
         if (
             entry.reading_index >= len(values)
             or entry.value != value_for(mission.details, values[entry.reading_index])
-            or entry.slot != slot_for(mission.details, entry.observed_at)
+            or (
+                mission.details.slot_rule == "tolerance-3h"
+                and entry.slot != slot_for(mission.details, entry.observed_at)
+            )
         ):
             continue
         kept.append(entry)

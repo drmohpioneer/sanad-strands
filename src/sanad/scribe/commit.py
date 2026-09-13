@@ -528,10 +528,16 @@ class ScribeCommit:
                 if schedule is None:
                     raise EffectsRejected("monitor_schedule_unclear")
                 details = schedule.details(proposal.created_at, patient.timezone)
-                preview = schedule.details(proposal.created_at, proposal.timezone)
-                if details.slots != preview.slots:
-                    raise EffectsRejected("monitor_timezone_changed")
-                if schedule.details(now, patient.timezone).slots != preview.slots:
+                preview = next((p for p in proposal.displayed_schedules if p.item == item), None)
+                displayed = (
+                    preview.slots
+                    if preview
+                    else schedule.details(proposal.created_at, proposal.timezone, legacy=True).slots
+                )
+                if (
+                    details.slots != displayed
+                    or schedule.details(now, patient.timezone).slots != displayed
+                ):
                     raise EffectsRejected("monitor_schedule_changed")
                 predicate = EvidencePredicate(evaluator="monitor")
             elif instruction.kind == "VISIT":
@@ -691,6 +697,41 @@ class ScribeCommit:
             or proposal.doctor_id != doctor.id
         ):
             return ConfirmationResult("stale", "scribe_stale")
+        from sanad.scribe.monitoring import compile_schedule
+        from sanad.store.records import from_record
+
+        timezone = proposal.timezone
+        if proposal.selected_patient_id:
+            patient_row = self.repo.store.get(
+                PatientScope(doctor_id=doctor.id, patient_id=proposal.selected_patient_id),
+                "patient",
+                proposal.selected_patient_id,
+            )
+            if patient_row:
+                timezone = from_record(patient_row, Patient).timezone
+        for i, mission in enumerate(proposal.candidate.missions):
+            item = f"mission:{i}"
+            if mission.kind != "MONITOR" or any(
+                issue.blocked and issue.item in {"all", item} for issue in proposal.issues
+            ):
+                continue
+            schedule = compile_schedule(mission.text)
+            if schedule is None:
+                continue
+            preview = next((p for p in proposal.displayed_schedules if p.item == item), None)
+            try:
+                displayed = (
+                    preview.slots
+                    if preview
+                    else schedule.details(proposal.created_at, proposal.timezone, legacy=True).slots
+                )
+                schedule_changed = schedule.details(now, timezone).slots != displayed
+            except ValueError:
+                schedule_changed = True
+            if schedule_changed:
+                return self.reject(
+                    proposal, actor, command_id, reason="monitor_schedule_changed", claim=claim
+                )
         if (proposal.creating_patient and proposal.blocked("patient")) or not (
             proposal.creating_patient or proposal.selected_patient_id
         ):
@@ -809,9 +850,15 @@ class ScribeCommit:
             return self.reject(
                 proposal, actor, command_id + ":stale", reason="stale_version", claim=claim
             )
-        except EffectsRejected:
+        except EffectsRejected as exc:
             return self.reject(
-                proposal, actor, command_id + ":invalid", reason="stale_version", claim=claim
+                proposal,
+                actor,
+                command_id + ":invalid",
+                reason="monitor_schedule_changed"
+                if str(exc) == "monitor_schedule_changed"
+                else "stale_version",
+                claim=claim,
             )
         finally:
             if lease:
@@ -843,7 +890,13 @@ class ScribeCommit:
             models += (revise(state, now, pending_proposal_id=None),)
         if token:
             models += (revise(token, now, consumed_at=now),)
-        template = "scribe_discarded" if reason == "doctor" else "scribe_stale"
+        template = (
+            "scribe_discarded"
+            if reason == "doctor"
+            else "monitor_schedule_changed"
+            if reason == "monitor_schedule_changed"
+            else "scribe_stale"
+        )
         intent = self.repo.intent(
             doctor,
             template,

@@ -144,6 +144,18 @@ class MonitorDetails(_BoundaryValue):
     slots: Annotated[tuple[UtcInstant, ...], Field(min_length=1)]
     required_coverage: PositiveVersion
     readings: tuple[MonitorReading, ...] = ()
+    slot_rule: Literal["tolerance-3h", "window-next-v1"] = "tolerance-3h"
+    timezone: IanaZone | None = None
+    times_per_day: Literal[1, 2, 3, 4] | None = None
+
+    @model_validator(mode="after")
+    def schedule_metadata(self) -> Self:
+        if self.slot_rule == "window-next-v1":
+            if self.timezone is None or self.times_per_day is None:
+                raise ValueError("window schedules require timezone and times_per_day")
+            if any(a >= b for a, b in zip(self.slots, self.slots[1:], strict=False)):
+                raise ValueError("window schedule slots must be strictly increasing")
+        return self
 
 
 class MedicationDetails(_BoundaryValue):

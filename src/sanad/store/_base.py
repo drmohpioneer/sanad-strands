@@ -28,9 +28,11 @@ from sanad.store.records import (
     MODELS,
     PROJECTION_FIELDS,
     Accepted,
+    AnyWebSession,
     Application,
     AuditEvent,
     Authorization,
+    AuthorizationUnavailable,
     BundleSchedule,
     CallbackToken,
     Claim,
@@ -80,6 +82,7 @@ from sanad.store.records import (
     scope_owns,
     to_record,
 )
+from sanad.store.retry import authorization_read
 
 type Item = dict[str, Any]
 
@@ -160,6 +163,8 @@ class StoreBase(ABC):
         through: str | None = None,
         cursor: Cursor | None = None,
         limit: int = 100,
+        descending: bool = False,
+        kinds: tuple[str, ...] = (),
     ) -> tuple[list[Item], Cursor | None]: ...
 
     def _owned(self, scope: Scope, key: Key) -> StoredRecord | None:
@@ -400,8 +405,115 @@ class StoreBase(ABC):
             return None
         return record
 
-    def patient_receipts(self, scope: PatientScope) -> tuple[StoredRecord, ...]:
-        raise NotImplementedError
+    def _project_writes(self, writes: list[Write]) -> list[Write]:
+        """Keep patient timelines and the confirmed-patient hint in the source CAS."""
+        result = {w.key: w for w in writes}
+        created = {
+            w.item.get("doctor_id"): w.item.get("patient_id")
+            for w in writes
+            if w.item.get("entity_type") == "patient"
+        }
+        for write in writes:
+            item = write.item
+            kind = item.get("entity_type")
+            if kind == "scribe_state":
+                previous = self._read(write.key) if write.before is not None else None
+                pin = created.get(item.get("doctor_id")) or (previous or {}).get(
+                    "recent_patient_id"
+                )
+                if pin:
+                    item["recent_patient_id"] = pin
+            if kind not in {"inbound_receipt", "outbound_intent", "media_work"} or not item.get(
+                "patient_id"
+            ):
+                continue
+            row = item_record(item)
+            assert row.doctor_id is not None and row.patient_id is not None
+            scope = PatientScope(doctor_id=row.doctor_id, patient_id=row.patient_id)
+            body = row.body
+            if kind == "media_work":
+                receipt_id = str(body["receipt_id"])
+                receipt = self.get(scope, "inbound_receipt", receipt_id)
+                if receipt is None:
+                    continue
+                source = record_item(receipt)
+                at = receipt.body["received_at"]
+                prefix = "RECEIPT#"
+                source["media_snapshot"] = item
+            elif kind == "inbound_receipt":
+                source, at, prefix = item.copy(), body["received_at"], "RECEIPT#"
+            else:
+                if (
+                    body.get("status") != "provider_accepted"
+                    or not body.get("accepted_at")
+                    or body.get("audience") != "patient"
+                ):
+                    continue
+                source, at, prefix = item.copy(), body["accepted_at"], "CONVERSATION#"
+            index_key = keys.timeline(
+                scope, prefix, datetime.fromisoformat(str(at)), str(source["id"])
+            )
+            previous = self._read(index_key)
+            # The pointer may have advanced after the receipt read above. Keep
+            # that newer receipt snapshot under this pointer's CAS version.
+            if kind == "media_work" and previous:
+                source = previous["source"] | {"media_snapshot": item}
+            # A receipt revision must not erase an already projected media checkpoint.
+            if kind == "inbound_receipt" and previous:
+                media = previous["source"].get("media_snapshot")
+                if media:
+                    source["media_snapshot"] = media
+            pending_pointer = result.get(index_key)
+            if pending_pointer and "source" in pending_pointer.item:
+                if kind == "media_work":
+                    source = pending_pointer.item["source"] | {"media_snapshot": item}
+                elif pending_pointer.item["source"].get("media_snapshot"):
+                    source["media_snapshot"] = pending_pointer.item["source"]["media_snapshot"]
+            projected = {
+                "PK": index_key.pk,
+                "SK": index_key.sk,
+                "version": int(previous["version"]) + 1 if previous else 1,
+                "kind": json.loads(source["body"]).get("kind", "outbound"),
+                "source": source,
+            }
+            result[index_key] = Write(projected, previous["version"] if previous else None)
+        return list(result.values())
+
+    def patient_receipts(
+        self,
+        scope: PatientScope,
+        cursor: Cursor | None = None,
+        limit: int = 50,
+        *,
+        kinds: tuple[str, ...] = (),
+    ) -> RecordPage:
+        return self.patient_timeline(scope, "RECEIPT#", cursor, limit, kinds=kinds)
+
+    def patient_timeline(
+        self,
+        scope: PatientScope,
+        prefix: str,
+        cursor: Cursor | None = None,
+        limit: int = 50,
+        *,
+        kinds: tuple[str, ...] = (),
+    ) -> RecordPage:
+        if not isinstance(scope, PatientScope) or prefix not in {"RECEIPT#", "CONVERSATION#"}:
+            return (), None
+        if not 1 <= limit <= 200:
+            raise ValueError("timeline limit must be between 1 and 200")
+        items, cursor = self._query(
+            keys.partition(scope),
+            prefix=prefix,
+            cursor=cursor,
+            limit=limit,
+            descending=True,
+            kinds=kinds,
+        )
+        rows = tuple(item_record(item["source"]) for item in items)
+        return tuple(
+            r for r in rows if r.doctor_id == scope.doctor_id and r.patient_id == scope.patient_id
+        ), cursor
 
     def list_records(
         self, scope: Scope, entity_type: str, cursor: Cursor | None = None, limit: int = 100
@@ -1486,18 +1598,44 @@ class StoreBase(ABC):
             generation=max(record.claim_generation, previous.generation if previous else 0) + 1,
             claimed_at=now,
             expires_at=now + ttl,
+            attempt_charged=count_attempt,
         )
         if isinstance(model, (InboundReceipt, MediaWork)):
             extractor_ready = (
                 start_extraction
                 and isinstance(model, MediaWork)
                 and model.stage in {"extract", "associate"}
+                and model.last_error is None
             )
             if (
                 (model.state == "needs_attention" and count_attempt)
                 or model.work_clock is None
                 or (model.work_clock.next_action_at > now and not extractor_ready)
             ):
+                return None
+            abandoned = (
+                isinstance(model, MediaWork) and previous is not None and previous.expires_at <= now
+            )
+            if abandoned:
+                assert isinstance(model, MediaWork) and previous is not None
+                # No committed provider/content outcome: reclaim without charging the lost claim.
+                recovered = self._revision(
+                    record,
+                    now,
+                    state="needs_attention" if model.state == "needs_attention" else "pending",
+                    processing_claim=None,
+                    infrastructure_deferrals=model.infrastructure_deferrals + 1,
+                    last_error="claim_expired",
+                    work_clock=transition_operational_clock(
+                        model.work_clock,
+                        now + timedelta(minutes=(1, 5, 15)[min(model.infrastructure_deferrals, 2)]),
+                        attempt_delta=-min(
+                            int(previous.attempt_charged), model.work_clock.attempt_count
+                        ),
+                        error="claim_expired",
+                    ),
+                )
+                self._update(record_item(recovered), record.version)
                 return None
             updated = self._revision(
                 record,
@@ -1518,40 +1656,115 @@ class StoreBase(ABC):
         )
         if not self._update(record_item(updated), record.version):
             return None
-        return Claim(**token.model_dump(), record_key=record_key, version=updated.version)
+        claim = Claim(**token.model_dump(), record_key=record_key, version=updated.version)
+        from sanad.store.claims import issued
+
+        owned = issued.get()
+        if owned is not None:
+            owned.append(claim)
+        return claim
+
+    def defer_media(self, claim: Claim, now: datetime, error: str) -> bool:
+        """Release only this worker's media generation; never alter a successor."""
+        from sanad.store.retry import BACKOFF, sleep
+
+        for attempt in range(4):
+            record = self._owned(claim.record_key.scope, claim.record_key.key)
+            if record is None or record.entity_type != "media_work":
+                return False
+            work = from_record(record, MediaWork)
+            if (
+                work.processing_claim is None
+                or work.work_clock is None
+                or work.processing_claim.owner != claim.owner
+                or work.processing_claim.generation != claim.generation
+                or work.processing_claim.expires_at <= now
+            ):
+                return False
+            changed = self._revision(
+                record,
+                now,
+                state="needs_attention" if work.state == "needs_attention" else "pending",
+                processing_claim=None,
+                last_error=error,
+                infrastructure_deferrals=work.infrastructure_deferrals + 1,
+                work_clock=transition_operational_clock(
+                    work.work_clock,
+                    now + timedelta(minutes=(1, 5, 15)[min(work.infrastructure_deferrals, 2)]),
+                    attempt_delta=-min(
+                        int(work.processing_claim.attempt_charged), work.work_clock.attempt_count
+                    ),
+                    error=error,
+                ),
+            )
+            if self._update(record_item(changed), record.version):
+                return True
+            if attempt < 3:
+                sleep(BACKOFF[attempt])
+        return False
+
+    def defer_inbound(self, claim: Claim, now: datetime) -> bool:
+        """Release only our current receipt claim for prompt, fenced retry."""
+        record = self._owned(claim.record_key.scope, claim.record_key.key)
+        if record is None or record.entity_type != "inbound_receipt":
+            return False
+        receipt = from_record(record, InboundReceipt)
+        if (
+            receipt.state != "processing"
+            or receipt.processing_claim is None
+            or receipt.processing_claim.owner != claim.owner
+            or receipt.processing_claim.generation != claim.generation
+            or receipt.processing_claim.expires_at <= now
+            or receipt.work_clock is None
+        ):
+            return False
+        changed = self._revision(
+            record,
+            now,
+            state="pending",
+            processing_claim=None,
+            work_clock=transition_operational_clock(receipt.work_clock, now),
+        )
+        return self._update(record_item(changed), record.version)
 
     def acquire_patient(
         self, scope: PatientScope, owner: str, now: datetime, ttl: timedelta
     ) -> Lease | None:
         now = utc_instant(now)
-        record = self.get(scope, "patient_profile", scope.patient_id)
-        if record is None or ttl <= timedelta() or not owner.strip():
-            return None
-        profile = from_record(record, PatientProfile)
-        if profile.lease_expires_at is not None and profile.lease_expires_at > now:
-            return None
-        lease = Lease(
-            scope=scope,
-            owner=owner,
-            generation=profile.lease_generation + 1,
-            claimed_at=now,
-            expires_at=now + ttl,
-        )
-        updated = self._revision(
-            record,
-            now,
-            lease_owner=owner,
-            lease_expires_at=lease.expires_at,
-            lease_generation=lease.generation,
-        )
-        return lease if self._update(record_item(updated), record.version) else None
+        for _ in range(3):
+            record = self.get(scope, "patient_profile", scope.patient_id)
+            if record is None or ttl <= timedelta() or not owner.strip():
+                return None
+            profile = from_record(record, PatientProfile)
+            if profile.lease_expires_at is not None and profile.lease_expires_at > now:
+                return None
+            lease = Lease(
+                scope=scope,
+                owner=owner,
+                generation=profile.lease_generation + 1,
+                claimed_at=now,
+                expires_at=now + ttl,
+            )
+            updated = self._revision(
+                record,
+                now,
+                lease_owner=owner,
+                lease_expires_at=lease.expires_at,
+                lease_generation=lease.generation,
+            )
+            if self._update(record_item(updated), record.version):
+                return lease
+        return None
 
     def release_patient(self, lease: Lease) -> None:
-        now = utc_instant(self._clock())
-        record = self._lease_record(lease, now)
-        if record is not None:
+        for _ in range(3):
+            now = utc_instant(self._clock())
+            record = self._lease_record(lease, now)
+            if record is None:
+                return
             updated = self._revision(record, now, lease_owner=None, lease_expires_at=None)
-            self._update(record_item(updated), record.version)
+            if self._update(record_item(updated), record.version):
+                return
 
     def query_due(
         self,
@@ -2356,94 +2569,121 @@ class StoreBase(ABC):
         """Explicit startup configuration, containing no credential or clinical access."""
         self._identity = config
 
+    @authorization_read
+    def web_session_snapshot(self, session: AnyWebSession) -> AnyWebSession | None:
+        """A stable authority cut; benign consent revisions refresh only the session pin."""
+        from sanad.store.identity import live_snapshot
+
+        current = self.get(session.scope, "web_session", session.id)
+        if current is None:
+            return None
+        snapshot = from_record(current, AnyWebSession)
+        checks = [Check(current.key, current.version)]
+        if snapshot.role == "patient":
+            patient_scope = PatientScope(
+                doctor_id=snapshot.doctor_id or "", patient_id=snapshot.patient_id or ""
+            )
+            profile = self.get(patient_scope, "patient_profile", patient_scope.patient_id)
+            if profile:
+                checks.append(Check(profile.key, profile.version))
+                snapshot = snapshot.model_copy(
+                    update={"consent_version": profile.body["consent_version"]}
+                )
+        valid = live_snapshot(self, session.scope, snapshot, checks)
+        # Duplicate reads with different versions mean the cut was torn.
+        versions = {(c.key.pk, c.key.sk): c.version for c in checks}
+        if any(versions[(c.key.pk, c.key.sk)] != c.version for c in checks):
+            raise AuthorizationUnavailable("authority_snapshot_busy")
+        checks = list({(c.key.pk, c.key.sk): c for c in checks}.values())
+        if self._atomic([], checks):
+            return snapshot if valid else None
+        raise AuthorizationUnavailable("authority_snapshot_busy")
+
+    @authorization_read
     def authorize(self, bot_id: str, telegram_user_id: str) -> Authorization:
         subject_key = keys.subject(bot_id, telegram_user_id)
         unknown = Principal(
             subject=telegram_user_id, user_id=telegram_user_id, bot_id=bot_id, actor_kind="unknown"
         )
-        for _ in range(3):
-            raw = self._read(subject_key)
-            binding = None
-            doctor = None
-            checks = [Check(subject_key, raw.get("version") if raw else None)]
-            if raw is not None:
-                try:
-                    binding = from_record(item_record(raw), SubjectBinding)
-                except (KeyError, ValueError, TypeError):
-                    return Authorization(principal=unknown)
-                if binding.doctor_id is not None:
-                    key = Key(keys.tenant_pk(TenantScope(doctor_id=binding.doctor_id)), "DOCTOR")
-                    row = self._read(key)
-                    checks.append(Check(key, row.get("version") if row else None))
-                    if row is not None:
-                        doctor = from_record(item_record(row), Doctor)
-                        if doctor.telegram_bot_id != bot_id:
-                            doctor = None
-            admin_row = None
-            if (
-                self._identity
-                and self._identity.bot_id == bot_id
-                and self._identity.admin_user_id == telegram_user_id
+        raw = self._read(subject_key)
+        binding = None
+        doctor = None
+        checks = [Check(subject_key, raw.get("version") if raw else None)]
+        if raw is not None:
+            try:
+                binding = from_record(item_record(raw), SubjectBinding)
+            except (KeyError, ValueError, TypeError):
+                return Authorization(principal=unknown)
+            if binding.doctor_id is not None:
+                key = Key(keys.tenant_pk(TenantScope(doctor_id=binding.doctor_id)), "DOCTOR")
+                row = self._read(key)
+                checks.append(Check(key, row.get("version") if row else None))
+                if row is not None:
+                    doctor = from_record(item_record(row), Doctor)
+                    if doctor.telegram_bot_id != bot_id:
+                        doctor = None
+        admin_row = None
+        if (
+            self._identity
+            and self._identity.bot_id == bot_id
+            and self._identity.admin_user_id == telegram_user_id
+        ):
+            admin_key = Key(
+                keys.partition(AccountScope(bot_id=bot_id)),
+                f"ADMIN_ACCOUNT#{keys.component(telegram_user_id)}",
+            )
+            admin_row = self._read(admin_key)
+            checks.append(Check(admin_key, admin_row.get("version") if admin_row else None))
+        # Validate a single consistent version cut across the authority reads.
+        if not self._atomic([], checks):
+            raise AuthorizationUnavailable("authority_snapshot_busy")
+        roles: set[Literal["admin", "doctor", "patient"]] = set()
+        configured_admin = (
+            self._identity is not None
+            and self._identity.bot_id == bot_id
+            and self._identity.admin_user_id == telegram_user_id
+        )
+        if binding is not None and binding.status == "active" and doctor is not None:
+            if "patient" in binding.role_set and not configured_admin:
+                roles.add("patient")
+            elif (
+                "doctor" in binding.role_set
+                and doctor.status == "approved"
+                and doctor.telegram_user_id == telegram_user_id
+                and doctor.private_chat_id == binding.private_chat_id
             ):
-                admin_key = Key(
-                    keys.partition(AccountScope(bot_id=bot_id)),
-                    f"ADMIN_ACCOUNT#{keys.component(telegram_user_id)}",
-                )
-                admin_row = self._read(admin_key)
-                checks.append(Check(admin_key, admin_row.get("version") if admin_row else None))
-            # Validate a single consistent version cut across the authority reads.
-            if not self._atomic([], checks):
-                continue
-            roles: set[Literal["admin", "doctor", "patient"]] = set()
-            configured_admin = (
-                self._identity is not None
-                and self._identity.bot_id == bot_id
-                and self._identity.admin_user_id == telegram_user_id
-            )
-            if binding is not None and binding.status == "active" and doctor is not None:
-                if "patient" in binding.role_set and not configured_admin:
-                    roles.add("patient")
-                elif (
-                    "doctor" in binding.role_set
-                    and doctor.status == "approved"
-                    and doctor.telegram_user_id == telegram_user_id
-                    and doctor.private_chat_id == binding.private_chat_id
-                ):
-                    roles.add("doctor")
-            if configured_admin:
-                roles.add("admin")
-            kind: Literal["unknown", "admin", "doctor", "patient"] = (
-                "doctor"
-                if "doctor" in roles
-                else "admin"
-                if "admin" in roles
-                else "patient"
-                if "patient" in roles
-                else "unknown"
-            )
-            principal = Principal(
-                subject=telegram_user_id,
-                user_id=telegram_user_id,
-                bot_id=bot_id,
-                actor_kind=kind,
-                verified_roles=frozenset(roles),
-                doctor_id=binding.doctor_id if binding and roles & {"doctor", "patient"} else None,
-                patient_id=binding.patient_id if binding and "patient" in roles else None,
-                auth_epoch=doctor.auth_epoch if doctor else None,
-            )
-            return Authorization(
-                principal=principal,
-                binding=binding,
-                doctor_status=doctor.status if doctor else None,
-                auth_epoch=doctor.auth_epoch if doctor else None,
-                admin_epoch=int(str(item_record(admin_row).body["auth_epoch"]))
-                if admin_row
-                else None,
-                private_chat_id=binding.private_chat_id
-                if binding
-                else (telegram_user_id if configured_admin else None),
-            )
-        return Authorization(principal=unknown)
+                roles.add("doctor")
+        if configured_admin:
+            roles.add("admin")
+        kind: Literal["unknown", "admin", "doctor", "patient"] = (
+            "doctor"
+            if "doctor" in roles
+            else "admin"
+            if "admin" in roles
+            else "patient"
+            if "patient" in roles
+            else "unknown"
+        )
+        principal = Principal(
+            subject=telegram_user_id,
+            user_id=telegram_user_id,
+            bot_id=bot_id,
+            actor_kind=kind,
+            verified_roles=frozenset(roles),
+            doctor_id=binding.doctor_id if binding and roles & {"doctor", "patient"} else None,
+            patient_id=binding.patient_id if binding and "patient" in roles else None,
+            auth_epoch=doctor.auth_epoch if doctor else None,
+        )
+        return Authorization(
+            principal=principal,
+            binding=binding,
+            doctor_status=doctor.status if doctor else None,
+            auth_epoch=doctor.auth_epoch if doctor else None,
+            admin_epoch=int(str(item_record(admin_row).body["auth_epoch"])) if admin_row else None,
+            private_chat_id=binding.private_chat_id
+            if binding
+            else (telegram_user_id if configured_admin else None),
+        )
 
     def get_account_source(self, scope: AccountScope, ref: VersionRef) -> StoredRecord | None:
         """Narrow account metadata read; never a tenant/patient enumeration capability."""

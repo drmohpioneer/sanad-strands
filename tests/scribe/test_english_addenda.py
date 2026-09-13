@@ -77,7 +77,7 @@ def test_english_speech_prompt_provenance_and_numbers_use_the_same_hint() -> Non
     )
 
 
-def test_secondary_history_missions_categories_and_questions_cannot_add_content() -> None:
+def test_secondary_missions_merge_but_history_stays_primary() -> None:
     primary = DictationCandidate.model_validate(
         {
             "facts": [{"category": "condition", "text": "diabetes"}],
@@ -96,7 +96,7 @@ def test_secondary_history_missions_categories_and_questions_cannot_add_content(
     )
     result = merge_candidates(primary, secondary, "diabetes, tests CBC")
     assert result and result.candidate.facts == primary.facts
-    assert result.candidate.missions == primary.missions
+    assert result.candidate.missions == secondary.missions
     assert not result.issues and result.candidate.ambiguities == ("Which new disease?",)
     assert not result.candidate._dropped_numbers
 

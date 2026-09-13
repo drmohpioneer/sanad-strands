@@ -190,6 +190,10 @@ class PatientTurnCommit:
         committed = command_result(self.store.commit(self.builder.finish()))
         if committed.status != "forbidden":
             return committed
+        return self.refuse(committed)
+
+    def refuse(self, committed: CommandResult) -> CommandResult:
+        """Complete a refused turn with the existing safe reply and no candidate effects."""
         from sanad.safety import render_urgent
         from sanad.safety.policy import SAFETY_POLICY_V1_CARDIOLOGY_DRAFT
         from sanad.steward.service import system_command

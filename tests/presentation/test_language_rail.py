@@ -273,13 +273,13 @@ def test_login_refusal_reason(
         assert "sanad_session" not in client.cookies
 
 
-def test_pre_session_outage_keeps_503(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_pre_session_outage_has_retryable_reason(monkeypatch: pytest.MonkeyPatch) -> None:
     w = scribe_world()
     monkeypatch.setattr(w.login, "pre_session", lambda: None)
     with w.client() as client:
         response = client.get("/d/" + "A" * 43)
-    assert response.status_code == 503
-    assert "Please try again in a minute." in response.text
+    assert response.status_code == 409
+    assert response.json()["reason"] == "authorization_unavailable"
 
 
 def test_welcome_uses_free_text_and_help_keeps_commands() -> None:

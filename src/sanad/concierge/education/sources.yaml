@@ -19,7 +19,7 @@
     "source_title": "Hypertension",
     "source_label": "منظمة الصحة العالمية: يعني إيه ضغط عالي",
     "retrieved_on": "2026-09-07",
-    "reviewed_by": "pending owner review",
+    "reviewed_by": "Clinical reviewer of record",
     "version": "education-v1-2026-09-07",
     "content_kind": "clinical",
     "source_label_en": "World Health Organization: High blood pressure"
@@ -43,7 +43,7 @@
     "source_title": "Blood pressure test - NHS",
     "source_label": "NHS البريطانية: ليه نقيس الضغط في البيت",
     "retrieved_on": "2026-09-07",
-    "reviewed_by": "pending owner review",
+    "reviewed_by": "Clinical reviewer of record",
     "version": "education-v1-2026-09-07",
     "content_kind": "clinical",
     "source_label_en": "NHS: Home blood pressure readings"
@@ -68,7 +68,7 @@
     "source_title": "Heart failure - NHS",
     "source_label": "NHS البريطانية: ضعف القلب ومتابعة الوزن",
     "retrieved_on": "2026-09-07",
-    "reviewed_by": "pending owner review",
+    "reviewed_by": "Clinical reviewer of record",
     "version": "education-v1-2026-09-07",
     "content_kind": "clinical",
     "source_label_en": "NHS: Heart failure and weight"
@@ -93,7 +93,7 @@
     "source_title": "Atrial fibrillation - NHS",
     "source_label": "NHS البريطانية: يعني إيه رجفان أذيني",
     "retrieved_on": "2026-09-07",
-    "reviewed_by": "pending owner review",
+    "reviewed_by": "Clinical reviewer of record",
     "version": "education-v1-2026-09-07",
     "content_kind": "clinical",
     "source_label_en": "NHS: Atrial fibrillation"
@@ -118,7 +118,7 @@
     "source_title": "Anticoagulant medicines - NHS",
     "source_label": "NHS البريطانية: السيولة وعلامات النزيف",
     "retrieved_on": "2026-09-07",
-    "reviewed_by": "pending owner review",
+    "reviewed_by": "Clinical reviewer of record",
     "version": "education-v1-2026-09-07",
     "content_kind": "clinical",
     "source_label_en": "NHS: Anticoagulants and bleeding"
@@ -142,7 +142,7 @@
     "source_title": "Anticoagulants (Blood Thinners) - North Tees and Hartlepool NHS Foundation Trust",
     "source_label": "NHS البريطانية: تحليل سيولة الدم",
     "retrieved_on": "2026-09-07",
-    "reviewed_by": "pending owner review",
+    "reviewed_by": "Clinical reviewer of record",
     "version": "education-v1-2026-09-07",
     "content_kind": "clinical",
     "source_label_en": "NHS: The INR blood test"
@@ -166,7 +166,7 @@
     "source_title": "Statins - NHS",
     "source_label": "NHS البريطانية: إيه فايدة أدوية الستاتين",
     "retrieved_on": "2026-09-07",
-    "reviewed_by": "pending owner review",
+    "reviewed_by": "Clinical reviewer of record",
     "version": "education-v1-2026-09-07",
     "content_kind": "clinical",
     "source_label_en": "NHS: Statins"
@@ -191,7 +191,7 @@
     "source_title": "High cholesterol | Causes, testing and treatment",
     "source_label": "NHS البريطانية: يعني إيه الكوليسترول الضار",
     "retrieved_on": "2026-09-07",
-    "reviewed_by": "pending owner review",
+    "reviewed_by": "Clinical reviewer of record",
     "version": "education-v1-2026-09-07",
     "content_kind": "clinical",
     "source_label_en": "NHS: What LDL means"
@@ -217,7 +217,7 @@
     "source_title": "High cholesterol - Getting tested - NHS",
     "source_label": "NHS البريطانية: تحليل الدهون والصيام",
     "retrieved_on": "2026-09-07",
-    "reviewed_by": "pending owner review",
+    "reviewed_by": "Clinical reviewer of record",
     "version": "education-v1-2026-09-07",
     "content_kind": "clinical",
     "source_label_en": "NHS: Lipid testing and fasting"
@@ -241,7 +241,7 @@
     "source_title": "About ramipril - NHS",
     "source_label": "NHS البريطانية: ليه نتابع البوتاسيوم",
     "retrieved_on": "2026-09-07",
-    "reviewed_by": "pending owner review",
+    "reviewed_by": "Clinical reviewer of record",
     "version": "education-v1-2026-09-07",
     "content_kind": "clinical",
     "source_label_en": "NHS: Why potassium is checked"
@@ -265,7 +265,7 @@
     "source_title": "Chronic kidney disease - Diagnosis - NHS",
     "source_label": "NHS البريطانية: تحليل الكرياتينين ووظائف الكلى",
     "retrieved_on": "2026-09-07",
-    "reviewed_by": "pending owner review",
+    "reviewed_by": "Clinical reviewer of record",
     "version": "education-v1-2026-09-07",
     "content_kind": "clinical",
     "source_label_en": "NHS: Creatinine and kidney function"
@@ -291,7 +291,7 @@
     "source_title": "Furosemide: a medicine to treat oedema - NHS",
     "source_label": "NHS البريطانية: مدرات البول والدوخة",
     "retrieved_on": "2026-09-07",
-    "reviewed_by": "pending owner review",
+    "reviewed_by": "Clinical reviewer of record",
     "version": "education-v1-2026-09-07",
     "content_kind": "clinical",
     "source_label_en": "NHS: Diuretics and dizziness"
@@ -316,7 +316,7 @@
     "source_title": "About glyceryl trinitrate (GTN) - NHS",
     "source_label": "NHS البريطانية: يعني إيه أدوية النترات",
     "retrieved_on": "2026-09-07",
-    "reviewed_by": "pending owner review",
+    "reviewed_by": "Clinical reviewer of record",
     "version": "education-v1-2026-09-07",
     "content_kind": "clinical",
     "source_label_en": "NHS: Nitrates"
@@ -340,7 +340,7 @@
     "source_title": "Complications of type 2 diabetes - NHS",
     "source_label": "NHS البريطانية: السكر وصحة القلب",
     "retrieved_on": "2026-09-07",
-    "reviewed_by": "pending owner review",
+    "reviewed_by": "Clinical reviewer of record",
     "version": "education-v1-2026-09-07",
     "content_kind": "clinical",
     "source_label_en": "NHS: Diabetes and heart health"
@@ -364,7 +364,7 @@
     "source_title": "Heart attack - NHS",
     "source_label": "سياسة الأمان في سند: إمتى مسار الطوارئ مهم",
     "retrieved_on": "2026-09-07",
-    "reviewed_by": "pending owner review",
+    "reviewed_by": "Clinical reviewer of record",
     "version": "education-v1-2026-09-07",
     "content_kind": "safety",
     "source_basis": "Actionable wording exclusively from SAFETY_POLICY_V1_CARDIOLOGY_DRAFT patient_emergency; public NHS page is background, its UK telephone numbers and medicine advice are not imported.",
@@ -385,14 +385,14 @@
       "أصور التحليل إزاي",
       "أصور الروشتة إزاي"
     ],
-    "text_ar": "الصورة الواضحة محتاجة نور كويس وإيد ثابتة وخلفية من غير حاجات كتير تشتت النظر. إرشادات سند للورق: الصفحة كلها تبقى ظاهرة من فوق، والأسماء والأرقام والوحدات والتاريخ يبقوا مقروءين، من غير لمعان مغطي الكتابة. كل ورقة لوحدها بتقلل لخبطة الصفوف. الصورة بتتبعت في محادثتك الخاصة مع البوت بعد الربط والموافقة. حفظ الصورة مش معناه إن التحليل اتفسر أو الروشتة بقت خطة جديدة. صفحة NHS خلفية عامة لجودة الصور، وتعليمات الورق والبوت هنا من سند.",
-    "text_en": "A clear photograph needs good lighting, a steady device and an uncluttered background. Sanad’s document instructions are to show the whole page from above, with names, numbers, units and dates readable and without glare. Separate pages reduce row confusion. Use your bound private bot conversation. Saving an image does not interpret a result or activate a prescription. NHS guidance supports image quality; document and bot instructions are Sanad’s own.",
+    "text_ar": "الصورة الواضحة محتاجة نور كويس وإيد ثابتة وخلفية من غير حاجات كتير تشتت النظر. إرشادات سند للورق: الصفحة كلها تبقى ظاهرة من فوق، والأسماء والأرقام والوحدات والتاريخ يبقوا مقروءين، من غير لمعان مغطي الكتابة. كل ورقة لوحدها بتقلل لخبطة الصفوف. الصورة بتتبعت في محادثتك الخاصة مع البوت بعد الربط والموافقة. حفظ الصورة مش معناه إن التحليل اتفسر أو الروشتة بقت خطة جديدة.",
+    "text_en": "A clear photograph needs good lighting, a steady device and an uncluttered background. Sanad’s document instructions are to show the whole page from above, with names, numbers, units and dates readable and without glare. Separate pages reduce row confusion. Use your bound private bot conversation. Saving an image does not interpret a result or activate a prescription.",
     "source_url": "https://myhealth-devon.nhs.uk/my-referral/taking-medical-photographs/",
     "source_title": "Taking Medical Photographs - MyHealth Devon",
     "source_label": "إرشادات سند: تصوير التحليل أو الروشتة",
     "retrieved_on": "2026-09-07",
-    "reviewed_by": "pending owner review",
-    "version": "education-v1-2026-09-07",
+    "reviewed_by": "Clinical reviewer of record",
+    "version": "education-v1-2026-09-13",
     "content_kind": "product",
     "source_basis": "Public NHS background only. Sanad-specific statements derive from docs/architecture.md and docs/contracts/10-patient-onboarding-concierge-and-education.md; not attributed to NHS.",
     "source_label_en": "Sanad: Photographing a report or prescription"
@@ -411,14 +411,14 @@
       "يعني إيه دعوة QR",
       "مسح الكود يفتح ملفي فورًا"
     ],
-    "text_ar": "كود الدعوة في سند وسيلة تفتح بيها رابط الربط بسند. الكود نفسه مفيهوش اسم المريض أو تفاصيل علاجه. فتح الرابط بيعرض تعريف سند والدكتور وتعليمات الموافقة، مش الملف الطبي. بعد طلب الربط والموافقة، الدكتور بيأكد إن الحساب للشخص المقصود قبل إتاحة الخطة. دعوة سند مؤقتة وصلاحيتها محدد، ومش وسيلة لنقل الملف لشخص تاني. صفحة NHS بتشرح مثال عام لفتح كود في الدخول، لكن قواعد الدعوة دي من تصميم سند نفسه.",
-    "text_en": "A Sanad invitation code opens a service-linking flow and contains no patient name or treatment details. Opening it shows the service, doctor and consent instructions rather than the chart. After consent and a claim, the doctor confirms the intended person before plan access. Invitations expire and cannot transfer a chart. The NHS page provides background on QR-based sign-in; these invitation rules are Sanad’s own specification.",
+    "text_ar": "كود الدعوة في سند وسيلة تفتح بيها رابط الربط بسند. الكود نفسه مفيهوش اسم المريض أو تفاصيل علاجه. فتح الرابط بيعرض تعريف سند والدكتور وتعليمات الموافقة، مش الملف الطبي. بعد طلب الربط والموافقة، الدكتور بيأكد إن الحساب للشخص المقصود قبل إتاحة الخطة. دعوة سند مؤقتة وصلاحيتها محدد، ومش وسيلة لنقل الملف لشخص تاني.",
+    "text_en": "A Sanad invitation code opens a service-linking flow and contains no patient name or treatment details. Opening it shows the service, doctor and consent instructions rather than the chart. After consent and a claim, the doctor confirms the intended person before plan access. Invitations expire and cannot transfer a chart.",
     "source_url": "https://help.login.nhs.uk/manage/passkeys",
     "source_title": "Passkeys",
     "source_label": "إرشادات سند: دعوة الربط في سند",
     "retrieved_on": "2026-09-07",
-    "reviewed_by": "pending owner review",
-    "version": "education-v1-2026-09-07",
+    "reviewed_by": "Clinical reviewer of record",
+    "version": "education-v1-2026-09-13",
     "content_kind": "product",
     "source_basis": "Public NHS background only. Sanad-specific statements derive from docs/architecture.md and docs/contracts/10-patient-onboarding-concierge-and-education.md; not attributed to NHS.",
     "source_label_en": "Sanad: Your Sanad QR invitation"

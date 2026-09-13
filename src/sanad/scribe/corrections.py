@@ -21,7 +21,38 @@ from sanad.store.protocol import Store
 NEW_PATIENT = re.compile(r"مريض\s+(?:جديد|تاني|تانى)|\bnew patient\b", re.I)
 
 
+def patient_answer(previous: Proposal, text: str) -> str | None:
+    """Only a unique, whole offered name resolves a patient-name question."""
+    offered = {
+        name
+        for issue in previous.issues
+        if issue.item == "patient"
+        and issue.field == "name_as_spoken"
+        and issue.code == "extraction_conflict"
+        for name in (issue.alternatives or ())
+    }
+    matches = [
+        name
+        for name in offered
+        if re.search(r"(?<!\w)" + re.escape(normalize(name)) + r"(?!\w)", normalize(text))
+        and not re.search(
+            r"\b(?:not|isn't|is not)\s+" + re.escape(normalize(name)) + r"(?!\w)", normalize(text)
+        )
+    ]
+    matches = [
+        name
+        for name in matches
+        if not any(
+            normalize(name) != normalize(other) and normalize(name) in normalize(other)
+            for other in matches
+        )
+    ]
+    return matches[0] if len(matches) == 1 else None
+
+
 def reply_mode(text: str, previous: Proposal, store: Store) -> str:
+    if patient_answer(previous, text):
+        return "correction"
     marker = NEW_PATIENT.search(text)
     if marker:
         return "new" if not text[: marker.start()].strip(" \n،,و") else "choose"
@@ -147,6 +178,10 @@ def answer_slots(previous: Proposal, text: str) -> dict[str, str]:
 
 def same_patient(previous: Proposal, proposed: DictationCandidate, text: str) -> DictationCandidate:
     patient = previous.candidate.patient
+    if name := patient_answer(previous, text):
+        return proposed.model_copy(
+            update={"patient": patient.model_copy(update={"name_as_spoken": name})}
+        )
     # A spelling correction before creation changes no stored patient's identity.
     if previous.creating_patient and (
         not patient.name_as_spoken or re.search(r"اسمه|اسمها|الاسم|name", text, re.I)
@@ -208,6 +243,8 @@ def _settles_merge(
 ) -> bool:
     """An answer to another field of the item cannot settle this conflict."""
     answer = slots.get(issue.item, "")
+    if issue.item == "patient" and issue.field == "name_as_spoken":
+        return bool(answer and candidate.patient.name_as_spoken == answer)
     if not answer or not issue.field or ":" not in issue.item:
         return False
     family, index = issue.item.split(":")
@@ -242,6 +279,8 @@ def merge_correction(
 ) -> MergedCorrection:
     old = previous.candidate
     slots = answer_slots(previous, text)
+    if name := patient_answer(previous, text):
+        slots["patient"] = name
     indices: dict[str, int] = {}
     for edit in proposed.correction_edits:
         if normalize(edit.source_quote) not in normalize(text):
@@ -396,6 +435,7 @@ def merge_correction(
             "correction_edits": (),
         }
     )
+    merged = same_patient(previous, merged.model_copy(update={"patient": proposed.patient}), text)
     merged._dropped_numbers = tuple(
         dict.fromkeys((*old._dropped_numbers, *proposed._dropped_numbers))
     )
@@ -430,6 +470,7 @@ def merge_correction(
                 *(
                     issue.model_copy(update={"item": proposed_targets.get(issue.item, issue.item)})
                     for issue in proposed._merge_issues
+                    if not (issue.item == "patient" and _settles_merge(issue, merged, slots))
                 ),
             )
         ),

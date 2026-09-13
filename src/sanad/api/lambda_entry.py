@@ -17,7 +17,6 @@ from botocore.config import Config  # type: ignore[import-untyped]
 from fastapi import FastAPI
 from pydantic import SecretStr
 from starlette.concurrency import run_in_threadpool
-from starlette.responses import Response
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from sanad.api.app import create_app
@@ -52,7 +51,11 @@ class MetadataOnlyErrors(logging.Filter):
 
     def filter(self, record: logging.LogRecord) -> bool:
         if record.exc_info:
-            record.msg = "application request failed; details withheld from logs"
+            from sanad.api.failures import exception_metadata
+
+            record.msg = "request_failed reason=unhandled route_family=web " + exception_metadata(
+                record.exc_info[1]
+            )
             record.args = ()
             record.exc_info = record.exc_text = None
         return True
@@ -88,7 +91,9 @@ def media_caller(
 
 
 def configure(revision: str) -> FastAPI:
-    config = Config(connect_timeout=2, read_timeout=3, retries={"total_max_attempts": 1})
+    config = Config(
+        connect_timeout=2, read_timeout=3, retries={"mode": "adaptive", "total_max_attempts": 4}
+    )
     prefix = os.environ["SANAD_SSM_PREFIX"]
     ssm = boto3.client("ssm", config=config)
     names = (
@@ -256,8 +261,10 @@ def create_runtime_app() -> ASGIApp:
         try:
             app = await run_in_threadpool(load)
         except Exception:
-            logger.error("runtime configuration unavailable")
-            await Response(status_code=503)(scope, receive, send)
+            from sanad.api.failures import log_failure, response, route_family
+
+            log_failure("configuration", route_family(scope["path"]))
+            await response("configuration")(scope, receive, send)
             return
         await app(scope, receive, send)
 

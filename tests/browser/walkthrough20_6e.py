@@ -68,7 +68,7 @@ def test_6e_two_minutes_polling_and_saves(
                 lambda r: r.url.endswith(endpoint) and r.request.method == "POST"
             ) as saved:
                 page.locator("#patient-quiet-form button").click()
-            assert saved.value.status == 200
+            assert saved.value.status == 200, saved.value.text()
         if role == "doctor" and i % 6 == 0:
             saved = page.evaluate("""async () => {
                 const p = await (await fetch('/api/preferences')).json();

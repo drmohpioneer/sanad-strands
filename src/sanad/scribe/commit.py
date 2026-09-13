@@ -511,7 +511,12 @@ class ScribeCommit:
                 continue
             text = instruction.text
             if instruction.kind == "TEST":
-                details: object = TestDetails(analytes=(text,), completeness="all")
+                from sanad.scribe.card import test_items
+
+                analytes = test_items(proposal, item)
+                if not analytes:
+                    raise EffectsRejected("test_names_missing")
+                details: object = TestDetails(analytes=analytes, completeness="all")
                 predicate: object = EvidencePredicate(evaluator="test")
             elif instruction.kind == "SEND_RECORDS":
                 details = SendRecordsDetails(categories=(text,), required_count=1)
@@ -704,9 +709,7 @@ class ScribeCommit:
                     scope, "scribe:" + command_id, now, timedelta(minutes=5)
                 )
                 if lease is None:
-                    return self.reject(
-                        proposal, actor, command_id, reason="patient_busy", claim=claim
-                    )
+                    return ConfirmationResult("busy", "scribe_stale")
                 for ref in proposal.base_versions:
                     row = self.repo.store.get(scope, ref.entity_type, ref.id)
                     if row is None or row.version != ref.version:

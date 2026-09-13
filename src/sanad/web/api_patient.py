@@ -2,6 +2,7 @@
 
 import base64
 import json
+from datetime import datetime
 from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -9,22 +10,23 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from sanad.auth.login import LoginService
 from sanad.channels.telegram.router import route_receipt
-from sanad.concierge.plan import load
 from sanad.domain import ObservationRef, PatientScope
 from sanad.media.upload import upload_state
 from sanad.safety import screen_text, to_incident_facts
 from sanad.steward.credential_message import is_credential_message
-from sanad.steward.types import records
+from sanad.steward.types import bounded_records as records
 from sanad.store import keys
 from sanad.store.records import (
+    Cursor,
     InboundReceipt,
     OperationalClock,
     OutboundIntent,
     StoredRecord,
     WebSession,
     from_record,
-    to_record,
+    item_record,
 )
+from sanad.web.receipts import persist
 from sanad.web.routes import require_session
 
 
@@ -62,11 +64,15 @@ def uploads(
     scope = patient_scope(session)
     evidence = list(records(login.store, scope, "evidence"))
     result = []
-    for row in receipt_rows if receipt_rows is not None else login.store.patient_receipts(scope):
+    for row in (
+        receipt_rows
+        if receipt_rows is not None
+        else login.store.patient_receipts(scope, limit=30, kinds=("photo", "document"))[0]
+    ):
         receipt = from_record(row, InboundReceipt)
         if receipt.source_subject != session.subject or receipt.kind not in {"photo", "document"}:
             continue
-        media = login.store.get(scope, "media_work", keys.digest(receipt.id))
+        media = item_record(row.media_snapshot) if row.media_snapshot else None
         association = str(media.body.get("association_ref", "")) if media else ""
         linked = (
             association.split(":", 1)[1]
@@ -158,9 +164,8 @@ def submit(
         safety_result=verdict.model_dump(mode="json"),
         work_clock=OperationalClock(next_action_at=now, work_lane="ingress"),
     )
-    accepted = login.store.accept_inbound(transport_key, to_record(receipt, scope))
-    if accepted.record is None or accepted.status not in {"created", "existing"}:
-        raise HTTPException(503)
+    accepted = persist(login.store, receipt)
+    assert accepted.record is not None
     if verdict.level == "danger":
         from sanad.safety import render_urgent
         from sanad.store.records import Patient
@@ -185,7 +190,7 @@ def submit(
     if routed.template_id == "patient_callback_stale":
         raise HTTPException(409)
     confirmation: str | None = None
-    for row in records(login.store, scope, "outbound_intent"):
+    for row in receipt_replies(login, scope, receipt.id):
         intent = from_record(row, OutboundIntent)
         if runtime.dispatcher.origin_receipt_id(intent) != receipt.id:
             continue
@@ -209,9 +214,54 @@ def submit(
             ):
                 confirmation = str(keyboard[0][0].get("callback_data", ""))
     saved = login.store.get(scope, "inbound_receipt", receipt.id)
-    return {
-        "status": "accepted" if saved and saved.body.get("state") == "completed" else "received",
+    completed = bool(saved and saved.body.get("state") == "completed")
+    result: dict[str, JsonValue] = {
+        "status": "accepted" if completed else "received",
         "confirmation_token": confirmation,
+    }
+    if preference:
+        result.update(queued=not completed, token=receipt.id)
+        if completed:
+            result["preferences"] = preference_state(login, session)
+    return result
+
+
+def receipt_replies(
+    login: LoginService, scope: PatientScope, receipt_id: str
+) -> tuple[StoredRecord, ...]:
+    # PatientTurn uses one exact reply key, or its deterministic refusal key.
+    rows = []
+    for suffix in ("", ":refused"):
+        id = keys.digest(f"patient-turn:{receipt_id}{suffix}|patient|solicited_reply|")
+        row = login.store.get(scope, "outbound_intent", id)
+        if row:
+            rows.append(row)
+    return tuple(rows)
+
+
+def preference_state(login: LoginService, session: WebSession) -> dict[str, JsonValue]:
+    # Preferences need only three point reads; no care-plan projection on a poll.
+    from sanad.store.records import Consent, Patient
+
+    scope = patient_scope(session)
+    patient = login.store.get(scope, "patient", scope.patient_id)
+    if patient is None:
+        raise HTTPException(401)
+    p = from_record(patient, Patient)
+    binding = login.store.get(scope, "patient_binding", p.active_binding_id or "")
+    consent = (
+        login.store.get(scope, "consent", str(binding.body["consent_id"])) if binding else None
+    )
+    if consent is None:
+        raise HTTPException(401)
+    c = from_record(consent, Consent)
+    return {
+        "reminders": "enabled"
+        if c.routine_contact_enabled and p.contact_status == "active"
+        else "paused",
+        "quiet_hours": list(c.quiet_hours),
+        "timezone": p.timezone,
+        "language": p.language,
     }
 
 
@@ -219,79 +269,159 @@ def patient_router(login: LoginService) -> APIRouter:
     router = APIRouter()
     guard = require_session("patient")
 
+    def decode_cursor(session: WebSession, value: str | None, family: str) -> list[Cursor | None]:
+        if not value:
+            return [None, None]
+        try:
+            if len(value) > 4096:
+                raise ValueError
+            data = json.loads(base64.urlsafe_b64decode(value))
+            if (
+                not isinstance(data, list)
+                or len(data) != 4
+                or data[:2] != [keys.digest(session.id), family]
+            ):
+                raise ValueError
+            return [Cursor.model_validate(v) if v else None for v in data[2:]]
+        except (ValueError, TypeError):
+            raise HTTPException(400) from None
+
+    def encode_cursor(session: WebSession, family: str, positions: list[Cursor | None]) -> str:
+        return base64.urlsafe_b64encode(
+            json.dumps(
+                [
+                    keys.digest(session.id),
+                    family,
+                    *[c.model_dump() if c else None for c in positions],
+                ]
+            ).encode()
+        ).decode()
+
     @router.get("/api/patient/uploads")
-    def list_uploads(session: Annotated[WebSession, Depends(guard)]) -> list[dict[str, str]]:
-        return uploads(login, session)[:30]
+    def list_uploads(
+        session: Annotated[WebSession, Depends(guard)], cursor: str | None = None
+    ) -> dict[str, JsonValue]:
+        position = decode_cursor(session, cursor, "uploads")[0]
+        rows, next_position = login.store.patient_receipts(
+            patient_scope(session), position, limit=30, kinds=("photo", "document")
+        )
+        return {
+            "items": [dict(item) for item in uploads(login, session, rows)],
+            "cursor": encode_cursor(session, "uploads", [next_position, None])
+            if next_position
+            else None,
+        }
 
     @router.get("/api/patient/conversation")
     def conversation(
         session: Annotated[WebSession, Depends(guard)], cursor: str | None = None
     ) -> dict[str, JsonValue]:
         scope = patient_scope(session)
-        receipt_rows = login.store.patient_receipts(scope)
-        states = {u["id"]: u for u in uploads(login, session, receipt_rows)}
-        items: list[dict[str, JsonValue]] = []
-        for row in receipt_rows:
+        positions = decode_cursor(session, cursor, "conversation")
+        inbound, next_in = login.store.patient_receipts(scope, positions[0], limit=50)
+        outbound, next_out = login.store.patient_timeline(
+            scope, "CONVERSATION#", positions[1], limit=50
+        )
+        states = {u["id"]: u for u in uploads(login, session, inbound)}
+        items: list[tuple[dict[str, JsonValue], int, StoredRecord]] = []
+        chat = login.store.authorize(session.scope.bot_id, session.subject).private_chat_id
+        for row in inbound:
             r = from_record(row, InboundReceipt)
-            if r.source_subject != session.subject or r.kind not in {"text", "photo", "document"}:
-                continue
-            items.append(
-                {
-                    "id": r.id,
-                    "at": r.received_at.isoformat(),
-                    "direction": "inbound",
-                    "text": str((r.payload or {}).get("text", "")),
-                    "upload": dict(states[r.id]) if r.id in states else None,
-                }
-            )
-        for row in records(login.store, scope, "outbound_intent"):
+            if r.source_subject == session.subject and r.kind in {"text", "photo", "document"}:
+                items.append(
+                    (
+                        {
+                            "id": r.id,
+                            "at": keys.instant(r.received_at),
+                            "direction": "inbound",
+                            "text": str((r.payload or {}).get("text", "")),
+                            "upload": dict(states[r.id]) if r.id in states else None,
+                        },
+                        0,
+                        row,
+                    )
+                )
+        for row in outbound:
             i = from_record(row, OutboundIntent)
             if (
                 i.audience == "patient"
                 and i.status == "provider_accepted"
                 and i.accepted_at
                 and i.recipient_subject in {None, session.subject}
-                and i.recipient_ref
-                == login.store.authorize(session.scope.bot_id, session.subject).private_chat_id
+                and i.recipient_ref == chat
             ):
                 credential = is_credential_message(i.template_id, i.delivered_text)
                 items.append(
-                    {
-                        "id": i.id,
-                        "at": i.accepted_at.isoformat(),
-                        "direction": "outbound",
-                        **(
-                            {"legacy": False, "credential": True}
-                            if credential
-                            else {"text": i.delivered_text, "legacy": i.delivered_text is None}
-                        ),
-                    }
+                    (
+                        {
+                            "id": i.id,
+                            "at": keys.instant(i.accepted_at),
+                            "direction": "outbound",
+                            **(
+                                {"legacy": False, "credential": True}
+                                if credential
+                                else {"text": i.delivered_text, "legacy": i.delivered_text is None}
+                            ),
+                        },
+                        1,
+                        row,
+                    )
                 )
-        items.sort(key=lambda r: (str(r["at"]), str(r["id"])))
-        if cursor:
-            try:
-                if len(cursor) > 2048:
-                    raise ValueError
-                values = json.loads(base64.urlsafe_b64decode(cursor))
-                if (
-                    not isinstance(values, list)
-                    or len(values) != 3
-                    or values[0] != keys.digest(session.id)
-                    or not all(isinstance(v, str) for v in values)
-                ):
-                    raise ValueError
-                items = [r for r in items if (str(r["at"]), str(r["id"])) < (values[1], values[2])]
-            except (ValueError, TypeError):
-                raise HTTPException(400) from None
-        page = items[-50:]
-        next_cursor = (
-            base64.urlsafe_b64encode(
-                json.dumps([keys.digest(session.id), page[0]["at"], page[0]["id"]]).encode()
-            ).decode()
-            if len(items) > 50
-            else None
-        )
-        return {"items": list(page), "cursor": next_cursor}
+        items.sort(key=lambda r: (str(r[0]["at"]), str(r[0]["id"])), reverse=True)
+        # A source with filtered-out rows may hide newer visible history on its
+        # next page. Do not pass its evaluated boundary in the other source.
+        boundaries = [
+            (keys.instant(datetime.fromisoformat(str(rows[-1].body[field]))), rows[-1].id)
+            for rows, next_key, field in (
+                (inbound, next_in, "received_at"),
+                (outbound, next_out, "accepted_at"),
+            )
+            if rows and next_key is not None
+        ]
+        boundary = max(boundaries) if boundaries else None
+        page = [
+            item
+            for item in items
+            if boundary is None or (str(item[0]["at"]), str(item[0]["id"])) >= boundary
+        ][:50]
+        # Advance each source only through consumed entries. Unselected tail rows
+        # stay on the next page even when the other source filled this page.
+        next_positions = [next_in, next_out]
+        for source, _rows, prefix in ((0, inbound, "RECEIPT#"), (1, outbound, "CONVERSATION#")):
+            remaining = [r for r in items[len(page) :] if r[1] == source]
+            if remaining:
+                selected = [r for r in page if r[1] == source]
+                if selected:
+                    row = selected[-1][2]
+                    at = row.body["received_at" if source == 0 else "accepted_at"]
+                    from sanad.store._base import query_identity
+
+                    pk = keys.partition(scope)
+                    next_positions[source] = Cursor(
+                        query=query_identity(pk, None, prefix, None) + ":desc",
+                        position={
+                            "PK": pk,
+                            "SK": keys.timeline(
+                                scope, prefix, datetime.fromisoformat(str(at)), row.id
+                            ).sk,
+                        },
+                    )
+                else:
+                    next_positions[source] = positions[source]
+            elif next_positions[source] is None:
+                # Exhausted source sentinel prevents restarting it on later pages.
+                from sanad.store._base import query_identity
+
+                pk = keys.partition(scope)
+                next_positions[source] = Cursor(
+                    query=query_identity(pk, None, prefix, None) + ":desc",
+                    position={"PK": pk, "SK": prefix},
+                )
+        more = len(items) > len(page) or next_in is not None or next_out is not None
+        return {
+            "items": [i[0] for i in reversed(page)],
+            "cursor": encode_cursor(session, "conversation", next_positions) if more else None,
+        }
 
     @router.post("/api/patient/messages")
     def message(
@@ -302,18 +432,38 @@ def patient_router(login: LoginService) -> APIRouter:
         return submit(login, request, session, body, body.text)
 
     @router.get("/api/patient/preferences")
-    def preferences(session: Annotated[WebSession, Depends(guard)]) -> dict[str, JsonValue]:
-        snap = load(login.store, patient_scope(session), login.clock())
-        if snap is None:
-            raise HTTPException(401)
-        return {
-            "reminders": "enabled"
-            if snap.consent.routine_contact_enabled and snap.patient.contact_status == "active"
-            else "paused",
-            "quiet_hours": list(snap.consent.quiet_hours),
-            "timezone": snap.patient.timezone,
-            "language": snap.patient.language,
-        }
+    def preferences(
+        request: Request, session: Annotated[WebSession, Depends(guard)], token: str | None = None
+    ) -> dict[str, JsonValue]:
+        result = preference_state(login, session)
+        if token:
+            receipt = login.store.get(patient_scope(session), "inbound_receipt", token)
+            payload = receipt.body.get("payload") if receipt else None
+            if (
+                receipt is None
+                or receipt.body.get("transport") != "web-preference"
+                or not isinstance(payload, dict)
+                or payload.get("web_session_id") != session.id
+            ):
+                raise HTTPException(404)
+            result["queued"] = receipt.body.get("state") != "completed"
+            if not result["queued"]:
+                for row in receipt_replies(login, patient_scope(session), token):
+                    intent = from_record(row, OutboundIntent)
+                    if request.app.state.telegram.dispatcher.origin_receipt_id(intent) != token:
+                        continue
+                    markup = (intent.payload or {}).get("reply_markup")
+                    if isinstance(markup, dict):
+                        keyboard = markup.get("inline_keyboard")
+                        if (
+                            isinstance(keyboard, list)
+                            and keyboard
+                            and isinstance(keyboard[0], list)
+                            and keyboard[0]
+                            and isinstance(keyboard[0][0], dict)
+                        ):
+                            result["confirmation_token"] = keyboard[0][0].get("callback_data")
+        return result
 
     @router.post("/api/patient/preferences")
     def preference(

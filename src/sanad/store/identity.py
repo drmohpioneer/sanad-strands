@@ -428,6 +428,10 @@ def identity_guards(
                     "idle_expires_at",
                     "revoked_at",
                 }
+                if kind == "TouchWebSession":
+                    immutable.add("consent_version")
+                if kind == "RevokeWebSession":
+                    immutable.add("revocation_reason")
                 if any(body.get(k) != v for k, v in old.items() if k not in immutable):
                     return None
                 if kind in {"ExchangeLogin", "RevokeWebSession"} and (
@@ -520,20 +524,23 @@ def live_snapshot(
         return True
     if snapshot.doctor_id is None:
         return False
-    if (
-        auth.binding is None
-        or auth.binding.status != "active"
-        or auth.principal.actor_kind != role
-        or auth.principal.doctor_id != snapshot.doctor_id
-        or auth.auth_epoch != snapshot.auth_epoch
-        or auth.doctor_status != "approved"
-    ):
-        return False
     bound = store.get(scope, "subject_binding", snapshot.subject)
     doctor = store.get(TenantScope(doctor_id=snapshot.doctor_id), "doctor", snapshot.doctor_id)
     if bound is None or doctor is None:
         return False
     checks.extend([Check(bound.key, bound.version), Check(doctor.key, doctor.version)])
+    subject = from_record(bound, SubjectBinding)
+    if (
+        subject.status != "active"
+        or auth.principal.actor_kind != role
+        or role not in subject.role_set
+        or subject.doctor_id != snapshot.doctor_id
+        or doctor.body.get("auth_epoch") != snapshot.auth_epoch
+        or doctor.body.get("status") != "approved"
+        or doctor.body.get("telegram_bot_id") != scope.bot_id
+        or (role == "doctor" and doctor.body.get("telegram_user_id") != snapshot.subject)
+    ):
+        return False
     if role == "patient":
         patient_scope = PatientScope(
             doctor_id=snapshot.doctor_id, patient_id=snapshot.patient_id or ""
@@ -550,12 +557,15 @@ def live_snapshot(
         if not consent_row:
             return False
         consent = from_record(consent_row, Consent)
+        checks.extend(
+            Check(r.key, r.version) for r in (binding_row, patient_row, profile_row, consent_row)
+        )
         if (
             binding.status != "active"
             or binding.subject != snapshot.subject
             or binding.binding_epoch != snapshot.binding_epoch
-            or auth.binding.binding_epoch != snapshot.binding_epoch
-            or auth.principal.patient_id != snapshot.patient_id
+            or subject.binding_epoch != snapshot.binding_epoch
+            or subject.patient_id != snapshot.patient_id
             or patient.active_binding_id != snapshot.binding_id
             or patient.contact_status in {"awaiting_link", "frozen"}
             or consent.version != snapshot.consent_version
@@ -573,9 +583,6 @@ def live_snapshot(
             or consent.accepted_by != snapshot.subject
         ):
             return False
-        checks.extend(
-            Check(r.key, r.version) for r in (binding_row, patient_row, profile_row, consent_row)
-        )
     return True
 
 

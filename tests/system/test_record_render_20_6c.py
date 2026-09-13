@@ -44,6 +44,18 @@ def journey(
     assert not proposal.blocked("all") and not proposal.blocked("order:0")
     a.tap(id=7001)
     assert a.scribe.repo.pending(a.doctor.scope) is None
+    a.dictate(
+        "Synthetic Alice. We can hold Aspirin for now because of bruising; stop Lasix.",
+        {
+            "patient": {"name_as_spoken": "Synthetic Alice"},
+            "orders": [
+                {"action": "stop", "drug": "Aspirin", "action_quote": "We can hold"},
+                {"action": "stop", "drug": "Lasix", "action_quote": "stop"},
+            ],
+        },
+        id=7002,
+    )
+    a.tap(id=7003)
     return worlds
 
 
@@ -93,6 +105,19 @@ def test_t38_all_record_kinds_render(
             stored_kinds.update(str(row["entity_type"]) for row in rows if "entity_type" in row)
             if cursor is None:
                 break
+        if peer is journey[0]:
+            assert len(record["held_medications"]) == 1
+            assert record["held_medications"][0]["drug"] == "Aspirin"
+            page.goto(rendered.origin + "/a")
+            page.locator('#content[aria-busy="false"]').wait_for()
+            page.locator(f'[data-record][href$="/{peer.patient_scope.patient_id}"]').click()
+            record_page = page.locator("#content")
+            expect(record_page.locator("[data-held-order]")).to_contain_text(
+                "Aspirin is on hold since"
+            )
+            expect(record_page.locator("[data-held-order]")).to_contain_text("of bruising")
+            expect(record_page.locator("[data-held-order]")).to_contain_text("since")
+            expect(record_page.locator("[data-order]").filter(has_text="Lasix")).to_have_count(0)
         base = f"{rendered.origin}/a/patients/{peer.patient_scope.patient_id}"
         with page.expect_response(base.replace("/a/", "/api/")) as record_response:
             page.goto(base)
@@ -104,29 +129,32 @@ def test_t38_all_record_kinds_render(
             "data-patient", peer.patient_scope.patient_id
         )
         assert peer.store.get_patient_profile(peer.patient_scope) is not None
-        for tab in ("Plan", "Requests", "Evidence", "History"):
+        for tab in ("Medicines", "Requests", "Documents", "History"):
             page.get_by_role("tab", name=tab, exact=True).click()
             panel = page.get_by_role("tabpanel")
             expect(panel).to_be_visible()
-            if tab == "Plan":
+            if tab == "Medicines":
                 for consent in record["consents"]:
                     expect(panel.locator(".consent-binding")).to_contain_text(
-                        f"Consent version {consent['version']}"
+                        "Agreed to Sanad messages on"
                     )
                     expect(panel.locator(".consent-binding")).to_contain_text(
-                        consent["policy_text_version"]
+                        f"(consent version {consent['version']})"
                     )
-                    expect(
-                        panel.locator(".consent-binding p")
-                        .filter(has_text=f"Consent version {consent['version']}")
-                        .locator(f'time[datetime="{consent["accepted_at"]}"]')
-                    ).to_be_visible()
                 for binding in record["bindings"]:
-                    expect(panel.locator(".consent-binding")).to_contain_text(
-                        "Patient binding: " + binding["status"].capitalize()
-                    )
+                    if binding["confirmed_at"]:
+                        expect(page.locator(".record-heading")).to_contain_text("Joined on")
 
+                for hold in record["held_medications"]:
+                    card = panel.locator(f'[data-held-order="{hold["order_id"]}"]')
+                    expect(card).to_be_visible()
+                    expect(card).to_contain_text(hold["drug"] + " is on hold since")
+                    expect(card).to_contain_text("of bruising")
+                    expect(card).to_contain_text("since")
                 for order in record["orders"]:
+                    if order["status"] != "active":
+                        expect(panel.locator(f'[data-order="{order["id"]}"]')).to_have_count(0)
+                        continue
                     card = panel.locator(f'[data-order="{order["id"]}"]')
                     expect(card).to_be_visible()
                     instruction = order["current_version"]["structured_instruction"]
@@ -163,21 +191,23 @@ def test_t38_all_record_kinds_render(
                     if follow["due_at"]:
                         expect(card.locator("time")).to_have_attribute("datetime", follow["due_at"])
                     else:
-                        expect(card).to_contain_text("No due time recorded")
+                        expect(card).to_contain_text("date not recorded")
                         expect(card.locator("time")).to_have_count(0)
-                for review in record["reviews"] + record["review_history"]:
+                for review in record["reviews"]:
+                    card = page.locator(f'[data-obligation="{review["id"]}"]')
+                    expect(card).to_be_visible()
+                    expect(card.locator("a")).to_have_count(1)
+                    expect(panel.locator(f'[data-review="{review["id"]}"]')).to_have_count(0)
+                for review in record["review_history"]:
                     card = panel.locator(f'[data-review="{review["id"]}"]')
                     expect(card).to_be_visible()
-                    expect(card.locator(".status").first).to_have_text(review["state"].capitalize())
-                    expect(card.locator("time").first).to_have_attribute(
-                        "datetime", review["review_at"]
-                    )
-            elif tab == "Evidence":
+                    expect(card).to_contain_text("Reviewed on")
+            elif tab == "Documents":
                 for e in evidence:
                     card = panel.locator(f'[data-evidence="{e["id"]}"]')
                     expect(card).to_be_visible()
                     expect(card.locator(".status")).to_contain_text(
-                        "Not used" if e["association_state"] == "detached" else "Accepted document"
+                        "Not used" if e["association_state"] == "detached" else "On file."
                     )
                     expect(card.locator("time").first).to_have_attribute(
                         "datetime", e["provenance"]["received_at"]
@@ -196,6 +226,11 @@ def test_t38_all_record_kinds_render(
                         panel.locator(f'[data-media][href$="/{media["media_id"]}"]').first
                     ).to_be_visible()
             else:
+                for order in record["orders"]:
+                    if order["status"] == "stopped":
+                        expect(
+                            panel.locator(f'[data-stopped-order="{order["id"]}"]')
+                        ).to_be_visible()
                 for correction in record["corrections"]:
                     card = panel.locator(f'[data-correction="{correction["id"]}"]')
                     expect(card).to_be_visible()

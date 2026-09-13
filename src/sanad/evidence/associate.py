@@ -8,6 +8,13 @@ from sanad.evidence.classify import analyte, caption_categories, expected, norma
 from sanad.store.records import Evidence
 
 
+def identity_required(evidence: Evidence) -> bool:
+    return bool(
+        {"identity_mismatch", "identity_unverifiable"}.intersection(evidence.flags)
+        and "identity_confirmed" not in evidence.flags
+    )
+
+
 def open_missions(missions: Sequence[Mission]) -> tuple[Mission, ...]:
     return tuple(
         m

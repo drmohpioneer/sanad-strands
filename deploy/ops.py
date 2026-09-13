@@ -249,13 +249,28 @@ def health_report(aws: Any, env: str, *, now: datetime | None = None) -> dict[st
         measured("oldest_unfinished_" + kind, oldest([b.get(field) for b in selected], now))
     app_group = f"/aws/lambda/sanad-{env}-app"
     relay_group = f"/aws/lambda/sanad-{env}-relay"
+    from sanad.api.failures import REASONS
+
+    failed_requests = dict.fromkeys(REASONS, 0)
     last_tick: int | None = None
     for group in (app_group, relay_group):
         for event in log_events(aws, group, int((now - timedelta(hours=1)).timestamp() * 1000)):
+            if group == app_group and event.get("timestamp", 0) <= now.timestamp() * 1000:
+                import re
+
+                failure = re.search(
+                    r"request_failed reason=([a-z_]+) route_family=([a-z]+)",
+                    event.get("message", ""),
+                )
+                if failure and failure[1] in failed_requests:
+                    failed_requests[failure[1]] += 1
             if group == app_group and "tick accepted nonce=" in event.get("message", ""):
                 stamp = event["timestamp"]
                 if stamp <= now.timestamp() * 1000:
                     last_tick = max(last_tick or stamp, stamp)
+    measured(
+        "failed_requests_last_hour", failed_requests, app_group + "; request_failed reason codes"
+    )
     unavailable(
         "scheduler_lag", "Tick logs record acceptance, not scheduled/due-to-handled lag.", app_group
     )
@@ -339,6 +354,28 @@ def health_report(aws: Any, env: str, *, now: datetime | None = None) -> dict[st
     measured(
         "unacknowledged_urgent_incidents", {"count": unacknowledged, "missing_review": unknown}
     )
+    for name, metric, statistic, operation in (
+        ("consumed_read_units_last_hour", "ConsumedReadCapacityUnits", "Sum", None),
+        ("consumed_write_units_last_hour", "ConsumedWriteCapacityUnits", "Sum", None),
+        ("scan_requests_last_hour", "SuccessfulRequestLatency", "SampleCount", "Scan"),
+    ):
+        dimensions = [{"Name": "TableName", "Value": out["TableName"]}]
+        if operation:
+            dimensions.append({"Name": "Operation", "Value": operation})
+        result = client(aws, "cloudwatch").get_metric_statistics(
+            Namespace="AWS/DynamoDB",
+            MetricName=metric,
+            Dimensions=dimensions,
+            StartTime=now - timedelta(hours=1),
+            EndTime=now,
+            Period=300,
+            Statistics=[statistic],
+        )
+        measured(
+            name,
+            sum(p[statistic] for p in result["Datapoints"]),
+            "CloudWatch AWS/DynamoDB " + metric + " " + statistic,
+        )
     errors = {}
     for role, output_key in (("app", "AppFunctionName"), ("relay", "RelayFunctionName")):
         result = client(aws, "cloudwatch").get_metric_statistics(

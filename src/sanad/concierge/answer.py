@@ -61,6 +61,14 @@ class Bundle:
     doctor_text: str | None = None
 
 
+def explanation_question(question: str) -> bool:
+    return bool(
+        re.search(
+            r"\b(?:what (?:is|are) .+ (?:for|used)|why|how .+ works?|explain)\b", question, re.I
+        )
+    )
+
+
 @dataclass(frozen=True)
 class AnswerResult:
     reply: str
@@ -84,7 +92,7 @@ def build_bundle(
         for o in snapshot.orders
         if isinstance(o.structured_instruction, OrderCandidate)
     )
-    use_plan = plan_question(question, drugs)
+    use_plan = plan_question(question, drugs) and not explanation_question(question)
     education_lines = tuple(line for entry in education for line in entry.lines(language))
     permitted = (*(plan_lines if use_plan else ()), *education_lines)
     bundle = {

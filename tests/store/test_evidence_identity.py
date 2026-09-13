@@ -110,7 +110,7 @@ def test_identity_doctor_actions(world: PatientWorld, method: str, action: str, 
     markup = buttons(intent)
     assert len(markup) == 2
     assert [row[0]["text"] for row in markup] == (
-        ["This patient's paper ✅", "Not this patient ❌"]
+        ["Confirm it is this patient", "Not this patient ❌"]
         if lang == "en"
         else ["ورقة المريض ده ✅", "مش ورقته ❌"]
     )

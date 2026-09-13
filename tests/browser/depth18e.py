@@ -26,7 +26,7 @@ def ready(app: RenderedApp, path: str = "/demo") -> Page:
     response = page.goto(app.origin + path)
     assert response.ok if response else page.url == app.origin + path and "#" in path
     if path.startswith("/demo#"):
-        page.get_by_role("tab", name="Plan", exact=True).wait_for()
+        page.get_by_role("tab", name="Medicines", exact=True).wait_for()
     page.locator('#content[aria-busy="false"]').wait_for()
     page.evaluate("document.fonts.ready")
     expect(page.locator("#feedback")).to_be_empty()
@@ -52,7 +52,7 @@ def identity(page: Page) -> None:
 
 
 @RETINA
-def test_depth_screenshots_and_computed_surfaces(rendered: RenderedApp) -> None:
+def test_depth_screenshots_and_computed_surfaces(rendered: RenderedApp, tmp_path: Path) -> None:
     ready(rendered)  # Warm the shipped optional fonts for the visual comparison.
     page = ready(rendered)
     assert page.locator(".identity").evaluate(
@@ -70,9 +70,9 @@ def test_depth_screenshots_and_computed_surfaces(rendered: RenderedApp) -> None:
     assert page.locator(".work-surface").evaluate("e=>getComputedStyle(e).boxShadow") != "none"
     expect(page.locator(".page-heading")).to_have_count(0)
     assert page.locator(".top-bar").evaluate("e=>e.getBoundingClientRect().height") == 56
-    expect(page.locator(".summary-tile").first).to_contain_text("Danger")
+    expect(page.locator(".summary-tile").first).to_contain_text("Needs you now")
     expect(page.locator(".summary-tile").first).to_have_class("summary-tile danger")
-    expect(page.locator(".sort-chevron")).to_have_count(6)
+    expect(page.locator(".sort-chevron")).to_have_count(4)
     assert page.locator("body,.summary-tile strong,td,time").evaluate_all(
         "es=>es.every(e=>getComputedStyle(e).fontVariantNumeric.includes('tabular-nums'))"
     )
@@ -80,20 +80,19 @@ def test_depth_screenshots_and_computed_surfaces(rendered: RenderedApp) -> None:
     viewport = page.viewport_size
     assert viewport
     size = f"{viewport['width']}x{viewport['height']}"
-    output = ROOT / "lane/runs/design-shots-18e-2"
+    output = tmp_path / "design-shots-18g"
     output.mkdir(parents=True, exist_ok=True)
     page.wait_for_timeout(350)  # Finish the bounded eight-row entrance before capture.
     for prefix, full in (("list", False), ("list-full", True)):
         name = f"{prefix}-{size}-{theme}.png"
-        assert (ROOT / "lane/runs/design-audit-shots" / name).is_file()
         page.screenshot(path=str(output / name), full_page=full)
         with Image.open(output / name) as shot:
             assert shot.width == viewport["width"] * 2
             assert shot.height >= viewport["height"] * 2
     page.locator("[data-record]").first.click()
-    expect(page.locator("#drawer-title")).to_contain_text("Ahmed")
+    expect(page.locator("#title")).to_contain_text("Ahmed")
     page.wait_for_timeout(300)
-    name = f"drawer-{size}-{theme}.png"
+    name = f"record-{size}-{theme}.png"
     page.screenshot(path=str(output / name))
     with Image.open(output / name) as shot:
         assert shot.size == (viewport["width"] * 2, viewport["height"] * 2)
@@ -103,16 +102,9 @@ def test_depth_screenshots_and_computed_surfaces(rendered: RenderedApp) -> None:
 @RETINA
 def test_depth_summary_filters_chips_and_primary(rendered: RenderedApp) -> None:
     page = ready(rendered)
-    colors = page.locator(".status").evaluate_all(
-        "es=>[...new Set(es.map(e=>getComputedStyle(e).backgroundColor))]"
-    )
-    assert len(colors) > 1
-    danger = page.locator(".status.danger").first
-    quiet = page.locator(".status.quiet").first
-    assert danger.count() and quiet.count()
-    assert danger.evaluate("e=>getComputedStyle(e).backgroundColor") != quiet.evaluate(
-        "e=>getComputedStyle(e).backgroundColor"
-    )
+    expect(page.locator(".patient-row .status")).to_have_count(0)
+    assert page.locator(".patient-row.danger").count()
+    assert page.locator(".patient-row.warning,.patient-row.calm").count()
     expect(page.locator("#refresh")).not_to_have_class("primary")
     for key in ("danger", "overdue", "pending_review", "due_today"):
         tile = page.locator(f'[data-summary="{key}"]')
@@ -202,7 +194,7 @@ def test_depth_identity_all_routes(rendered: RenderedApp) -> None:
     ):
         identity(ready(rendered, path))
     rendered.detail()
-    for tab in ("Plan", "Requests", "Evidence", "History"):
+    for tab in ("Medicines", "Requests", "Documents", "History"):
         rendered.page.get_by_role("tab", name=tab, exact=True).click()
         identity(rendered.page)
     rendered.login(PATIENT)
@@ -246,18 +238,16 @@ def test_depth_keyboard_and_motion(rendered: RenderedApp) -> None:
     page.keyboard.press("ArrowUp")
     expect(rows.first).to_be_focused()
     page.keyboard.press("Enter")
-    expect(page.locator("#patient-drawer")).to_be_visible()
-    motionless()
-    page.keyboard.press("Escape")
+    expect(page.locator("#what-to-do")).to_be_visible()
     expect(page.locator("#patient-drawer")).to_have_count(0)
-    expect(rows.first.locator("[data-record]")).to_be_focused()
+    motionless()
     rendered.detail()
-    first = page.get_by_role("tab", name="Plan", exact=True)
+    first = page.get_by_role("tab", name="Medicines", exact=True)
     first.focus()
     for key, tab in (
         ("ArrowRight", "Requests"),
         ("End", "History"),
-        ("Home", "Plan"),
+        ("Home", "Medicines"),
         ("ArrowLeft", "History"),
     ):
         page.keyboard.press(key)
@@ -337,13 +327,9 @@ def fits(page: Page) -> None:
 def test_depth_queue_density_and_groups(rendered: RenderedApp) -> None:
     page = ready(rendered)
     groups = page.locator(".day-group")
-    assert groups.count() >= 5
-    assert groups.evaluate_all("es=>es.every(e=>!e.hasAttribute('tabindex'))")
-    assert sum(int(n) for n in groups.locator(".count").all_text_contents()) == 50
-    assert groups.locator('th[scope="rowgroup"][colspan="6"]').count() == groups.count()
-    assert groups.locator("th").evaluate_all(
-        "es=>es.every(e=>getComputedStyle(e).position==='sticky')"
-    )
+    expect(groups).to_have_count(0)
+    expect(page.locator(".patient-row")).to_have_count(50)
+    expect(page.locator(".clinical col")).to_have_count(4)
     values = page.locator(".age-value")
     assert values.evaluate_all("""es=>es.every(e=>{
       const s=getComputedStyle(e);return s.whiteSpace==='nowrap'&&
@@ -364,18 +350,8 @@ def test_depth_queue_density_and_groups(rendered: RenderedApp) -> None:
         first = page.locator(".patient-row").first.bounding_box()
         assert first and first["y"] < 844, first
     fits(page)
-    page.evaluate("""() => scrollTo(0,
-      document.querySelector('.day-group').getBoundingClientRect().top+scrollY+250)""")
-    page.wait_for_timeout(100)
-    band = groups.first.locator("th").bounding_box()
-    expected_top = 200 if page.viewport_size and page.viewport_size["width"] == 390 else 96
-    assert band and abs(band["y"] - expected_top) <= 1, band
-    page.evaluate("scrollTo(0,0)")
-    dates = groups.locator("th > bdi").all_text_contents()
-    assert dates == sorted(dates, key=lambda d: datetime.strptime(d, "%b %d, %Y"))
-    page.locator('[data-sort="due"]').click()
-    dates = groups.locator("th > bdi").all_text_contents()
-    assert dates == sorted(dates, key=lambda d: datetime.strptime(d, "%b %d, %Y"), reverse=True)
+    page.locator('[data-sort="urgency"]').click()
+    expect(page.locator('th[aria-sort="descending"]')).to_contain_text("urgency")
     page.locator('[data-sort="patient"]').click()
     expect(groups).to_have_count(0)
     page.locator('[data-sort="last_activity"]').click()
@@ -399,7 +375,7 @@ def test_depth_route_geometry_and_empty_anatomy(rendered: RenderedApp) -> None:
     page.locator(".empty [data-clear]").click()
     expect(page.locator("[data-record]")).to_have_count(50)
     rendered.detail()
-    for tab in ("Plan", "Requests", "Evidence", "History"):
+    for tab in ("Medicines", "Requests", "Documents", "History"):
         page.get_by_role("tab", name=tab, exact=True).click()
         fits(page)
         identity(page)
@@ -433,38 +409,23 @@ def test_depth_route_geometry_and_empty_anatomy(rendered: RenderedApp) -> None:
 
 @RETINA
 @pytest.mark.parametrize("world", ["medication"], indirect=True)
-def test_depth_drawer_anatomy_and_retry(rendered: RenderedApp) -> None:
+def test_depth_record_loading_and_retry(rendered: RenderedApp) -> None:
     page = ready(rendered, "/a")
     anchor = page.locator("[data-record]").first
     held: list[Route] = []
     pattern = "**/api/patients/*/evidence"
     page.route(pattern, lambda route: held.append(route))
     anchor.click()
-    drawer = page.locator("#patient-drawer")
-    expect(drawer.locator(".skeleton")).to_be_visible()
-    expect(anchor.locator("xpath=ancestor::tr")).to_have_attribute("aria-selected", "true")
+    expect(page.locator("#feedback .skeleton")).to_be_visible()
     assert held
     held.pop().fulfill(status=503, content_type="application/json", body='{"detail":"unavailable"}')
-    expect(drawer.locator(".error")).to_be_visible()
+    expect(page.locator("#feedback .error")).to_be_visible()
     page.unroute(pattern)
-    drawer.locator("[data-retry]").click()
-    drawer.locator(".inline-stats").wait_for()
-    expect(drawer.locator(".summary-tile")).to_have_count(0)
-    expect(drawer.locator(".inline-stats>span")).to_have_count(4)
-    expect(drawer.locator(".drawer-footer a.primary")).to_have_count(1)
-    expect(drawer.locator("[data-amend]")).to_be_visible()
-    assert drawer.locator(".drawer-content").evaluate("e=>getComputedStyle(e).overflowY") == "auto"
-    page.wait_for_timeout(300)
-    footer = drawer.locator("footer").bounding_box()
-    drawer.locator(".drawer-content").evaluate("e=>e.scrollTop=e.scrollHeight")
-    assert drawer.locator("footer").bounding_box() == footer
+    page.locator("#refresh").click()
+    page.locator("#what-to-do").wait_for()
+    expect(page.locator("#patient-drawer")).to_have_count(0)
+    expect(page.locator("[data-amend]")).to_be_visible()
     fits(page)
-    if page.viewport_size and page.viewport_size["width"] == 390:
-        assert drawer.evaluate("e=>getComputedStyle(e).animationName") == "sheet-in"
-        assert drawer.bounding_box()["width"] == 390  # type: ignore[index]
-    page.keyboard.press("Escape")
-    expect(anchor).to_be_focused()
-    expect(anchor.locator("xpath=ancestor::tr")).not_to_have_attribute("aria-selected", "true")
     rendered.errors[:] = [e for e in rendered.errors if "503" not in e]
 
 
@@ -475,7 +436,7 @@ def test_depth_lightbox_anatomy_and_both_openers(rendered: RenderedApp) -> None:
 
     rendered.detail()
     page = rendered.page
-    page.get_by_role("tab", name="Evidence", exact=True).click()
+    page.get_by_role("tab", name="Documents", exact=True).click()
     image_bytes = base64.b64decode(
         "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a7XkAAAAASUVORK5CYII="
     )
@@ -548,8 +509,10 @@ def test_depth_rtl_and_forced_colors(
     rendered: RenderedApp, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("SANAD_CONTEST_ENGLISH", "0")
-    # The stored fixture doctor is Arabic; exercise the server's locale resolution.
     page = ready(rendered, "/a")
+    expect(page.locator("html")).to_have_attribute("dir", "ltr")
+    rendered.login(PATIENT)
+    ready(rendered, "/pp")
     expect(page.locator("html")).to_have_attribute("dir", "rtl")
     fits(page)
     if page.viewport_size and page.viewport_size["width"] == 1440:
@@ -559,20 +522,10 @@ def test_depth_rtl_and_forced_colors(
     assert page.locator("h1,label,th").evaluate_all(
         "es=>es.every(e=>getComputedStyle(e).letterSpacing==='normal')"
     )
-    anchor = page.locator("[data-record]").first
-    anchor.click()
-    page.locator(".inline-stats").wait_for()
-    drawer = page.locator(".drawer")
-    page.wait_for_timeout(300)
-    assert drawer.bounding_box()["x"] == 0  # type: ignore[index]
-    assert drawer.evaluate("e=>getComputedStyle(e).animationName") == (
-        "sheet-in" if page.viewport_size and page.viewport_size["width"] == 390 else "drawer-rtl"
-    )
-    fits(page)
-    page.keyboard.press("Escape")
+    rendered.login(rendered.world.owner.subject)
     rendered.detail()
-    page.get_by_role("tab", name="Plan", exact=True).focus()
-    page.keyboard.press("ArrowLeft")
+    page.get_by_role("tab", name="Medicines", exact=True).focus()
+    page.keyboard.press("ArrowRight")
     expect(page.get_by_role("tab", name="Requests", exact=True)).to_be_focused()
     fits(page)
     page.emulate_media(forced_colors="active", reduced_motion="reduce")

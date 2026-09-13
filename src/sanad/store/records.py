@@ -52,6 +52,7 @@ from sanad.store.keys import AccountScope, IntakeScope, Key, Scope, ScopedKey
 
 
 class ProcessingClaim(_BoundaryValue):
+    attempt_charged: bool = True
     owner: NonblankStr
     generation: PositiveVersion
     expires_at: UtcInstant
@@ -231,6 +232,10 @@ class AdminAccount(_Metadata):
     def admin_identity(self) -> Self:
         keys.subject(self.scope.bot_id, self.id)
         return self
+
+
+class AuthorizationUnavailable(RuntimeError):
+    """A consistent authority snapshot could not be read; this is not revocation."""
 
 
 class Authorization(_BoundaryValue):
@@ -580,6 +585,7 @@ class WebSession(_Metadata, Generic[SessionDoctor]):
     idle_expires_at: UtcInstant
     absolute_expires_at: UtcInstant
     revoked_at: UtcInstant | None = None
+    revocation_reason: NonblankStr | None = None
 
     @model_validator(mode="after")
     def hashed(self) -> Self:
@@ -979,6 +985,7 @@ class PatientMedia(_Metadata):
 class MediaWork(_Metadata):
     """Recoverable extraction work; association never follows merely from a read."""
 
+    infrastructure_deferrals: NonnegativeInt = 0
     entity_type: Literal["media_work"] = "media_work"
     scope: PatientScope | IntakeScope
     receipt_id: NonblankStr
@@ -1301,6 +1308,8 @@ class StoredRecord(_BoundaryValue):
     review_sort: str | None = None
     patients_pk: str | None = None
     patients_sort: str | None = None
+    recent_patient_id: str | None = None
+    media_snapshot: dict[str, Any] | None = Field(default=None, repr=False)
 
     @property
     def key(self) -> Key:

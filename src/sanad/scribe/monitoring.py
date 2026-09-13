@@ -213,7 +213,16 @@ def timing(
         )
     # "five days" and "for five days" are the same duration; only a genuinely
     # different dictated expression is treated as an explicit deadline.
-    if expression and _bare_duration(expression) != _bare_duration(duration_expression(text) or ""):
+    schedule_expression = bool(
+        expression
+        and _FREQUENCY.search(normalize(expression))
+        and _DURATION.search(normalize(expression))
+    )
+    if (
+        expression
+        and not schedule_expression
+        and _bare_duration(expression) != _bare_duration(duration_expression(text) or "")
+    ):
         return resolve_expression(expression, MissionKind.MONITOR, anchor, clock_policy)
     try:
         details = schedule.details(anchor, clock_policy.timezone)

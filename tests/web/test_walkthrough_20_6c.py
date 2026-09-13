@@ -14,27 +14,25 @@ SCRIPT = Path("src/sanad/web/static/browser.js").read_text()
 @pytest.mark.parametrize(
     ("due", "now", "zone", "expected"),
     [
-        ("2026-09-09T18:30:00Z", "2026-09-12T12:00:00Z", "Africa/Cairo", "overdue by 2 days"),
-        ("2026-09-12T08:10:00Z", "2026-09-12T12:00:00Z", "Africa/Cairo", "overdue by 3 hours"),
-        ("2026-09-12T11:40:00Z", "2026-09-12T12:00:00Z", "Africa/Cairo", "due now"),
-        ("2026-09-12T12:00:00Z", "2026-09-12T12:00:00Z", "Africa/Cairo", "due now"),
-        ("2026-09-12T19:00:00Z", "2026-09-12T12:00:00Z", "Africa/Cairo", "due today"),
-        ("2026-09-12T22:30:00Z", "2026-09-12T19:00:00Z", "Africa/Cairo", "due in 3 hours"),
-        ("2026-09-12T22:30:00Z", "2026-09-12T19:00:00Z", "UTC", "due today"),
-        ("2026-09-13T21:00:00Z", "2026-09-12T19:00:00Z", "Africa/Cairo", "due in 1 day"),
-        ("2026-09-16T18:00:00Z", "2026-09-12T19:00:00Z", "Africa/Cairo", "due in 3 days"),
-        ("2026-09-13T00:10:00Z", "2026-09-12T23:40:00Z", "UTC", "due now"),
-        ("2026-11-01T07:30:00Z", "2026-11-01T04:30:00Z", "America/New_York", "due today"),
-        ("2026-09-12T11:00:00Z", "2026-09-12T12:00:00Z", "UTC", "overdue by 1 hour"),
+        ("2026-09-09T18:30:00Z", "2026-09-12T12:00:00Z", "Africa/Cairo", "Sep 9"),
+        ("2026-09-12T08:10:00Z", "2026-09-12T12:00:00Z", "Africa/Cairo", "3 hours ago"),
+        ("2026-09-12T11:40:00Z", "2026-09-12T12:00:00Z", "Africa/Cairo", "20 minutes ago"),
+        ("2026-09-12T12:00:00Z", "2026-09-12T12:00:00Z", "Africa/Cairo", "this minute"),
+        ("2026-09-12T19:00:00Z", "2026-09-12T12:00:00Z", "Africa/Cairo", "in 7 hours"),
+        ("2026-09-12T22:30:00Z", "2026-09-12T19:00:00Z", "Africa/Cairo", "in 3 hours"),
+        ("2026-09-12T22:30:00Z", "2026-09-12T19:00:00Z", "UTC", "in 3 hours"),
+        ("2026-09-13T21:00:00Z", "2026-09-12T19:00:00Z", "Africa/Cairo", "tomorrow"),
+        ("2026-09-16T18:00:00Z", "2026-09-12T19:00:00Z", "Africa/Cairo", "Sep 16"),
+        ("2026-09-13T00:10:00Z", "2026-09-12T23:40:00Z", "UTC", "in 30 minutes"),
+        ("2026-11-01T07:30:00Z", "2026-11-01T04:30:00Z", "America/New_York", "in 3 hours"),
+        ("2026-09-12T11:00:00Z", "2026-09-12T12:00:00Z", "UTC", "1 hour ago"),
     ],
 )
 def test_review_relative_time(due: str, now: str, zone: str, expected: str) -> None:
     catalog = SCRIPT[SCRIPT.index("  Object.assign(words, {") : SCRIPT.index("  const t = key =>")]
-    function = SCRIPT[
-        SCRIPT.index("  function reviewTime(") : SCRIPT.index("  function reviewPresentation(")
-    ]
+    function = SCRIPT[SCRIPT.index("  function reviewTime(") : SCRIPT.index("  const sentences =")]
     program = (
-        "const words={};"
+        "const en=true,words={};"
         + catalog
         + "const t=key=>words[key][0];"
         + function

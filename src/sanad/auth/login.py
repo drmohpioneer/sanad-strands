@@ -45,7 +45,7 @@ class SessionIssued(_BoundaryValue):
     session: WebSession
 
 
-def log_revocation(reason: str, path: str) -> None:
+def log_revocation(reason: str, path: str, session_id: str) -> None:
     import logging
     import re
 
@@ -54,7 +54,9 @@ def log_revocation(reason: str, path: str) -> None:
         r"/\1/<redacted>",
         path.split("?", 1)[0],
     )
-    logging.getLogger("sanad.web").info("session revoked reason=%s path=%s", reason, safe_path)
+    logging.getLogger("sanad.web").info(
+        "session revoked reason=%s path=%s session=%s", reason, safe_path, session_id[:8]
+    )
 
 
 class LoginService(IdentityService):
@@ -410,7 +412,7 @@ class LoginService(IdentityService):
         if result.status != "accepted":
             return ExchangeRefused(status="commit_failed")
         if previous and previous.revoked_at is None:
-            log_revocation("session_replaced", "auth/exchange")
+            log_revocation("session_replaced", "auth/exchange", previous.id)
         return SessionIssued(cookie=cookie.secret, csrf=secret.secret, session=session)
 
     def session(self, raw_cookie: str) -> WebSession | None:
@@ -429,10 +431,10 @@ class LoginService(IdentityService):
                     command_id=uuid4().hex,
                     actor=internal_actor(self.scope.bot_id),
                 ),
-                (revise(current, self.clock(), revoked_at=self.clock()),),
+                (revise(current, self.clock(), revoked_at=self.clock(), revocation_reason=reason),),
             )
             if result.status == "accepted":
-                log_revocation(reason, path)
+                log_revocation(reason, path, current.id)
                 return
 
     @overload
@@ -460,41 +462,36 @@ class LoginService(IdentityService):
         ):
             self.revoke(session, reason="role_or_expiry", path=path)
             return None
-        auth = self.store.authorize(self.scope.bot_id, session.subject)
-        if (
-            role == "admin"
-            and (
-                "admin" not in auth.principal.verified_roles
-                or auth.admin_epoch != session.auth_epoch
-            )
-        ) or (
-            role != "admin"
-            and (
-                auth.principal.actor_kind != role
-                or auth.auth_epoch != session.auth_epoch
-                or auth.doctor_status != "approved"
-            )
-        ):
-            self.revoke(session, reason="suspension_or_auth_epoch", path=path)
-            return None
-        from sanad.store.identity import live_snapshot
+        from sanad.store.records import AuthorizationUnavailable
+        from sanad.store.retry import BACKOFF, sleep
 
-        for _ in range(2):
-            # Touch conflicts can involve any authority row, not just this session.
-            # Revalidate the complete live snapshot before retrying or skipping.
-            if not live_snapshot(self.store, self.scope, session, []):
+        for delay in (0, *BACKOFF):
+            if delay:
+                sleep(delay)
+            snapshot = self.store.web_session_snapshot(session)
+            if snapshot is None:
                 self.revoke(session, reason="binding_consent_or_authority", path=path)
                 return None
+            now = self.clock()
+            if snapshot.revoked_at:
+                return None
+            if (
+                snapshot.role != role
+                or min(snapshot.idle_expires_at, snapshot.absolute_expires_at) <= now
+            ):
+                self.revoke(snapshot, reason="role_or_expiry", path=path)
+                return None
+            auth = self.store.authorize(self.scope.bot_id, snapshot.subject)
             changed = revise(
-                session,
+                snapshot,
                 now,
                 last_seen_at=now,
-                idle_expires_at=min(now + self.policy.idle_ttl, session.absolute_expires_at),
+                idle_expires_at=min(now + self.policy.idle_ttl, snapshot.absolute_expires_at),
             )
             result = self.commit(
                 InternalCommand(
                     type="TouchWebSession",
-                    target_id=session.id,
+                    target_id=snapshot.id,
                     command_id=uuid4().hex,
                     actor=self.admin_actor(auth.principal.subject, auth.admin_epoch)
                     if role == "admin"
@@ -504,18 +501,18 @@ class LoginService(IdentityService):
             )
             if result.status == "accepted":
                 return changed
-            current = self.session(raw_cookie)
-            now = self.clock()
-            if current is None or current.revoked_at:
-                return None
-            if (
-                current.role != role
-                or min(current.idle_expires_at, current.absolute_expires_at) <= now
-            ):
-                self.revoke(current, reason="role_or_expiry", path=path)
-                return None
-            if not live_snapshot(self.store, self.scope, current, []):
-                self.revoke(current, reason="binding_consent_or_authority", path=path)
-                return None
-            session = current
-        return session
+            session = snapshot
+        # A failed touch is not revocation; validate again before skipping the touch.
+        snapshot = self.store.web_session_snapshot(session)
+        if snapshot is None:
+            self.revoke(session, reason="binding_consent_or_authority", path=path)
+            return None
+        current = self.session(raw_cookie)
+        if current is None or current.revoked_at:
+            return None
+        if current.consent_version != snapshot.consent_version:
+            raise AuthorizationUnavailable("session_pin_busy")
+        if min(current.idle_expires_at, current.absolute_expires_at) <= self.clock():
+            self.revoke(current, reason="role_or_expiry", path=path)
+            return None
+        return snapshot

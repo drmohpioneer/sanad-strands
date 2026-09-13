@@ -640,6 +640,9 @@ class ConciergeTurn:
         bundle = answer.build_bundle(
             presentation, text, entries, tuple(t.model_dump() for t in session.turns), history
         )
+        if answer.explanation_question(text) and not entries:
+            question.open_ticket(tx, text)
+            return reply("patient_education_unavailable")
         from sanad.concierge.reuse import best
 
         reusable = best(self.store, tx.snapshot.scope.doctor_id, text, exact=True)

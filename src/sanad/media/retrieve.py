@@ -6,6 +6,7 @@ extract stage and own explicit association; a fetched blob is never evidence acc
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import timedelta
 from hashlib import sha256
 from typing import Literal
 from uuid import uuid4
@@ -271,22 +272,56 @@ class MediaRetriever:
             if lease:
                 store.release_patient(lease)
 
+    def _defer(self, claim: Claim, reason: str) -> None:
+        from sanad.api.failures import store_busy
+        from sanad.store.retry import transient_conflict
+
+        try:
+            self.steward.store.defer_media(claim, self.steward.clock(), reason)
+        except Exception as error:
+            if not store_busy(error) and not transient_conflict(error):
+                raise
+            # Leave the fenced ten-minute claim durable; recovery returns its attempt.
+
     def _failure(self, work: MediaWork, claim: Claim, reason: str) -> MediaFailure:
+        if reason in {
+            "store_busy",
+            "storage_unavailable",
+            "stale_work",
+            "extraction_commit_failed",
+        }:
+            self._defer(claim, reason)
+            return MediaFailure(reason=reason, request_resend=False)
         now = self.steward.clock()
         policy = self.policy
         assert work.work_clock is not None
+        attempt = max(1, work.work_clock.attempt_count)
+        retry = (
+            isinstance(work.scope, PatientScope)
+            and bool(work.mime and work.mime.startswith("image/"))
+            and work.stage == "extract"
+            and attempt <= 3
+        )
+        next_action = now + (
+            timedelta(minutes=(1, 5, 15)[attempt - 1])
+            if retry
+            else policy.timing.result_review_interval
+        )
         revised = MediaWork.model_validate(
             work.model_dump()
             | {
                 "version": work.version + 1,
                 "updated_at": now,
                 "processing_claim": None,
+                "state": "pending",
+                "last_error": reason,
                 "work_clock": transition_operational_clock(
-                    work.work_clock, now + policy.timing.result_review_interval, error=reason
+                    work.work_clock, next_action, error=reason
                 ),
             }
         )
-        if not self._commit(revised, claim, failure=reason):
+        if not self._commit(revised, claim, failure=None if retry else reason):
+            self._defer(claim, "stale_work")
             return MediaFailure(reason="stale_work", request_resend=False)
         saved = self._get(work.id)
         assert saved is not None
@@ -333,31 +368,39 @@ class MediaRetriever:
         )
         if claim is None:
             return False
-        work = self._get(work.id)
-        assert work is not None
-        if failure:
-            return self._failure(work, claim, failure)
-        changed = MediaWork.model_validate(
-            work.model_dump()
-            | {
-                "version": work.version + 1,
-                "updated_at": now,
-                "processing_claim": None,
-                "transcript_ref": transcript_ref or work.transcript_ref,
-                "association_ref": association_ref,
-                "state": "completed" if association_ref else "pending",
-                "stage": "associate" if association_ref else "extract",
-                "work_clock": None
-                if association_ref
-                else OperationalClock(
-                    next_action_at=now
-                    if resume_immediately
-                    else now + self.policy.timing.result_review_interval,
-                    work_lane="media",
-                ),
-            }
-        )
-        return self._commit(changed, claim)
+        try:
+            work = self._get(work.id)
+            assert work is not None
+            if failure:
+                return self._failure(work, claim, failure)
+            changed = MediaWork.model_validate(
+                work.model_dump()
+                | {
+                    "version": work.version + 1,
+                    "updated_at": now,
+                    "processing_claim": None,
+                    "transcript_ref": transcript_ref or work.transcript_ref,
+                    "association_ref": association_ref,
+                    "state": "completed" if association_ref else "pending",
+                    "stage": "associate" if association_ref else "extract",
+                    "work_clock": None
+                    if association_ref
+                    else OperationalClock(
+                        next_action_at=now,
+                        work_lane="media",
+                    ),
+                }
+            )
+            return self._commit(changed, claim)
+        except Exception as error:
+            from sanad.api.failures import store_busy
+            from sanad.store.retry import transient_conflict
+
+            if store_busy(error) or transient_conflict(error):
+                return False
+            raise
+        finally:
+            self._defer(claim, "extraction_commit_failed")
 
     def fetch_media(self, handle: str, *, receipt_id: str) -> StoredMedia | MediaFailure:
         if not self._valid():
@@ -414,87 +457,107 @@ class MediaRetriever:
             )
             if claim is None:
                 return MediaFailure(reason="work_busy", request_resend=False)
-            work = self._get(id)
-            assert work is not None and work.work_clock is not None
-            self.checkpoint("claimed_" + work.stage)
-            if work.work_clock.attempt_count > policy.operations.max_inbound_attempts:
-                return self._failure(work, claim, "attempts_exhausted")
+            release_reason = "stage_exception"
             try:
-                if work.stage == "fetch":
-                    download = self.source.fetch(handle)
-                    if isinstance(download, MediaFailure):
-                        return self._failure(work, claim, download.reason)
-                    self.checkpoint("downloaded")
-                    try:
-                        actual = sniff(download.data)
-                    except MediaInvalid:
-                        actual = "image"
-                    if actual in {"png", "jpeg", "heif", "avif", "image"}:
-                        mime = source_image_mime(download.data)
-                    elif len(download.data) <= MAX_AUDIO_BYTES:
-                        mime = {
-                            "ogg": "audio/ogg",
-                            "wav": "audio/wav",
-                            "m4a": "audio/mp4",
-                            "mp3": "audio/mpeg",
-                        }[actual]
+                work = self._get(id)
+                assert work is not None and work.work_clock is not None
+                self.checkpoint("claimed_" + work.stage)
+                if work.work_clock.attempt_count > policy.operations.max_inbound_attempts:
+                    return self._failure(work, claim, "attempts_exhausted")
+                try:
+                    if work.stage == "fetch":
+                        download = self.source.fetch(handle)
+                        if isinstance(download, MediaFailure):
+                            return self._failure(work, claim, download.reason)
+                        self.checkpoint("downloaded")
+                        try:
+                            actual = sniff(download.data)
+                        except MediaInvalid:
+                            actual = "image"
+                        if actual in {"png", "jpeg", "heif", "avif", "image"}:
+                            mime = source_image_mime(download.data)
+                        elif len(download.data) <= MAX_AUDIO_BYTES:
+                            mime = {
+                                "ogg": "audio/ogg",
+                                "wav": "audio/wav",
+                                "m4a": "audio/mp4",
+                                "mp3": "audio/mpeg",
+                            }[actual]
+                        else:
+                            raise MediaInvalid("too_large")
+                        reference = self._put_blob(download.data, mime)
+                        self.checkpoint("source_stored")
+                        changed = {
+                            "stage": "normalize",
+                            "source_blob_ref": reference,
+                            "byte_hash": sha256(download.data).hexdigest(),
+                            "size": len(download.data),
+                            "mime": mime,
+                        }
                     else:
-                        raise MediaInvalid("too_large")
-                    reference = self._put_blob(download.data, mime)
-                    self.checkpoint("source_stored")
-                    changed = {
-                        "stage": "normalize",
-                        "source_blob_ref": reference,
-                        "byte_hash": sha256(download.data).hexdigest(),
-                        "size": len(download.data),
-                        "mime": mime,
+                        assert work.source_blob_ref is not None
+                        data = self._get_blob(work.source_blob_ref)
+                        self.checkpoint("normalization_loaded")
+                        if work.mime and work.mime.startswith("image/"):
+                            normalized = self._put_blob(normalize_document(data), "image/jpeg")
+                            duration = None
+                        else:
+                            actual = sniff(data)
+                            converted = self.converter.convert(data, actual)
+                            if isinstance(converted, ConversionFailure):
+                                return self._failure(work, claim, converted.reason)
+                            normalized = self._put_blob(converted.data, "audio/mpeg")
+                            duration = converted.duration
+                        self.checkpoint("normalized_stored")
+                        changed = {
+                            "stage": "extract",
+                            "normalized_blob_ref": normalized,
+                            "duration": duration,
+                        }
+                except MediaInvalid as error:
+                    return self._failure(work, claim, str(error))
+                except _StorageUnavailable:
+                    release_reason = "storage_unavailable"
+                    return MediaFailure(reason="storage_unavailable", request_resend=False)
+                except Exception as error:
+                    from sanad.api.failures import store_busy
+
+                    if store_busy(error):
+                        release_reason = "store_busy"
+                        return MediaFailure(reason="store_busy", request_resend=False)
+                    # The exit guard releases this generation before propagating unexpected errors.
+                    raise
+                revised = MediaWork.model_validate(
+                    work.model_dump()
+                    | changed
+                    | {
+                        "version": work.version + 1,
+                        "updated_at": self.steward.clock(),
+                        "state": "pending",
+                        "processing_claim": None,
+                        "work_clock": transition_operational_clock(
+                            work.work_clock,
+                            self.steward.clock(),
+                            attempt_delta=-work.work_clock.attempt_count
+                            if changed["stage"] == "extract"
+                            else -1,
+                        ),
                     }
-                else:
-                    assert work.source_blob_ref is not None
-                    data = self._get_blob(work.source_blob_ref)
-                    self.checkpoint("normalization_loaded")
-                    if work.mime and work.mime.startswith("image/"):
-                        normalized = self._put_blob(normalize_document(data), "image/jpeg")
-                        duration = None
-                    else:
-                        actual = sniff(data)
-                        converted = self.converter.convert(data, actual)
-                        if isinstance(converted, ConversionFailure):
-                            return self._failure(work, claim, converted.reason)
-                        normalized = self._put_blob(converted.data, "audio/mpeg")
-                        duration = converted.duration
-                    self.checkpoint("normalized_stored")
-                    changed = {
-                        "stage": "extract",
-                        "normalized_blob_ref": normalized,
-                        "duration": duration,
-                    }
-            except MediaInvalid as error:
-                return self._failure(work, claim, str(error))
-            except _StorageUnavailable:
-                return MediaFailure(reason="storage_unavailable", request_resend=False)
-            except Exception:
-                # Leave the claim and clock intact for crash/outage recovery; no false completion.
+                )
+                if not self._commit(revised, claim):
+                    release_reason = "stale_work"
+                    return MediaFailure(reason="stale_work", request_resend=False)
+                self.checkpoint("committed_" + str(changed["stage"]))
+            except Exception as error:
+                from sanad.api.failures import store_busy
+                from sanad.store.retry import transient_conflict
+
+                if store_busy(error) or transient_conflict(error):
+                    release_reason = "store_busy" if store_busy(error) else "stale_work"
+                    return MediaFailure(reason=release_reason, request_resend=False)
                 raise
-            revised = MediaWork.model_validate(
-                work.model_dump()
-                | changed
-                | {
-                    "version": work.version + 1,
-                    "updated_at": self.steward.clock(),
-                    "state": "pending",
-                    "processing_claim": None,
-                    "work_clock": transition_operational_clock(
-                        work.work_clock,
-                        self.steward.clock() + policy.timing.result_review_interval
-                        if changed["stage"] == "extract"
-                        else self.steward.clock(),
-                    ),
-                }
-            )
-            if not self._commit(revised, claim):
-                return MediaFailure(reason="stale_work", request_resend=False)
-            self.checkpoint("committed_" + str(changed["stage"]))
+            finally:
+                self._defer(claim, release_reason)
         saved = self._get(id)
         assert saved is not None
         return StoredMedia.model_validate(
@@ -542,23 +605,26 @@ class MediaRetriever:
                 )
                 if claim is None:
                     continue
-                current = self._get(work.id)
-                assert current is not None and current.work_clock is not None
-                if current.state != "needs_attention":
-                    self._failure(current, claim, "extraction_unresolved")
-                else:
-                    revised = MediaWork.model_validate(
-                        current.model_dump()
-                        | {
-                            "version": current.version + 1,
-                            "updated_at": now,
-                            "processing_claim": None,
-                            "work_clock": transition_operational_clock(
-                                current.work_clock, now + policy.timing.overdue_review_interval
-                            ),
-                        }
-                    )
-                    self._commit(revised, claim)
+                try:
+                    current = self._get(work.id)
+                    assert current is not None and current.work_clock is not None
+                    if current.state != "needs_attention":
+                        self._failure(current, claim, "extraction_unresolved")
+                    else:
+                        revised = MediaWork.model_validate(
+                            current.model_dump()
+                            | {
+                                "version": current.version + 1,
+                                "updated_at": now,
+                                "processing_claim": None,
+                                "work_clock": transition_operational_clock(
+                                    current.work_clock, now + policy.timing.overdue_review_interval
+                                ),
+                            }
+                        )
+                        self._commit(revised, claim)
+                finally:
+                    self._defer(claim, "media_sweep_commit_failed")
             handled += 1
         return handled
 

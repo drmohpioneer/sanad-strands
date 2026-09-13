@@ -157,6 +157,8 @@ def merge_candidates(
     second: DictationCandidate | None,
     source: str,
     ctx: Context | None = None,
+    *,
+    panel_names: tuple[str, ...] = (),
 ) -> MergeResult | None:
     """None is a failed extraction. No successful reading is discarded by a peer's failure."""
     ctx = ctx or Context()
@@ -279,8 +281,7 @@ def merge_candidates(
                 )
             )
             combined.append((chosen, False, differing))
-        if family != "mission":
-            combined.extend((item, True, ()) for j, item in enumerate(right) if j not in used)
+        combined.extend((item, True, ()) for j, item in enumerate(right) if j not in used)
 
         def position(row: tuple[Item, bool, tuple[ProposalIssue, ...]]) -> int:
             item = row[0]
@@ -313,6 +314,21 @@ def merge_candidates(
             left_value, right_value = getattr(first.patient, field), getattr(second.patient, field)
             # Absence is a single reading, never evidence of a different patient.
             patient[field] = left_value or right_value
+            if field == "name_as_spoken" and left_value and right_value:
+                left_name, right_name = str(left_value), str(right_value)
+                left_words, right_words = (
+                    set(_content_key(left_name)),
+                    set(_content_key(right_name)),
+                )
+                longer = max((left_name, right_name), key=lambda n: (len(_content_key(n)), len(n)))
+                if (
+                    left_words
+                    and right_words
+                    and (left_words <= right_words or right_words <= left_words)
+                    and _patient_key(longer) in {_patient_key(n) for n in panel_names}
+                ):
+                    patient[field] = longer
+                    continue
             if left_value and right_value and _patient_key(left_value) != _patient_key(right_value):
                 issues.append(
                     ProposalIssue(
@@ -326,8 +342,25 @@ def merge_candidates(
                     )
                 )
     values["patient"] = PatientCandidate.model_validate(patient)
-    values["ambiguities"] = tuple(
+    ambiguities = tuple(
         dict.fromkeys((*first.ambiguities, *(second.ambiguities if second else ())))
+    )
+    patient_words = set(_content_key(patient.get("name_as_spoken") or ""))
+    tests = " ".join(
+        m.text.casefold()
+        for m in (*first.missions, *(second.missions if second else ()))
+        if m.kind == "TEST"
+    )
+    values["ambiguities"] = tuple(
+        a
+        for a in ambiguities
+        if not (set(_content_key(a)) and set(_content_key(a)) <= patient_words)
+        and not (
+            "not found as drugs" in a.casefold()
+            and all(
+                w in tests for w in _content_key(a.casefold().split("were not found as drugs")[0])
+            )
+        )
     )
     values["correction_edits"] = tuple(
         edit.model_copy(

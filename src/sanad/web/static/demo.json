@@ -1,957 +1,865 @@
 [
   {
     "patient_id": "demo-000",
-    "display_name": "Ahmed Abdelrahman Mostafa عبد الرحمن — long synthetic name",
+    "display_name": "Ahmed Abdelrahman Mostafa Alexander Hamilton Longname",
     "age": null,
     "timezone": "Africa/Cairo",
-    "contact_status": "awaiting_link",
+    "contact_status": "active",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
+      {
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
+      }
+    ],
     "reviews": [
       {
         "id": "demo-review-0",
+        "patient_id": "demo-000",
         "state": "open",
         "review_kind": "incident_response",
-        "source_type": "mission",
-        "source_id": "demo-request-0",
+        "source_type": "patient",
+        "source_id": "demo-source-0",
         "source_version": 1,
-        "last_material_change_version": 2,
-        "review_at": "2026-09-08T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "last_material_change_version": 1,
+        "review_at": "2026-09-11T08:00:00Z",
+        "first_notice_at": "2026-09-10T08:00:00Z"
       }
     ],
     "review_history": [],
     "orders": [],
     "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-0",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-08T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
+    "missions": [],
+    "followups": [],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-001",
-    "display_name": "Mariam Hassan مريم",
-    "age": "44",
+    "display_name": "Ahmed Abdelrahman Mostafa Alexander Hamilton Longname Grace",
+    "age": "33",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
+      {
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
+      }
+    ],
     "reviews": [
       {
         "id": "demo-review-1",
+        "patient_id": "demo-001",
         "state": "acknowledged",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-1",
+        "review_kind": "incident_response",
+        "source_type": "patient",
+        "source_id": "demo-source-1",
         "source_version": 1,
         "last_material_change_version": 1,
-        "review_at": "2026-09-09T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "review_at": "2026-09-11T08:00:00Z",
+        "first_notice_at": "2026-09-10T08:00:00Z"
       }
     ],
     "review_history": [],
     "orders": [],
     "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-1",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-09T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
+    "missions": [],
+    "followups": [],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-002",
-    "display_name": "Youssef Abdelaziz يوسف",
-    "age": "45",
+    "display_name": "Ahmed Abdelrahman Mostafa Alexander Hamilton Longname Robin",
+    "age": "34",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
-    "reviews": [],
-    "review_history": [
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
       {
-        "id": "demo-review-2",
-        "state": "resolved",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-2",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-10T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
       }
     ],
+    "reviews": [
+      {
+        "id": "demo-review-2",
+        "patient_id": "demo-002",
+        "state": "open",
+        "review_kind": "incident_response",
+        "source_type": "patient",
+        "source_id": "demo-source-2",
+        "source_version": 1,
+        "last_material_change_version": 2,
+        "review_at": "2026-09-11T08:00:00Z",
+        "first_notice_at": "2026-09-10T08:00:00Z"
+      }
+    ],
+    "review_history": [],
     "orders": [],
     "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-2",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-10T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
+    "missions": [],
+    "followups": [],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-003",
-    "display_name": "Nour El Din نور الدين",
-    "age": "46",
+    "display_name": "Ahmed Abdelrahman Mostafa Alexander Hamilton Longname Taylor",
+    "age": "35",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
+      {
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
+      }
+    ],
     "reviews": [
       {
         "id": "demo-review-3",
+        "patient_id": "demo-003",
         "state": "open",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-3",
+        "review_kind": "incident_response",
+        "source_type": "patient",
+        "source_id": "demo-source-3",
         "source_version": 1,
         "last_material_change_version": 1,
         "review_at": "2026-09-11T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "first_notice_at": "2026-09-10T08:00:00Z"
       }
     ],
     "review_history": [],
     "orders": [],
     "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-3",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-11T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
+    "missions": [],
+    "followups": [],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-004",
-    "display_name": "Salma Mahmoud سلمى",
-    "age": "47",
+    "display_name": "Ahmed Abdelrahman Mostafa Alexander Hamilton Longname Morgan",
+    "age": "36",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
+      {
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
+      }
+    ],
     "reviews": [
       {
         "id": "demo-review-4",
-        "state": "acknowledged",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-4",
+        "patient_id": "demo-004",
+        "state": "open",
+        "review_kind": "incident_response",
+        "source_type": "patient",
+        "source_id": "demo-source-4",
         "source_version": 1,
-        "last_material_change_version": 2,
-        "review_at": "2026-09-12T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "last_material_change_version": 1,
+        "review_at": "2026-09-11T08:00:00Z",
+        "first_notice_at": "2026-09-10T08:00:00Z"
       }
     ],
     "review_history": [],
     "orders": [],
     "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-4",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-12T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
+    "missions": [],
+    "followups": [],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-005",
-    "display_name": "Omar Ibrahim عمر",
-    "age": "48",
+    "display_name": "Mariam Hassan",
+    "age": "37",
     "timezone": "Africa/Cairo",
-    "contact_status": "awaiting_link",
-    "reviews": [],
-    "review_history": [
+    "contact_status": "active",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
       {
-        "id": "demo-review-5",
-        "state": "resolved",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-5",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-13T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
       }
     ],
+    "reviews": [
+      {
+        "id": "demo-review-5",
+        "patient_id": "demo-005",
+        "state": "open",
+        "review_kind": "result_review",
+        "source_type": "evidence",
+        "source_id": "demo-source-5",
+        "source_version": 1,
+        "last_material_change_version": 1,
+        "review_at": "2026-09-11T08:00:00Z",
+        "first_notice_at": "2026-09-10T08:00:00Z"
+      }
+    ],
+    "review_history": [],
     "orders": [],
     "facts": [],
-    "missions": [
+    "missions": [],
+    "followups": [],
+    "evidence": [
       {
-        "id": "demo-request-5",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-13T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
+        "id": "demo-source-5",
+        "evidence_id": "demo-source-5",
+        "category": "lab_result",
+        "association_state": "accepted",
+        "provenance": {
+          "received_at": "2026-09-10T06:00:00Z"
+        },
+        "extracted_values": [
+          {
+            "name": "Potassium",
+            "value": "4.2",
+            "unit": "mmol/L"
+          }
+        ]
       }
-    ]
+    ],
+    "corrections": []
   },
   {
     "patient_id": "demo-006",
-    "display_name": "Laila Ali ليلى",
-    "age": "49",
+    "display_name": "Mariam Hassan Grace",
+    "age": "38",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
+      {
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
+      }
+    ],
     "reviews": [
       {
         "id": "demo-review-6",
-        "state": "open",
+        "patient_id": "demo-006",
+        "state": "acknowledged",
         "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-6",
+        "source_type": "evidence",
+        "source_id": "demo-source-6",
         "source_version": 1,
         "last_material_change_version": 1,
-        "review_at": "2026-09-14T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "review_at": "2026-09-11T08:00:00Z",
+        "first_notice_at": "2026-09-10T08:00:00Z"
       }
     ],
     "review_history": [],
     "orders": [],
     "facts": [],
-    "missions": [
+    "missions": [],
+    "followups": [],
+    "evidence": [
       {
-        "id": "demo-request-6",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-14T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
+        "id": "demo-source-6",
+        "evidence_id": "demo-source-6",
+        "category": "lab_result",
+        "association_state": "accepted",
+        "provenance": {
+          "received_at": "2026-09-10T06:00:00Z"
+        },
+        "extracted_values": [
+          {
+            "name": "Potassium",
+            "value": "4.2",
+            "unit": "mmol/L"
+          }
+        ]
       }
-    ]
+    ],
+    "corrections": []
   },
   {
     "patient_id": "demo-007",
-    "display_name": "Hassan Mahmoud حسن",
-    "age": "50",
+    "display_name": "Mariam Hassan Robin",
+    "age": "39",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
+      {
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
+      }
+    ],
     "reviews": [
       {
         "id": "demo-review-7",
-        "state": "acknowledged",
+        "patient_id": "demo-007",
+        "state": "open",
         "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-7",
+        "source_type": "evidence",
+        "source_id": "demo-source-7",
         "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-08T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "last_material_change_version": 2,
+        "review_at": "2026-09-11T08:00:00Z",
+        "first_notice_at": "2026-09-10T08:00:00Z"
       }
     ],
     "review_history": [],
     "orders": [],
     "facts": [],
-    "missions": [
+    "missions": [],
+    "followups": [],
+    "evidence": [
       {
-        "id": "demo-request-7",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-08T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
+        "id": "demo-source-7",
+        "evidence_id": "demo-source-7",
+        "category": "lab_result",
+        "association_state": "accepted",
+        "provenance": {
+          "received_at": "2026-09-10T06:00:00Z"
+        },
+        "extracted_values": [
+          {
+            "name": "Potassium",
+            "value": "4.2",
+            "unit": "mmol/L"
+          }
+        ]
       }
-    ]
+    ],
+    "corrections": []
   },
   {
     "patient_id": "demo-008",
-    "display_name": "Ahmed Abdelrahman Mostafa عبد الرحمن — long synthetic name 2",
-    "age": "51",
+    "display_name": "Mariam Hassan Taylor",
+    "age": "40",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
-    "reviews": [],
-    "review_history": [
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
       {
-        "id": "demo-review-8",
-        "state": "resolved",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-8",
-        "source_version": 1,
-        "last_material_change_version": 2,
-        "review_at": "2026-09-09T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
       }
     ],
+    "reviews": [
+      {
+        "id": "demo-review-8",
+        "patient_id": "demo-008",
+        "state": "open",
+        "review_kind": "result_review",
+        "source_type": "evidence",
+        "source_id": "demo-source-8",
+        "source_version": 1,
+        "last_material_change_version": 1,
+        "review_at": "2026-09-11T08:00:00Z",
+        "first_notice_at": "2026-09-10T08:00:00Z"
+      }
+    ],
+    "review_history": [],
     "orders": [],
     "facts": [],
-    "missions": [
+    "missions": [],
+    "followups": [],
+    "evidence": [
       {
-        "id": "demo-request-8",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-09T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
+        "id": "demo-source-8",
+        "evidence_id": "demo-source-8",
+        "category": "lab_result",
+        "association_state": "accepted",
+        "provenance": {
+          "received_at": "2026-09-10T06:00:00Z"
+        },
+        "extracted_values": [
+          {
+            "name": "Potassium",
+            "value": "4.2",
+            "unit": "mmol/L"
+          }
+        ]
       }
-    ]
+    ],
+    "corrections": []
   },
   {
     "patient_id": "demo-009",
-    "display_name": "Mariam Hassan مريم 2",
-    "age": null,
+    "display_name": "Mariam Hassan Morgan",
+    "age": "41",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
+      {
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
+      }
+    ],
     "reviews": [
       {
         "id": "demo-review-9",
+        "patient_id": "demo-009",
         "state": "open",
         "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-9",
+        "source_type": "evidence",
+        "source_id": "demo-source-9",
         "source_version": 1,
         "last_material_change_version": 1,
-        "review_at": "2026-09-10T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "review_at": "2026-09-11T08:00:00Z",
+        "first_notice_at": "2026-09-10T08:00:00Z"
       }
     ],
     "review_history": [],
     "orders": [],
     "facts": [],
-    "missions": [
+    "missions": [],
+    "followups": [],
+    "evidence": [
       {
-        "id": "demo-request-9",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-10T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
+        "id": "demo-source-9",
+        "evidence_id": "demo-source-9",
+        "category": "lab_result",
+        "association_state": "accepted",
+        "provenance": {
+          "received_at": "2026-09-10T06:00:00Z"
+        },
+        "extracted_values": [
+          {
+            "name": "Potassium",
+            "value": "4.2",
+            "unit": "mmol/L"
+          }
+        ]
       }
-    ]
+    ],
+    "corrections": []
   },
   {
     "patient_id": "demo-010",
-    "display_name": "Youssef Abdelaziz يوسف 2",
-    "age": "53",
+    "display_name": "Youssef Abdelaziz",
+    "age": "42",
     "timezone": "Africa/Cairo",
-    "contact_status": "awaiting_link",
+    "contact_status": "active",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
+      {
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
+      }
+    ],
     "reviews": [
       {
         "id": "demo-review-10",
-        "state": "acknowledged",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-10",
+        "patient_id": "demo-010",
+        "state": "open",
+        "review_kind": "evidence_association",
+        "source_type": "evidence",
+        "source_id": "demo-source-10",
         "source_version": 1,
         "last_material_change_version": 1,
         "review_at": "2026-09-11T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "first_notice_at": "2026-09-10T08:00:00Z"
       }
     ],
     "review_history": [],
     "orders": [],
     "facts": [],
-    "missions": [
+    "missions": [],
+    "followups": [],
+    "evidence": [
       {
-        "id": "demo-request-10",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-11T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
+        "id": "demo-source-10",
+        "evidence_id": "demo-source-10",
+        "category": "lab_result",
+        "association_state": "candidate",
+        "provenance": {
+          "received_at": "2026-09-10T06:00:00Z"
+        },
+        "extracted_values": [
+          {
+            "name": "Potassium",
+            "value": "4.2",
+            "unit": "mmol/L"
+          }
+        ]
       }
-    ]
+    ],
+    "corrections": []
   },
   {
     "patient_id": "demo-011",
-    "display_name": "Nour El Din نور الدين 2",
-    "age": "54",
+    "display_name": "Youssef Abdelaziz Grace",
+    "age": "43",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
-    "reviews": [],
-    "review_history": [
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
+      {
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
+      }
+    ],
+    "reviews": [
       {
         "id": "demo-review-11",
-        "state": "resolved",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-11",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-12T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
-      }
-    ],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-11",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-12T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
-  },
-  {
-    "patient_id": "demo-012",
-    "display_name": "Salma Mahmoud سلمى 2",
-    "age": "55",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "reviews": [
-      {
-        "id": "demo-review-12",
-        "state": "open",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-12",
-        "source_version": 1,
-        "last_material_change_version": 2,
-        "review_at": "2026-09-13T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-12",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-13T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
-  },
-  {
-    "patient_id": "demo-013",
-    "display_name": "Omar Ibrahim عمر 2",
-    "age": "56",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "reviews": [
-      {
-        "id": "demo-review-13",
+        "patient_id": "demo-011",
         "state": "acknowledged",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-13",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-14T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-13",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-14T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
-  },
-  {
-    "patient_id": "demo-014",
-    "display_name": "Laila Ali ليلى 2",
-    "age": "57",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "reviews": [],
-    "review_history": [
-      {
-        "id": "demo-review-14",
-        "state": "resolved",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-14",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-08T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
-      }
-    ],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-14",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-08T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
-  },
-  {
-    "patient_id": "demo-015",
-    "display_name": "Hassan Mahmoud حسن 2",
-    "age": "58",
-    "timezone": "Africa/Cairo",
-    "contact_status": "awaiting_link",
-    "reviews": [
-      {
-        "id": "demo-review-15",
-        "state": "open",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-15",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-09T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-15",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-09T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
-  },
-  {
-    "patient_id": "demo-016",
-    "display_name": "Ahmed Abdelrahman Mostafa عبد الرحمن — long synthetic name 3",
-    "age": "59",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "reviews": [
-      {
-        "id": "demo-review-16",
-        "state": "acknowledged",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-16",
-        "source_version": 1,
-        "last_material_change_version": 2,
-        "review_at": "2026-09-10T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-16",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-10T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
-  },
-  {
-    "patient_id": "demo-017",
-    "display_name": "Mariam Hassan مريم 3",
-    "age": "60",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "reviews": [],
-    "review_history": [
-      {
-        "id": "demo-review-17",
-        "state": "resolved",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-17",
+        "review_kind": "evidence_association",
+        "source_type": "evidence",
+        "source_id": "demo-source-11",
         "source_version": 1,
         "last_material_change_version": 1,
         "review_at": "2026-09-11T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "first_notice_at": "2026-09-10T08:00:00Z"
       }
     ],
+    "review_history": [],
+    "orders": [],
+    "facts": [],
+    "missions": [],
+    "followups": [],
+    "evidence": [
+      {
+        "id": "demo-source-11",
+        "evidence_id": "demo-source-11",
+        "category": "lab_result",
+        "association_state": "candidate",
+        "provenance": {
+          "received_at": "2026-09-10T06:00:00Z"
+        },
+        "extracted_values": [
+          {
+            "name": "Potassium",
+            "value": "4.2",
+            "unit": "mmol/L"
+          }
+        ]
+      }
+    ],
+    "corrections": []
+  },
+  {
+    "patient_id": "demo-012",
+    "display_name": "Youssef Abdelaziz Robin",
+    "age": "44",
+    "timezone": "Africa/Cairo",
+    "contact_status": "active",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
+      {
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
+      }
+    ],
+    "reviews": [
+      {
+        "id": "demo-review-12",
+        "patient_id": "demo-012",
+        "state": "open",
+        "review_kind": "evidence_association",
+        "source_type": "evidence",
+        "source_id": "demo-source-12",
+        "source_version": 1,
+        "last_material_change_version": 2,
+        "review_at": "2026-09-11T08:00:00Z",
+        "first_notice_at": "2026-09-10T08:00:00Z"
+      }
+    ],
+    "review_history": [],
+    "orders": [],
+    "facts": [],
+    "missions": [],
+    "followups": [],
+    "evidence": [
+      {
+        "id": "demo-source-12",
+        "evidence_id": "demo-source-12",
+        "category": "lab_result",
+        "association_state": "candidate",
+        "provenance": {
+          "received_at": "2026-09-10T06:00:00Z"
+        },
+        "extracted_values": [
+          {
+            "name": "Potassium",
+            "value": "4.2",
+            "unit": "mmol/L"
+          }
+        ]
+      }
+    ],
+    "corrections": []
+  },
+  {
+    "patient_id": "demo-013",
+    "display_name": "Youssef Abdelaziz Taylor",
+    "age": "45",
+    "timezone": "Africa/Cairo",
+    "contact_status": "active",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
+      {
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
+      }
+    ],
+    "reviews": [
+      {
+        "id": "demo-review-13",
+        "patient_id": "demo-013",
+        "state": "open",
+        "review_kind": "evidence_association",
+        "source_type": "evidence",
+        "source_id": "demo-source-13",
+        "source_version": 1,
+        "last_material_change_version": 1,
+        "review_at": "2026-09-11T08:00:00Z",
+        "first_notice_at": "2026-09-10T08:00:00Z"
+      }
+    ],
+    "review_history": [],
+    "orders": [],
+    "facts": [],
+    "missions": [],
+    "followups": [],
+    "evidence": [
+      {
+        "id": "demo-source-13",
+        "evidence_id": "demo-source-13",
+        "category": "lab_result",
+        "association_state": "candidate",
+        "provenance": {
+          "received_at": "2026-09-10T06:00:00Z"
+        },
+        "extracted_values": [
+          {
+            "name": "Potassium",
+            "value": "4.2",
+            "unit": "mmol/L"
+          }
+        ]
+      }
+    ],
+    "corrections": []
+  },
+  {
+    "patient_id": "demo-014",
+    "display_name": "Youssef Abdelaziz Morgan",
+    "age": "46",
+    "timezone": "Africa/Cairo",
+    "contact_status": "active",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
+      {
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
+      }
+    ],
+    "reviews": [
+      {
+        "id": "demo-review-14",
+        "patient_id": "demo-014",
+        "state": "open",
+        "review_kind": "evidence_association",
+        "source_type": "evidence",
+        "source_id": "demo-source-14",
+        "source_version": 1,
+        "last_material_change_version": 1,
+        "review_at": "2026-09-11T08:00:00Z",
+        "first_notice_at": "2026-09-10T08:00:00Z"
+      }
+    ],
+    "review_history": [],
+    "orders": [],
+    "facts": [],
+    "missions": [],
+    "followups": [],
+    "evidence": [
+      {
+        "id": "demo-source-14",
+        "evidence_id": "demo-source-14",
+        "category": "lab_result",
+        "association_state": "candidate",
+        "provenance": {
+          "received_at": "2026-09-10T06:00:00Z"
+        },
+        "extracted_values": [
+          {
+            "name": "Potassium",
+            "value": "4.2",
+            "unit": "mmol/L"
+          }
+        ]
+      }
+    ],
+    "corrections": []
+  },
+  {
+    "patient_id": "demo-015",
+    "display_name": "Nour El Din",
+    "age": "47",
+    "timezone": "Africa/Cairo",
+    "contact_status": "active",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
+      {
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
+      }
+    ],
+    "reviews": [
+      {
+        "id": "demo-review-15",
+        "patient_id": "demo-015",
+        "state": "open",
+        "review_kind": "question_answer",
+        "source_type": "mission",
+        "source_id": "demo-source-15",
+        "source_version": 1,
+        "last_material_change_version": 1,
+        "review_at": "2026-09-11T08:00:00Z",
+        "first_notice_at": "2026-09-10T08:00:00Z"
+      }
+    ],
+    "review_history": [],
     "orders": [],
     "facts": [],
     "missions": [
       {
-        "id": "demo-request-17",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-11T08:00:00Z",
+        "id": "demo-source-15",
+        "title": "Can I take my medicine with breakfast?",
+        "state": "fulfilled",
+        "due_at": "2026-09-10T06:00:00Z",
+        "created_at": "2026-09-09T08:00:00Z",
         "review_status": "pending",
         "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
+          "kind": "QUESTION"
         }
       }
-    ]
+    ],
+    "followups": [],
+    "evidence": [],
+    "corrections": []
+  },
+  {
+    "patient_id": "demo-016",
+    "display_name": "Nour El Din Grace",
+    "age": "48",
+    "timezone": "Africa/Cairo",
+    "contact_status": "active",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
+      {
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
+      }
+    ],
+    "reviews": [
+      {
+        "id": "demo-review-16",
+        "patient_id": "demo-016",
+        "state": "acknowledged",
+        "review_kind": "question_answer",
+        "source_type": "mission",
+        "source_id": "demo-source-16",
+        "source_version": 1,
+        "last_material_change_version": 1,
+        "review_at": "2026-09-11T08:00:00Z",
+        "first_notice_at": "2026-09-10T08:00:00Z"
+      }
+    ],
+    "review_history": [],
+    "orders": [],
+    "facts": [],
+    "missions": [
+      {
+        "id": "demo-source-16",
+        "title": "Can I take my medicine with breakfast?",
+        "state": "fulfilled",
+        "due_at": "2026-09-10T06:00:00Z",
+        "created_at": "2026-09-09T08:00:00Z",
+        "review_status": "pending",
+        "details": {
+          "kind": "QUESTION"
+        }
+      }
+    ],
+    "followups": [],
+    "evidence": [],
+    "corrections": []
+  },
+  {
+    "patient_id": "demo-017",
+    "display_name": "Nour El Din Robin",
+    "age": "49",
+    "timezone": "Africa/Cairo",
+    "contact_status": "active",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
+      {
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
+      }
+    ],
+    "reviews": [
+      {
+        "id": "demo-review-17",
+        "patient_id": "demo-017",
+        "state": "open",
+        "review_kind": "question_answer",
+        "source_type": "mission",
+        "source_id": "demo-source-17",
+        "source_version": 1,
+        "last_material_change_version": 2,
+        "review_at": "2026-09-11T08:00:00Z",
+        "first_notice_at": "2026-09-10T08:00:00Z"
+      }
+    ],
+    "review_history": [],
+    "orders": [],
+    "facts": [],
+    "missions": [
+      {
+        "id": "demo-source-17",
+        "title": "Can I take my medicine with breakfast?",
+        "state": "fulfilled",
+        "due_at": "2026-09-10T06:00:00Z",
+        "created_at": "2026-09-09T08:00:00Z",
+        "review_status": "pending",
+        "details": {
+          "kind": "QUESTION"
+        }
+      }
+    ],
+    "followups": [],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-018",
-    "display_name": "Youssef Abdelaziz يوسف 3",
-    "age": null,
+    "display_name": "Nour El Din Taylor",
+    "age": "50",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
+      {
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
+      }
+    ],
     "reviews": [
       {
         "id": "demo-review-18",
+        "patient_id": "demo-018",
         "state": "open",
-        "review_kind": "result_review",
+        "review_kind": "question_answer",
         "source_type": "mission",
-        "source_id": "demo-request-18",
+        "source_id": "demo-source-18",
         "source_version": 1,
         "last_material_change_version": 1,
-        "review_at": "2026-09-12T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "review_at": "2026-09-11T08:00:00Z",
+        "first_notice_at": "2026-09-10T08:00:00Z"
       }
     ],
     "review_history": [],
@@ -959,51 +867,46 @@
     "facts": [],
     "missions": [
       {
-        "id": "demo-request-18",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-12T08:00:00Z",
+        "id": "demo-source-18",
+        "title": "Can I take my medicine with breakfast?",
+        "state": "fulfilled",
+        "due_at": "2026-09-10T06:00:00Z",
+        "created_at": "2026-09-09T08:00:00Z",
         "review_status": "pending",
         "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
+          "kind": "QUESTION"
         }
       }
-    ]
+    ],
+    "followups": [],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-019",
-    "display_name": "Nour El Din نور الدين 3",
-    "age": "62",
+    "display_name": "Nour El Din Morgan",
+    "age": "51",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
+      {
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
+      }
+    ],
     "reviews": [
       {
         "id": "demo-review-19",
-        "state": "acknowledged",
-        "review_kind": "result_review",
+        "patient_id": "demo-019",
+        "state": "open",
+        "review_kind": "question_answer",
         "source_type": "mission",
-        "source_id": "demo-request-19",
+        "source_id": "demo-source-19",
         "source_version": 1,
         "last_material_change_version": 1,
-        "review_at": "2026-09-13T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "review_at": "2026-09-11T08:00:00Z",
+        "first_notice_at": "2026-09-10T08:00:00Z"
       }
     ],
     "review_history": [],
@@ -1011,311 +914,232 @@
     "facts": [],
     "missions": [
       {
-        "id": "demo-request-19",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-13T08:00:00Z",
+        "id": "demo-source-19",
+        "title": "Can I take my medicine with breakfast?",
+        "state": "fulfilled",
+        "due_at": "2026-09-10T06:00:00Z",
+        "created_at": "2026-09-09T08:00:00Z",
         "review_status": "pending",
         "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
+          "kind": "QUESTION"
         }
       }
-    ]
+    ],
+    "followups": [],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-020",
-    "display_name": "Salma Mahmoud سلمى 3",
-    "age": "63",
+    "display_name": "Salma Mahmoud",
+    "age": "52",
     "timezone": "Africa/Cairo",
-    "contact_status": "awaiting_link",
-    "reviews": [],
-    "review_history": [
+    "contact_status": "active",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
       {
-        "id": "demo-review-20",
-        "state": "resolved",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-20",
-        "source_version": 1,
-        "last_material_change_version": 2,
-        "review_at": "2026-09-14T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
       }
     ],
+    "reviews": [
+      {
+        "id": "demo-review-20",
+        "patient_id": "demo-020",
+        "state": "open",
+        "review_kind": "correction_disposition",
+        "source_type": "correction",
+        "source_id": "demo-source-20",
+        "source_version": 1,
+        "last_material_change_version": 1,
+        "review_at": "2026-09-11T08:00:00Z",
+        "first_notice_at": "2026-09-10T08:00:00Z"
+      }
+    ],
+    "review_history": [],
     "orders": [],
     "facts": [],
-    "missions": [
+    "missions": [],
+    "followups": [],
+    "evidence": [],
+    "corrections": [
       {
-        "id": "demo-request-20",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-14T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
+        "id": "demo-source-20",
+        "created_at": "2026-09-11T08:00:00Z",
+        "before": {
+          "value": "120/80"
+        },
+        "after": {
+          "value": "125/82"
         }
       }
     ]
   },
   {
     "patient_id": "demo-021",
-    "display_name": "Omar Ibrahim عمر 3",
-    "age": "64",
+    "display_name": "Salma Mahmoud Grace",
+    "age": "53",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
+      {
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
+      }
+    ],
     "reviews": [
       {
         "id": "demo-review-21",
+        "patient_id": "demo-021",
         "state": "open",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-21",
+        "review_kind": "intake_clarification",
+        "source_type": "patient",
+        "source_id": "demo-source-21",
         "source_version": 1,
         "last_material_change_version": 1,
-        "review_at": "2026-09-08T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "review_at": "2026-09-11T08:00:00Z",
+        "first_notice_at": "2026-09-10T08:00:00Z"
       }
     ],
     "review_history": [],
     "orders": [],
     "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-21",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-08T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
+    "missions": [],
+    "followups": [],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-022",
-    "display_name": "Laila Ali ليلى 3",
-    "age": "65",
+    "display_name": "Salma Mahmoud Robin",
+    "age": "54",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
+      {
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
+      }
+    ],
     "reviews": [
       {
         "id": "demo-review-22",
-        "state": "acknowledged",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-22",
+        "patient_id": "demo-022",
+        "state": "open",
+        "review_kind": "media_failure",
+        "source_type": "patient",
+        "source_id": "demo-source-22",
         "source_version": 1,
         "last_material_change_version": 1,
-        "review_at": "2026-09-09T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "review_at": "2026-09-11T08:00:00Z",
+        "first_notice_at": "2026-09-10T08:00:00Z"
       }
     ],
     "review_history": [],
     "orders": [],
     "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-22",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-09T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
+    "missions": [],
+    "followups": [],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-023",
-    "display_name": "Hassan Mahmoud حسن 3",
-    "age": "66",
+    "display_name": "Salma Mahmoud Taylor",
+    "age": "55",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
-    "reviews": [],
-    "review_history": [
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
       {
-        "id": "demo-review-23",
-        "state": "resolved",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-23",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-10T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
       }
     ],
+    "reviews": [
+      {
+        "id": "demo-review-23",
+        "patient_id": "demo-023",
+        "state": "open",
+        "review_kind": "binding_review",
+        "source_type": "patient",
+        "source_id": "demo-source-23",
+        "source_version": 1,
+        "last_material_change_version": 1,
+        "review_at": "2026-09-11T08:00:00Z",
+        "first_notice_at": "2026-09-10T08:00:00Z"
+      }
+    ],
+    "review_history": [],
     "orders": [],
     "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-23",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-10T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
+    "missions": [],
+    "followups": [],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-024",
-    "display_name": "Ahmed Abdelrahman Mostafa عبد الرحمن — long synthetic name 4",
-    "age": "67",
+    "display_name": "Salma Mahmoud Morgan",
+    "age": "56",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
+      {
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
+      }
+    ],
     "reviews": [
       {
         "id": "demo-review-24",
+        "patient_id": "demo-024",
         "state": "open",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-24",
+        "review_kind": "coverage_review",
+        "source_type": "patient",
+        "source_id": "demo-source-24",
         "source_version": 1,
-        "last_material_change_version": 2,
+        "last_material_change_version": 1,
         "review_at": "2026-09-11T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "first_notice_at": "2026-09-10T08:00:00Z"
       }
     ],
     "review_history": [],
     "orders": [],
     "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-24",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-11T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
+    "missions": [],
+    "followups": [],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-025",
-    "display_name": "Mariam Hassan مريم 4",
-    "age": "68",
+    "display_name": "Omar Ibrahim",
+    "age": "57",
     "timezone": "Africa/Cairo",
-    "contact_status": "awaiting_link",
+    "contact_status": "active",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
+      {
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
+      }
+    ],
     "reviews": [
       {
         "id": "demo-review-25",
-        "state": "acknowledged",
-        "review_kind": "result_review",
+        "patient_id": "demo-025",
+        "state": "open",
+        "review_kind": "unmet_objective",
         "source_type": "mission",
-        "source_id": "demo-request-25",
+        "source_id": "demo-source-25",
         "source_version": 1,
         "last_material_change_version": 1,
-        "review_at": "2026-09-12T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "review_at": "2026-09-11T08:00:00Z",
+        "first_notice_at": "2026-09-10T08:00:00Z"
       }
     ],
     "review_history": [],
@@ -1323,103 +1147,93 @@
     "facts": [],
     "missions": [
       {
-        "id": "demo-request-25",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-12T08:00:00Z",
+        "id": "demo-source-25",
+        "title": "Send the blood test result",
+        "state": "closed_unfulfilled",
+        "due_at": "2026-09-10T06:00:00Z",
+        "created_at": "2026-09-09T08:00:00Z",
         "review_status": "pending",
         "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
+          "kind": "TASK"
         }
       }
-    ]
+    ],
+    "followups": [],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-026",
-    "display_name": "Youssef Abdelaziz يوسف 4",
-    "age": "69",
+    "display_name": "Omar Ibrahim Grace",
+    "age": "58",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
-    "reviews": [],
-    "review_history": [
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
       {
-        "id": "demo-review-26",
-        "state": "resolved",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-26",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-13T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
       }
     ],
+    "reviews": [
+      {
+        "id": "demo-review-26",
+        "patient_id": "demo-026",
+        "state": "acknowledged",
+        "review_kind": "unmet_objective",
+        "source_type": "mission",
+        "source_id": "demo-source-26",
+        "source_version": 1,
+        "last_material_change_version": 1,
+        "review_at": "2026-09-11T08:00:00Z",
+        "first_notice_at": "2026-09-10T08:00:00Z"
+      }
+    ],
+    "review_history": [],
     "orders": [],
     "facts": [],
     "missions": [
       {
-        "id": "demo-request-26",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-13T08:00:00Z",
+        "id": "demo-source-26",
+        "title": "Send the blood test result",
+        "state": "closed_unfulfilled",
+        "due_at": "2026-09-10T06:00:00Z",
+        "created_at": "2026-09-09T08:00:00Z",
         "review_status": "pending",
         "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
+          "kind": "TASK"
         }
       }
-    ]
+    ],
+    "followups": [],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-027",
-    "display_name": "Nour El Din نور الدين 4",
-    "age": null,
+    "display_name": "Omar Ibrahim Robin",
+    "age": "59",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
+      {
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
+      }
+    ],
     "reviews": [
       {
         "id": "demo-review-27",
+        "patient_id": "demo-027",
         "state": "open",
-        "review_kind": "result_review",
+        "review_kind": "unmet_objective",
         "source_type": "mission",
-        "source_id": "demo-request-27",
+        "source_id": "demo-source-27",
         "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-14T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "last_material_change_version": 2,
+        "review_at": "2026-09-11T08:00:00Z",
+        "first_notice_at": "2026-09-10T08:00:00Z"
       }
     ],
     "review_history": [],
@@ -1427,51 +1241,46 @@
     "facts": [],
     "missions": [
       {
-        "id": "demo-request-27",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-14T08:00:00Z",
+        "id": "demo-source-27",
+        "title": "Send the blood test result",
+        "state": "closed_unfulfilled",
+        "due_at": "2026-09-10T06:00:00Z",
+        "created_at": "2026-09-09T08:00:00Z",
         "review_status": "pending",
         "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
+          "kind": "TASK"
         }
       }
-    ]
+    ],
+    "followups": [],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-028",
-    "display_name": "Salma Mahmoud سلمى 4",
-    "age": "71",
+    "display_name": "Omar Ibrahim Taylor",
+    "age": "60",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
+      {
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
+      }
+    ],
     "reviews": [
       {
         "id": "demo-review-28",
-        "state": "acknowledged",
-        "review_kind": "result_review",
+        "patient_id": "demo-028",
+        "state": "open",
+        "review_kind": "unmet_objective",
         "source_type": "mission",
-        "source_id": "demo-request-28",
+        "source_id": "demo-source-28",
         "source_version": 1,
-        "last_material_change_version": 2,
-        "review_at": "2026-09-08T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "last_material_change_version": 1,
+        "review_at": "2026-09-11T08:00:00Z",
+        "first_notice_at": "2026-09-10T08:00:00Z"
       }
     ],
     "review_history": [],
@@ -1479,2684 +1288,969 @@
     "facts": [],
     "missions": [
       {
-        "id": "demo-request-28",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-08T08:00:00Z",
+        "id": "demo-source-28",
+        "title": "Send the blood test result",
+        "state": "closed_unfulfilled",
+        "due_at": "2026-09-10T06:00:00Z",
+        "created_at": "2026-09-09T08:00:00Z",
         "review_status": "pending",
         "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
+          "kind": "TASK"
         }
       }
-    ]
+    ],
+    "followups": [],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-029",
-    "display_name": "Omar Ibrahim عمر 4",
-    "age": "72",
+    "display_name": "Omar Ibrahim Morgan",
+    "age": "61",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
-    "reviews": [],
-    "review_history": [
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
       {
-        "id": "demo-review-29",
-        "state": "resolved",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-29",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-09T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
       }
     ],
+    "reviews": [
+      {
+        "id": "demo-review-29",
+        "patient_id": "demo-029",
+        "state": "open",
+        "review_kind": "unmet_objective",
+        "source_type": "mission",
+        "source_id": "demo-source-29",
+        "source_version": 1,
+        "last_material_change_version": 1,
+        "review_at": "2026-09-11T08:00:00Z",
+        "first_notice_at": "2026-09-10T08:00:00Z"
+      }
+    ],
+    "review_history": [],
     "orders": [],
     "facts": [],
     "missions": [
       {
-        "id": "demo-request-29",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-09T08:00:00Z",
+        "id": "demo-source-29",
+        "title": "Send the blood test result",
+        "state": "closed_unfulfilled",
+        "due_at": "2026-09-10T06:00:00Z",
+        "created_at": "2026-09-09T08:00:00Z",
         "review_status": "pending",
         "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
+          "kind": "TASK"
         }
       }
-    ]
+    ],
+    "followups": [],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-030",
-    "display_name": "Laila Ali ليلى 4",
-    "age": "73",
+    "display_name": "Laila Ali",
+    "age": "62",
     "timezone": "Africa/Cairo",
-    "contact_status": "awaiting_link",
-    "reviews": [
+    "contact_status": "active",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
       {
-        "id": "demo-review-30",
-        "state": "open",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-30",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-10T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
       }
     ],
+    "reviews": [],
     "review_history": [],
     "orders": [],
     "facts": [],
-    "missions": [
+    "missions": [],
+    "followups": [
       {
-        "id": "demo-request-30",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-10T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
+        "id": "demo-followup-30",
+        "kind": "MEDICATION_DAY3",
+        "state": "awaiting_anchor",
+        "due_at": null
       }
-    ]
+    ],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-031",
-    "display_name": "Hassan Mahmoud حسن 4",
-    "age": "74",
+    "display_name": "Laila Ali Grace",
+    "age": "63",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
-    "reviews": [
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
       {
-        "id": "demo-review-31",
-        "state": "acknowledged",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-31",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-11T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
       }
     ],
+    "reviews": [],
     "review_history": [],
     "orders": [],
     "facts": [],
-    "missions": [
+    "missions": [],
+    "followups": [
       {
-        "id": "demo-request-31",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-11T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
+        "id": "demo-followup-31",
+        "kind": "MEDICATION_DAY3",
+        "state": "scheduled",
+        "due_at": "2026-09-15T06:00:00Z"
       }
-    ]
+    ],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-032",
-    "display_name": "Ahmed Abdelrahman Mostafa عبد الرحمن — long synthetic name 5",
-    "age": "75",
+    "display_name": "Laila Ali Robin",
+    "age": "64",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
-    "reviews": [],
-    "review_history": [
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
       {
-        "id": "demo-review-32",
-        "state": "resolved",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-32",
-        "source_version": 1,
-        "last_material_change_version": 2,
-        "review_at": "2026-09-12T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
       }
     ],
+    "reviews": [],
+    "review_history": [],
     "orders": [],
     "facts": [],
-    "missions": [
+    "missions": [],
+    "followups": [
       {
-        "id": "demo-request-32",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-12T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
+        "id": "demo-followup-32",
+        "kind": "MEDICATION_DAY3",
+        "state": "waiting_response",
+        "due_at": "2026-09-15T06:00:00Z"
       }
-    ]
+    ],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-033",
-    "display_name": "Mariam Hassan مريم 5",
-    "age": "76",
+    "display_name": "Laila Ali Taylor",
+    "age": "65",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
-    "reviews": [
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
       {
-        "id": "demo-review-33",
-        "state": "open",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-33",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-13T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
       }
     ],
+    "reviews": [],
     "review_history": [],
     "orders": [],
     "facts": [],
-    "missions": [
+    "missions": [],
+    "followups": [
       {
-        "id": "demo-request-33",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-13T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
+        "id": "demo-followup-33",
+        "kind": "MEDICATION_DAY3",
+        "state": "overdue",
+        "due_at": "2026-09-10T06:00:00Z"
       }
-    ]
+    ],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-034",
-    "display_name": "Youssef Abdelaziz يوسف 5",
-    "age": "77",
+    "display_name": "Laila Ali Morgan",
+    "age": "66",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
-    "reviews": [
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
       {
-        "id": "demo-review-34",
-        "state": "acknowledged",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-34",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-14T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
       }
     ],
+    "reviews": [],
     "review_history": [],
     "orders": [],
     "facts": [],
-    "missions": [
+    "missions": [],
+    "followups": [
       {
-        "id": "demo-request-34",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-14T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
+        "id": "demo-followup-34",
+        "kind": "MEDICATION_DAY3",
+        "state": "contact_suppressed",
+        "due_at": "2026-09-15T06:00:00Z"
       }
-    ]
+    ],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-035",
-    "display_name": "Nour El Din نور الدين 5",
-    "age": "78",
+    "display_name": "Hassan Mahmoud",
+    "age": "67",
     "timezone": "Africa/Cairo",
-    "contact_status": "awaiting_link",
-    "reviews": [],
-    "review_history": [
+    "contact_status": "active",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
+      {
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
+      }
+    ],
+    "reviews": [
       {
         "id": "demo-review-35",
-        "state": "resolved",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-35",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-08T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
-      }
-    ],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-35",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
+        "patient_id": "demo-035",
         "state": "open",
-        "due_at": "2026-09-08T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
-  },
-  {
-    "patient_id": "demo-036",
-    "display_name": "Salma Mahmoud سلمى 5",
-    "age": null,
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "reviews": [
-      {
-        "id": "demo-review-36",
-        "state": "open",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-36",
-        "source_version": 1,
-        "last_material_change_version": 2,
-        "review_at": "2026-09-09T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-36",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-09T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
-  },
-  {
-    "patient_id": "demo-037",
-    "display_name": "Omar Ibrahim عمر 5",
-    "age": "80",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "reviews": [
-      {
-        "id": "demo-review-37",
-        "state": "acknowledged",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-37",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-10T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-37",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-10T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
-  },
-  {
-    "patient_id": "demo-038",
-    "display_name": "Laila Ali ليلى 5",
-    "age": "81",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "reviews": [],
-    "review_history": [
-      {
-        "id": "demo-review-38",
-        "state": "resolved",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-38",
+        "review_kind": "followup_disposition",
+        "source_type": "patient",
+        "source_id": "demo-source-35",
         "source_version": 1,
         "last_material_change_version": 1,
         "review_at": "2026-09-11T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
-      }
-    ],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-38",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-11T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
-  },
-  {
-    "patient_id": "demo-039",
-    "display_name": "Hassan Mahmoud حسن 5",
-    "age": "82",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "reviews": [
-      {
-        "id": "demo-review-39",
-        "state": "open",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-39",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-12T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "first_notice_at": "2026-09-10T08:00:00Z"
       }
     ],
     "review_history": [],
     "orders": [],
     "facts": [],
-    "missions": [
+    "missions": [],
+    "followups": [],
+    "evidence": [],
+    "corrections": []
+  },
+  {
+    "patient_id": "demo-036",
+    "display_name": "Hassan Mahmoud Grace",
+    "age": "68",
+    "timezone": "Africa/Cairo",
+    "contact_status": "active",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
       {
-        "id": "demo-request-39",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-12T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
       }
-    ]
+    ],
+    "reviews": [
+      {
+        "id": "demo-review-36",
+        "patient_id": "demo-036",
+        "state": "open",
+        "review_kind": "delivery_failure",
+        "source_type": "patient",
+        "source_id": "demo-source-36",
+        "source_version": 1,
+        "last_material_change_version": 1,
+        "review_at": "2026-09-11T08:00:00Z",
+        "first_notice_at": "2026-09-10T08:00:00Z"
+      }
+    ],
+    "review_history": [],
+    "orders": [],
+    "facts": [],
+    "missions": [],
+    "followups": [],
+    "evidence": [],
+    "corrections": []
+  },
+  {
+    "patient_id": "demo-037",
+    "display_name": "Hassan Mahmoud Robin",
+    "age": "69",
+    "timezone": "Africa/Cairo",
+    "contact_status": "active",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
+      {
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
+      }
+    ],
+    "reviews": [],
+    "review_history": [],
+    "orders": [],
+    "facts": [],
+    "missions": [],
+    "followups": [
+      {
+        "id": "demo-followup-37",
+        "kind": "CLINICAL_CHECKIN",
+        "state": "scheduled",
+        "due_at": "2026-09-15T06:00:00Z"
+      }
+    ],
+    "evidence": [],
+    "corrections": []
+  },
+  {
+    "patient_id": "demo-038",
+    "display_name": "Hassan Mahmoud Taylor",
+    "age": "70",
+    "timezone": "Africa/Cairo",
+    "contact_status": "active",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
+      {
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
+      }
+    ],
+    "reviews": [],
+    "review_history": [],
+    "orders": [],
+    "facts": [],
+    "missions": [],
+    "followups": [
+      {
+        "id": "demo-followup-38",
+        "kind": "CLINICAL_CHECKIN",
+        "state": "waiting_response",
+        "due_at": "2026-09-15T06:00:00Z"
+      }
+    ],
+    "evidence": [],
+    "corrections": []
+  },
+  {
+    "patient_id": "demo-039",
+    "display_name": "Hassan Mahmoud Morgan",
+    "age": "71",
+    "timezone": "Africa/Cairo",
+    "contact_status": "active",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
+      {
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
+      }
+    ],
+    "reviews": [
+      {
+        "id": "demo-review-39",
+        "patient_id": "demo-039",
+        "state": "open",
+        "review_kind": "binding_review",
+        "source_type": "patient",
+        "source_id": "demo-source-39",
+        "source_version": 1,
+        "last_material_change_version": 1,
+        "review_at": "2026-09-11T08:00:00Z",
+        "first_notice_at": "2026-09-10T08:00:00Z"
+      }
+    ],
+    "review_history": [],
+    "orders": [],
+    "facts": [],
+    "missions": [],
+    "followups": [],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-040",
-    "display_name": "Ahmed Abdelrahman Mostafa عبد الرحمن — long synthetic name 6",
-    "age": "43",
+    "display_name": "Sophie Grant",
+    "age": "72",
     "timezone": "Africa/Cairo",
-    "contact_status": "awaiting_link",
-    "reviews": [
+    "contact_status": "active",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
       {
-        "id": "demo-review-40",
-        "state": "acknowledged",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-40",
-        "source_version": 1,
-        "last_material_change_version": 2,
-        "review_at": "2026-09-13T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
       }
     ],
+    "reviews": [],
     "review_history": [],
     "orders": [],
     "facts": [],
     "missions": [
       {
         "id": "demo-request-40",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
+        "title": "Send your morning blood pressure reading",
         "state": "open",
-        "due_at": "2026-09-13T08:00:00Z",
-        "review_status": "pending",
+        "due_at": "2026-09-10T06:00:00Z",
+        "review_status": "not_required",
         "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
+          "kind": "TASK"
         }
       }
-    ]
+    ],
+    "followups": [],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-041",
-    "display_name": "Mariam Hassan مريم 6",
-    "age": "44",
+    "display_name": "Sophie Grant Grace",
+    "age": "73",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
-    "reviews": [],
-    "review_history": [
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
       {
-        "id": "demo-review-41",
-        "state": "resolved",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-41",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-14T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
       }
     ],
+    "reviews": [],
+    "review_history": [],
     "orders": [],
     "facts": [],
     "missions": [
       {
         "id": "demo-request-41",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
+        "title": "Send your morning blood pressure reading",
         "state": "open",
-        "due_at": "2026-09-14T08:00:00Z",
-        "review_status": "pending",
+        "due_at": "2026-09-19T06:00:00Z",
+        "review_status": "not_required",
         "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
+          "kind": "TASK"
         }
       }
-    ]
+    ],
+    "followups": [],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-042",
-    "display_name": "Youssef Abdelaziz يوسف 6",
-    "age": "45",
+    "display_name": "Sophie Grant Robin",
+    "age": "74",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
-    "reviews": [
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
       {
-        "id": "demo-review-42",
-        "state": "open",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-42",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-08T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
       }
     ],
+    "reviews": [],
     "review_history": [],
     "orders": [],
     "facts": [],
     "missions": [
       {
         "id": "demo-request-42",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
+        "title": "Send your morning blood pressure reading",
         "state": "open",
-        "due_at": "2026-09-08T08:00:00Z",
-        "review_status": "pending",
+        "due_at": "2026-09-12T20:00:00Z",
+        "review_status": "not_required",
         "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
+          "kind": "TASK"
         }
       }
-    ]
+    ],
+    "followups": [],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-043",
-    "display_name": "Nour El Din نور الدين 6",
-    "age": "46",
+    "display_name": "Sophie Grant Taylor",
+    "age": "75",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
-    "reviews": [
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
       {
-        "id": "demo-review-43",
-        "state": "acknowledged",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-43",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-09T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
       }
     ],
+    "reviews": [],
     "review_history": [],
     "orders": [],
     "facts": [],
     "missions": [
       {
         "id": "demo-request-43",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
+        "title": "Send your morning blood pressure reading",
         "state": "open",
-        "due_at": "2026-09-09T08:00:00Z",
-        "review_status": "pending",
+        "due_at": null,
+        "review_status": "not_required",
         "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
+          "kind": "TASK"
         }
       }
-    ]
+    ],
+    "followups": [],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-044",
-    "display_name": "Salma Mahmoud سلمى 6",
-    "age": "47",
+    "display_name": "Sophie Grant Morgan",
+    "age": "76",
     "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "reviews": [],
-    "review_history": [
+    "contact_status": "paused",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
       {
-        "id": "demo-review-44",
-        "state": "resolved",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-44",
-        "source_version": 1,
-        "last_material_change_version": 2,
-        "review_at": "2026-09-10T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
       }
     ],
+    "reviews": [],
+    "review_history": [],
     "orders": [],
     "facts": [],
     "missions": [
       {
         "id": "demo-request-44",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-10T08:00:00Z",
-        "review_status": "pending",
+        "title": "Send your morning blood pressure reading",
+        "state": "overdue",
+        "due_at": "2026-09-10T06:00:00Z",
+        "review_status": "not_required",
         "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
+          "kind": "TASK"
         }
       }
-    ]
+    ],
+    "followups": [],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-045",
-    "display_name": "Omar Ibrahim عمر 6",
-    "age": null,
+    "display_name": "Oliver Reed",
+    "age": "77",
     "timezone": "Africa/Cairo",
-    "contact_status": "awaiting_link",
-    "reviews": [
+    "contact_status": "active",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
       {
-        "id": "demo-review-45",
-        "state": "open",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-45",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-11T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
       }
     ],
+    "reviews": [],
     "review_history": [],
     "orders": [],
     "facts": [],
     "missions": [
       {
         "id": "demo-request-45",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-11T08:00:00Z",
-        "review_status": "pending",
+        "title": "Send your morning blood pressure reading",
+        "state": "blocked",
+        "due_at": "2026-09-10T06:00:00Z",
+        "review_status": "not_required",
         "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
+          "kind": "TASK"
         }
       }
-    ]
+    ],
+    "followups": [],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-046",
-    "display_name": "Laila Ali ليلى 6",
-    "age": "49",
+    "display_name": "Oliver Reed Grace",
+    "age": "78",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
-    "reviews": [
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
       {
-        "id": "demo-review-46",
-        "state": "acknowledged",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-46",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-12T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
       }
     ],
+    "reviews": [],
     "review_history": [],
     "orders": [],
     "facts": [],
     "missions": [
       {
         "id": "demo-request-46",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-12T08:00:00Z",
-        "review_status": "pending",
+        "title": "Send your morning blood pressure reading",
+        "state": "waiting_patient",
+        "due_at": "2026-09-10T06:00:00Z",
+        "review_status": "not_required",
         "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
+          "kind": "TASK"
         }
       }
-    ]
+    ],
+    "followups": [],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-047",
-    "display_name": "Hassan Mahmoud حسن 6",
-    "age": "50",
+    "display_name": "Oliver Reed Robin",
+    "age": "79",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
-    "reviews": [],
-    "review_history": [
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
       {
-        "id": "demo-review-47",
-        "state": "resolved",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-47",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-13T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
       }
     ],
+    "reviews": [],
+    "review_history": [],
     "orders": [],
     "facts": [],
     "missions": [
       {
         "id": "demo-request-47",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-13T08:00:00Z",
-        "review_status": "pending",
+        "title": "Send your morning blood pressure reading",
+        "state": "proposed",
+        "due_at": "2026-09-10T06:00:00Z",
+        "review_status": "not_required",
         "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
+          "kind": "TASK"
         }
       }
-    ]
+    ],
+    "followups": [],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-048",
-    "display_name": "Ahmed Abdelrahman Mostafa عبد الرحمن — long synthetic name 7",
-    "age": "51",
+    "display_name": "Oliver Reed Taylor",
+    "age": "80",
     "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "reviews": [
-      {
-        "id": "demo-review-48",
-        "state": "open",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-48",
-        "source_version": 1,
-        "last_material_change_version": 2,
-        "review_at": "2026-09-14T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
-      }
-    ],
+    "contact_status": "awaiting_link",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [],
+    "reviews": [],
     "review_history": [],
     "orders": [],
     "facts": [],
     "missions": [
       {
         "id": "demo-request-48",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-14T08:00:00Z",
-        "review_status": "pending",
+        "title": "Send your morning blood pressure reading",
+        "state": "awaiting_link",
+        "due_at": "2026-09-10T06:00:00Z",
+        "review_status": "not_required",
         "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
+          "kind": "TASK"
         }
       }
-    ]
+    ],
+    "followups": [],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-049",
-    "display_name": "Mariam Hassan مريم 7",
-    "age": "52",
+    "display_name": "Oliver Reed Morgan",
+    "age": "32",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
-    "reviews": [
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
       {
-        "id": "demo-review-49",
-        "state": "acknowledged",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-49",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-08T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
       }
     ],
+    "reviews": [],
     "review_history": [],
     "orders": [],
     "facts": [],
     "missions": [
       {
         "id": "demo-request-49",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-08T08:00:00Z",
-        "review_status": "pending",
+        "title": "Send your morning blood pressure reading",
+        "state": "unreachable",
+        "due_at": "2026-09-10T06:00:00Z",
+        "review_status": "not_required",
         "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
+          "kind": "TASK"
         }
       }
-    ]
+    ],
+    "followups": [],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-050",
-    "display_name": "Youssef Abdelaziz يوسف 7",
-    "age": "53",
+    "display_name": "Amelia Brooks",
+    "age": "33",
     "timezone": "Africa/Cairo",
-    "contact_status": "awaiting_link",
+    "contact_status": "active",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
+      {
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
+      }
+    ],
     "reviews": [],
     "review_history": [
       {
-        "id": "demo-review-50",
-        "state": "resolved",
+        "id": "demo-reviewed",
         "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-50",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-09T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "state": "resolved",
+        "resolved_at": "2026-09-11T08:00:00Z",
+        "resolved_reason": "doctor_reviewed"
       }
     ],
     "orders": [],
     "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-50",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-09T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
+    "missions": [],
+    "followups": [],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-051",
-    "display_name": "Nour El Din نور الدين 7",
-    "age": "54",
+    "display_name": "Amelia Brooks Grace",
+    "age": "34",
     "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "reviews": [
+    "contact_status": "awaiting_link",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
       {
-        "id": "demo-review-51",
-        "state": "open",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-51",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-10T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
       }
     ],
+    "reviews": [],
     "review_history": [],
     "orders": [],
     "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-51",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-10T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
+    "missions": [],
+    "followups": [],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-052",
-    "display_name": "Salma Mahmoud سلمى 7",
-    "age": "55",
+    "display_name": "Amelia Brooks Robin",
+    "age": "35",
     "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "reviews": [
+    "contact_status": "paused",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
       {
-        "id": "demo-review-52",
-        "state": "acknowledged",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-52",
-        "source_version": 1,
-        "last_material_change_version": 2,
-        "review_at": "2026-09-11T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
       }
     ],
+    "reviews": [],
     "review_history": [],
     "orders": [],
     "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-52",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-11T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
+    "missions": [],
+    "followups": [],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-053",
-    "display_name": "Omar Ibrahim عمر 7",
-    "age": "56",
+    "display_name": "Amelia Brooks Taylor",
+    "age": "36",
     "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "reviews": [],
-    "review_history": [
+    "contact_status": "opted_out",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
       {
-        "id": "demo-review-53",
-        "state": "resolved",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-53",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-12T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
       }
     ],
+    "reviews": [],
+    "review_history": [],
     "orders": [],
     "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-53",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-12T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
+    "missions": [],
+    "followups": [],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-054",
-    "display_name": "Laila Ali ليلى 7",
-    "age": null,
+    "display_name": "Amelia Brooks Morgan",
+    "age": "37",
     "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "reviews": [
+    "contact_status": "unreachable",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
       {
-        "id": "demo-review-54",
-        "state": "open",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-54",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-13T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
       }
     ],
+    "reviews": [],
     "review_history": [],
     "orders": [],
     "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-54",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-13T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
+    "missions": [],
+    "followups": [],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-055",
-    "display_name": "Hassan Mahmoud حسن 7",
-    "age": "58",
+    "display_name": "James Bennett",
+    "age": "38",
     "timezone": "Africa/Cairo",
-    "contact_status": "awaiting_link",
-    "reviews": [
+    "contact_status": "active",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
       {
-        "id": "demo-review-55",
-        "state": "acknowledged",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-55",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-14T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
       }
     ],
+    "reviews": [],
     "review_history": [],
     "orders": [],
     "facts": [],
-    "missions": [
+    "missions": [],
+    "followups": [],
+    "evidence": [],
+    "corrections": [],
+    "held_medications": [
       {
-        "id": "demo-request-55",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-14T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
+        "order_id": "demo-held",
+        "drug": "Aspirin",
+        "reason": "bruising reported",
+        "since": "2026-09-11T08:00:00Z"
       }
     ]
   },
   {
     "patient_id": "demo-056",
-    "display_name": "Ahmed Abdelrahman Mostafa عبد الرحمن — long synthetic name 8",
-    "age": "59",
+    "display_name": "James Bennett Grace",
+    "age": "39",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
-    "reviews": [],
-    "review_history": [
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
       {
-        "id": "demo-review-56",
-        "state": "resolved",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-56",
-        "source_version": 1,
-        "last_material_change_version": 2,
-        "review_at": "2026-09-08T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
       }
     ],
+    "reviews": [],
+    "review_history": [],
     "orders": [],
     "facts": [],
     "missions": [
       {
         "id": "demo-request-56",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-08T08:00:00Z",
-        "review_status": "pending",
+        "title": "Send your morning blood pressure reading",
+        "state": "fulfilled",
+        "due_at": "2026-09-10T06:00:00Z",
+        "review_status": "not_required",
         "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
+          "kind": "TASK"
+        },
+        "fulfillment_validity": "invalidated_pending_review"
       }
-    ]
+    ],
+    "followups": [],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-057",
-    "display_name": "Mariam Hassan مريم 8",
-    "age": "60",
+    "display_name": "James Bennett Robin",
+    "age": "40",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
-    "reviews": [
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
       {
-        "id": "demo-review-57",
-        "state": "open",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-57",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-09T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
       }
     ],
+    "reviews": [],
     "review_history": [],
     "orders": [],
     "facts": [],
     "missions": [
       {
         "id": "demo-request-57",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-09T08:00:00Z",
-        "review_status": "pending",
+        "title": "Send your morning blood pressure reading",
+        "state": "processing",
+        "due_at": "2026-09-10T06:00:00Z",
+        "review_status": "not_required",
         "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
+          "kind": "TASK"
         }
       }
-    ]
+    ],
+    "followups": [],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-058",
-    "display_name": "Youssef Abdelaziz يوسف 8",
-    "age": "61",
+    "display_name": "James Bennett Taylor",
+    "age": "41",
     "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "reviews": [
+    "contact_status": "frozen",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
       {
-        "id": "demo-review-58",
-        "state": "acknowledged",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-58",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-10T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
       }
     ],
+    "reviews": [],
     "review_history": [],
     "orders": [],
     "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-58",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-10T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
+    "missions": [],
+    "followups": [],
+    "evidence": [],
+    "corrections": []
   },
   {
     "patient_id": "demo-059",
-    "display_name": "Nour El Din نور الدين 8",
-    "age": "62",
+    "display_name": "James Bennett Morgan",
+    "age": "42",
     "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "reviews": [],
-    "review_history": [
+    "contact_status": "opted_out",
+    "last_activity_at": "2026-09-12T07:00:00Z",
+    "bindings": [
       {
-        "id": "demo-review-59",
-        "state": "resolved",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-59",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-11T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
+        "status": "active",
+        "confirmed_at": "2026-09-09T08:00:00Z"
       }
     ],
+    "reviews": [],
+    "review_history": [],
     "orders": [],
     "facts": [],
     "missions": [
       {
         "id": "demo-request-59",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-11T08:00:00Z",
-        "review_status": "pending",
+        "title": "Send your morning blood pressure reading",
+        "state": "overdue",
+        "due_at": "2026-09-10T06:00:00Z",
+        "review_status": "not_required",
         "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
+          "kind": "TASK"
         }
-      }
-    ]
-  },
-  {
-    "patient_id": "demo-060",
-    "display_name": "Salma Mahmoud سلمى 8",
-    "age": "63",
-    "timezone": "Africa/Cairo",
-    "contact_status": "awaiting_link",
-    "reviews": [
-      {
-        "id": "demo-review-60",
-        "state": "open",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-60",
-        "source_version": 1,
-        "last_material_change_version": 2,
-        "review_at": "2026-09-12T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
       }
     ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-60",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-12T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
-  },
-  {
-    "patient_id": "demo-061",
-    "display_name": "Omar Ibrahim عمر 8",
-    "age": "64",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "reviews": [
-      {
-        "id": "demo-review-61",
-        "state": "acknowledged",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-61",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-13T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-61",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-13T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
-  },
-  {
-    "patient_id": "demo-062",
-    "display_name": "Laila Ali ليلى 8",
-    "age": "65",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "reviews": [],
-    "review_history": [
-      {
-        "id": "demo-review-62",
-        "state": "resolved",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-62",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-14T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
-      }
-    ],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-62",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-14T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
-  },
-  {
-    "patient_id": "demo-063",
-    "display_name": "Hassan Mahmoud حسن 8",
-    "age": null,
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "reviews": [
-      {
-        "id": "demo-review-63",
-        "state": "open",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-63",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-08T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-63",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-08T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
-  },
-  {
-    "patient_id": "demo-064",
-    "display_name": "Ahmed Abdelrahman Mostafa عبد الرحمن — long synthetic name 9",
-    "age": "67",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "reviews": [
-      {
-        "id": "demo-review-64",
-        "state": "acknowledged",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-64",
-        "source_version": 1,
-        "last_material_change_version": 2,
-        "review_at": "2026-09-09T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-64",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-09T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
-  },
-  {
-    "patient_id": "demo-065",
-    "display_name": "Mariam Hassan مريم 9",
-    "age": "68",
-    "timezone": "Africa/Cairo",
-    "contact_status": "awaiting_link",
-    "reviews": [],
-    "review_history": [
-      {
-        "id": "demo-review-65",
-        "state": "resolved",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-65",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-10T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
-      }
-    ],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-65",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-10T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
-  },
-  {
-    "patient_id": "demo-066",
-    "display_name": "Youssef Abdelaziz يوسف 9",
-    "age": "69",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "reviews": [
-      {
-        "id": "demo-review-66",
-        "state": "open",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-66",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-11T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-66",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-11T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
-  },
-  {
-    "patient_id": "demo-067",
-    "display_name": "Nour El Din نور الدين 9",
-    "age": "70",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "reviews": [
-      {
-        "id": "demo-review-67",
-        "state": "acknowledged",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-67",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-12T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-67",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-12T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
-  },
-  {
-    "patient_id": "demo-068",
-    "display_name": "Salma Mahmoud سلمى 9",
-    "age": "71",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "reviews": [],
-    "review_history": [
-      {
-        "id": "demo-review-68",
-        "state": "resolved",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-68",
-        "source_version": 1,
-        "last_material_change_version": 2,
-        "review_at": "2026-09-13T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
-      }
-    ],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-68",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-13T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
-  },
-  {
-    "patient_id": "demo-069",
-    "display_name": "Omar Ibrahim عمر 9",
-    "age": "72",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "reviews": [
-      {
-        "id": "demo-review-69",
-        "state": "open",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-69",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-14T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-69",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-14T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
-  },
-  {
-    "patient_id": "demo-070",
-    "display_name": "Laila Ali ليلى 9",
-    "age": "73",
-    "timezone": "Africa/Cairo",
-    "contact_status": "awaiting_link",
-    "reviews": [
-      {
-        "id": "demo-review-70",
-        "state": "acknowledged",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-70",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-08T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-70",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-08T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
-  },
-  {
-    "patient_id": "demo-071",
-    "display_name": "Hassan Mahmoud حسن 9",
-    "age": "74",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "reviews": [],
-    "review_history": [
-      {
-        "id": "demo-review-71",
-        "state": "resolved",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-71",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-09T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
-      }
-    ],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-71",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-09T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
-  },
-  {
-    "patient_id": "demo-072",
-    "display_name": "Ahmed Abdelrahman Mostafa عبد الرحمن — long synthetic name 10",
-    "age": null,
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "reviews": [
-      {
-        "id": "demo-review-72",
-        "state": "open",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-72",
-        "source_version": 1,
-        "last_material_change_version": 2,
-        "review_at": "2026-09-10T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-72",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-10T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
-  },
-  {
-    "patient_id": "demo-073",
-    "display_name": "Mariam Hassan مريم 10",
-    "age": "76",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "reviews": [
-      {
-        "id": "demo-review-73",
-        "state": "acknowledged",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-73",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-11T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-73",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-11T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
-  },
-  {
-    "patient_id": "demo-074",
-    "display_name": "Youssef Abdelaziz يوسف 10",
-    "age": "77",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "reviews": [],
-    "review_history": [
-      {
-        "id": "demo-review-74",
-        "state": "resolved",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-74",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-12T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
-      }
-    ],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-74",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-12T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
-  },
-  {
-    "patient_id": "demo-075",
-    "display_name": "Nour El Din نور الدين 10",
-    "age": "78",
-    "timezone": "Africa/Cairo",
-    "contact_status": "awaiting_link",
-    "reviews": [
-      {
-        "id": "demo-review-75",
-        "state": "open",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-75",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-13T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-75",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-13T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
-  },
-  {
-    "patient_id": "demo-076",
-    "display_name": "Salma Mahmoud سلمى 10",
-    "age": "79",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "reviews": [
-      {
-        "id": "demo-review-76",
-        "state": "acknowledged",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-76",
-        "source_version": 1,
-        "last_material_change_version": 2,
-        "review_at": "2026-09-14T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-76",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-14T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
-  },
-  {
-    "patient_id": "demo-077",
-    "display_name": "Omar Ibrahim عمر 10",
-    "age": "80",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "reviews": [],
-    "review_history": [
-      {
-        "id": "demo-review-77",
-        "state": "resolved",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-77",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-08T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
-      }
-    ],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-77",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-08T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
-  },
-  {
-    "patient_id": "demo-078",
-    "display_name": "Laila Ali ليلى 10",
-    "age": "81",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "reviews": [
-      {
-        "id": "demo-review-78",
-        "state": "open",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-78",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-09T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-78",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-09T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
-  },
-  {
-    "patient_id": "demo-079",
-    "display_name": "Hassan Mahmoud حسن 10",
-    "age": "82",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "reviews": [
-      {
-        "id": "demo-review-79",
-        "state": "acknowledged",
-        "review_kind": "result_review",
-        "source_type": "mission",
-        "source_id": "demo-request-79",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-10T08:00:00Z",
-        "first_notice_at": "2026-09-08T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-79",
-        "title": "Blood pressure متابعة الضغط — morning and evening",
-        "state": "open",
-        "due_at": "2026-09-10T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "MONITOR",
-          "metric": "Blood pressure",
-          "unit": "mmHg",
-          "slots": [
-            "2026-09-09T06:00:00Z",
-            "2026-09-09T18:00:00Z"
-          ],
-          "readings": [
-            {
-              "slot": 0,
-              "value": "128/82",
-              "received_at": "2026-09-09T06:05:00Z",
-              "source_ref": {
-                "id": "demo-observation",
-                "version": 1
-              }
-            }
-          ]
-        }
-      }
-    ]
+    "followups": [],
+    "evidence": [],
+    "corrections": []
   }
 ]

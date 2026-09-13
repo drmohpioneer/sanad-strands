@@ -93,9 +93,13 @@ def test_s3_outage_is_typed_and_recoverable(
     result = retriever.fetch_telegram_file("synthetic-handle", receipt_id=receipt_id)
     assert isinstance(result, MediaFailure) and result.reason == "storage_unavailable"
     assert "private" not in repr(result)
-    assert work(world, receipt_id).state == "processing"
+    assert work(world, receipt_id).state == "pending"
+    assert work(world, receipt_id).processing_claim is None
+    assert work(world, receipt_id).last_error == "storage_unavailable"
     monkeypatch.setattr(s3.fake, "put_object", original)
-    clock.now += world.policy.operations.claim_ttl + timedelta(seconds=1)
+    saved = work(world, receipt_id)
+    assert saved.work_clock and saved.work_clock.attempt_count == 0
+    clock.now = saved.work_clock.next_action_at
     assert isinstance(
         retriever.fetch_telegram_file("synthetic-handle", receipt_id=receipt_id), StoredMedia
     )
@@ -138,7 +142,7 @@ def test_media_fetch_normalize_then_pending_extraction(store: StoreBase, clock: 
     saved = work(world, receipt_id)
     assert saved.state == "pending" and saved.stage == "extract" and saved.work_clock is not None
     assert saved.source_blob_ref != saved.normalized_blob_ref
-    assert saved.work_clock.next_action_at > clock()
+    assert saved.work_clock.next_action_at == clock()
     assert store.get(OTHER, "media_work", saved.id) is None
     assert not store.list_records(SCOPE, "care_order")[0][0].body.get("model_id")
     calls = len(retriever.telegram.calls)  # type: ignore[attr-defined]
@@ -221,8 +225,11 @@ def test_stale_claim_cannot_commit_download_and_new_worker_recovers(
                 clock(),
                 world.policy.operations.claim_ttl,
             )
-            is not None
+            is None
         )
+        recovered = work(world, receipt_id)
+        assert recovered.processing_claim is None
+        assert recovered.work_clock and recovered.work_clock.attempt_count == 0
 
     retriever.checkpoint = steal
     result = retriever.fetch_telegram_file("synthetic-handle", receipt_id=receipt_id)
@@ -263,7 +270,14 @@ def test_scoped_sweep_refetches_expired_claim_and_keeps_review_timed(
     clock.now += world.policy.operations.claim_ttl + timedelta(seconds=1)
     assert retriever.sweep() == 1
     assert work(world, receipt_id).stage == "extract"
-    clock.now += world.policy.timing.result_review_interval + timedelta(seconds=1)
+    assert work(world, receipt_id).work_clock.next_action_at == clock()  # type: ignore[union-attr]
+    for minutes in (1, 5, 15):
+        assert retriever.sweep() == 1
+        retry = work(world, receipt_id)
+        assert retry.state == "pending" and retry.work_clock
+        assert retry.work_clock.next_action_at == clock() + timedelta(minutes=minutes)
+        assert retriever.sweep() == 0
+        clock.now = retry.work_clock.next_action_at
     assert retriever.sweep() == 1
     saved = work(world, receipt_id)
     assert saved.state == "needs_attention"

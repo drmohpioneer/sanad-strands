@@ -125,6 +125,14 @@ def test_foreign_evidence_action_has_valid_owner_control(
     a.app.state.media_store = storage
     assert f.upload(a) == "accepted"
     e = f.current(a)
+    if action == "associate":
+        from sanad.evidence.doctor import decide
+
+        assert (
+            decide(a.runtime.steward, a.owner, e, "confirm_identity", "confirm-name").status
+            == "accepted"
+        )
+        e = f.current(a)
     body: dict[str, Any] = (
         {"mission_id": "potassium-test"}
         if action == "associate"

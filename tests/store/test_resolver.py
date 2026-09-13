@@ -299,7 +299,7 @@ def test_crash_restart_and_webhook_replay(store: StoreBase, clock: FakeClock, st
 
     w.concierge.checkpoint = crash
     assert w.post(update(PATIENT, text, 1000)).status_code == 200
-    assert w.receipt(1000).state == "processing"
+    assert w.receipt(1000).state == "pending"
     before_calls, before_http = len(model.script.calls), len(capture.requests)
     clock.now += timedelta(minutes=10)
     w.concierge.checkpoint = lambda at: None
@@ -438,7 +438,7 @@ def test_revocation_between_reservation_and_http_blocks_call(
         == 200
     )
     assert not capture.requests
-    assert w.receipt(1000).state == "processing"
+    assert w.receipt(1000).state == "pending"
     assert get(w).barrier_attempts[-1].searches_spent == 1
 
 
@@ -557,7 +557,7 @@ def test_older_interrupted_receipt_cannot_buy_attempt_after_new_reply(
 
     w.concierge.checkpoint = crash
     assert w.post(update(PATIENT, "The lab is too expensive", 1000)).status_code == 200
-    assert w.receipt(1000).state == "processing"
+    assert w.receipt(1000).state == "pending"
     w.concierge.checkpoint = lambda stage: None
     w.next_message = 1001
     model, _ = w.send(

@@ -61,3 +61,9 @@ def records(store: Store, scope: Scope, entity_type: str) -> Iterator[StoredReco
         yield from page
         if cursor is None:
             break
+
+
+def bounded_records(store: Store, scope: Scope, entity_type: str) -> Iterator[StoredRecord]:
+    """One bounded request projection; domain workers retain their own full reader."""
+    page, _ = store.list_records(scope, entity_type, limit=200)
+    yield from page

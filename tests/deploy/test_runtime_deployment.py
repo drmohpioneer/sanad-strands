@@ -3,7 +3,6 @@ import hashlib
 import hmac
 import json
 from concurrent.futures import ThreadPoolExecutor
-from datetime import timedelta
 from typing import Any
 
 import httpx
@@ -177,9 +176,9 @@ def test_worker_crash_after_claim_is_recovered_by_existing_sweep(
     monkeypatch.setattr(world.runtime.accounts, "finish_receipt", crash)
     with pytest.raises(RuntimeError):
         process_event(world.runtime, event)
-    assert world.receipt(1).state == "processing"
+    assert world.receipt(1).state == "pending"
+    assert world.receipt(1).processing_claim is None
     monkeypatch.setattr(world.runtime.accounts, "finish_receipt", original)
-    clock.advance(timedelta(minutes=11))
     report = sweep_due(world.runtime, store)
     assert report["handled"] >= 1 and not report["errors"]
     assert world.receipt(1).state == "completed"

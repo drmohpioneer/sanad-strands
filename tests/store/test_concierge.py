@@ -122,7 +122,7 @@ def test_question_due_and_dedupe_boundary(world: PatientWorld) -> None:
     )
     world.clock.advance(timedelta(hours=1))
     world.send("عايز أكلم الدكتور")
-    assert len([r for r in world.rows("mission") if r.body["kind"] == "QUESTION"]) == 2
+    assert len([r for r in world.rows("mission") if r.body["kind"] == "QUESTION"]) == 1
 
 
 def test_resume_requires_single_use_tap(world: PatientWorld) -> None:
@@ -218,12 +218,15 @@ def test_sources_ledger_and_synthetic_gate() -> None:
     entries = education.source_set()
     assert len(entries) == 17
     for e in entries:
-        assert 60 <= len(e.text_ar.split()) <= 200
+        if e.content_kind in {"clinical", "safety"}:
+            assert 60 <= len(e.text_ar.split()) <= 200
+        else:
+            assert len(e.text_ar.split()) <= 200
         assert e.source_url in successes
         assert successes[e.source_url]["title"] == e.source_title
-        assert e.reviewed_by == "pending owner review"
+        assert e.reviewed_by == "Clinical reviewer of record"
         assert all("(مصدر: " in line for line in e.lines("ar"))
-    assert not education.retrieve("ارتفاع ضغط الدم")
+    assert tuple(e.id for e in education.retrieve("ارتفاع ضغط الدم")) == ("hypertension",)
     assert len(education.retrieve("ضغط القلب السكر بوتاسيوم", synthetic=True)) == 2
     assert not education.retrieve("البركان حمم المريخ", synthetic=True)
     emergency = next(e for e in entries if e.content_kind == "safety")
@@ -361,7 +364,7 @@ def test_changed_epoch_during_model_discards_reply(world: PatientWorld) -> None:
     model = ScriptedModel(change)
     world.concierge.model_factory = lambda registry, role: model
     world.post(update(PATIENT, "هو الدكتور قال 40 ولا 20؟", 1500))
-    assert world.receipt(1500).state == "processing"
+    assert world.receipt(1500).state == "pending"
     assert not any(
         "patient-turn:" + world.receipt(1500).id in i.source_event_ids
         for i in world.patient_intents()

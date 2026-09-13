@@ -1,0 +1,44 @@
+[
+  {
+    "id": "demo-application-1",
+    "name": "Dr. Nadia Test",
+    "specialty": "Family medicine",
+    "city": "Cairo",
+    "applied_at": "2026-09-12",
+    "status": "pending",
+    "version": 1,
+    "doctor_id": null
+  },
+  {
+    "id": "demo-application-2",
+    "name": "Dr. Samir Test",
+    "specialty": "Internal medicine",
+    "city": "Cairo",
+    "applied_at": "2026-09-10",
+    "status": "approved",
+    "version": 1,
+    "doctor_id": "demo-doctor-2",
+    "doctor_version": 1
+  },
+  {
+    "id": "demo-application-3",
+    "name": "Dr. Leila Test",
+    "specialty": "General practice",
+    "city": "Alexandria",
+    "applied_at": "2026-09-09",
+    "status": "suspended",
+    "version": 1,
+    "doctor_id": "demo-doctor-3",
+    "doctor_version": 2
+  },
+  {
+    "id": "demo-application-4",
+    "name": "Dr. Rami Test",
+    "specialty": "General practice",
+    "city": "Cairo",
+    "applied_at": "2026-09-08",
+    "status": "rejected",
+    "version": 2,
+    "doctor_id": null
+  }
+]

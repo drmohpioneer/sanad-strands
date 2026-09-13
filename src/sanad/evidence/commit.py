@@ -314,11 +314,13 @@ def prepare(builder: CommitBuilder) -> None:
         raise EffectsRejected("evidence_stale")
     if action == "confirm_identity" and (
         command.principal.actor_kind != "doctor"
-        or previous.association_state != "accepted_pending_identity"
-        or not previous.identity_pending
+        or previous.association_state not in {"candidate", "unmatched", "accepted_pending_identity"}
+        or not associate.identity_required(previous)
         or command.payload.get("mission_id") not in {None, previous.mission_id}
     ):
         raise EffectsRejected("identity_confirmation_not_pending")
+    if action in {"associate", "accept"} and associate.identity_required(previous):
+        raise EffectsRejected("identity_not_confirmed")
     if action == "doctor_card":
         doctor_card(builder, head, previous)
         return
@@ -347,7 +349,9 @@ def prepare(builder: CommitBuilder) -> None:
     chosen, provenance, plausible = associate.choose(
         missions, previous, str((receipt.payload or {}).get("text", ""))
     )
-    if action in {"associate", "accept", "patient_choose", "confirm_identity"}:
+    if action in {"associate", "accept", "patient_choose"} or (
+        action == "confirm_identity" and previous.mission_id
+    ):
         mission_id = command.payload.get("mission_id") or previous.mission_id
         chosen = next((m for m in associate.open_missions(missions) if m.id == mission_id), None)
         if not chosen:
@@ -366,6 +370,7 @@ def prepare(builder: CommitBuilder) -> None:
     }
     evidence = Evidence.model_validate(previous.model_dump() | changes)
     if action == "confirm_identity":
+        evidence = evidence.model_copy(update={"mission_id": previous.mission_id})
         evidence = evidence.model_copy(update={"flags": (*evidence.flags, "identity_confirmed")})
     keyboard: list[JsonValue] = []
     key, fields = "patient_evidence_kept", {}
@@ -396,6 +401,8 @@ def prepare(builder: CommitBuilder) -> None:
             }
         )
         review(builder, evidence)
+    elif action == "confirm_identity" and previous.association_state != "accepted_pending_identity":
+        review(builder, evidence)
     elif "one_document_per_photo" in evidence.flags:
         key = "patient_evidence_one_per_photo"
         evidence = evidence.model_copy(
@@ -411,7 +418,11 @@ def prepare(builder: CommitBuilder) -> None:
             }
         )
         review(builder, evidence)
-    elif "identity_mismatch" in evidence.flags and provenance != "doctor_choice":
+    elif (
+        "identity_mismatch" in evidence.flags
+        and associate.identity_required(evidence)
+        and provenance != "doctor_choice"
+    ):
         key = "patient_evidence_name_check"
         keyboard = patient_buttons(builder, evidence, plausible, identity=True)
         review(builder, evidence)
@@ -659,9 +670,6 @@ def consume(builder: CommitBuilder, evidence: Evidence, token_hash: str) -> None
 def doctor_card(builder: CommitBuilder, head: EvidenceHead, evidence: Evidence) -> None:
     from sanad.store.records import Doctor, DoctorAuthority
 
-    missions = tuple(
-        from_record(row, Mission) for row in records(builder.store, builder.scope, "mission")
-    )
     keyboard: list[JsonValue] = []
     authority_row = builder.store.get(builder.scope, "doctor_authority", builder.scope.doctor_id)
     doctor_row = builder.store.get(builder.scope, "doctor", builder.scope.doctor_id)
@@ -670,27 +678,9 @@ def doctor_card(builder: CommitBuilder, head: EvidenceHead, evidence: Evidence) 
     authority = from_record(authority_row, DoctorAuthority)
     language = from_record(doctor_row, Doctor).language
     patient = from_record(patient_row, Patient)
-    choices: list[tuple[str, str | None, str]] = [
-        ("associate", m.id, templates.button("associate", language) + ": " + m.title)
-        for m in associate.open_missions(missions)
-    ]
-    if any(
-        m.id == evidence.mission_id
-        and m.objective_predicate.kind == "evidence"
-        and m.objective_predicate.evaluator == "task_evidence"
-        for m in missions
-    ):
-        choices.append(("accept", evidence.mission_id, templates.button("accept", language)))
-    choices.append(("reject", None, templates.button("reject", language)))
-    if evidence.association_state == "accepted_pending_identity":
-        choices = [
-            (
-                "confirm_identity",
-                evidence.mission_id,
-                templates.button("confirm_identity", language),
-            ),
-            ("reject", None, templates.button("reject_identity", language)),
-        ]
+    from sanad.evidence.doctor import action_choices
+
+    choices = action_choices(builder.store, evidence, language)
     for action, mission_id, label in choices:
         raw = token_urlsafe(32)
         token = EvidenceAction.model_validate(

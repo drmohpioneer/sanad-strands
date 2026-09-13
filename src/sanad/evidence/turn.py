@@ -25,6 +25,7 @@ from sanad.store.records import (
     EvidenceHash,
     EvidenceHead,
     InboundReceipt,
+    Lease,
     MediaWork,
     Patient,
     from_record,
@@ -297,6 +298,25 @@ class EvidenceTurn:
     ) -> "RouteResult":
         from sanad.channels.telegram.router import RouteResult
 
+        assert isinstance(receipt.scope, PatientScope)
+        lease = self.store.acquire_patient(
+            receipt.scope,
+            "evidence-choice:" + receipt.id,
+            self.runtime.clock(),
+            self.runtime.steward.policy_provider(receipt.scope).operations.lease_ttl,
+        )
+        if lease is None:
+            return RouteResult(route="busy", status="patient_busy")
+        try:
+            return self._patient_action(receipt, actor, token, lease)
+        finally:
+            self.store.release_patient(lease)
+
+    def _patient_action(
+        self, receipt: InboundReceipt, actor: Principal, token: PatientAction, lease: Lease
+    ) -> "RouteResult":
+        from sanad.channels.telegram.router import RouteResult
+
         claimed = self.concierge._claim(receipt)
         if not claimed:
             return RouteResult(route="busy", status="processing")
@@ -310,6 +330,7 @@ class EvidenceTurn:
         command = CommandEnvelope.model_validate(
             {
                 "command_id": "evidence-choice:" + receipt.id,
+                "fence": lease,
                 "scope": receipt.scope,
                 "principal": actor,
                 "requested_at": self.runtime.clock(),
@@ -326,11 +347,15 @@ class EvidenceTurn:
             }
         )
         outcome = self.runtime.steward.handle(command)
-        if outcome.status not in {"accepted", "stale_version"}:
+        if outcome.status == "stale_version":
+            self.store.defer_inbound(claim, self.runtime.clock())
+        elif outcome.status != "accepted":
             stale = CommandEnvelope.model_validate(
                 command.model_dump()
                 | {
                     "command_id": "evidence-stale:" + receipt.id,
+                    # Steward released the first command's lease; acquire a fresh fence.
+                    "fence": None,
                     "payload": {
                         "type": "_EvidenceTurn",
                         "executor": "evidence-v1",

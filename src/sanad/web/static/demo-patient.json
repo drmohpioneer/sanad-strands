@@ -1,0 +1,127 @@
+{
+  "display_name": "Mona Test",
+  "language": "en",
+  "plan": {
+    "doctor_name": "Dr. Samir Test",
+    "orders": [
+      {
+        "drug": "Amlodipine",
+        "dose": "5 mg",
+        "frequency": "Once daily",
+        "timing": "In the morning",
+        "route": "By mouth"
+      },
+      {
+        "drug": "Atorvastatin",
+        "dose": "20 mg",
+        "frequency": "Once daily",
+        "timing": "In the evening",
+        "route": "By mouth"
+      }
+    ],
+    "next_missions": [
+      {
+        "title": "Report your blood pressure each morning for seven days",
+        "due_at": "2026-09-19T06:00:00Z"
+      }
+    ],
+    "medication_reports": [
+      {
+        "text": "I started my medication on September 10."
+      }
+    ],
+    "last_reading": {
+      "text": "Blood pressure 124/78 mmHg, reported September 12."
+    },
+    "preferences": {
+      "routine_contact_enabled": true,
+      "contact_status": "active",
+      "timezone": "Africa/Cairo",
+      "quiet_hours": [
+        "22:00",
+        "07:00"
+      ]
+    },
+    "open_questions": []
+  },
+  "preferences": {
+    "reminders": "enabled",
+    "timezone": "Africa/Cairo",
+    "language": "en",
+    "quiet_hours": [
+      "22:00",
+      "07:00"
+    ]
+  },
+  "conversation": [
+    {
+      "id": "demo-message-1",
+      "at": "2026-09-10T06:00:00Z",
+      "direction": "outbound",
+      "credential": true
+    },
+    {
+      "id": "demo-message-2",
+      "at": "2026-09-10T06:05:00Z",
+      "direction": "inbound",
+      "text": "I started my medication today."
+    },
+    {
+      "id": "demo-message-3",
+      "at": "2026-09-10T06:05:02Z",
+      "direction": "outbound",
+      "text": "Your report has been recorded."
+    },
+    {
+      "id": "demo-message-4",
+      "at": "2026-09-11T07:00:00Z",
+      "direction": "inbound",
+      "text": "Where can I send my blood pressure photo?"
+    },
+    {
+      "id": "demo-message-5",
+      "at": "2026-09-11T08:00:00Z",
+      "direction": "outbound",
+      "text": "Your doctor's answer to your question: You can send the photo here."
+    },
+    {
+      "id": "demo-message-6",
+      "at": "2026-09-12T06:00:00Z",
+      "direction": "inbound",
+      "text": "My blood pressure this morning.",
+      "upload": {
+        "state": "read"
+      }
+    },
+    {
+      "id": "demo-message-7",
+      "at": "2026-09-12T06:00:02Z",
+      "direction": "outbound",
+      "text": "Your photo has been read."
+    },
+    {
+      "id": "demo-message-8",
+      "at": "2026-09-12T06:01:00Z",
+      "direction": "inbound",
+      "text": "Thank you. I will send tomorrow's reading here."
+    }
+  ],
+  "uploads": [
+    {
+      "id": "demo-upload-1",
+      "received_at": "2026-09-11T06:00:00Z",
+      "state": "read"
+    },
+    {
+      "id": "demo-upload-2",
+      "received_at": "2026-09-12T06:00:00Z",
+      "state": "read"
+    },
+    {
+      "id": "demo-upload-3",
+      "received_at": "2026-09-12T07:00:00Z",
+      "state": "processing"
+    }
+  ],
+  "reply": "This is a demonstration reply. Your message stays in this browser; no doctor has been contacted."
+}

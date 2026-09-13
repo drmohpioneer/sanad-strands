@@ -19,7 +19,8 @@ FIRST = (
 SECOND = "Ahmed Test, change Exforge to 10/160 once daily, and add Forxiga 10 in the morning"
 
 
-def test_f01_f02_card_and_confirmation() -> None:
+@pytest.mark.parametrize("expression", ["for 3 days", "twice a day for three days"])
+def test_f01_f02_card_and_confirmation(expression: str) -> None:
     world = world_for("en")
     patient = world.named_stub("Ahmed Test")
     value: dict[str, Any] = {
@@ -39,7 +40,7 @@ def test_f01_f02_card_and_confirmation() -> None:
             {
                 "kind": "MONITOR",
                 "text": "check his pressure twice a day for three days",
-                "timing_expression": "for 3 days",
+                "timing_expression": expression,
             },
         ],
     }
@@ -62,7 +63,8 @@ def test_f01_f02_card_and_confirmation() -> None:
         "TEST",
     ]
     test = next(r for r in rows if r.body["kind"] == "TEST")
-    assert "CBC" in str(test.body) and "K" in str(test.body)
+    assert isinstance(test.body["details"], dict)
+    assert test.body["details"]["analytes"] == ["CBC", "K"]
     monitor = next(r for r in rows if r.body["kind"] == "MONITOR")
     assert isinstance(monitor.body["details"], dict)
     slots = monitor.body["details"]["slots"]

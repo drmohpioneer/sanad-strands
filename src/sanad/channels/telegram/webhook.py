@@ -8,13 +8,20 @@ from fastapi import APIRouter, Request, Response
 from pydantic import JsonValue, ValidationError
 from starlette.concurrency import run_in_threadpool
 
+from sanad.api.failures import RequestFailure, store_busy
 from sanad.channels.telegram.router import TelegramRuntime
 from sanad.channels.telegram.update import TelegramUpdate
 from sanad.domain import PatientScope, TenantScope
 from sanad.safety import screen_text
 from sanad.store import keys
 from sanad.store.keys import AccountScope, Scope, ScopedKey
-from sanad.store.records import InboundReceipt, OperationalClock, to_record
+from sanad.store.records import (
+    AuthorizationUnavailable,
+    InboundReceipt,
+    OperationalClock,
+    from_record,
+    to_record,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +37,7 @@ def telegram_router(
     @router.post("/tg")
     async def telegram(request: Request) -> Response:
         if runtime is None:
-            return Response(status_code=503)
+            raise RequestFailure("ingress_exception")
         supplied = request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
         if not hmac.compare_digest(
             supplied.encode(), runtime.settings.webhook_secret.get_secret_value().encode()
@@ -72,7 +79,7 @@ def telegram_router(
         if reason:
             runtime.count("dropped_" + reason)
             logger.info("telegram update dropped: %s", reason)
-            return Response(status_code=200)
+            raise RequestFailure("ingress_exception")
         assert sender and sender.id and chat
         text = message.readable_text if message else ""
         try:
@@ -136,13 +143,26 @@ def telegram_router(
                 safety_result=verdict.model_dump(mode="json"),
             )
             accepted = runtime.store.accept_inbound(transport_key, to_record(receipt, scope))
-        except Exception:
+        except AuthorizationUnavailable:
+            raise RequestFailure("authorization_unavailable") from None
+        except Exception as error:
+            if store_busy(error):
+                raise RequestFailure("store_busy") from None
             runtime.count("store_unavailable")
             logger.warning("telegram receipt unavailable")
-            return Response(status_code=503)
+            raise RequestFailure("ingress_exception") from None
         if accepted.status not in {"created", "existing"} or accepted.record is None:
             runtime.count("receipt_conflict")
-            return Response(status_code=503)
+            raise RequestFailure("ingress_conflict")
+        saved = from_record(accepted.record, InboundReceipt)
+        try:
+            durable = runtime.store.get(saved.scope, "inbound_receipt", saved.id)
+        except Exception as error:
+            raise RequestFailure(
+                "store_busy" if store_busy(error) else "ingress_exception"
+            ) from None
+        if durable is None or durable.body.get("transport_key") != transport_key:
+            raise RequestFailure("ingress_conflict")
         if process_receipts and receipt_submit is not None and accepted.state != "completed":
             saved = InboundReceipt.model_validate(accepted.record.body)
             try:

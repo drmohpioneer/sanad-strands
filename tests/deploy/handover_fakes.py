@@ -248,6 +248,15 @@ class FakeAWS:
         return Paginator(self, name)
 
     def get_metric_statistics(self, **kwargs: Any) -> dict[str, Any]:
+        if kwargs["Namespace"] == "AWS/DynamoDB":
+            assert kwargs["MetricName"] in {
+                "ConsumedReadCapacityUnits",
+                "ConsumedWriteCapacityUnits",
+                "SuccessfulRequestLatency",
+            }
+            assert (kwargs["EndTime"] - kwargs["StartTime"]).total_seconds() == 3600
+            self.calls.append(("metrics", kwargs))
+            return {"Datapoints": [{kwargs["Statistics"][0]: 0}]}
         assert kwargs["Namespace"] == "AWS/Lambda" and kwargs["MetricName"] in {
             "Errors",
             "Invocations",

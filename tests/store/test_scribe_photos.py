@@ -236,7 +236,7 @@ def test_photo_crash_resumes_durable_work_without_refetch(world: ScribeWorld, st
         world.scribe.checkpoint = crash
     with pytest.raises(SimulatedCrash):
         world.post(photo())
-    assert world.receipt(10).state == "processing"
+    assert world.receipt(10).state == "pending"
     world.scribe.media_factory, world.scribe.checkpoint = factory, lambda _: None
     world.clock.advance(timedelta(minutes=11))
     report = sweep_due(world.runtime, world.store)

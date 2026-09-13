@@ -3,6 +3,18 @@
 from sanad.presentation.catalog import Catalog, validate_catalog
 
 CATALOG: Catalog = {
+    "evidence.doctor_evidence_refused": {
+        "ar": "مقدرتش أسجل القرار. افتح /evidence وحاول تاني.",
+        "en": "This evidence decision could not be recorded. Open /evidence and try again.",
+    },
+    "evidence.doctor_evidence_mission_closed": {
+        "ar": "الطلب ده مقفول. افتح /evidence تاني.",
+        "en": "This request is closed. Open /evidence again.",
+    },
+    "evidence.doctor_evidence_identity_required": {
+        "ar": "تأكد الأول إن الورقة للمريض ده.",
+        "en": "Identity is not confirmed. Confirm it is this patient first.",
+    },
     "evidence.patient_evidence_received_pending": {
         "ar": "وصلت الصورة، بقراها وهرد عليك",
         "en": "I received the photo. I will read it and reply.",
@@ -62,7 +74,7 @@ CATALOG: Catalog = {
     },
     "evidence.doctor_evidence_stale": {
         "ar": "الاختيار ده انتهى أو اتغير، افتح /evidence تاني",
-        "en": "This choice expired or changed. Open /evidence again.",
+        "en": "This evidence changed since listing or the choice expired. Open /evidence again.",
     },
     "evidence.doctor_evidence_empty": {
         "ar": "مفيش مستندات مستنية ربط",

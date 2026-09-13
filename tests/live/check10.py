@@ -75,7 +75,7 @@ def run_check(
         "checks": [],
         "calls": [],
         "estimated_usd": 0,
-        "source_review": "pending owner review; synthetic mode only",
+        "source_review": "owner approved; check runs in synthetic mode",
         "fixtures": "tests/live/check10.py: MESSAGES, bound synthetic PatientWorld",
         "price_source": "https://aws.amazon.com/bedrock/pricing/",
         "rates_per_million_usd": {

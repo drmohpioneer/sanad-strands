@@ -75,7 +75,7 @@ def test_health_and_unconfigured_webhook_read_no_secrets(monkeypatch: pytest.Mon
         ) as client:
             assert (await client.get("/health")).status_code == 200
             response = await client.post("/tg", json={"update_id": 1})
-            assert response.status_code == 503 and response.content == b""
+            assert response.status_code == 409 and response.json()["reason"] == "ingress_exception"
 
     asyncio.run(run())
     assert app.state.telegram is None

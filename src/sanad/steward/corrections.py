@@ -81,13 +81,25 @@ class ValidateBody(BaseModel):
 
 
 def current_facts(
-    store: Store, scope: PatientScope, *, include_detached: bool = False
+    store: Store, scope: PatientScope, *, include_detached: bool = False, bounded: bool = False
 ) -> tuple[StoredRecord, ...]:
-    heads = {r.id: from_record(r, FactHead) for r in records(store, scope, "fact_head")}
+    from sanad.steward.types import bounded_records
+
+    reader = bounded_records if bounded else records
+    heads = (
+        {}
+        if bounded
+        else {r.id: from_record(r, FactHead) for r in reader(store, scope, "fact_head")}
+    )
     result = []
-    for row in records(store, scope, "clinical_fact"):
+    for row in reader(store, scope, "clinical_fact"):
         fact = from_record(row, ClinicalFact)
-        head = heads.get(fact.root_fact_id or fact.id)
+        root = fact.root_fact_id or fact.id
+        if bounded and root not in heads:
+            current = store.get(scope, "fact_head", root)
+            if current:
+                heads[root] = from_record(current, FactHead)
+        head = heads.get(root)
         if (
             head is None
             or (include_detached or head.status == "accepted")

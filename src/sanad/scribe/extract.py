@@ -618,5 +618,14 @@ def candidate_issues(
     if derive_intent(candidate, has_match=False) == "unclear":
         issues.append(ProposalIssue(item="all", code="clarification"))
     elif candidate.ambiguities:
-        issues.append(ProposalIssue(item="all", code="multiple_patients"))
+        name = set((candidate.patient.name_as_spoken or "").casefold().split())
+        for ambiguity in candidate.ambiguities:
+            words = set(ambiguity.casefold().split())
+            if words and words <= name:
+                continue
+            # An extractor's drug/test uncertainty is not evidence of another person.
+            identity = "not found as drugs" not in ambiguity.casefold()
+            issues.append(
+                ProposalIssue(item="all", code="multiple_patients" if identity else "clarification")
+            )
     return tuple(dict.fromkeys(issues))

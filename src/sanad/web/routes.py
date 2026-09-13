@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from pydantic import Field, ValidationError
 
+from sanad.api.failures import RequestFailure, store_busy
 from sanad.auth.claim import ClaimService
 from sanad.auth.commands import ConfirmPatientClaim, ExchangeRefused
 from sanad.auth.login import LoginService as LoginService
@@ -21,6 +22,7 @@ from sanad.store import keys
 from sanad.store.records import AnyWebSession as AnyWebSession
 from sanad.store.records import InboundReceipt, Patient, WebSession
 from sanad.web import pages
+from sanad.web.security import SessionRefused
 from sanad.web.settings import WebSettings
 
 if TYPE_CHECKING:
@@ -80,11 +82,30 @@ def require_session(
     async def guard(request: Request) -> AnyWebSession:
         login: LoginService = request.app.state.login
         settings: WebSettings = request.app.state.web_settings
-        session = login.require(
-            request.cookies.get(SESSION_COOKIE, ""), role, path=request.url.path
-        )
+        from sanad.store.records import AuthorizationUnavailable
+
+        try:
+            session = login.require(
+                request.cookies.get(SESSION_COOKIE, ""), role, path=request.url.path
+            )
+        except AuthorizationUnavailable:
+            raise RequestFailure("authorization_unavailable") from None
         if session is None:
-            raise HTTPException(401)
+            if role == "admin":
+                raise HTTPException(401)
+            previous = login.session(request.cookies.get(SESSION_COOKIE, ""))
+            changed_elsewhere = (
+                previous is not None
+                and previous.revocation_reason == "binding_consent_or_authority"
+            )
+            reason = (
+                "patient_access_changed"
+                if role == "patient" and changed_elsewhere
+                else "patient_sign_in"
+                if role == "patient"
+                else "signed_out"
+            )
+            raise SessionRefused(reason)
         if request.method != "GET":
             fields = await form_fields(request)
             supplied = request.headers.get("x-csrf-token") or fields.get("csrf", "")
@@ -114,7 +135,7 @@ def web_router(login: LoginService, claims: ClaimService, settings: WebSettings)
     async def show_continue(request: Request, token: str) -> Response:
         pre = login.pre_session()
         if pre is None:
-            return HTMLResponse(pages.refused_page("unavailable"), status_code=503)
+            raise RequestFailure("authorization_unavailable")
         response = HTMLResponse(pages.continue_page(request.url.path, pre.csrf.get_secret_value()))
         set_cookie(
             response,
@@ -327,9 +348,21 @@ def upload_router(ingress: "UploadIngress", settings: WebSettings) -> APIRouter:
     @router.post("/api/patient/uploads")
     async def upload(request: Request) -> Response:
         cookie = request.cookies.get(SESSION_COOKIE, "")
-        session = await run_in_threadpool(ingress.login.require, cookie, "patient")
+        from sanad.store.records import AuthorizationUnavailable
+
+        try:
+            session = await run_in_threadpool(
+                ingress.login.require, cookie, "patient", path=request.url.path
+            )
+        except AuthorizationUnavailable:
+            raise RequestFailure("authorization_unavailable") from None
         if session is None:
-            raise HTTPException(401)
+            previous = ingress.login.session(cookie)
+            raise SessionRefused(
+                "patient_access_changed"
+                if previous and previous.revocation_reason == "binding_consent_or_authority"
+                else "patient_sign_in"
+            )
         csrf, csrf_cookie = (
             request.headers.get("x-csrf-token", ""),
             request.cookies.get(CSRF_COOKIE, ""),
@@ -403,9 +436,13 @@ def upload_router(ingress: "UploadIngress", settings: WebSettings) -> APIRouter:
                 {"status": "not_received", "category": rejection_category(str(error))},
                 status_code=status,
             )
-        except Exception:
+        except AuthorizationUnavailable:
+            raise RequestFailure("authorization_unavailable") from None
+        except Exception as error:
+            if store_busy(error):
+                raise RequestFailure("store_busy") from None
             # Reserved stages retain their clock; outages never receive a saved ACK.
-            return JSONResponse({"status": "unavailable"}, status_code=503)
+            raise RequestFailure("media_storage_unavailable") from None
         await run_in_threadpool(ingress.danger, receipt, verdict)
         await run_in_threadpool(ingress.handoff, saved)
         return JSONResponse(

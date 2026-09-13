@@ -81,6 +81,8 @@ PUBLIC = {
     ("GET", "/p/{token}"),
     ("GET", "/assets/{name}"),
     ("GET", "/demo"),
+    ("GET", "/demo/patient"),
+    ("GET", "/demo/admin"),
 }
 ADMIN_ROUTES = {
     ("GET", "/admin"),

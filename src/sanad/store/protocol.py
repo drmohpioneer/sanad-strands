@@ -20,6 +20,7 @@ from sanad.domain import (
 )
 from sanad.store.keys import AccountScope, Scope, ScopedKey
 from sanad.store.records import (
+    AnyWebSession,
     Authorization,
     Claim,
     CommandEnvelope,
@@ -48,7 +49,26 @@ from sanad.store.records import (
 
 
 class Store(Protocol):
-    def patient_receipts(self, scope: PatientScope) -> tuple[StoredRecord, ...]: ...
+    def web_session_snapshot(self, session: AnyWebSession) -> AnyWebSession | None: ...
+
+    def patient_receipts(
+        self,
+        scope: PatientScope,
+        cursor: Cursor | None = None,
+        limit: int = 50,
+        *,
+        kinds: tuple[str, ...] = (),
+    ) -> RecordPage: ...
+
+    def patient_timeline(
+        self,
+        scope: PatientScope,
+        prefix: str,
+        cursor: Cursor | None = None,
+        limit: int = 50,
+        *,
+        kinds: tuple[str, ...] = (),
+    ) -> RecordPage: ...
 
     def reserve_browser_command(self, session: WebSession, command_id: str, digest: str) -> str: ...
 
@@ -106,6 +126,10 @@ class Store(Protocol):
         self, scope: PatientScope, owner: str, now: datetime, ttl: timedelta
     ) -> Lease | None: ...
     def release_patient(self, lease: Lease) -> None: ...
+
+    def defer_media(self, claim: Claim, now: datetime, error: str) -> bool: ...
+
+    def defer_inbound(self, claim: Claim, now: datetime) -> bool: ...
     def query_due(
         self,
         lane: str,

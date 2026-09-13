@@ -8,7 +8,6 @@ import pytest
 from harness import FakeClock
 
 from sanad.auth.service import revise
-from sanad.domain.language import effective
 from sanad.store._base import StoreBase
 from sanad.store.records import AuditEvent, from_record
 from sanad.web.security import HEADERS
@@ -71,8 +70,7 @@ def test_locale_uses_resolver_and_real_patient_scope(dashboard: LoginWorld, loca
         for path in ("/a", "/a/inbox", "/a/history", "/a/preferences", "/a/patients/" + patient.id):
             result = client.get(path)
             assert result.status_code == 200
-            lang = effective(locale)
-            assert f'lang="{lang}" dir="{"rtl" if lang == "ar" else "ltr"}"' in result.text
+            assert 'lang="en" dir="ltr"' in result.text
         foreign = client.get("/a/patients/not-owned")
         assert foreign.status_code == 404 and patient.display_name not in foreign.text
         record = client.get("/api/patients/" + patient.id).json()

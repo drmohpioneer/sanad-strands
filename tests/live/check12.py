@@ -188,7 +188,7 @@ def run_check(destination: Path = EVIDENCE, *, caller: ModelCaller | None = None
                         for payload in [json.loads(json.dumps(c.payload))]
                     ]
                     check["identity_review_has_two_choices"] = any(
-                        c["buttons"] == ["This patient's paper ✅", "Not this patient ❌"]
+                        c["buttons"] == ["Confirm it is this patient", "Not this patient ❌"]
                         and "The name on this paper could not be read. Is this Ahmed S.'s paper?"
                         in c["text"]
                         for c in check["identity_review_cards"]

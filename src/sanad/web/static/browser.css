@@ -591,6 +591,7 @@ dialog,.drawer,.lightbox,#action-toast{background:var(--s3);border:0;border-radi
 
 .status svg{display:none}
 .status{margin-inline-end:var(--sp-2)}
+[hidden]{display:none!important}
 button,.button{
   min-block-size:var(--control-h); padding-block:var(--sp-2); padding-inline:var(--sp-4);
   border-radius:var(--r-sm); font:600 .875rem/1.2 var(--font-ui);
@@ -691,10 +692,8 @@ button.summary-tile:active{transform:scale(.98)}
 main{max-inline-size:1280px}
 .clinical col:nth-child(1){inline-size:24%}
 .clinical col:nth-child(2){inline-size:8%}
-.clinical col:nth-child(3){inline-size:24%}
+.clinical col:nth-child(3){inline-size:52%}
 .clinical col:nth-child(4){inline-size:16%}
-.clinical col:nth-child(5){inline-size:14%}
-.clinical col:nth-child(6){inline-size:14%}
 .clinical td{padding-block:var(--sp-3);padding-inline:var(--sp-3);font:var(--t-row)}
 .clinical td:first-child a{font:var(--t-row-em);min-block-size:0}
 .clinical td small,.clinical td.muted,.age-value.muted{font:var(--t-meta);color:var(--text-muted)}

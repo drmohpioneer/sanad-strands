@@ -1,6 +1,5 @@
 """Patient-created QUESTION with a durable observation and default policy clock."""
 
-from sanad.concierge.policy import DRAFT_CONCIERGE_POLICY as POLICY
 from sanad.concierge.records import ReportFactPayload
 from sanad.concierge.templates import render
 from sanad.concierge.text import normalized
@@ -24,7 +23,7 @@ def open_ticket(tx: PatientTurnCommit, text: str) -> Mission:
     for mission in tx.snapshot.missions:
         if (
             isinstance(mission.details, QuestionDetails)
-            and tx.now - mission.created_at < POLICY.question_dedupe
+            and mission.state not in {"fulfilled", "cancelled", "closed_unfulfilled", "superseded"}
             and normalized(mission.details.question_text) == normalized(text)
         ):
             tx.put(

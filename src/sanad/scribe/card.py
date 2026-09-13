@@ -758,6 +758,29 @@ def dictation_questions(proposal: Proposal) -> tuple[str, ...]:
     return unique_questions(questions, proposal)
 
 
+def test_items(proposal: Proposal, item: str) -> tuple[str, ...]:
+    """One grounded analyte per displayed TEST item, also used at confirmation."""
+    from sanad.scribe.grounding import permits
+
+    names = tuple(
+        dict.fromkeys(
+            supported_text(n.latin, proposal)
+            for index, n in enumerate(proposal.names)
+            if n.item == item
+            and n.kind == "test"
+            and (not proposal.evidence_fingerprint or permits(proposal, item, f"name:{index}"))
+        )
+    )
+    if names or not proposal.photo:
+        return names
+    # Each photo TEST is already one checked row; it has no text NameReadings.
+    mission = proposal.candidate.missions[int(item.split(":")[1])]
+    if proposal.evidence_fingerprint and not permits(proposal, item, "text"):
+        return ()
+    value = supported_text(mission.text, proposal)
+    return (value,) if value else ()
+
+
 def clinical_line(proposal: Proposal, item: str, spoken: str) -> str:
     from sanad.scribe.grounding import permits
 
@@ -786,7 +809,7 @@ def clinical_line(proposal: Proposal, item: str, spoken: str) -> str:
         ]
     if fragments:
         values = [supported_text(n.latin, proposal) for n in fragments]
-        value = ", ".join(dict.fromkeys(values) if kind == "test" else values)
+        value = ", ".join(test_items(proposal, item) if kind == "test" else values)
     elif item.startswith("mission:") and mission.kind == "TEST" and not proposal.photo:
         # An unanchored analyte is only a question, never an instruction.
         value = ""

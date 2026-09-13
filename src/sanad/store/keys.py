@@ -58,6 +58,12 @@ def instant(value: datetime) -> str:
     return utc_instant(value).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
 
+def timeline(scope: PatientScope, prefix: str, at: datetime, id: str) -> Key:
+    if prefix not in {"RECEIPT#", "CONVERSATION#"}:
+        raise ValueError("unknown patient timeline")
+    return Key(partition(scope), prefix + instant(at) + "#" + id)
+
+
 def tenant_pk(scope: TenantScope) -> str:
     return f"D#{component(scope.doctor_id)}"
 

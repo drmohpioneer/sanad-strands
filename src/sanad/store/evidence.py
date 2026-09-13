@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 from sanad.concierge.records import PatientAction
 from sanad.domain import PatientScope
+from sanad.evidence.associate import identity_required
 from sanad.store.records import (
     CommitRequest,
     Evidence,
@@ -142,6 +143,8 @@ def guards(store: "StoreBase", request: CommitRequest, now: datetime) -> list["C
             # detached accepted source. Ordinary association cannot bypass it.
             if old.association_state == "detached" or evidence.association_state == "detached":
                 return None
+            if action in {"associate", "accept"} and identity_required(old):
+                return None
             new_flags = (
                 (*old.flags, "doctor_accepted")
                 if actor.actor_kind == "doctor" and action == "accept"
@@ -152,8 +155,8 @@ def guards(store: "StoreBase", request: CommitRequest, now: datetime) -> list["C
             if evidence.flags != new_flags:
                 return None
             if action == "confirm_identity" and (
-                old.association_state != "accepted_pending_identity"
-                or not old.identity_pending
+                old.association_state not in {"candidate", "unmatched", "accepted_pending_identity"}
+                or not identity_required(old)
                 or evidence.mission_id != old.mission_id
             ):
                 return None

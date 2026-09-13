@@ -98,7 +98,7 @@ def test_every_measure_with_seeded_rows_and_paginated_logs() -> None:
     assert {
         name for name, data in m.items() if data["value"] == "not measurable in this build"
     } == UNMEASURABLE
-    assert len(m) == 23
+    assert len(m) == 27
     assert all(cost > 0 for cost in m["cost"]["lambda_gross_usd_last_24h"].values())
     for name in UNMEASURABLE:
         assert m[name]["reason"] and m[name]["source"]

@@ -44,14 +44,14 @@ def test_message_replay_conflict_and_web_delivery(browser: UploadWorld) -> None:
     history = browser.client.get("/api/patient/conversation").json()["items"]
     assert any(r.get("text") == data["text"] for r in history)
     assert any(r["direction"] == "outbound" and r.get("text") for r in history)
-    count = len(browser.world.store.patient_receipts(browser.world.patient_scope))
+    count = len(browser.world.store.patient_receipts(browser.world.patient_scope)[0])
     assert (
         browser.client.post(
             "/api/patient/messages", json=data, headers=headers(browser)
         ).status_code
         == 200
     )
-    assert len(browser.world.store.patient_receipts(browser.world.patient_scope)) == count
+    assert len(browser.world.store.patient_receipts(browser.world.patient_scope)[0]) == count
     assert (
         browser.client.post(
             "/api/patient/messages", json=data | {"text": "different"}, headers=headers(browser)
@@ -119,6 +119,8 @@ def test_mapped_telegram_business_equivalence(
     outcomes: list[dict[str, Any]] = []
     for channel, target in (("web", store), ("telegram", MemoryStore(clock=clock))):
         for item in baseline.values():
+            if item["SK"].startswith(("RECEIPT#", "CONVERSATION#")):
+                continue
             assert target._atomic([Write(deepcopy(item), None)], [])
         world = cast(PatientWorld, PatientWorld.create(target, clock))
         world.patient_scope = initial.patient_scope
@@ -243,10 +245,10 @@ def test_upload_evidence_state_projection(browser: UploadWorld, state: str, expe
     browser.world.seed(changed)
     response = browser.client.get("/api/patient/uploads")
     assert response.status_code == 200
-    assert response.json()[0]["state"] == expected
+    assert response.json()["items"][0]["state"] == expected
     assert "private provider" not in response.text
     if state == "rejected":
-        assert response.json()[0]["category"] == "unreadable"
+        assert response.json()["items"][0]["category"] == "unreadable"
 
 
 @pytest.mark.parametrize(
@@ -280,12 +282,12 @@ def test_upload_received_processing_and_media_failure(browser: UploadWorld) -> N
 
     response = browser.client.post("/api/patient/uploads", content=png(), headers=browser.headers())
     assert response.status_code == 202
-    assert browser.client.get("/api/patient/uploads").json()[0]["state"] == "received"
+    assert browser.client.get("/api/patient/uploads").json()["items"][0]["state"] == "received"
     stage = browser.stages()[0]
     route_receipt(
         browser.world.runtime, to_record(stage.receipt, stage.scope).scoped_key(stage.scope)
     )
-    assert browser.client.get("/api/patient/uploads").json()[0]["state"] == "processing"
+    assert browser.client.get("/api/patient/uploads").json()["items"][0]["state"] == "processing"
     work = from_record(browser.world.rows("media_work")[0], MediaWork)
     browser.world.seed(
         work.model_copy(
@@ -297,7 +299,7 @@ def test_upload_received_processing_and_media_failure(browser: UploadWorld) -> N
             }
         )
     )
-    item = browser.client.get("/api/patient/uploads").json()[0]
+    item = browser.client.get("/api/patient/uploads").json()["items"][0]
     assert item["state"] == "rejected" and item["category"] == "too_large"
 
 
@@ -307,7 +309,7 @@ def test_rejected_danger_caption_is_a_message_not_an_upload(browser: UploadWorld
         "/api/patient/uploads", content=b"invalid", headers=browser.headers(caption)
     )
     assert response.status_code == 400 and response.json()["category"] == "unsupported"
-    assert browser.client.get("/api/patient/uploads").json() == []
+    assert browser.client.get("/api/patient/uploads").json()["items"] == []
     items = browser.client.get("/api/patient/conversation").json()["items"]
     assert any(
         i["text"] == caption and i["upload"] is None for i in items if i["direction"] == "inbound"
@@ -421,7 +423,7 @@ def test_recovery_worker_selects_web_from_durable_receipt(browser: UploadWorld) 
     world.store.release_patient(lease)
     receipt = next(
         r
-        for r in world.store.patient_receipts(world.patient_scope)
+        for r in world.store.patient_receipts(world.patient_scope)[0]
         if r.body.get("transport") == "web-message"
     )
     result = route_receipt(world.runtime, receipt.scoped_key(world.patient_scope))
@@ -530,7 +532,7 @@ def test_duplicate_upload_follows_existing_evidence_decision(browser: UploadWorl
     evidence.providers(browser.world)
     assert evidence.upload(browser.world, id=6100) == "accepted"
     assert evidence.upload(browser.world, id=6101) == "accepted"
-    rows = browser.client.get("/api/patient/uploads").json()
+    rows = browser.client.get("/api/patient/uploads").json()["items"]
     assert len(rows) == 2 and {r["state"] for r in rows} == {"accepted"}
 
 
@@ -622,7 +624,7 @@ def test_nine_mib_upload_refused_with_category(browser: UploadWorld) -> None:
         "/api/patient/uploads", content=b"x" * (9 * 1024 * 1024), headers=browser.headers()
     )
     assert response.status_code == 413 and response.json()["category"] == "too_large"
-    assert browser.client.get("/api/patient/uploads").json() == []
+    assert browser.client.get("/api/patient/uploads").json()["items"] == []
 
 
 def test_legacy_outbox_shape_does_not_gain_a_null_field(browser: UploadWorld) -> None:
@@ -663,6 +665,7 @@ def test_web_danger_response_follows_incident_receipt(browser: UploadWorld) -> N
 
 
 def test_login_delivery_omits_text_and_projects_credential(browser: UploadWorld) -> None:
+    from sanad.store import keys
     from sanad.store.records import to_record
 
     world = browser.world
@@ -679,7 +682,7 @@ def test_login_delivery_omits_text_and_projects_credential(browser: UploadWorld)
     )
     assert item == {
         "id": intent.id,
-        "at": intent.accepted_at.isoformat(),
+        "at": keys.instant(intent.accepted_at),
         "direction": "outbound",
         "legacy": False,
         "credential": True,

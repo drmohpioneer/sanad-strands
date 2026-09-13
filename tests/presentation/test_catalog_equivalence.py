@@ -68,7 +68,11 @@ def test_no_keys_renamed_or_new_prose_created(surface: str) -> None:
         else set()
     )
     if surface == "concierge":
-        added |= {"concierge.doctor_question_deferred", "concierge.doctor_answer_reused"}
+        added |= {
+            "concierge.doctor_question_deferred",
+            "concierge.doctor_answer_reused",
+            "concierge.patient_education_unavailable",  # Contract 20 addendum 6f.
+        }
     assert set(catalog) == {surface + "." + key for key in legacy(surface)} | added
     assert all(set(locales) == {"ar", "en"} for locales in catalog.values())
 

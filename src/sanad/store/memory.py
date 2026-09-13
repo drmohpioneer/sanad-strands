@@ -5,7 +5,6 @@ from copy import deepcopy
 from datetime import datetime
 from threading import RLock
 
-from sanad.domain import PatientScope
 from sanad.store._base import (
     INDEX_FIELDS,
     Check,
@@ -17,7 +16,7 @@ from sanad.store._base import (
     utc_now,
 )
 from sanad.store.keys import Key
-from sanad.store.records import Cursor, StoredRecord
+from sanad.store.records import Cursor
 
 
 class MemoryStore(StoreBase):
@@ -25,25 +24,14 @@ class MemoryStore(StoreBase):
         super().__init__(clock=clock)
         self._items: dict[Key, Item] = {}
         self._lock = RLock()
-
-    def patient_receipts(self, scope: PatientScope) -> tuple[StoredRecord, ...]:
-        if not isinstance(scope, PatientScope):
-            return ()
-        with self._lock:
-            keys = [
-                key
-                for key, item in self._items.items()
-                if item.get("entity_type") == "inbound_receipt"
-                and item.get("doctor_id") == scope.doctor_id
-                and item.get("patient_id") == scope.patient_id
-            ]
-            return tuple(row for key in keys if (row := self._owned(scope, key)) is not None)
+        self._timeline: dict[str, dict[Key, Item]] = {}
 
     def _read(self, key: Key) -> Item | None:
         with self._lock:
             return deepcopy(self._items.get(key))
 
     def _atomic(self, writes: list[Write], checks: list[Check]) -> bool:
+        writes = self._project_writes(writes)
         if size_failure(writes, checks) is not None:
             return False
         with self._lock:
@@ -60,6 +48,8 @@ class MemoryStore(StoreBase):
                 return False
             for write in writes:
                 self._items[write.key] = deepcopy(write.item)
+                if write.key.sk.startswith(("RECEIPT#", "CONVERSATION#")):
+                    self._timeline.setdefault(write.key.pk, {})[write.key] = self._items[write.key]
             return True
 
     def _update(self, item: Item, before: int) -> bool:
@@ -83,23 +73,33 @@ class MemoryStore(StoreBase):
         through: str | None = None,
         cursor: Cursor | None = None,
         limit: int = 100,
+        descending: bool = False,
+        kinds: tuple[str, ...] = (),
     ) -> tuple[list[Item], Cursor | None]:
         if type(limit) is not int or not 1 <= limit <= 1000:
             raise ValueError("page limit must be an integer between 1 and 1000")
-        query = query_identity(pk, index, prefix, through)
+        query = (
+            query_identity(pk, index, prefix, through)
+            + (":desc" if descending else "")
+            + ":".join(kinds)
+        )
         if cursor is not None and cursor.query != query:
             return [], None
         pk_field, sk_field = INDEX_FIELDS[index] if index else ("PK", "SK")
         with self._lock:
             items = [
                 deepcopy(item)
-                for item in self._items.values()
+                for item in (
+                    self._timeline.get(pk, {}).values()
+                    if prefix in {"RECEIPT#", "CONVERSATION#"} and index is None
+                    else self._items.values()
+                )
                 if item.get(pk_field) == pk
                 and sk_field in item
                 and item[sk_field].startswith(prefix)
                 and (through is None or item[sk_field] <= through)
             ]
-        items.sort(key=lambda item: (item[sk_field], item["PK"], item["SK"]))
+        items.sort(key=lambda item: (item[sk_field], item["PK"], item["SK"]), reverse=descending)
         if cursor is not None:
             position = cursor.position
             if (
@@ -109,11 +109,20 @@ class MemoryStore(StoreBase):
             ):
                 return [], None
             start = (position[sk_field], position["PK"], position["SK"])
-            items = [item for item in items if (item[sk_field], item["PK"], item["SK"]) > start]
+            items = [
+                item
+                for item in items
+                if (
+                    (item[sk_field], item["PK"], item["SK"]) < start
+                    if descending
+                    else (item[sk_field], item["PK"], item["SK"]) > start
+                )
+            ]
         page = items[:limit]
+        filtered = [item for item in page if not kinds or item.get("kind") in kinds]
         if len(page) < limit:
-            return page, None
+            return filtered, None
         last = page[-1]
-        return page, Cursor(
+        return filtered, Cursor(
             query=query, position={field: last[field] for field in {"PK", "SK", pk_field, sk_field}}
         )

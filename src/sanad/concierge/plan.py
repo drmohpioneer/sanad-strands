@@ -14,7 +14,7 @@ from sanad.scribe.extract import OrderCandidate
 from sanad.scribe.memory import NameVocabulary
 from sanad.scribe.records import CareOrderHead, CareOrderVersion, ClinicalFact
 from sanad.scribe.resolver import Context, resolve_name
-from sanad.steward.types import records
+from sanad.steward.types import bounded_records as records
 from sanad.store.protocol import Store
 from sanad.store.records import (
     Consent,
@@ -168,7 +168,7 @@ def load(store: Store, scope: PatientScope, now: datetime) -> Snapshot | None:
         tuple(from_record(r, FollowUpTask) for r in records(store, scope, "followup")),
         tuple(
             from_record(r, ClinicalFact)
-            for r in current_facts(store, scope)
+            for r in current_facts(store, scope, bounded=True)
             if r.body.get("visibility") == "patient_released"
             and r.body.get("category") == "patient_report"
         ),

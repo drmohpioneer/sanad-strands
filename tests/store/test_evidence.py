@@ -275,6 +275,12 @@ def test_checkpoint_crash_resumes_one_read_and_one_fulfillment(
     world.concierge.checkpoint = lambda stage: None
     world.clock.advance(timedelta(minutes=11))
     world.concierge.sweep(to_record(f.work(world), world.patient_scope))
+    if stage == "evidence_read_blob_written":
+        recovered = f.work(world)
+        assert recovered.work_clock and recovered.work_clock.attempt_count == 0
+        assert recovered.processing_claim is None
+        world.clock.now = recovered.work_clock.next_action_at
+        world.concierge.sweep(to_record(recovered, world.patient_scope))
     assert f.work(world).state == "completed"
     assert len(vision.calls) == 2
     assert f.current(world).required_predicate_results[0].satisfied
@@ -368,6 +374,14 @@ def test_doctor_actions_resolve_review(world: PatientWorld, method: str, action:
     assert f.upload(world) == "accepted"
     e = f.current(world)
     assert world.rows("review")
+    if action == "associate":
+        from sanad.evidence.doctor import decide
+
+        assert (
+            decide(world.runtime.steward, world.owner, e, "confirm_identity", "confirm-name").status
+            == "accepted"
+        )
+        e = f.current(world)
     if method == "api":
         with world.client() as client:
             assert browser_login(client, world.login_path()).status_code == 303

@@ -577,9 +577,9 @@ def projections_and_isolation(a: SubjectWorld, b: SubjectWorld, c: SubjectWorld)
                         )
                 elif path == "/api/patient/uploads":
                     expected_states = ["not_used"] if w is a else ["accepted"] if w is c else []
-                    assert [u["state"] for u in response.json()] == expected_states
+                    assert [u["state"] for u in response.json()["items"]] == expected_states
                     if w is not b:
-                        assert response.json()[0]["id"] in {
+                        assert response.json()["items"][0]["id"] in {
                             r.body["observation_id"] for r in w.rows("evidence")
                         }
                 elif path == "/api/patient/preferences":

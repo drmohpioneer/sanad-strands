@@ -235,7 +235,7 @@ def test_crash_recovery_attaches_or_disposes_without_orphan_claim(
 
     uploads.ingress.checkpoint = crash
     response = uploads.client.post("/api/patient/uploads", content=png(), headers=uploads.headers())
-    assert response.status_code == 503
+    assert response.status_code == 409
     stage = uploads.stages()[0]
     uploads.ingress.checkpoint = lambda name: None
     uploads.world.clock.advance(STAGING_TTL)
@@ -322,7 +322,7 @@ def test_unclaimed_stage_is_disposed_after_revocation_and_late_writer_is_cleaned
         uploads.client.post(
             "/api/patient/uploads", content=png(), headers=uploads.headers()
         ).status_code
-        == 503
+        == 409
     )
     stage = uploads.stages()[0]
     uploads.ingress.checkpoint = lambda name: None
@@ -362,6 +362,8 @@ def test_browser_and_telegram_image_have_equal_business_event_semantics(
     receipt_ids: list[str] = []
     for adapter, target in zip(("browser", "telegram"), targets, strict=True):
         for item in baseline.values():
+            if item["SK"].startswith(("RECEIPT#", "CONVERSATION#")):
+                continue
             assert target._atomic([Write(deepcopy(item), None)], [])
         world = cast(PatientWorld, PatientWorld.create(target, clock))
         world.patient_scope = initial.patient_scope
@@ -582,8 +584,10 @@ def test_staged_source_survives_media_fetch_retry(uploads: UploadWorld) -> None:
     with pytest.raises(RuntimeError):
         retriever.fetch_media("upload:" + stage.id, receipt_id=stage.receipt.id)
     work = from_record(world.rows("media_work")[0], MediaWork)
-    assert work.processing_claim
-    world.clock.advance(STAGING_TTL)
+    assert work.processing_claim is None and work.last_error
+    assert work.work_clock and work.work_clock.attempt_count == 0
+    assert work.work_clock.next_action_at == world.clock() + timedelta(minutes=1)
+    world.clock.now = work.work_clock.next_action_at
     retriever.checkpoint = lambda name: None
     result = retriever.fetch_media("upload:" + stage.id, receipt_id=stage.receipt.id)
     assert not isinstance(result, MediaFailure)
@@ -638,7 +642,7 @@ def test_two_attachment_workers_have_one_receipt(uploads: UploadWorld) -> None:
         uploads.client.post(
             "/api/patient/uploads", content=png(), headers=uploads.headers()
         ).status_code
-        == 503
+        == 409
     )
     stage = uploads.stages()[0]
 
@@ -717,7 +721,7 @@ def test_recovery_preserves_danger_when_no_s3_body_was_written(uploads: UploadWo
             content=png(),
             headers=uploads.headers("I have chest pain and cannot breathe"),
         ).status_code
-        == 503
+        == 409
     )
     uploads.world.clock.advance(STAGING_TTL)
     stage = uploads.stages()[0]

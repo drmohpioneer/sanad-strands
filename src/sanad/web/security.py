@@ -24,6 +24,14 @@ HEADERS = {
 }
 
 
+class SessionRefused(Exception):
+    """A session refusal with a safe public reason, handled on pages and APIs."""
+
+    def __init__(self, reason: str, status_code: int = 401):
+        self.reason, self.status_code = reason, status_code
+        super().__init__(reason)
+
+
 def redact(text: str) -> str:
     return _START.sub(r"\1<redacted>", _PATH.sub(r"/\1/<redacted>", text))
 
@@ -59,7 +67,11 @@ class BrowserSecurity:
         path = str(scope.get("path", ""))
         request = Request(scope)
         login = getattr(request.app.state, "login", None)
-        if login is not None:
+        static_demo = request.method == "GET" and (
+            path in {"/demo", "/demo/patient", "/demo/admin"}
+            or re.fullmatch(r"/assets/[^/]+", path) is not None
+        )
+        if login is not None and not static_demo:
             session = login.session(request.cookies.get("sanad_session", ""))
             if session is not None and session.role == "admin":
                 method = request.method
@@ -104,4 +116,26 @@ class BrowserSecurity:
                 )
             await send(message)
 
-        await self.app(scope, receive, guarded_send)
+        try:
+            await self.app(scope, receive, guarded_send)
+        except SessionRefused as error:
+            if error.status_code >= 500:
+                from sanad.api.failures import RequestFailure
+
+                raise RequestFailure("authorization_unavailable") from None
+            from sanad.web.pages import LOGIN_REFUSALS, refused_page
+            from sanad.web.routes import clear_cookies
+
+            response = (
+                JSONResponse(
+                    {"detail": LOGIN_REFUSALS[error.reason]}, status_code=error.status_code
+                )
+                if path.startswith("/api/")
+                else HTMLResponse(refused_page(error.reason), status_code=error.status_code)
+            )
+            # The revoked credential grants no access. Retain it for an authority
+            # refusal so parallel patient requests can all recover the same reason;
+            # expiry, logout and session replacement still clear their cookies.
+            if error.status_code == 401 and error.reason != "patient_access_changed":
+                clear_cookies(response)
+            await response(scope, receive, guarded_send)

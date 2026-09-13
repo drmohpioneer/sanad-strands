@@ -1,21 +1,26 @@
 """Session-authorized record projections and private media streaming."""
 
+import re
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import JsonValue
 
+from sanad.api.failures import RequestFailure, store_busy
 from sanad.auth.claim import ClaimService
 from sanad.domain import PatientScope, TenantScope
-from sanad.evidence.doctor import owned
 from sanad.evidence.templates import render as render_evidence
 from sanad.scribe.crosscheck import render_card
+from sanad.scribe.extract import OrderCandidate
 from sanad.scribe.policy import DRAFT_SCRIBE_POLICY
 from sanad.scribe.proposal import Proposal
-from sanad.steward.types import records
+from sanad.scribe.records import CareOrderVersion, ClinicalFact
+from sanad.steward.types import bounded_records as records
 from sanad.store.records import (
     Doctor,
+    Evidence,
+    EvidenceHead,
     IntakeDraft,
     MediaWork,
     PatientMedia,
@@ -59,6 +64,14 @@ def record_router(claims: ClaimService) -> APIRouter:
         from sanad.steward.corrections import current_facts, rendered_notice
 
         profile = claims.store.get_patient_profile(scope)
+        binding = (
+            claims.store.get(scope, "patient_binding", patient.active_binding_id)
+            if patient.active_binding_id
+            else None
+        )
+        consent = (
+            claims.store.get(scope, "consent", str(binding.body["consent_id"])) if binding else None
+        )
         corrections = [
             from_record(r, Correction) for r in records(claims.store, scope, "correction")
         ]
@@ -122,6 +135,48 @@ def record_router(claims: ClaimService) -> APIRouter:
         proposals = [
             from_record(r, Proposal) for r in records(claims.store, tenant, "scribe_proposal")
         ]
+        held_medications = []
+        for order in orders:
+            if order["status"] != "stopped" or not order["current_version"]:
+                continue
+            version = CareOrderVersion.model_validate(order["current_version"])
+            instruction = version.structured_instruction
+            if not isinstance(instruction, OrderCandidate) or instruction.action != "stop":
+                continue
+            observation = version.provenance.source_observation_id
+            drug = instruction.drug
+            history_hold = any(
+                fact.provenance.source_observation_id == observation
+                and fact.payload.text.casefold().startswith(
+                    drug.casefold() + ": doctor instructed hold;"
+                )
+                for fact in (
+                    from_record(r, ClinicalFact)
+                    for r in current_facts(claims.store, scope, bounded=True)
+                    if r.entity_type == "clinical_fact"
+                )
+            )
+            if not history_hold and not re.search(
+                r"\bhold\b", instruction.action_quote or "", re.I
+            ):
+                continue
+            reason = "no reason given"
+            source_text = next(
+                (p.source_text for p in proposals if p.source_receipt_id == observation), ""
+            )
+            for clause in re.split(r"[,;\n]", source_text):
+                if re.search(r"(?<!\w)" + re.escape(drug) + r"(?!\w)", clause, re.I):
+                    match = re.search(r"\b(?:because|due to)\s+(.+?)[.]*$", clause, re.I)
+                    if match:
+                        reason = match[1].strip()
+            held_medications.append(
+                {
+                    "order_id": order["id"],
+                    "drug": drug,
+                    "reason": reason,
+                    "since": version.confirmed_at.isoformat(),
+                }
+            )
         pending = [
             {
                 "proposal_id": p.id,
@@ -152,7 +207,7 @@ def record_router(claims: ClaimService) -> APIRouter:
             for r in records(claims.store, scope, "evidence_head")
         }
         correctable_facts = []
-        for r in current_facts(claims.store, scope, include_detached=True):
+        for r in current_facts(claims.store, scope, include_detached=True, bounded=True):
             fact_source_head = source_heads.get(str(r.body.get("root_fact_id") or r.id))
             correctable_facts.append(
                 {
@@ -189,6 +244,15 @@ def record_router(claims: ClaimService) -> APIRouter:
             "patient_id": patient.id,
             "display_name": patient.display_name,
             "contact_status": patient.contact_status,
+            "contact_preferences": {
+                "reminders": "enabled"
+                if profile
+                and profile.routine_contact_enabled
+                and patient.contact_status == "active"
+                else "paused",
+                "quiet_hours": consent.body["quiet_hours"] if consent else [],
+                "timezone": patient.timezone,
+            },
             "record_version": patient.record_version,
             "medication_list_seen": [
                 {
@@ -198,10 +262,19 @@ def record_router(claims: ClaimService) -> APIRouter:
                     "label": render_evidence("history_label", language),
                     "active_order": False,
                 }
-                for e in owned(claims.store, session.doctor_id)
+                for head in (
+                    from_record(r, EvidenceHead)
+                    for r in records(claims.store, scope, "evidence_head")
+                )
+                if (
+                    evidence_row := claims.store.get(
+                        scope, "evidence", f"{head.id}:{head.current_version}"
+                    )
+                )
+                for e in (from_record(evidence_row, Evidence),)
                 if e.scope == scope and e.category in {"prescription", "medication_list"}
             ],
-            "facts": [r.body for r in current_facts(claims.store, scope)],
+            "facts": [r.body for r in current_facts(claims.store, scope, bounded=True)],
             "correctable_facts": correctable_facts,
             "fact_history": [r.body for r in records(claims.store, scope, "clinical_fact")],
             "corrections": [
@@ -217,6 +290,7 @@ def record_router(claims: ClaimService) -> APIRouter:
             }
             if profile
             else None,
+            "held_medications": held_medications,
             "orders": orders,
             "order_heads": orders,
             "missions": missions,
@@ -264,13 +338,15 @@ def record_router(claims: ClaimService) -> APIRouter:
             raise HTTPException(404)
         storage = getattr(request.app.state, "media_store", None)
         if storage is None:
-            raise HTTPException(503)
+            raise RequestFailure("media_storage_unavailable")
         try:
             data = storage.get(
                 media.media_scope, work.source_blob_ref, DRAFT_SCRIBE_POLICY.max_photo_bytes
             )
-        except Exception:
-            raise HTTPException(503) from None
+        except Exception as error:
+            raise RequestFailure(
+                "store_busy" if store_busy(error) else "media_storage_unavailable"
+            ) from None
         if (
             request.app.state.login.require(request.cookies.get(SESSION_COOKIE, ""), "doctor")
             is None

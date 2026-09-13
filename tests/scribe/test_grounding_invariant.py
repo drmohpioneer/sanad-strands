@@ -36,12 +36,12 @@ def world_for(language: Language) -> ScribeWorld:
 
 
 def dictate(world: ScribeWorld, source: str, value: dict[str, Any], id: int = 10) -> Proposal:
-    # The existing omission rail may use its one identical retry.
-    model = ScriptedModel(*(candidate(value) for _ in range(3)))
+    # The existing omission rail may use one identical retry per reader.
+    model = ScriptedModel(*(candidate(value) for _ in range(4)))
     world.scribe.model_factory = lambda *_: model
     world.post(update(APPLICANT, source, id))
     assert world.receipt(id).state == "completed"
-    assert len(model.script.calls) in {2, 3}
+    assert len(model.script.calls) in {2, 3, 4}
     return world.proposal
 
 

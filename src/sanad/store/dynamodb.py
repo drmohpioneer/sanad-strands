@@ -8,7 +8,6 @@ from typing import Any
 from boto3.dynamodb.types import TypeDeserializer, TypeSerializer  # type: ignore[import-untyped]
 from botocore.exceptions import ClientError  # type: ignore[import-untyped]
 
-from sanad.domain import PatientScope
 from sanad.store._base import (
     INDEX_FIELDS,
     Check,
@@ -20,7 +19,7 @@ from sanad.store._base import (
     utc_now,
 )
 from sanad.store.keys import Key
-from sanad.store.records import PROJECTION_FIELDS, Cursor, StoredRecord
+from sanad.store.records import PROJECTION_FIELDS, Cursor
 
 _SERIALIZER = TypeSerializer()
 _DESERIALIZER = TypeDeserializer()
@@ -89,37 +88,6 @@ class DynamoStore(StoreBase):
         self._client = client
         self._table = table_name
 
-    def patient_receipts(self, scope: PatientScope) -> tuple[StoredRecord, ...]:
-        """Read pre-index receipts too; no migration or eventually consistent history."""
-        if not isinstance(scope, PatientScope):
-            return ()
-        args: dict[str, Any] = {
-            "TableName": self._table,
-            "ConsistentRead": True,
-            "Limit": 1000,
-            "FilterExpression": "#kind = :kind AND doctor_id = :doctor AND patient_id = :patient",
-            "ProjectionExpression": "PK, SK",
-            "ExpressionAttributeNames": {"#kind": "entity_type"},
-            "ExpressionAttributeValues": _encode(
-                {
-                    ":kind": "inbound_receipt",
-                    ":doctor": scope.doctor_id,
-                    ":patient": scope.patient_id,
-                }
-            ),
-        }
-        rows: list[StoredRecord] = []
-        while True:
-            result = self._client.scan(**args)
-            for item in result.get("Items", []):
-                key = _decode(item)
-                row = self._owned(scope, Key(key["PK"], key["SK"]))
-                if row is not None and row.entity_type == "inbound_receipt":
-                    rows.append(row)
-            if not result.get("LastEvaluatedKey"):
-                return tuple(rows)
-            args["ExclusiveStartKey"] = result["LastEvaluatedKey"]
-
     def _read(self, key: Key) -> Item | None:
         result = self._client.get_item(
             TableName=self._table, Key=_encode({"PK": key.pk, "SK": key.sk}), ConsistentRead=True
@@ -140,8 +108,27 @@ class DynamoStore(StoreBase):
         }
 
     def _atomic(self, writes: list[Write], checks: list[Check]) -> bool:
+        writes = self._project_writes(writes)
         if size_failure(writes, checks) is not None:
             return False
+        if not writes:
+            if not checks:
+                return True
+            result = self._client.transact_get_items(
+                TransactItems=[
+                    {
+                        "Get": {
+                            "TableName": self._table,
+                            "Key": _encode({"PK": c.key.pk, "SK": c.key.sk}),
+                        }
+                    }
+                    for c in checks
+                ]
+            )
+            return all(
+                _decode(row.get("Item", {})).get("version") == check.version
+                for check, row in zip(checks, result["Responses"], strict=True)
+            )
         transactions = [
             {
                 "Put": {
@@ -168,6 +155,12 @@ class DynamoStore(StoreBase):
         except ClientError as error:
             if error.response["Error"]["Code"] == "TransactionCanceledException":
                 reasons = {r["Code"] for r in error.response.get("CancellationReasons", [])}
+                if reasons <= {"None", "TransactionConflict"} and "TransactionConflict" in reasons:
+                    from sanad.store.claims import issued
+                    from sanad.store.retry import StoreConflict
+
+                    if issued.get() is not None:
+                        raise StoreConflict("transaction_conflict") from None
                 if reasons & {"ConditionalCheckFailed", "TransactionConflict"} and not reasons - {
                     "None",
                     "ConditionalCheckFailed",
@@ -177,6 +170,13 @@ class DynamoStore(StoreBase):
             raise  # Provider, capacity and validation failures must stay visible.
 
     def _update(self, item: Item, before: int) -> bool:
+        if item.get("entity_type") in {
+            "inbound_receipt",
+            "media_work",
+            "outbound_intent",
+            "scribe_state",
+        }:
+            return self._atomic([Write(item, before)], [])
         if size_failure([Write(item, before)], []) is not None:
             return False
         names = {"#version": "version"}
@@ -237,10 +237,16 @@ class DynamoStore(StoreBase):
         through: str | None = None,
         cursor: Cursor | None = None,
         limit: int = 100,
+        descending: bool = False,
+        kinds: tuple[str, ...] = (),
     ) -> tuple[list[Item], Cursor | None]:
         if type(limit) is not int or not 1 <= limit <= 1000:
             raise ValueError("page limit must be an integer between 1 and 1000")
-        identity = query_identity(pk, index, prefix, through)
+        identity = (
+            query_identity(pk, index, prefix, through)
+            + (":desc" if descending else "")
+            + ":".join(kinds)
+        )
         if cursor is not None and cursor.query != identity:
             return [], None
         pk_field, sk_field = INDEX_FIELDS[index] if index else ("PK", "SK")
@@ -263,6 +269,15 @@ class DynamoStore(StoreBase):
             "Limit": limit,
             "ConsistentRead": index is None,
         }
+        args["ScanIndexForward"] = not descending
+        if kinds:
+            args["ExpressionAttributeNames"]["#kind"] = "kind"
+            args["FilterExpression"] = (
+                "#kind IN (" + ", ".join(f":kind{i}" for i in range(len(kinds))) + ")"
+            )
+            args["ExpressionAttributeValues"].update(
+                _encode({f":kind{i}": kind for i, kind in enumerate(kinds)})
+            )
         if index is not None:
             args["IndexName"] = index
         if cursor is not None:

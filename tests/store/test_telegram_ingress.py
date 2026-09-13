@@ -51,7 +51,9 @@ def test_verified_but_ineligible_updates_are_counted_and_dropped(
         message["via_bot"] = {"id": "4243", "is_bot": True}
     else:
         message["chat"] = {"id": 9000, "type": "private"}
-    assert accounts.post(body).status_code == 200
+    response = accounts.post(body)
+    assert response.status_code == 409
+    assert response.json()["reason"] == "ingress_exception"
     assert sum(accounts.runtime.counters.values()) == 1
     assert not accounts.intents()
     assert accounts.store._read(keys.inbound("telegram", keys.digest(f"{BOT}:1"))) is None
@@ -122,7 +124,7 @@ def test_store_failure_has_no_ack_then_success(
         raise RuntimeError("synthetic storage unavailable")
 
     monkeypatch.setattr(accounts.store, "accept_inbound", unavailable)
-    assert accounts.post(update()).status_code == 503
+    assert accounts.post(update()).status_code == 409
     assert not accounts.intents()
     monkeypatch.setattr(accounts.store, "accept_inbound", original)
     assert accounts.post(update()).status_code == 200
@@ -204,7 +206,7 @@ def test_patient_danger_at_character_4096_bypasses_ordinary_lease(accounts: Acco
     assert receipt.safety_result and receipt.safety_result["level"] == "danger"
     profile = accounts.store.get_patient_profile(scope)
     assert profile and profile.safety_epoch == 1
-    assert accounts.receipt(1).state == "processing"
+    assert accounts.receipt(1).state == "pending"
     assert accounts.post(update(PATIENT, text + "x", id=2)).status_code == 400
     assert accounts.store._read(keys.inbound("telegram", keys.digest(f"{BOT}:2"))) is None
 

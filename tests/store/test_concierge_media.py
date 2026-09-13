@@ -132,7 +132,7 @@ def test_voice_transcript_checkpoint_replay_no_second_transcription(world: Patie
 
     world.concierge.checkpoint = crash
     world.post(media_message())
-    assert world.receipt(1100).state == "processing" and work(world).transcript_ref
+    assert world.receipt(1100).state == "pending" and work(world).transcript_ref
     world.concierge.checkpoint = lambda stage: None
     world.clock.advance(timedelta(minutes=11))
     sweep_due(world.runtime, world.store)
@@ -173,7 +173,12 @@ def test_photo_document_durable_pending_then_scoped_media_recovery(
     sweep_due(world.runtime, world.store)
     saved = work(world)
     assert saved.source_blob_ref and saved.stage == "extract" and len(files.calls) == 1
-    world.clock.advance(timedelta(days=4))
+    for minutes in (1, 5, 15):
+        sweep_due(world.runtime, world.store)
+        retry = work(world)
+        assert retry.state == "pending" and retry.work_clock
+        assert retry.work_clock.next_action_at == world.clock() + timedelta(minutes=minutes)
+        world.clock.advance(timedelta(minutes=minutes))
     sweep_due(world.runtime, world.store)
     assert work(world).review_obligation_id
 

@@ -36,7 +36,7 @@ def world(store: StoreBase, clock: FakeClock) -> ScribeWorld:
 
 
 def missing(world: ScribeWorld, text: str, *, by_voice: bool = False) -> ScriptedModel:
-    model = ScriptedModel(candidate(VALUE), candidate(VALUE), candidate(VALUE))
+    model = ScriptedModel(*(candidate(VALUE) for _ in range(4)))
     world.scribe.model_factory = lambda registry, role: model
     if by_voice:
         providers(world, text + " NUMBERS: 53 560 12.5 5 45")
@@ -58,9 +58,9 @@ def test_real_transcript_missing_missions_retries_and_blocks_confirmation(
     caplog.set_level(logging.INFO, logger="sanad.scribe.turn")
     model = missing(world, source, by_voice=by_voice)
     p = world.proposal
-    assert len(model.script.calls) == 3
+    assert len(model.script.calls) == 4
     assert model.script.calls[0] == model.script.calls[1] == model.script.calls[2]
-    assert retries == ["request_missing"]
+    assert retries == ["request_missing", "request_missing"]
     assert render_card(p)[0].count(QUESTION) == 1
     assert dictation_questions(p).count(QUESTION) == 1 and p.blocked("all")
     with pytest.raises(AssertionError, match="card button missing"):
@@ -88,7 +88,7 @@ def test_real_transcript_missing_missions_retries_and_blocks_confirmation(
 @pytest.mark.parametrize("cue", ["طلبت", "اعمل", "يعملوه", "تحليل", "أشعة", "إيكو", "TEST", "lab"])
 def test_each_binding_request_cue_retries_and_keeps_one_block(world: ScribeWorld, cue: str) -> None:
     model = missing(world, "سامي اختبار أنجينا " + cue)
-    assert len(model.script.calls) == 3
+    assert len(model.script.calls) == 4
     assert world.proposal.blocked("all")
     assert render_card(world.proposal)[0].count(QUESTION) == 1
 
@@ -97,10 +97,12 @@ def test_each_binding_request_cue_retries_and_keeps_one_block(world: ScribeWorld
 def test_primary_retains_each_supported_mission_kind(world: ScribeWorld, kind: str) -> None:
     complete = copy.deepcopy(VALUE)
     complete["missions"] = [{"kind": kind, "text": "BUN" if kind == "TEST" else "يراجع العيادة"}]
-    model = ScriptedModel(candidate(complete), candidate(VALUE))
+    model = ScriptedModel(candidate(complete), candidate(VALUE), candidate(VALUE))
     world.scribe.model_factory = lambda registry, role: model
     world.post(update(APPLICANT, "سامي اختبار أنجينا طلبت BUN ويراجع العيادة", 10))
-    assert len(model.script.calls) == 2 and model.script.calls[0] == model.script.calls[1]
+    assert len(model.script.calls) == 3 and all(
+        call == model.script.calls[0] for call in model.script.calls
+    )
     assert len(world.proposal.candidate.missions) == 1
     assert not world.proposal.blocked("all") and QUESTION not in render_card(world.proposal)[0]
     world.tap()
@@ -150,23 +152,30 @@ def test_schema_retry_and_missing_request_share_one_allowance(world: ScribeWorld
         ScriptedModel(response("malformed")),
         ScriptedModel(candidate(VALUE)),
         ScriptedModel(candidate(VALUE)),
+        ScriptedModel(candidate(VALUE)),
     ]
     factories = iter(models)
     world.scribe.model_factory = lambda *_: next(factories)
     retries: list[str] = []
     world.scribe.observe_retry = retries.append
     world.post(update(APPLICANT, "سامي اختبار أنجينا طلبت تحليل", 10))
-    assert sum(len(m.script.calls) for m in models) == 3 and retries == ["schema_validation"]
+    assert sum(len(m.script.calls) for m in models) == 4 and retries == [
+        "schema_validation",
+        "request_missing",
+    ]
     assert world.proposal.blocked("all") and QUESTION in render_card(world.proposal)[0]
 
 
 def test_missing_request_retry_failure_keeps_the_valid_blocked_card(world: ScribeWorld) -> None:
     model = ScriptedModel(
-        candidate(VALUE), candidate(VALUE), RuntimeError("private provider failure")
+        candidate(VALUE),
+        candidate(VALUE),
+        RuntimeError("private provider failure"),
+        RuntimeError("private provider failure"),
     )
     world.scribe.model_factory = lambda registry, role: model
     world.post(update(APPLICANT, "سامي اختبار أنجينا طلبت تحليل", 10))
-    assert len(model.script.calls) == 3
+    assert len(model.script.calls) == 4
     assert world.proposal.blocked("all") and QUESTION in render_card(world.proposal)[0]
 
 
@@ -191,10 +200,11 @@ def test_missing_request_retry_shares_six_http_call_budget(world: ScribeWorld) -
         response(calls=[("lookup_drug", {"name": "Amlodipine"})]),
         candidate(VALUE),
         candidate(VALUE),
+        candidate(VALUE),
     )
     world.scribe.model_factory = lambda registry, role: model
     world.post(update(APPLICANT, "سامي اختبار أنجينا طلبت تحليل", 10))
-    assert len(model.script.calls) == 5 and len(fixture.calls) == 6
+    assert len(model.script.calls) == 6 and len(fixture.calls) == 6
     assert world.proposal.rxnorm_calls == 6 and world.proposal.blocked("all")
 
 

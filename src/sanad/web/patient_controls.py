@@ -48,8 +48,8 @@ def controls(locale: str) -> str:
 <h2>{w("preferences")}</h2>
 <p id="patient-preferences">
 </p>
+<p id="patient-reminder-explanation">{w("reminder_explanation")}</p>
 <button id="patient-stop" type="button">{w("stop")}</button>
-<button id="patient-resume" type="button">{w("resume")}</button>
 <button id="patient-confirm" type="button" hidden>{w("confirm")}</button>
 <form id="patient-quiet-form">
 <label>{w("quiet_start")}<input id="patient-quiet-start" type="time" required>

@@ -123,7 +123,15 @@ def apply(
     slot_id: str | None = None,
 ) -> str:
     if preference.action == "resume" and not confirmed:
-        tx.button("resume", "أيوه، رجّع التذكيرات")
+        from sanad.domain.language import effective
+        from sanad.presentation.patient_browser import CATALOG
+
+        tx.button(
+            "resume",
+            CATALOG["patient_browser.confirm"][
+                effective(tx.snapshot.patient.language, audience="patient")
+            ],
+        )
         return "patient_resume_ask"
     patient, consent, binding, profile = (
         tx.snapshot.patient,

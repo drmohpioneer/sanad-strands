@@ -414,7 +414,7 @@ class ClaimService(IdentityService):
                     "claim_awaiting_doctor",
                     doctor.telegram_user_id,
                     "doctor",
-                    fields={"claimant": pending.minimal_claim_identifier},
+                    fields={"claimant": patient.display_name},
                     markup=markup,
                     auth_epoch=doctor.auth_epoch,
                     expires_at=inv.expires_at,

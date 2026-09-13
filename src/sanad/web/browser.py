@@ -11,6 +11,7 @@ from sanad.auth.claim import ClaimService
 from sanad.auth.login import LoginService
 from sanad.domain.language import Audience, effective
 from sanad.store.records import WebSession
+from sanad.web.pages import admin_home, demo_banner
 from sanad.web.patient_controls import controls
 from sanad.web.routes import require_session
 
@@ -110,19 +111,27 @@ def surface(
     demo: bool = False,
     patient_plan: dict[str, object] | None = None,
 ) -> str:
-    locale = effective(language, audience=audience)
+    locale = "en" if audience == "doctor" else effective(language, audience=audience)
     direction = "rtl" if locale == "ar" else "ltr"
     title = (
         "خطتك"
         if audience == "patient" and locale == "ar"
         else ("Your care" if audience == "patient" else "Sanad")
     )
-    home = "/demo" if demo else "/pp" if audience == "patient" else "/a"
+    home = (
+        ("/demo/patient" if audience == "patient" else "/demo")
+        if demo
+        else "/pp"
+        if audience == "patient"
+        else "/a"
+    )
     noscript = (
         "فعّل JavaScript لعرض البيانات. الدخول متاح من تيليجرام."
         if locale == "ar"
         else "Enable JavaScript to load this view. Sign in through Telegram."
     )
+    if demo:
+        noscript = "Enable JavaScript to explore this synthetic demonstration."
     # All data attributes are escaped, and no private record is embedded in scripts.
     attrs = {
         "view": view,
@@ -175,6 +184,7 @@ def surface(
 </aside>
 <main id="workspace" tabindex="-1">
 <div id="banner">
+{demo_banner() if demo else ""}
 </div>
 <header class="page-heading">
 <p class="eyebrow" id="eyebrow">
@@ -212,7 +222,8 @@ def browser_router(login: LoginService, claims: ClaimService) -> APIRouter:
         allowed = {
             p.name
             for p in ASSETS.iterdir()
-            if p.suffix in {".css", ".js", ".ttf"} or p.name == "demo.json"
+            if p.suffix in {".css", ".js", ".ttf"}
+            or p.name in {"demo.json", "demo-patient.json", "demo-admin.json"}
         }
         if name not in allowed:
             raise HTTPException(404)
@@ -221,7 +232,7 @@ def browser_router(login: LoginService, claims: ClaimService) -> APIRouter:
             if name.endswith(".ttf")
             else (
                 "application/json"
-                if name == "demo.json"
+                if name.endswith(".json")
                 else "text/css"
                 if name.endswith(".css")
                 else "text/javascript"
@@ -263,5 +274,13 @@ def browser_router(login: LoginService, claims: ClaimService) -> APIRouter:
     def demo() -> HTMLResponse:
         # No session lookup, no store, no authenticated link. Data is a static fixture.
         return HTMLResponse(surface("Synthetic clinic", "en", demo=True))
+
+    @router.get("/demo/patient")
+    def demo_patient() -> HTMLResponse:
+        return HTMLResponse(surface("Mona Test", "en", audience="patient", demo=True))
+
+    @router.get("/demo/admin")
+    def demo_admin() -> HTMLResponse:
+        return HTMLResponse(admin_home(demo=True))
 
     return router

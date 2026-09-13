@@ -344,4 +344,11 @@ CATALOG: Catalog = {
     },
 }
 
+CATALOG["concierge.patient_education_unavailable"] = {
+    "en": (
+        "An explanation is not yet available from the clinic, "
+        "so your question has been passed to your doctor."
+    ),
+    "ar": "الشرح مش متاح من العيادة لسه، فوصّلنا سؤالك للدكتور.",
+}
 FIELDS = validate_catalog("concierge", CATALOG)

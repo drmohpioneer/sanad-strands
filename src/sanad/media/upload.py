@@ -59,8 +59,13 @@ class StagedUpload:
             data = self.storage.get_upload(
                 self.scope, stage.id, stage.content_digest, MAX_IMAGE_BYTES
             )
-        except Exception:
-            return MediaFailure(reason="storage_unavailable", request_resend=False)
+        except Exception as error:
+            from sanad.api.failures import store_busy
+
+            return MediaFailure(
+                reason="store_busy" if store_busy(error) else "storage_unavailable",
+                request_resend=False,
+            )
         if (
             data is None
             or len(data) != stage.size

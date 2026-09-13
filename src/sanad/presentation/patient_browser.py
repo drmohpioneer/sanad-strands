@@ -1,65 +1,91 @@
-"""Plain browser controls; paired entries keep the later Arabic adapter possible."""
+"""Plain browser controls in English and Egyptian Arabic."""
 
 from sanad.presentation.catalog import Catalog, validate_catalog
 
 CATALOG: Catalog = {
-    "conversation": {"en": "Your conversation", "ar": "محادثتك"},
+    "conversation": {"en": "Your conversation", "ar": "كلامك مع سند"},
     "message": {"en": "Your message", "ar": "رسالتك"},
-    "send": {"en": "Send", "ar": "إرسال"},
-    "older": {"en": "Older messages", "ar": "رسائل أقدم"},
-    "no_messages": {"en": "No messages yet.", "ar": "لا توجد رسائل بعد."},
-    "legacy": {"en": "Message sent on", "ar": "أُرسلت رسالة في"},
-    "credential": {"en": "A sign-in link was sent on", "ar": "أُرسل رابط تسجيل الدخول في"},
-    "upload": {"en": "Upload a document or photo", "ar": "إرسال مستند أو صورة"},
-    "file": {"en": "Choose an image", "ar": "اختر صورة"},
-    "caption": {"en": "Add a message (optional)", "ar": "أضف رسالة (اختياري)"},
+    "send": {"en": "Send", "ar": "ابعت"},
+    "older": {"en": "Older messages", "ar": "رسايل أقدم"},
+    "no_messages": {"en": "No messages yet.", "ar": "لسه مفيش رسايل."},
+    "legacy": {"en": "Message sent on", "ar": "رسالة اتبعتت يوم"},
+    "credential": {"en": "A sign-in link was sent on", "ar": "لينك الدخول اتبعت يوم"},
+    "upload": {"en": "Upload a document or photo", "ar": "ابعت مستند أو صورة"},
+    "file": {"en": "Choose an image", "ar": "اختار صورة"},
+    "caption": {"en": "Add a message (optional)", "ar": "ضيف رسالة (لو حابب)"},
     "limits": {
         "en": "Images up to 8 MiB, 8,000 pixels per side and 20 million pixels.",
-        "ar": "صور حتى ٨ ميبي بايت، و٨٠٠٠ بكسل لكل جانب، و٢٠ مليون بكسل.",
+        "ar": "صور لحد ٨ ميبي بايت، ٨٠٠٠ بكسل في كل ناحية، و٢٠ مليون بكسل في الصورة كلها.",
     },
-    "uploading": {"en": "Sending your image…", "ar": "جار إرسال صورتك…"},
+    "uploading": {"en": "Sending your image…", "ar": "بنبعت صورتك…"},
     "received": {"en": "Received", "ar": "وصلت"},
-    "processing": {"en": "Checking your document", "ar": "جار مراجعة مستندك"},
-    "accepted": {"en": "Accepted", "ar": "تم القبول"},
-    "needs_doctor_review": {"en": "Needs your doctor's review", "ar": "تحتاج مراجعة دكتورك"},
-    "not_used": {"en": "Not used", "ar": "لم تُستخدم"},
-    "rejected": {"en": "Could not use this image", "ar": "تعذر استخدام الصورة"},
-    "unreadable": {"en": "Please send a clearer image.", "ar": "أرسل صورة أوضح من فضلك."},
-    "too_large": {"en": "Please choose a smaller image.", "ar": "اختر صورة أصغر من فضلك."},
+    "processing": {"en": "Checking your document", "ar": "بنراجع مستندك"},
+    "accepted": {"en": "Accepted", "ar": "اتقبلت"},
+    "needs_doctor_review": {"en": "Needs your doctor's review", "ar": "محتاجة دكتورك يراجعها"},
+    "not_used": {"en": "Not used", "ar": "متستخدمتش"},
+    "rejected": {"en": "Could not use this image", "ar": "معرفناش نستخدم الصورة دي"},
+    "unreadable": {"en": "Please send a clearer image.", "ar": "ابعت صورة أوضح لو سمحت."},
+    "too_large": {"en": "Please choose a smaller image.", "ar": "اختار صورة أصغر لو سمحت."},
     "not_a_document": {
         "en": "Please choose a document or medical photo.",
-        "ar": "اختر مستندًا أو صورة طبية من فضلك.",
+        "ar": "اختار مستند أو صورة طبية لو سمحت.",
     },
     "unsupported": {
         "en": "Please choose a supported image file.",
-        "ar": "اختر ملف صورة مدعومًا من فضلك.",
+        "ar": "اختار ملف صورة نقدر نفتحه لو سمحت.",
     },
-    "preferences": {"en": "Reminder preferences", "ar": "تفضيلات التذكيرات"},
-    "enabled": {"en": "Reminders enabled", "ar": "التذكيرات مفعلة"},
-    "paused": {"en": "Reminders paused", "ar": "التذكيرات متوقفة"},
-    "stop": {"en": "Stop reminders", "ar": "إيقاف التذكيرات"},
-    "resume": {"en": "Resume reminders", "ar": "استئناف التذكيرات"},
-    "confirm": {"en": "Yes, resume reminders", "ar": "نعم، استأنف التذكيرات"},
-    "quiet_start": {"en": "Quiet hours start", "ar": "بداية ساعات الهدوء"},
-    "quiet_end": {"en": "Quiet hours end", "ar": "نهاية ساعات الهدوء"},
-    "save": {"en": "Save quiet hours", "ar": "حفظ ساعات الهدوء"},
-    "saved": {"en": "Saved.", "ar": "تم الحفظ."},
-    "sent": {"en": "Message received.", "ar": "وصلت رسالتك."},
+    "preferences": {"en": "Reminder preferences", "ar": "ظبط التذكيرات"},
+    "enabled": {"en": "Reminders enabled", "ar": "التذكيرات شغالة"},
+    "paused": {"en": "Reminders paused", "ar": "التذكيرات واقفة"},
+    "stop": {"en": "Stop reminders", "ar": "وقف التذكيرات"},
+    "resume": {"en": "Resume reminders", "ar": "شغل التذكيرات تاني"},
+    "confirm": {"en": "Yes, resume reminders", "ar": "أيوه، شغل التذكيرات تاني"},
+    "quiet_start": {"en": "Quiet hours start", "ar": "ساعات الهدوء تبدأ إمتى"},
+    "quiet_end": {"en": "Quiet hours end", "ar": "ساعات الهدوء تخلص إمتى"},
+    "save": {"en": "Save quiet hours", "ar": "احفظ ساعات الهدوء"},
+    "saved": {"en": "Saved.", "ar": "اتحفظ."},
+    "sent": {"en": "Message received.", "ar": "رسالتك وصلت."},
     "still_working": {
         "en": "Still working on your message. Your reply will appear here.",
         "ar": "لسه بنراجع رسالتك. الرد هيظهر هنا.",
     },
-    "pending": {"en": "Received. Preparing your reply.", "ar": "وصل الطلب. بنجهز الرد."},
+    "pending": {"en": "Received. Preparing your reply.", "ar": "وصل طلبك. بنجهز الرد."},
     "failed": {
         "en": "Could not complete this request. Try again.",
-        "ar": "تعذر إكمال الطلب. حاول مجددًا.",
+        "ar": "معرفناش نكمل طلبك. جرب تاني.",
     },
-    "expired": {"en": "Please sign in again from Telegram.", "ar": "سجل الدخول مجددًا من تيليجرام."},
+    "expired": {
+        "en": "Please sign in again from Telegram.",
+        "ar": "ادخل تاني من تيليجرام لو سمحت.",
+    },
+    "changed_elsewhere": {
+        "en": "Your access changed elsewhere.",
+        "ar": "اتغيرت صلاحية دخولك من مكان تاني.",
+    },
     "conflict": {
         "en": "This request has changed or expired. Refresh and try again.",
-        "ar": "تغير الطلب أو انتهت صلاحيته. حدّث الصفحة وحاول مجددًا.",
+        "ar": "الطلب اتغير أو وقته خلص. حدّث الصفحة وجرب تاني.",
     },
-    "quiet_invalid": {"en": "Choose two different times.", "ar": "اختر وقتين مختلفين."},
+    "quiet_invalid": {"en": "Choose two different times.", "ar": "اختار ميعادين مختلفين."},
+    "read": {"en": "Read by Sanad", "ar": "سند قراها"},
+    "documents_sent": {"en": "Documents you sent", "ar": "المستندات اللي بعتها"},
+    "reminder_explanation": {
+        "en": (
+            "Sanad writes to you on Telegram when your doctor is waiting for "
+            "something from you: a reading, a photo, an answer. During quiet hours "
+            "routine reminders wait, except at the times you agreed to; replies to "
+            "your own messages and anything urgent are not held. If you pause "
+            "reminders, routine messages stop, your doctor can see they are paused, "
+            "and urgent messages are never held back by the pause."
+        ),
+        "ar": (
+            "سند بيبعتلك على تيليجرام لما دكتورك يكون مستني منك حاجة: قراءة، صورة، أو"
+            " إجابة. في ساعات الهدوء التذكيرات العادية بتستنى، إلا في المواعيد اللي "
+            "إنت وافقت عليها؛ الردود على رسايلك وأي حاجة مستعجلة مبتستناش. لو وقفت "
+            "التذكيرات، الرسايل العادية بتقف، ودكتورك بيشوف إنها واقفة، وأي رسالة "
+            "مستعجلة مبتتعطلش بسبب الوقفة دي."
+        ),
+    },
 }
 CATALOG = {"patient_browser." + key: value for key, value in CATALOG.items()}
 validate_catalog("patient_browser", CATALOG)

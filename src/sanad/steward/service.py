@@ -287,6 +287,11 @@ class Steward:
             scope, "command:" + uuid4().hex, now, policy.operations.lease_ttl
         )
         if lease is None:
+            from sanad.store.claims import issued
+            from sanad.store.retry import StoreConflict
+
+            if issued.get() is not None:
+                raise StoreConflict("patient_busy")
             return CommandResult(status="stale_version", reason_code="patient_busy")
         try:
             profile = self.store.get_patient_profile(scope)

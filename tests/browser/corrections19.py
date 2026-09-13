@@ -11,8 +11,13 @@ from store.account_fixtures import ADMIN, PATIENT
 from store.concierge_fixtures import PatientWorld
 
 from browser.conftest import RenderedApp
-from browser.depth18e import (
-    test_depth_drawer_anatomy_and_retry as test_depth_drawer_anatomy_and_retry,
+from browser.demo18f import test_demo_admin_controls as test_demo_admin_controls
+from browser.demo18f import (
+    test_demo_does_not_unlock_real_apis as test_demo_does_not_unlock_real_apis,
+)
+from browser.demo18f import test_demo_patient_controls as test_demo_patient_controls
+from browser.demo18f import (
+    test_demo_routes_ignore_sessions_and_store as test_demo_routes_ignore_sessions_and_store,
 )
 from browser.depth18e import test_depth_entry_shells as test_depth_entry_shells
 
@@ -35,6 +40,9 @@ from browser.depth18e import (
 from browser.depth18e import (
     test_depth_queue_density_and_groups as test_depth_queue_density_and_groups,
 )
+from browser.depth18e import (
+    test_depth_record_loading_and_retry as test_depth_record_loading_and_retry,
+)
 from browser.depth18e import test_depth_rendered_text_contrast as test_depth_rendered_text_contrast
 from browser.depth18e import (
     test_depth_route_geometry_and_empty_anatomy as test_depth_route_geometry_and_empty_anatomy,
@@ -55,6 +63,57 @@ from browser.walkthrough20_6e import (
 from browser.walkthrough20_6e import (
     test_6e_two_minutes_polling_and_saves as test_6e_two_minutes_polling_and_saves,
 )
+from browser.walkthrough20_6f import (
+    test_6f_doctor_preferences_and_logout as test_6f_doctor_preferences_and_logout,
+)
+from browser.walkthrough20_6f import (
+    test_6f_parallel_patient as test_6f_parallel_patient,
+)
+from browser.walkthrough20_6f import (
+    test_6f_patient_wording as test_6f_patient_wording,
+)
+from browser.walkthrough20_6g import test_6g_failure_sentences as test_6g_failure_sentences
+from browser.walkthrough20_6h import (
+    test_6h_hold_reason_fallback_and_latest_stop as test_6h_hold_reason_fallback_and_latest_stop,
+)
+from browser.walkthrough20_6h import (
+    test_6h_identity_associate_replay as test_6h_identity_associate_replay,
+)
+from browser.walkthrough20_6h import (
+    test_6h_task_actions_and_doctor_refusal as test_6h_task_actions_and_doctor_refusal,
+)
+from browser.walkthrough20_6i import (
+    test_6i_hidden_and_queued_preferences as test_6i_hidden_and_queued_preferences,
+)
+from browser.walkthrough20_6i import (
+    test_6i_passive_poll_preserves_quiet_edit as test_6i_passive_poll_preserves_quiet_edit,
+)
+from browser.walkthrough20_6i import (
+    test_6i_preference_poll_has_time_limit as test_6i_preference_poll_has_time_limit,
+)
+from browser.words18g import (
+    test_18g_admin_counts_reasons_and_results as test_18g_admin_counts_reasons_and_results,
+)
+from browser.words18g import (
+    test_18g_click_anywhere_back_and_counts as test_18g_click_anywhere_back_and_counts,
+)
+from browser.words18g import (
+    test_18g_dates_targets_and_no_repeats as test_18g_dates_targets_and_no_repeats,
+)
+from browser.words18g import test_18g_demo_catalog as test_18g_demo_catalog
+from browser.words18g import (
+    test_18g_every_outstanding_sentence as test_18g_every_outstanding_sentence,
+)
+from browser.words18g import (
+    test_18g_history_labels as test_18g_history_labels,
+)
+from browser.words18g import (
+    test_18g_patient_links_words_and_uploads as test_18g_patient_links_words_and_uploads,
+)
+from browser.words18g import (
+    test_18g_terminal_states_history_and_contact as test_18g_terminal_states_history_and_contact,
+)
+from browser.words18g import test_18g_urgency_uses_source_wait as test_18g_urgency_uses_source_wait
 from sanad.domain import Mission
 from sanad.store.records import from_record
 
@@ -115,7 +174,7 @@ def test_corrected_monitor_render_and_doctor_decisions(
     expect(facts).not_to_contain_text("BP 120/80")
     # Superseded history stays retained; this assertion is about current truth.
     page.screenshot(path=str(tmp_path / "corrected-monitor.png"), full_page=True)
-    page.get_by_role("tab", name="Plan", exact=True).click()
+    page.get_by_role("tab", name="Medicines", exact=True).click()
     page.locator("[data-correct-fact]").first.click()
     dialog = page.get_by_role("dialog")
     expect(dialog).to_be_visible()
@@ -146,7 +205,7 @@ def test_reading_selection_updates_inputs_and_detach_submits(
     old = f.current(world)
     rendered.detail()
     page = rendered.page
-    page.get_by_role("tab", name="Evidence", exact=True).click()
+    page.get_by_role("tab", name="Documents", exact=True).click()
     page.locator("[data-correct-evidence]").click()
     dialog = page.get_by_role("dialog")
     expect(dialog).to_be_visible()
@@ -163,7 +222,7 @@ def test_reading_selection_updates_inputs_and_detach_submits(
     changed = f.current(world)
     assert changed.extracted_values[0] == old.extracted_values[0]
     assert changed.extracted_values[1].value == "1.2"
-    page.get_by_role("tab", name="Evidence", exact=True).click()
+    page.get_by_role("tab", name="Documents", exact=True).click()
     page.locator("[data-correct-evidence]").click()
     dialog.locator('[name="operation"]').select_option("detach")
     action = submit(page, "Wrong chart")
@@ -202,13 +261,12 @@ def test_medication_reopen_preview_confirmation_and_amendment(
     mission = page.locator(".detail-grid .record-item").filter(
         has=page.get_by_role("heading", name=before.title, exact=True)
     )
-    # The fixture doctor is Arabic and no contest-English override is set here,
-    # so the badge renders in Arabic. Asserting English asserted the wrong world.
-    expect(mission.locator(".status").first).to_have_text("لم يحن الموعد")
+    # The doctor surface always uses the released English state phrases.
+    expect(mission.locator(".status").first).to_have_text("Not due yet")
     expect(mission.locator("time").first).to_have_attribute(
         "datetime", due.isoformat().replace("+00:00", "Z")
     )
-    page.get_by_role("tab", name="Plan", exact=True).click()
+    page.get_by_role("tab", name="Medicines", exact=True).click()
     page.locator("[data-amend]").click()
     expect(dialog).to_contain_text("cannot be unsent")
     expect(dialog.locator('[name="reason"]')).to_be_visible()
@@ -248,7 +306,7 @@ def assert_identity(page: Page) -> None:
 def test_identity_tabs_themes_and_no_horizontal_overflow(rendered: RenderedApp) -> None:
     page = rendered.page
     rendered.detail()
-    for name in ("Plan", "Requests", "Evidence", "History"):
+    for name in ("Medicines", "Requests", "Documents", "History"):
         page.get_by_role("tab", name=name, exact=True).click()
         assert_identity(page)
         assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
@@ -270,7 +328,7 @@ def test_identity_tabs_themes_and_no_horizontal_overflow(rendered: RenderedApp) 
     expect(page.locator("details.support")).to_have_count(0)
 
 
-def test_keyboard_drawer_sort_and_reduced_motion(rendered: RenderedApp) -> None:
+def test_keyboard_record_sort_and_reduced_motion(rendered: RenderedApp) -> None:
     page = rendered.page
     page.goto(rendered.origin + "/demo")
     page.locator('#content[aria-busy="false"]').wait_for()
@@ -279,12 +337,11 @@ def test_keyboard_drawer_sort_and_reduced_motion(rendered: RenderedApp) -> None:
     page.keyboard.press("ArrowDown")
     expect(rows.nth(1)).to_be_focused()
     page.keyboard.press("Enter")
-    drawer = page.locator("#patient-drawer")
-    expect(drawer).to_be_visible()
-    expect(drawer.get_by_role("link", name="Open full patient record")).to_be_visible()
+    expect(page.locator("#what-to-do")).to_be_visible()
+    expect(page.locator("#patient-drawer")).to_have_count(0)
     assert_identity(page)
-    page.keyboard.press("Escape")
-    expect(drawer).to_have_count(0)
+    page.locator("#back").click()
+    page.locator('#content[aria-busy="false"]').wait_for()
     page.locator('[data-sort="patient"]').click()
     expect(page.locator('th[aria-sort="ascending"]')).to_contain_text("Patient")
     page.locator('[data-sort="patient"]').click()
@@ -369,7 +426,7 @@ def test_lightbox_image_and_unavailable_state(rendered: RenderedApp) -> None:
 
     rendered.detail()
     page = rendered.page
-    page.get_by_role("tab", name="Evidence", exact=True).click()
+    page.get_by_role("tab", name="Documents", exact=True).click()
     original = page.locator("[data-media]").first
     expect(original).to_have_count(1)
     image_bytes = base64.b64decode(
@@ -413,83 +470,131 @@ def test_patient_upload_rejection_and_theme_choice(rendered: RenderedApp) -> Non
 
 # The 23:48 action table has sixteen scope-specific rows, plus an overdue duplicate.
 INBOX_CASES = [
-    ("result_review", "patient", "Result to review", "Open evidence", "evidence"),
+    (
+        "result_review",
+        "patient",
+        "Read the result and tell the patient what it means.",
+        "Open evidence",
+        "evidence",
+    ),
     (
         "evidence_association",
         "patient",
-        "Document to link to a request",
+        "A document arrived. Say which request it belongs to, or that it is not this patient's.",
         "Open evidence",
         "evidence",
     ),
     (
         "question_answer",
         "patient",
-        "Patient question waiting for an answer",
+        "The patient asked a question. Answer it.",
         "Answer question",
         "questions",
     ),
-    ("correction_disposition", "patient", "Correction to review", "Open history", "history"),
-    ("incident_response", "patient", "Danger report needs a response", "Open record", "plan"),
+    (
+        "correction_disposition",
+        "patient",
+        "A correction to the record is waiting for your yes or no.",
+        "Open history",
+        "history",
+    ),
+    (
+        "incident_response",
+        "patient",
+        "Respond to the danger report. Nobody has answered it yet.",
+        "Open record",
+        "plan",
+    ),
     (
         "incident_response",
         "intake",
-        "Danger found in a new-patient intake",
+        "Respond to the danger report. Nobody has answered it yet.",
         "Handled from the intake message in Telegram.",
         None,
     ),
     (
         "unmet_objective",
         "patient",
-        "Deadline missed, decide what happens next",
+        'The patient missed "the request". Decide: chase again, extend, or close it.',
         "Open requests",
         "requests",
     ),
-    ("followup_disposition", "patient", "Follow-up outcome to review", "Open requests", "requests"),
-    ("binding_review", "patient", "Patient link needs your review", "Open requests", "requests"),
-    ("media_failure", "patient", "A file could not be processed", "Open requests", "requests"),
+    (
+        "followup_disposition",
+        "patient",
+        (
+            "The follow-up on the new medicine needs your decision (it came back, ran"
+            " late, or could not be sent)."
+        ),
+        "Open requests",
+        "requests",
+    ),
+    (
+        "binding_review",
+        "patient",
+        (
+            "Check this patient's link: who joined, or a conflict in what they asked "
+            "for (stop, quiet hours)."
+        ),
+        "Open requests",
+        "requests",
+    ),
+    (
+        "media_failure",
+        "patient",
+        "A photo the patient sent could not be read. Ask them to send it again.",
+        "Open requests",
+        "requests",
+    ),
     (
         "media_failure",
         "intake",
-        "A file could not be processed",
+        "A photo the patient sent could not be read. Ask them to send it again.",
         "Handled from the intake message in Telegram.",
         None,
     ),
     (
         "intake_clarification",
         "intake",
-        "New-patient intake needs clarification",
+        "A new patient's file needs one clarification before it is complete.",
         "Handled from the intake message in Telegram.",
         None,
     ),
     (
         "delivery_failure",
         "patient",
-        "A message about this patient was not delivered",
+        "A message to this patient did not arrive. Check how to reach them.",
         "Open requests",
         "requests",
     ),
     (
         "delivery_failure",
         "intake",
-        "An intake message was not delivered",
+        "A message about a new patient's file did not arrive.",
         "Handled from the intake message in Telegram.",
         None,
     ),
     (
         "delivery_failure",
         "doctor",
-        "A message to you was not delivered",
+        "A message to you did not arrive. Check your Telegram.",
         "Handled from the review message in Telegram.",
         None,
     ),
     (
         "coverage_review",
         "patient",
-        "Patient coverage needs your review",
+        "Check who is covering these patients.",
         "Handled from the review message in Telegram.",
         None,
     ),
-    ("result_review", "patient", "Result to review", "Open evidence", "evidence"),
+    (
+        "result_review",
+        "patient",
+        "Read the result and tell the patient what it means.",
+        "Open evidence",
+        "evidence",
+    ),
 ]
 
 
@@ -547,14 +652,14 @@ def test_walkthrough_inbox_action_table(
         line = card.locator(".review-line")
         expect(line).to_be_visible()
         expect(line).to_contain_text(words)
-        expect(line).to_contain_text(
+        expect(card.locator("summary")).to_contain_text(
             "Synthetic Patient"
             if scope == "patient"
             else "Unassigned intake"
             if scope == "intake"
             else "Your account"
         )
-        expect(line).to_contain_text("overdue by 2 days" if i == 16 else "due in 3 days")
+        expect(line).not_to_contain_text("days")  # No source-event date exists in these records.
         assert card.evaluate("(el)=>el.open") == (kind == "incident_response" or i == 16)
         if not card.evaluate("(el)=>el.open"):
             card.locator("summary").click()
@@ -567,22 +672,24 @@ def test_walkthrough_inbox_action_table(
             assert (
                 href == "#questions"
                 if tab == "questions"
-                else href == f"/a/patients/{w.patient_scope.patient_id}#tab={tab}"
+                else href == f"/a/patients/{w.patient_scope.patient_id}#tab=requests"
             )
         else:
             expect(card.locator(".review-action")).to_have_text(control)
             expect(card.locator("a, button")).to_have_count(0)
     overdue = page.locator('[data-summary="overdue"]')
     overdue.click()
-    expect(page.locator("#inbox-rail-16")).to_be_in_viewport()
+    expect(page.locator(".inbox-item")).to_have_count(
+        0
+    )  # Review deadlines are not patient lateness.
     expect(overdue).to_have_attribute("aria-pressed", "true")
     # No filtered overdue card means no dangling summary link.
     page.locator("#search").fill("Danger")
     expect(page.locator(".summary-strip a")).to_have_count(0)
     for tab, label in [
-        ("plan", "Plan"),
+        ("plan", "Medicines"),
         ("requests", "Requests"),
-        ("evidence", "Evidence"),
+        ("evidence", "Documents"),
         ("history", "History"),
     ]:
         page.goto(f"{rendered.origin}/a/patients/{w.patient_scope.patient_id}#tab={tab}")
@@ -594,7 +701,7 @@ def test_walkthrough_inbox_action_table(
 
 
 @pytest.mark.parametrize("world", ["empty", "evidence", "monitor", "medication"], indirect=True)
-def test_walkthrough_drawer_four_groups(
+def test_walkthrough_record_four_groups(
     rendered: RenderedApp, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("SANAD_CONTEST_ENGLISH", "1")
@@ -604,35 +711,37 @@ def test_walkthrough_drawer_four_groups(
     with page.expect_response(lambda r: r.url.endswith("/evidence")) as response:
         page.locator("[data-record]").first.click()
     assert response.value.status == 200
-    drawer = page.locator("#patient-drawer")
-    expect(drawer.get_by_role("link", name="Open full patient record")).to_be_visible()
-    for title in ["Current plan", "Outstanding work", "Evidence", "History"]:
-        expect(drawer.get_by_role("heading", name=title, exact=True)).to_be_visible()
+    record_page = page.locator("#content")
+    expect(page.locator("#patient-drawer")).to_have_count(0)
+    for title in ["Medicines", "Requests", "Documents", "History"]:
+        expect(page.get_by_role("tab", name=title, exact=True)).to_be_visible()
     record = page.request.get(f"{rendered.origin}/api/patients/{w.patient_scope.patient_id}").json()
     active_orders = [o for o in record["orders"] if o["status"] == "active"]
     for order in active_orders:
         instruction = order["current_version"]["structured_instruction"]
         for field in ("drug", "dose", "frequency"):
             if instruction.get(field):
-                expect(drawer).to_contain_text(str(instruction[field]))
+                expect(record_page).to_contain_text(str(instruction[field]))
     if not active_orders:
-        expect(drawer).to_contain_text("No active medication is recorded.")
+        expect(record_page).to_contain_text("No active medication is recorded.")
     if not record["reviews"] and not record["missions"] and not record["followups"]:
-        expect(drawer).to_contain_text("No outstanding obligation recorded")
+        expect(record_page).to_contain_text(
+            "All quiet. Nothing is waiting on you or on the patient."
+        )
     for correction in record["corrections"]:
-        expect(drawer.locator(f'time[datetime="{correction["created_at"]}"]')).to_be_visible()
+        expect(record_page.locator(f'[data-correction="{correction["id"]}"]')).to_have_count(1)
     evidence = response.value.json()
     if evidence:
-        expect(drawer).to_contain_text("Lab result")
-        expect(drawer).to_contain_text("Accepted document")
-        assert drawer.locator("time").count() > 0
+        expect(record_page).to_contain_text("Lab result")
+        expect(record_page).to_contain_text("On file.")
+        assert record_page.locator("time").count() > 0
     else:
-        expect(drawer).to_contain_text("No evidence is recorded for this patient.")
+        expect(record_page).to_contain_text("No evidence is recorded for this patient.")
     if w.rows("correction"):
-        expect(drawer).to_contain_text("120/80")
-        expect(drawer).to_contain_text("130/85")
+        expect(record_page).to_contain_text("120/80")
+        expect(record_page).to_contain_text("130/85")
     else:
-        expect(drawer).to_contain_text("No corrections are recorded for this patient.")
+        expect(record_page).to_contain_text("No corrections are recorded for this patient.")
     expect(page.locator("#feedback")).to_be_empty()
 
 
@@ -684,7 +793,7 @@ def test_6d_admin_denials_keep_revocation(rendered: RenderedApp) -> None:
 
 @pytest.mark.parametrize("world", ["medication"], indirect=True)
 @pytest.mark.parametrize("rendered", [(1440, "light"), (375, "light")], indirect=True)
-def test_6d_last_activity_and_drawer_amend(
+def test_6d_last_activity_and_record_amend(
     rendered: RenderedApp, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("SANAD_CONTEST_ENGLISH", "1")
@@ -697,13 +806,13 @@ def test_6d_last_activity_and_drawer_amend(
     expect(row).to_contain_text(
         "قبل ساعتين" if page.locator("html").get_attribute("lang") == "ar" else "2 hours ago"
     )
-    assert row.locator("td").nth(4).locator("time").get_attribute("datetime")
+    assert row.locator("td").nth(3).locator("time").get_attribute("datetime")
     assert page.locator("caption").evaluate("e=>getComputedStyle(e).display") == "block"
     assert row.locator("td").nth(1).evaluate("e=>getComputedStyle(e).whiteSpace") == "nowrap"
     page.screenshot(path=str(tmp_path / "6d-patient-list.png"), full_page=True)
     row.locator("[data-record]").click()
-    drawer = page.locator("#patient-drawer")
-    drawer.get_by_role("button", name="Amend instruction").click()
+    page.locator("#what-to-do").wait_for()
+    page.get_by_role("button", name="Amend instruction").click()
     dialog = page.locator("#correction-dialog")
     expect(dialog).to_be_visible()
     dialog.locator('[name="dose"]').fill("40 mg")
@@ -711,7 +820,7 @@ def test_6d_last_activity_and_drawer_amend(
     with page.expect_response(lambda r: r.url.endswith("/corrections")) as response:
         dialog.get_by_role("button", name="Confirm correction").click()
     assert response.value.status == 200
-    expect(page.locator("#patient-drawer")).to_contain_text("40 mg")
+    expect(page.locator("[data-order]")).to_contain_text("40 mg")
     expect(page.locator("#action-toast")).to_contain_text("Change recorded.")
     assert any("40 mg" in str(r.body) for r in world.rows("care_order_version"))
 

@@ -497,7 +497,51 @@ def run_smoke(aws: Any, env: str, out: dict[str, str], revision: str) -> dict[st
                 reason = str(error) if isinstance(error, OperationError) else type(error).__name__
                 checks[name] = {"status": "FAILED", "reason": reason}
             print("smoke", name, json.dumps(checks[name], sort_keys=True, default=str))
+    try:
+        checks["health"]["lambda_errors_last_15_minutes"] = app_errors(aws, out["AppFunctionName"])
+        checks["health"]["scan_requests_last_15_minutes"] = scan_requests(aws, out["TableName"])
+    except Exception as error:
+        checks["health"].update(
+            status="FAILED",
+            reason=str(error) if isinstance(error, OperationError) else type(error).__name__,
+        )
     return checks
+
+
+def scan_requests(aws: Any, table_name: str) -> float:
+    now = datetime.now(UTC)
+    result = client(aws, "cloudwatch").get_metric_statistics(
+        Namespace="AWS/DynamoDB",
+        MetricName="SuccessfulRequestLatency",
+        Dimensions=[
+            {"Name": "TableName", "Value": table_name},
+            {"Name": "Operation", "Value": "Scan"},
+        ],
+        StartTime=now - timedelta(minutes=15),
+        EndTime=now,
+        Period=60,
+        Statistics=["SampleCount"],
+    )
+    count = float(sum(p["SampleCount"] for p in result["Datapoints"]))
+    require(count <= 5, "DynamoDB Scan requests exceed 5 in the last 15 minutes")
+    return count
+
+
+def app_errors(aws: Any, function_name: str) -> float:
+    now = datetime.now(UTC)
+    result = client(aws, "cloudwatch").get_metric_statistics(
+        Namespace="AWS/Lambda",
+        MetricName="Errors",
+        Dimensions=[{"Name": "FunctionName", "Value": function_name}],
+        StartTime=now - timedelta(minutes=15),
+        EndTime=now,
+        Period=60,
+        Statistics=["Sum"],
+    )
+    require(bool(result["Datapoints"]), "App Lambda error count is not yet measurable")
+    count = float(sum(p["Sum"] for p in result["Datapoints"]))
+    require(count == 0, "App Lambda errors in the last 15 minutes")
+    return count
 
 
 def main() -> None:

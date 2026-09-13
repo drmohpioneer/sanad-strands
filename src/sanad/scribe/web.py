@@ -16,11 +16,20 @@ def scribe_router(claims: ClaimService) -> APIRouter:
 
     @router.get("/api/names")
     def names(session: Annotated[WebSession, Depends(require_session("doctor"))]) -> object:
-        from sanad.scribe.memory import memory_rows
+        from sanad.steward.types import bounded_records
+        from sanad.store.records import NameMemory, from_record
 
         return [
             r.model_dump(mode="json", exclude={"scope", "entity_type"})
-            for r in memory_rows(claims.store, TenantScope(doctor_id=session.doctor_id))
+            for r in sorted(
+                (
+                    from_record(row, NameMemory)
+                    for row in bounded_records(
+                        claims.store, TenantScope(doctor_id=session.doctor_id), "name_memory"
+                    )
+                ),
+                key=lambda r: (-r.confirmations, -r.last_confirmed_at.timestamp(), r.id),
+            )
         ]
 
     @router.get("/api/patients")

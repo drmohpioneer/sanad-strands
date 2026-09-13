@@ -156,7 +156,7 @@ def test_t35_upload_recovery_uses_new_ingress_and_retained_storage(
         uploads.client.post(
             "/api/patient/uploads", content=png(), headers=uploads.headers()
         ).status_code
-        == 503
+        == 409
     )
     stage = uploads.stages()[0]
     # New service instance: neither callbacks nor process memory survive.

@@ -115,11 +115,18 @@ def create_app(
 
         @app.exception_handler(HTTPException)
         async def browser_error(request: Request, error: HTTPException) -> HTMLResponse:
+            if error.status_code >= 500:
+                from sanad.api.failures import RequestFailure
+
+                raise RequestFailure("unhandled")
             response = HTMLResponse(pages.refused_page(), status_code=error.status_code)
             if error.status_code in {401, 403}:
                 clear_cookies(response)
             return response
 
+    from sanad.api.failures import RequestFailures
+
+    app.add_middleware(RequestFailures)
     app.state.telegram = runtime
     app.include_router(
         telegram_router(runtime, process_receipts=process_receipts, receipt_submit=receipt_submit)

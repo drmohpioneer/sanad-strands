@@ -10,7 +10,8 @@ from sanad.channels.telegram.router import route_receipt
 from sanad.domain.language import contest_english, effective
 from sanad.safety import screen_text
 from sanad.store import keys
-from sanad.store.records import InboundReceipt, OperationalClock, WebSession, to_record
+from sanad.store.records import InboundReceipt, OperationalClock, WebSession
+from sanad.web.receipts import persist
 from sanad.web.routes import SESSION_COOKIE, require_session
 
 
@@ -99,9 +100,8 @@ def preference_router(login: LoginService) -> APIRouter:
             safety_result=verdict.model_dump(mode="json"),
             work_clock=OperationalClock(next_action_at=now, work_lane="ingress"),
         )
-        accepted = login.store.accept_inbound(transport_key, to_record(receipt, receipt.scope))
-        if accepted.record is None or accepted.status not in {"created", "existing"}:
-            raise HTTPException(503)
+        accepted = persist(login.store, receipt)
+        assert accepted.record is not None
         # Reuses parsing, work claim, authority checks, ScribeLanguage transaction,
         # audit and queued reply. No provider or transport dispatch is called here.
         result = route_receipt(runtime, accepted.record.scoped_key(receipt.scope), owner=channel)

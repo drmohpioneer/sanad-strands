@@ -67,7 +67,7 @@ def test_resolved_aliases_equal_analyte_sets_and_spoken_order() -> None:
     assert result.single_source == ("fact:0",)
 
 
-def test_changed_fields_ask_but_secondary_mission_does_not_replace_primary() -> None:
+def test_changed_fields_ask_and_secondary_mission_survives() -> None:
     a = value("orders", [{"action": "continue", "drug": "كونكور", "dose": "5"}])
     b = DictationCandidate.model_validate(
         {
@@ -77,10 +77,10 @@ def test_changed_fields_ask_but_secondary_mission_does_not_replace_primary() -> 
     )
     result = merge_candidates(a, b, "كونكور 5 وقف 10 وطلبت BUN")
     assert result and len(result.issues) == 2
-    assert result.single_source == ()
+    assert result.single_source == ("mission:0",)
     from sanad.scribe.extract import missing_request
 
-    assert missing_request(result.candidate, "طلبت BUN")
+    assert not missing_request(result.candidate, "طلبت BUN")
 
 
 def test_failures_and_discarded_unsupported_digits() -> None:

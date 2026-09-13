@@ -31,7 +31,7 @@ ADMIN_SHELL = Template("""<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>$title</title><script src="/assets/theme.js"></script>
 <link rel="stylesheet" href="/assets/browser.css"></head>
-<body class="standalone"><main><header class="page-heading"><span class="identity">Sanad</span>
+<body class="standalone"$demo><main><header class="page-heading"><span class="identity">Sanad</span>
 <label>Appearance <select id="theme"><option value="system">System</option>
 <option value="dark">Dark</option><option value="light">Light</option></select></label></header>
 $content</main></body></html>""")
@@ -58,7 +58,19 @@ def render(template: Template, **values: str) -> str:
     return template.substitute({k: escape(v, quote=True) for k, v in values.items()})
 
 
-def shell(title: str, content: str, language: str = "ar", *, interactive: bool = False) -> str:
+def demo_banner() -> str:
+    return (
+        '<div class="demo-banner"><strong>Synthetic demonstration · Fictional records only</strong>'
+        "<p>This view uses a separate static data source. It cannot open a clinical account.</p>"
+        '<nav aria-label="Demonstrations"><a href="/demo">Doctor demo</a> · '
+        '<a href="/demo/patient">Patient demo</a> · '
+        '<a href="/demo/admin">Admin demo</a></nav></div>'
+    )
+
+
+def shell(
+    title: str, content: str, language: str = "ar", *, interactive: bool = False, demo: bool = False
+) -> str:
     # Content is markup rendered exclusively by the escaping functions in this module.
     locale = effective(language)
     return (ADMIN_SHELL if interactive else SHELL).substitute(
@@ -66,6 +78,7 @@ def shell(title: str, content: str, language: str = "ar", *, interactive: bool =
         content=content,
         language=locale,
         direction="rtl" if locale == "ar" else "ltr",
+        demo=' data-demo="true"' if demo else "",
     )
 
 
@@ -86,6 +99,10 @@ def continue_page(action: str, csrf: str, language: str = "ar") -> str:
 
 
 LOGIN_REFUSALS = {
+    "signed_out": "You signed out. Send /login in Telegram for a new link.",
+    "patient_sign_in": "Please sign in again from Telegram.",
+    "patient_access_changed": "Your access changed elsewhere. Please sign in again from Telegram.",
+    "session_busy": "Please try again shortly.",
     "expired": "This link has expired; send /login again.",
     "unknown_link": "This link has expired; send /login again.",
     "already_used": "This link was already used; send /login again.",
@@ -160,15 +177,17 @@ def patient_home(name: str, consent: int, language: str = "ar") -> str:
     )
 
 
-def admin_home() -> str:
+def admin_home(*, demo: bool = False) -> str:
     return shell(
         "Administrator",
-        "<h1>Administrator</h1><p>Account administration</p>"
-        '<button id="admin-logout">Sign out everywhere</button>'
-        '<p id="admin-result" role="status"></p><div id="admin-applications"></div>'
-        '<script src="/assets/browser.js" defer></script>',
+        (demo_banner() if demo else "")
+        + "<h1>Administrator</h1><p>Account administration</p>"
+        + ("" if demo else '<button id="admin-logout">Sign out everywhere</button>')
+        + '<p id="admin-result" role="status"></p><div id="admin-applications"></div>'
+        + '<script src="/assets/browser.js" defer></script>',
         "en",
         interactive=True,
+        demo=demo,
     )
 
 

@@ -33,7 +33,13 @@ from sanad.safety import screen_text
 from sanad.scribe import amend
 from sanad.scribe.change_binding import SourcePartition, append_reply, partition_for
 from sanad.scribe.commit import ConfirmationResult, ScribeCommit
-from sanad.scribe.corrections import NEW_PATIENT, correction_request, merge_correction, reply_mode
+from sanad.scribe.corrections import (
+    NEW_PATIENT,
+    correction_request,
+    merge_correction,
+    patient_answer,
+    reply_mode,
+)
 from sanad.scribe.crosscheck import PhotoReview, render_card, review_issues
 from sanad.scribe.extract import (
     CORRECTION_PROMPT_VERSION,
@@ -768,11 +774,17 @@ class ScribeTurn:
                 # Photo correction keeps its accepted single-extraction path.
                 return await reading(0)
             results = list(await asyncio.gather(reading(0), reading(1), return_exceptions=True))
-            primary = next((i for i, r in enumerate(results) if isinstance(r, ModelProposal)), None)
-            if primary is not None:
+            for primary in range(len(results)):
+                if not isinstance(results[primary], ModelProposal):
+                    continue
                 before = results[primary]
                 assert isinstance(before, ModelProposal)
-                if attempts[primary] < 2 and missing_request(before.value, text):
+                peer_requests = any(
+                    isinstance(peer, ModelProposal)
+                    and any(m.kind == "TEST" for m in peer.value.missions)
+                    for peer in results
+                ) and not any(m.kind == "TEST" for m in before.value.missions)
+                if attempts[primary] < 2 and (missing_request(before.value, text) or peer_requests):
                     try:
                         retried = await reading(primary, before)
                     except Exception:
@@ -805,7 +817,15 @@ class ScribeTurn:
                     ModelUnavailable(reason="unavailable"),
                 )
             values = [r.value if isinstance(r, ModelProposal) else None for r in results]
-            merged = merge_candidates(values[0], values[1], text, context(service))
+            from sanad.scribe.patients import panel
+
+            merged = merge_candidates(
+                values[0],
+                values[1],
+                text,
+                context(service),
+                panel_names=tuple(p.display_name for p in panel(self.repo.store, doctor.scope)),
+            )
             assert merged is not None
             return good[0].model_copy(
                 update={
@@ -1240,10 +1260,21 @@ class ScribeTurn:
             > 65
         ):
             issues.append(ProposalIssue(item="all", code="batch_too_large"))
+        # Choosing the other offered identity creates a replacement proposal;
+        # an existing proposal's selected identity remains immutable in the store.
+        rebind = bool(
+            correction
+            and previous
+            and patient_answer(previous, source_text[len(previous.source_text) :])
+            and candidate.patient != previous.candidate.patient
+            and (selected.patient_id if selected else None) != previous.selected_patient_id
+        )
         nonce = issue_token()
         proposal = Proposal(
-            id=previous.id if correction and previous else proposal_id or uuid4().hex,
-            version=previous.version + 1 if correction and previous else 1,
+            id=previous.id
+            if correction and previous and not rebind
+            else proposal_id or uuid4().hex,
+            version=previous.version + 1 if correction and previous and not rebind else 1,
             scope=doctor.scope,
             doctor_id=doctor.id,
             timezone=doctor.timezone,
@@ -1282,7 +1313,7 @@ class ScribeTurn:
                 work_lane="scribe",
             ),
             supersedes_id=previous.supersedes_id
-            if correction and previous
+            if correction and previous and not rebind
             else previous.id
             if previous
             else None,
@@ -1313,7 +1344,7 @@ class ScribeTurn:
                 }
             )
         models: tuple[BaseModel, ...] = (proposal, *extra_models)
-        if previous and previous.status == "pending" and not correction:
+        if previous and previous.status == "pending" and (not correction or rebind):
             models += (revise(previous, now, status="superseded", work_clock=None),)
         models += (
             (
@@ -1445,6 +1476,12 @@ class ScribeTurn:
             id = "callback:" + receipt.id
             if token.action == "confirm":
                 result = self.committer.confirm(proposal, token, actor, id, claim=claim)
+                if result.status == "busy":
+                    self.repo.store.defer_inbound(claim, self.repo.clock())
+                    self.runtime.transport.answer_callback(
+                        str((receipt.payload or {}).get("callback_query_id", "")), ""
+                    )
+                    return RouteResult(route="busy", status="patient_busy")
             elif token.action == "reject":
                 result = self.committer.reject(proposal, actor, id, claim=claim, token=token)
             elif token.action == "edit":

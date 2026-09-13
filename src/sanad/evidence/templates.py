@@ -5,6 +5,18 @@ from sanad.presentation.context import PresentationContext
 
 OWNER_REVIEW_PENDING = True
 TEXT = {
+    "doctor_evidence_refused": (
+        "مقدرتش أسجل القرار. افتح /evidence وحاول تاني.",
+        "This evidence decision could not be recorded. Open /evidence and try again.",
+    ),
+    "doctor_evidence_mission_closed": (
+        "الطلب ده مقفول. افتح /evidence تاني.",
+        "This request is closed. Open /evidence again.",
+    ),
+    "doctor_evidence_identity_required": (
+        "تأكد الأول إن الورقة للمريض ده.",
+        "Identity is not confirmed. Confirm it is this patient first.",
+    ),
     "patient_evidence_received_pending": (
         "وصلت الصورة، بقراها وهرد عليك",
         "I received the photo. I will read it and reply.",
@@ -53,7 +65,7 @@ TEXT = {
     ),
     "doctor_evidence_stale": (
         "الاختيار ده انتهى أو اتغير، افتح /evidence تاني",
-        "This choice expired or changed. Open /evidence again.",
+        "This evidence changed since listing or the choice expired. Open /evidence again.",
     ),
     "doctor_evidence_empty": ("مفيش مستندات مستنية ربط", "No evidence is waiting for association."),
     "doctor_evidence_action_recorded": (
@@ -127,7 +139,7 @@ BUTTONS = {
     "associate": ("ربط", "Associate"),
     "accept": ("قبول", "Accept"),
     "reject": ("رفض", "Reject"),
-    "confirm_identity": ("ورقة المريض ده ✅", "This patient's paper ✅"),
+    "confirm_identity": ("ورقة المريض ده ✅", "Confirm it is this patient"),
     "reject_identity": ("مش ورقته ❌", "Not this patient ❌"),
 }
 

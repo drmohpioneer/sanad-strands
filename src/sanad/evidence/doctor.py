@@ -27,6 +27,41 @@ def owned(store: Store, doctor_id: str) -> tuple[Evidence, ...]:
     return tuple(values)
 
 
+def action_choices(
+    store: Store, evidence: Evidence, language: str
+) -> list[tuple[str, str | None, str]]:
+    """The same current-state action model for Telegram and the browser."""
+    from sanad.domain import Mission
+    from sanad.evidence import associate
+
+    if evidence.association_state in {"rejected", "superseded", "detached"}:
+        return []
+    missions = tuple(from_record(row, Mission) for row in records(store, evidence.scope, "mission"))
+    if associate.identity_required(evidence):
+        return [
+            (
+                "confirm_identity",
+                evidence.mission_id,
+                templates.button("confirm_identity", language),
+            ),
+            ("reject", None, templates.button("reject_identity", language)),
+        ]
+    choices: list[tuple[str, str | None, str]] = [
+        ("associate", m.id, templates.button("associate", language) + ": " + m.title)
+        for m in associate.choose(missions, evidence, "")[2]
+    ]
+    if any(
+        m.id == evidence.mission_id
+        and m.objective_predicate.kind == "evidence"
+        and m.objective_predicate.evaluator == "task_evidence"
+        for m in associate.open_missions(missions)
+    ):
+        choices.append(("accept", evidence.mission_id, templates.button("accept", language)))
+    if not any(m.id == evidence.mission_id and m.state == "fulfilled" for m in missions):
+        choices.append(("reject", None, templates.button("reject", language)))
+    return choices
+
+
 def decide(
     steward: Steward,
     actor: Principal,
@@ -38,6 +73,31 @@ def decide(
     reason: str | None = None,
     token_hash: str | None = None,
 ) -> CommandResult:
+    return steward.handle(
+        command_for(
+            steward,
+            actor,
+            evidence,
+            action,
+            command_id,
+            mission_id=mission_id,
+            reason=reason,
+            token_hash=token_hash,
+        )
+    )
+
+
+def command_for(
+    steward: Steward,
+    actor: Principal,
+    evidence: Evidence,
+    action: str,
+    command_id: str,
+    *,
+    mission_id: str | None = None,
+    reason: str | None = None,
+    token_hash: str | None = None,
+) -> CommandEnvelope:
     kind = (
         "RejectEvidence"
         if action == "reject"
@@ -63,7 +123,22 @@ def decide(
             },
         }
     )
-    return steward.handle(command)
+    return command
+
+
+def refusal_key(reason: str | None, status: str) -> str:
+    if reason in {"identity_not_confirmed", "identity_confirmation_not_pending"}:
+        return "doctor_evidence_identity_required"
+    if reason == "mission_missing":
+        return "doctor_evidence_mission_closed"
+    if reason == "evidence_already_decided":
+        return "doctor_evidence_already_handled"
+    if (
+        reason in {"evidence_stale", "evidence_token_stale", "evidence_token_target"}
+        or status == "stale_version"
+    ):
+        return "doctor_evidence_stale"
+    return "doctor_evidence_refused"
 
 
 def route(
@@ -91,7 +166,7 @@ def route(
         # Solicited evidence decisions accompany the existing Liaison inbox;
         # its ordinary handler still owns the receipt and all other reviews.
         for value in evidence:
-            if value.association_state == "candidate" and value.mission_id:
+            if value.association_state in {"candidate", "unmatched", "accepted_pending_identity"}:
                 decide(
                     turn.runtime.steward,
                     actor,
@@ -106,6 +181,7 @@ def route(
                 (e, row)
                 for e in evidence
                 if (row := turn.repo.store.get(e.scope, "evidence_action", token_hash))
+                and row.body.get("evidence_id") == e.evidence_id
             ),
             None,
         )
@@ -174,11 +250,11 @@ def route(
         )
         status = result.status
         key = (
-            "doctor_evidence_action_recorded"
-            if status in {"accepted", "duplicate"}
-            else "doctor_evidence_already_handled"
+            "doctor_evidence_already_handled"
             if token.consumed_at
-            else "doctor_evidence_stale"
+            else "doctor_evidence_action_recorded"
+            if status in {"accepted", "duplicate"}
+            else refusal_key(result.reason_code, status)
         )
     if receipt.kind == "callback":
         turn.runtime.transport.answer_callback(

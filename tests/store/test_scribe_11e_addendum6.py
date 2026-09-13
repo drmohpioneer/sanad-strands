@@ -222,7 +222,7 @@ def test_request_retry_setup_failure_keeps_grounded_monitor(
     world.approve(language="en")
     incomplete = copy.deepcopy(VALUE)
     incomplete["missions"] = [incomplete["missions"][1]]
-    model = ScriptedModel(candidate(incomplete), candidate(incomplete))
+    model = ScriptedModel(candidate(incomplete), candidate(incomplete), candidate(incomplete))
     calls = 0
 
     def factory(*_: object) -> ScriptedModel:
@@ -235,7 +235,7 @@ def test_request_retry_setup_failure_keeps_grounded_monitor(
     world.scribe.model_factory = factory
     world.post(update(APPLICANT, SOURCE, 10))
     p = world.proposal
-    assert calls == 3 and world.receipt(10).state == "completed"
+    assert calls == 4 and world.receipt(10).state == "completed"
     assert not p.blocked("all") and len(p.candidate.orders) == 2
     assert sum(m.kind == "MONITOR" for m in p.candidate.missions) == 1
     text = "\n".join(render_card(p))

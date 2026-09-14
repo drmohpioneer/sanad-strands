@@ -185,7 +185,7 @@ def test_6f_patient_wording(rendered: RenderedApp, monkeypatch: pytest.MonkeyPat
     expect(page.locator("#patient-conversation")).to_contain_text("Synthetic Doctor")
     patient = w.claims.patient(w.patient_scope.doctor_id, w.patient_scope.patient_id)
     assert patient
-    local_time = w.clock().astimezone(ZoneInfo(patient.timezone))
+    local_time = w.clock().astimezone(ZoneInfo("UTC"))
     expect(page.locator("#patient-conversation small").first).to_have_text(
         "Today " + local_time.strftime("%H:%M")
     )

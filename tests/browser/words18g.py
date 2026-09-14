@@ -45,9 +45,23 @@ REVIEW_WORDS = {
     ),
     "coverage_review": "Check who is covering these patients.",
 }
-ACK = "You have seen this; it stays open until handled in Telegram."
+ACK = "You have seen this. It stays open until you reply."
 CHANGED = " Something changed since you last looked."
 OLD_WORDS = (
+    "No patients recorded yet. Add a patient through Telegram.",
+    "Acknowledgment does not resolve a review. Actions remain in Telegram.",
+    "Sanad writes to you on Telegram when your doctor is waiting for",
+    "Change or cancel the request in Telegram.",
+    "Needs you now",
+    "Reinstate",
+    "Reinstated.",
+    "cover arranged",
+    "Handled from the intake message in Telegram.",
+    "Handled from the review message in Telegram.",
+    "Check your Telegram.",
+    "confirmation in Telegram.",
+    "Confirm in Telegram",
+    "until handled in Telegram.",
     "Needs review",
     "Pending review",
     "Awaiting link",
@@ -85,6 +99,7 @@ def old_word_walk(page: Page) -> None:
     for word in OLD_WORDS:
         assert word not in texts, word
     assert not re.search(r"\b[a-zA-Z]+_[a-zA-Z_]+\b", texts)
+    assert "Due today" not in page.locator(".tile-label").all_text_contents()
     identity(page)
 
 
@@ -185,7 +200,7 @@ def test_18g_every_outstanding_sentence(rendered: RenderedApp) -> None:
         (
             "proposed",
             {},
-            '"Send the reading" is proposed and waits for your confirmation in Telegram.',
+            '"Send the reading" is proposed and waits for your confirmation.',
             "Proposed",
         ),
         (
@@ -217,10 +232,7 @@ def test_18g_every_outstanding_sentence(rendered: RenderedApp) -> None:
         (
             "blocked",
             {},
-            (
-                'The patient cannot do "Send the reading" yet. Change or cancel the '
-                "request in Telegram."
-            ),
+            'The patient cannot do "Send the reading" yet.',
             "Patient cannot do it yet",
         ),
         (
@@ -611,7 +623,7 @@ def test_18g_click_anywhere_back_and_counts(rendered: RenderedApp) -> None:
     projected(app, data)
     goto(app, "/a")
     expect(page.locator(".tile-label")).to_have_text(
-        ["Needs you now", "Waiting on you", "Patient is late", "Due today"]
+        ["Emergency", "Waiting on you", "Patient is late", "Patient tasks due today"]
     )
     expect(page.locator(".summary-tile strong")).to_have_text(["1", "1", "2", "1"])
     expect(page.locator('[data-summary="danger"] .tile-clause')).to_have_text("1 needs a response")
@@ -620,11 +632,11 @@ def test_18g_click_anywhere_back_and_counts(rendered: RenderedApp) -> None:
     )
     for key in ("danger", "pending_review", "overdue", "due_today"):
         tile = page.locator(f'[data-summary="{key}"]')
-        assert tile.get_attribute("aria-pressed") is None
         tile.click()
-        expect(page.locator('#filter [aria-pressed="true"]')).to_have_attribute(
-            "data-filter", "needs"
-        )
+        expect(tile).to_have_attribute("aria-pressed", "true")
+        expect(page.locator('#filter [aria-pressed="true"]')).to_have_count(0)
+        expect(page.locator(".patient-row")).to_have_count(1)
+    page.locator('#filter [data-filter="all"]').click()
     for selector in (".who2 small", ".need", ".who2 b"):
         row = page.locator(".patient-row").first
         row.locator(selector).click()
@@ -694,6 +706,8 @@ def test_18g_patient_links_words_and_uploads(
     page.route(app.origin + "/api/patient/uploads", lambda r: r.fulfill(json=uploads))
     page.clock.set_fixed_time(NOW)
     goto(app, "/pp")
+    expect(page.locator("#patient-uploads p")).to_have_count(5)
+    page.locator("#patient-uploads-toggle").click()
     expect(page.locator("#patient-uploads p")).to_have_count(6)
     expect(page.locator("#patient-uploads h3")).to_have_text(
         CATALOG["patient_browser.documents_sent"][locale]
@@ -770,7 +784,7 @@ def test_18g_admin_counts_reasons_and_results(rendered: RenderedApp) -> None:
     expect(page.locator(".summary-tile > span")).to_have_text(
         ["Waiting for your decision", "Approved", "Suspended", "Rejected"]
     )
-    for i, actions in enumerate((["Approve", "Reject"], ["Suspend"], ["Reinstate"], [])):
+    for i, actions in enumerate((["Approve", "Reject"], ["Suspend"], ["Restore access"], [])):
         expect(cards.nth(i).locator("button")).to_have_text(actions)
     # Submit both reason choices to the real transport boundary without account mutations.
     fixture = json.loads(
@@ -820,14 +834,14 @@ def test_18g_admin_counts_reasons_and_results(rendered: RenderedApp) -> None:
     assert captured[-1]["reason_code"] == "coverage"
     assert dialogs[-1] == (
         "Suspending closes this doctor's access and opens an item for you to "
-        "arrange cover for their patients (it does not arrange it by itself). "
-        "Reinstate restores the account."
+        "find another doctor to take over their patients (it does not do this by itself). "
+        "Restore access gives the account back."
     )
-    cards.nth(2).get_by_role("button", name="Reinstate", exact=True).click()
-    expect(page.locator("#admin-result")).to_have_text("Reinstated.")
+    cards.nth(2).get_by_role("button", name="Restore access", exact=True).click()
+    expect(page.locator("#admin-result")).to_have_text("Access restored.")
     assert (
         dialogs[-1]
-        == "Reinstating restores this doctor's access. Their patients' records were kept."
+        == "Restoring access lets this doctor sign in again. Their patients' records were kept."
     )
     cards.nth(0).get_by_role("button", name="Approve", exact=True).click()
     expect(page.locator("#admin-result")).to_have_text("Approved.")

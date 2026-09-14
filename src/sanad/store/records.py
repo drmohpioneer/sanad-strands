@@ -1242,6 +1242,10 @@ class QuestionDigestSchedule(_Metadata):
 class OutboundIntent(_Metadata):
     review_listing: tuple[ReviewSnapshot, ...] = ()
     review_listing_expires_at: UtcInstant | None = None
+    record_listing_session_id: NonblankStr | None = Field(default=None, repr=False)
+    record_listing_subject: NonblankStr | None = Field(default=None, repr=False)
+    record_listing_auth_epoch: NonnegativeInt | None = None
+    record_listing_patient_id: NonblankStr | None = None
     entity_type: Literal["outbound_intent"] = "outbound_intent"
     scope: Scope
     scope_kind: Literal["patient", "intake", "account", "doctor"]
@@ -1926,6 +1930,8 @@ class Accepted(_BoundaryValue):
         "accepted", "needs_confirmation", "invalid_input", "forbidden", "unsupported"
     ] = "accepted"
     reason_code: NonblankStr | None = None
+    outcome_label: Literal["saved", "queued", "held", "suppressed"] | None = None
+    outcome_reason: NonblankStr | None = None
 
 
 class StaleVersion(_BoundaryValue):

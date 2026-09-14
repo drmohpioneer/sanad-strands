@@ -15,7 +15,7 @@ from sanad.domain import (
 )
 from sanad.domain import events as ev
 from sanad.domain.transitions import transition_review
-from sanad.liaison.records import ReviewOffer
+from sanad.liaison.records import ReviewOffer, ReviewSnapshot
 from sanad.liaison.snapshot import snapshot
 from sanad.steward.types import CommandResult, command_result
 from sanad.store import keys
@@ -24,6 +24,8 @@ from sanad.store.records import (
     AuditEvent,
     CommandEnvelope,
     CommitRequest,
+    OutboundIntent,
+    StoredRecord,
     from_record,
     model_scope,
     to_record,
@@ -55,6 +57,8 @@ def load_offer(store: "Store", command: CommandEnvelope) -> ReviewOffer:
 
 
 def prepare(store: "Store", command: CommandEnvelope, now: datetime) -> CommitRequest:
+    if "listing_token" in command.payload:
+        return prepare_listing(store, command, now)
     offer = load_offer(store, command)
     if offer.snapshot.scope != command.scope:
         raise ReviewRefused("review_scope_changed")
@@ -142,6 +146,142 @@ def prepare(store: "Store", command: CommandEnvelope, now: datetime) -> CommitRe
         command.scope,
     )
     puts = (consumed,) if changed.version == row.version else (changed, consumed)
+    return CommitRequest(
+        command=command,
+        puts=puts,
+        events=(audit,),
+        expected=tuple(r.ref for r in (*puts, audit)),
+        reason_code="ack_done" if kind == "AcknowledgeReview" else "resolve_done",
+    )
+
+
+def load_listing(
+    store: "Store", command: CommandEnvelope, now: datetime
+) -> tuple[OutboundIntent, ReviewSnapshot]:
+    from sanad.store.reviews import browser_session
+
+    actor = command.principal
+    if type(command.scope) is not PatientScope:
+        raise ReviewRefused("review_scope_changed")
+    session = browser_session(store, actor, command.scope.doctor_id, now)
+    if session is None:
+        raise ReviewRefused("browser_session_changed")
+    row = store.get(
+        IntakeScope(doctor_id=command.scope.doctor_id, intake_id="scribe"),
+        "outbound_intent",
+        str(command.payload.get("listing_token", "")),
+    )
+    if row is None:
+        raise ReviewRefused("listing_missing")
+    listing = from_record(row, OutboundIntent)
+    if (
+        listing.record_listing_session_id != session.id
+        or listing.record_listing_subject != actor.subject
+        or listing.record_listing_auth_epoch != session.auth_epoch
+        or listing.record_listing_patient_id != command.scope.patient_id
+        or listing.status != "suppressed"
+        or listing.suppression_reason != "browser_listing"
+        or listing.template_id != "doctor_questions"
+        or listing.work_clock is not None
+        or listing.question_listing_token is not None
+        or listing.question_listing_targets
+        or listing.question_bindings
+        or listing.review_listing_expires_at is None
+        or min(listing.review_listing_expires_at, listing.expires_at) <= now
+        or len(listing.review_listing) > 25
+    ):
+        raise ReviewRefused("listing_expired_or_changed")
+    selected = next(
+        (
+            s
+            for s in listing.review_listing
+            if s.review_ref.id == command.payload.get("review_id") and s.scope == command.scope
+        ),
+        None,
+    )
+    if selected is None:
+        raise ReviewRefused("review_not_listed")
+    return listing, selected
+
+
+def prepare_listing(
+    store: "Store",
+    command: CommandEnvelope,
+    now: datetime,
+    *,
+    observed: tuple[StoredRecord, ReviewSnapshot] | None = None,
+) -> CommitRequest:
+    listing, selected = load_listing(store, command, now)
+    kind = command.payload.get("type")
+    fields = {"type", "review_id", "listing_token", "expected_source_version"}
+    if kind == "ResolveReview":
+        fields |= {"action", "reason"}
+    if kind not in {"AcknowledgeReview", "ResolveReview"} or set(command.payload) != fields:
+        raise ReviewRefused("invalid_action")
+    row = observed[0] if observed else store.get(command.scope, "review", selected.review_ref.id)
+    if row is None:
+        raise ReviewRefused("review_missing")
+    review = from_record(row, ReviewObligation)
+    if (
+        review.owner_doctor_id != command.principal.doctor_id
+        or model_scope(review) != command.scope
+        or (observed[1] if observed else snapshot(store, review)) != selected
+        or selected.review_ref not in command.expected_versions
+    ):
+        raise ReviewRefused("review_or_source_changed")
+    if (
+        type(command.payload["expected_source_version"]) is not int
+        or command.payload["expected_source_version"] != selected.source_version
+    ):
+        raise ReviewRefused("source_version_changed")
+    event_id = keys.digest("review-action:" + command.command_id)
+    if kind == "AcknowledgeReview":
+        event: ev.AcknowledgeReview | ev.ResolveReview = ev.AcknowledgeReview(
+            event_id=event_id,
+            actor_id=command.principal.subject,
+        )
+    else:
+        reason = command.payload["reason"]
+        if not isinstance(reason, str) or not reason.strip() or len(reason) > 200:
+            raise ReviewRefused("reason_required")
+        action = command.payload["action"]
+        if not isinstance(action, str):
+            raise ReviewRefused("action_not_offered")
+        try:
+            event = ev.ResolveReview(
+                event_id=event_id,
+                actor_id=command.principal.subject,
+                action=ReviewAction(action),
+                expected_source_version=selected.source_version,
+                reason=reason.strip(),
+            )
+        except (ValueError, ValidationError) as error:
+            raise ReviewRefused("action_not_offered") from error
+    result = transition_review(review, event, now, DRAFT_POLICY_2026_09)
+    if not isinstance(result, ev.TransitionResult) or any(
+        not isinstance(e, ev.RecordAudit) for e in result.effects
+    ):
+        raise ReviewRefused("review_transition_refused")
+    changed = to_record(result.aggregate, command.scope)
+    audit = to_record(
+        AuditEvent(
+            id=event_id,
+            event_id=event_id,
+            command_id=command.command_id,
+            scope=command.scope,
+            event_type="REVIEW_ACKNOWLEDGED" if kind == "AcknowledgeReview" else "REVIEW_RESOLVED",
+            actor=command.principal,
+            aggregate_refs=(changed.ref,),
+            before_versions=(row.ref,),
+            after_versions=(changed.ref,),
+            source_refs=(listing.id,),
+            accepted_at=now,
+            created_at=now,
+            updated_at=now,
+        ),
+        command.scope,
+    )
+    puts = () if changed.version == row.version else (changed,)
     return CommitRequest(
         command=command,
         puts=puts,

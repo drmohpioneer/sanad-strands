@@ -149,7 +149,7 @@ def test_sample18h3_chip_sources_and_actions(rendered: RenderedApp) -> None:
         ("missing", "amber", "Nudge the patient"),
         ("blocked", "amber", "Check contact"),
         ("unreachable", "amber", "Check contact"),
-        ("proposed", "cool", "Confirm in Telegram"),
+        ("proposed", "cool", "Confirm the request"),
         ("awaiting_link", "green", "Nothing needed"),
         ("waiting_patient", "green", "Nothing needed"),
     ]:
@@ -159,7 +159,7 @@ def test_sample18h3_chip_sources_and_actions(rendered: RenderedApp) -> None:
         (
             {"missions": [mission("fulfilled", fulfillment_validity="invalidated_pending_review")]},
             "cool",
-            "Confirm in Telegram",
+            "Confirm the request",
         ),
         (
             {

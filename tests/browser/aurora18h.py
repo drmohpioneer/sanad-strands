@@ -260,7 +260,7 @@ def test_aurora_trends(rendered: RenderedApp, aurora_monitor: dict[str, Any]) ->
             projected(rendered, data)
             goto(rendered, f"/a/patients/{data['patient_id']}")
             page.get_by_role("tab", name="Requests", exact=True).click()
-            bars = page.locator(".trend span")
+            bars = page.locator("#record-panel-1 .trend span")
             expect(bars).to_have_count(3)
             assert bars.evaluate_all("es=>es.map(e=>e.classList.contains('hot'))") == (
                 hot if variant == "matching" else [False, False, False]

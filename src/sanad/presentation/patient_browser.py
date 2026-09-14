@@ -105,9 +105,11 @@ CATALOG: Catalog = {
     "quiet_invalid": {"en": "Choose two different times.", "ar": "اختار ميعادين مختلفين."},
     "read": {"en": "Read by Sanad", "ar": "سند قراها"},
     "documents_sent": {"en": "Documents you sent", "ar": "المستندات اللي بعتها"},
+    "show_all": {"en": "Show all {N}", "ar": "اعرض الكل ({N})"},
+    "show_latest": {"en": "Show latest 5", "ar": "اعرض آخر 5"},
     "reminder_explanation": {
         "en": (
-            "Sanad writes to you on Telegram when your doctor is waiting for "
+            "Sanad writes to you when your doctor is waiting for "
             "something from you: a reading, a photo, an answer. During quiet hours "
             "routine reminders wait, except at the times you agreed to; replies to "
             "your own messages and anything urgent are not held. If you pause "
@@ -115,7 +117,7 @@ CATALOG: Catalog = {
             "and urgent messages are never held back by the pause."
         ),
         "ar": (
-            "سند بيبعتلك على تيليجرام لما دكتورك يكون مستني منك حاجة: قراءة، صورة، أو"
+            "سند بيبعتلك لما دكتورك يكون مستني منك حاجة: قراءة، صورة، أو"
             " إجابة. في ساعات الهدوء التذكيرات العادية بتستنى، إلا في المواعيد اللي "
             "إنت وافقت عليها؛ الردود على رسايلك وأي حاجة مستعجلة مبتستناش. لو وقفت "
             "التذكيرات، الرسايل العادية بتقف، ودكتورك بيشوف إنها واقفة، وأي رسالة "

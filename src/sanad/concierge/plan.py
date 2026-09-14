@@ -20,6 +20,8 @@ from sanad.store.records import (
     Consent,
     Doctor,
     DoctorAuthority,
+    Evidence,
+    EvidenceHead,
     Patient,
     PatientBinding,
     PatientProfile,
@@ -46,6 +48,8 @@ class Snapshot:
     names: Context = Context()
     stopped_heads: tuple[CareOrderHead, ...] = ()
     stopped_orders: tuple[CareOrderVersion, ...] = ()
+    reading_missions: tuple[Mission, ...] = ()
+    reading_fact_refs: tuple[tuple[str, VersionRef], ...] = ()
 
     @property
     def acknowledgment_refs(self) -> tuple[VersionRef, ...]:
@@ -86,6 +90,7 @@ class Snapshot:
 
 
 def load(store: Store, scope: PatientScope, now: datetime) -> Snapshot | None:
+    from sanad.monitor.executor import current_details
     from sanad.steward.corrections import current_facts
 
     def get[T: BaseModel](kind: str, id: str, schema: type[T]) -> T | None:
@@ -151,6 +156,59 @@ def load(store: Store, scope: PatientScope, now: datetime) -> Snapshot | None:
         ):
             heads.append(h)
             orders.append(order)
+    mission_rows = tuple(records(store, scope, "mission"))
+    facts = tuple(
+        from_record(r, ClinicalFact)
+        for r in current_facts(store, scope, bounded=True)
+        if r.body.get("visibility") == "patient_released"
+        and r.body.get("category") == "patient_report"
+    )
+    released_refs = {to_record(f, scope).ref for f in facts}
+    # Document reports and monitor observations can describe the same source row.
+    # Resolve their current accepted evidence head without exposing its identity.
+    document_sources = {
+        fact.provenance.source_observation_id
+        for fact in facts
+        if fact.provenance.source_kind == "document_observation"
+        and isinstance(fact.payload, ReportFactPayload)
+        and fact.payload.report_kind == "reading"
+    }
+    evidence_refs = {}
+    if document_sources:
+        for row in records(store, scope, "evidence"):
+            evidence = from_record(row, Evidence)
+            if evidence.observation_id not in document_sources:
+                continue
+            head = get("evidence_head", evidence.evidence_id, EvidenceHead)
+            if (
+                head
+                and head.current_version == evidence.version
+                and head.status == "accepted"
+                and not evidence.identity_pending
+            ):
+                evidence_refs[evidence.observation_id] = row.ref
+    reading_fact_refs = tuple(
+        (fact.id, evidence_refs[fact.provenance.source_observation_id])
+        for fact in facts
+        if fact.provenance.source_observation_id in evidence_refs
+    )
+    reading_missions = []
+    for row in mission_rows:
+        if row.body.get("kind") != "MONITOR" or row.body.get("state") == "proposed":
+            continue
+        mission = from_record(row, Mission)
+        details = current_details(store, scope, mission)
+        details = details.model_copy(
+            update={
+                "readings": tuple(
+                    entry
+                    for entry in details.readings
+                    if entry.source_ref.entity_type == "evidence"
+                    or entry.source_ref in released_refs
+                )
+            }
+        )
+        reading_missions.append(mission.model_copy(update={"details": details}))
     return Snapshot(
         patient,
         profile,
@@ -162,19 +220,16 @@ def load(store: Store, scope: PatientScope, now: datetime) -> Snapshot | None:
         tuple(orders),
         tuple(
             from_record(r, Mission)
-            for r in records(store, scope, "mission")
+            for r in mission_rows
             if r.body.get("state") not in TERMINAL_STATES | {"proposed"}
         ),
         tuple(from_record(r, FollowUpTask) for r in records(store, scope, "followup")),
-        tuple(
-            from_record(r, ClinicalFact)
-            for r in current_facts(store, scope, bounded=True)
-            if r.body.get("visibility") == "patient_released"
-            and r.body.get("category") == "patient_report"
-        ),
+        facts,
         Context(vocabulary=NameVocabulary(store, doctor)),
         tuple(stopped_heads),
         tuple(stopped_orders),
+        tuple(reading_missions),
+        reading_fact_refs,
     )
 
 
@@ -306,8 +361,38 @@ def projection(snapshot: Snapshot) -> dict[str, JsonValue]:
         if isinstance(f.payload, ReportFactPayload) and f.payload.report_kind == "reading"
     ]
     last = max(readings, key=lambda f: f.created_at) if readings else None
+    history: dict[tuple[str, str, int, int], JsonValue] = {}
+    document_refs = dict(snapshot.reading_fact_refs)
+    for fact in readings:
+        assert isinstance(fact.payload, ReportFactPayload)
+        if fact.provenance.source_kind == "document_observation" and fact.id not in document_refs:
+            continue
+        ref = document_refs.get(fact.id, to_record(fact, snapshot.scope).ref)
+        for index, reading in enumerate(fact.payload.readings):
+            history[(ref.entity_type, ref.id, ref.version, index)] = {
+                "metric": reading.analyte,
+                "unit": reading.raw_unit,
+                "value": reading.raw_value,
+                "observed_at": None,
+                "received_at": None,
+                "recorded_at": fact.created_at.isoformat(),
+            }
+    for mission in snapshot.reading_missions:
+        from sanad.domain.entities import MonitorDetails
+
+        assert isinstance(mission.details, MonitorDetails)
+        for entry in mission.details.readings:
+            ref = entry.source_ref
+            history[(ref.entity_type, ref.id, ref.version, entry.reading_index)] = {
+                "metric": mission.details.metric,
+                "unit": mission.details.unit,
+                "value": entry.value,
+                "observed_at": entry.observed_at.isoformat(),
+                "received_at": entry.received_at.isoformat(),
+            }
     return {
         **summary(snapshot),
+        "reading_history": list(history.values()),
         "medication_reports": [
             {
                 "text": f.payload.text,

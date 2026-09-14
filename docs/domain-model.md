@@ -580,6 +580,8 @@ runs again. Patient reviews retain patient leases. Exact tenant delivery failure
 and exact intake sources use their independently guarded patientless branch.
 No fabricated patient profile, patient lease or executor effect is admitted.
 
+A review decision may also come from an authenticated record listing bound to the review snapshot and the web session.
+
 `OutboundIntent.review_listing` retains the selected inbox snapshots and its
 one-hour expiry. A durable `LIAISON_MODEL_ATTEMPT` event/command reservation grants
 one bounded proposal attempt per logical intent, without granting action authority.

@@ -65,7 +65,7 @@ def test_depth_screenshots_and_computed_surfaces(rendered: RenderedApp, tmp_path
     )
     expect(page.locator(".top-bar")).to_have_count(0)
     expect(page.locator(".page-heading")).to_have_count(1)
-    expect(page.locator(".summary-tile").first).to_contain_text("Needs you now")
+    expect(page.locator(".summary-tile").first).to_contain_text("Emergency")
     expect(page.locator(".summary-tile").first).to_have_class(
         __import__("re").compile(r"\bsummary-tile\b.*\bdanger\b")
     )

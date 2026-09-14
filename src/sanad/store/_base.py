@@ -806,6 +806,22 @@ class StoreBase(ABC):
                 return Forbidden()
             authority_checks, identity_expiry = guarded
 
+        if (
+            actor.session_id
+            and actor.actor_kind == "doctor"
+            and command.command_id.startswith("web:")
+        ):
+            from sanad.store.reviews import browser_session, doctor_checks
+
+            if type(scope) is not PatientScope:
+                return Forbidden()
+            session = browser_session(self, actor, scope.doctor_id, self._clock())
+            session_checks = doctor_checks(self, actor, scope.doctor_id)
+            if session is None or session_checks is None:
+                return Forbidden()
+            authority_checks.extend(session_checks)
+            identity_expiry = min(session.idle_expires_at, session.absolute_expires_at)
+
         if review_action:
             from sanad.store.reviews import guards as review_guards
 
@@ -813,6 +829,25 @@ class StoreBase(ABC):
             if checked_reviews is None:
                 return Forbidden()
             authority_checks.extend(checked_reviews)
+            if "listing_token" in command.payload:
+                from sanad.steward.reviews import ReviewRefused, load_listing
+                from sanad.store.reviews import browser_session
+
+                if type(scope) is not PatientScope:
+                    return Forbidden()
+                session = browser_session(self, actor, scope.doctor_id, self._clock())
+                if session is None:
+                    return Forbidden()
+                try:
+                    listing, _ = load_listing(self, command, self._clock())
+                except ReviewRefused:
+                    return Forbidden()
+                identity_expiry = min(
+                    session.idle_expires_at,
+                    session.absolute_expires_at,
+                    listing.review_listing_expires_at or listing.expires_at,
+                    listing.expires_at,
+                )
         if command.payload.get("type") == "_StartLiaison":
             from sanad.liaison.attempt import guards as liaison_attempt_guards
 
@@ -1456,11 +1491,36 @@ class StoreBase(ABC):
             )
             records.append(completed)
             writes.append(Write(record_item(completed), receipt.version))
+        patient_intents = [
+            from_record(r, OutboundIntent)
+            for r in request.intents
+            if r.body.get("audience") == "patient"
+        ]
+        suppressed = next((i for i in patient_intents if i.status == "suppressed"), None)
+        outcome_label: Literal["saved", "queued", "held", "suppressed"] = "saved"
+        outcome_reason = None
+        if request.reason_code == "patient_removed":
+            # Removal wins even without a patient intent (a never-linked recipient).
+            outcome_label, outcome_reason = "suppressed", "patient_removed"
+        elif request.reason_code == "doctor_question_held":
+            outcome_label = "held"
+        elif suppressed:
+            outcome_label, outcome_reason = "suppressed", suppressed.suppression_reason
+        elif any(i.status == "queued" for i in patient_intents):
+            outcome_label = "queued"
+        elif request.reason_code == "doctor_question_delivery_pending":
+            removed_profile = (
+                self.get_patient_profile(scope) if isinstance(scope, PatientScope) else None
+            )
+            if removed_profile and removed_profile.removed_at:
+                outcome_label, outcome_reason = "suppressed", "patient_removed"
         result = Accepted(
             event_ids=tuple(r.id for r in records if r.entity_type == "audit_event"),
             resulting_versions=tuple(r.ref for r in records),
             command_status=request.command_status,
             reason_code=request.reason_code,
+            outcome_label=outcome_label,
+            outcome_reason=outcome_reason,
         )
         writes.append(
             Write(
@@ -2056,6 +2116,113 @@ class StoreBase(ABC):
             [Check(profile.key, profile.version), Check(intent.key, intent.version)],
         )
         return "reserved" if accepted else "already_taken"
+
+    def lookup_record_action(
+        self, session: WebSession, scope: PatientScope, command_id: str
+    ) -> CommitResult | None:
+        """Read an authenticated record action's immutable body-derived result."""
+        current = self.web_session_snapshot(session)
+        if (
+            current is None
+            or current.role != "doctor"
+            or current.doctor_id != scope.doctor_id
+            or current.subject != session.subject
+            or current.auth_epoch != session.auth_epoch
+            or current.revoked_at is not None
+            or min(current.idle_expires_at, current.absolute_expires_at) <= self._clock()
+            or self.get(scope, "patient", scope.patient_id) is None
+        ):
+            return Forbidden()
+        existing = self._read(keys.uniqueness(scope, "CMD", command_id))
+        if existing is None:
+            return None
+        if existing.get("scope") != scope.model_dump(mode="json"):
+            return Forbidden()
+        return Duplicate(original=Accepted.model_validate(existing["accepted_result"]))
+
+    def save_record_listing(
+        self, intent: OutboundIntent, session: WebSession
+    ) -> StoredRecord | None:
+        """Save a non-deliverable, session-bound record snapshot in one transaction."""
+        from sanad.scribe.repository import ScribeRepository
+        from sanad.store.reviews import browser_session, doctor_checks, listing_source_observation
+
+        now = utc_instant(self._clock())
+        actor = self.authorize(session.scope.bot_id, session.subject).principal.model_copy(
+            update={"session_id": session.id}
+        )
+        current = browser_session(self, actor, session.doctor_id, now)
+        checks = doctor_checks(self, actor, session.doctor_id)
+        doctor_row = self.get(TenantScope(doctor_id=session.doctor_id), "doctor", session.doctor_id)
+        if current is None or current != session or checks is None or doctor_row is None:
+            return None
+        if not intent.record_listing_patient_id:
+            return None
+        patient_scope = PatientScope(
+            doctor_id=session.doctor_id,
+            patient_id=intent.record_listing_patient_id,
+        )
+        patient_row = self.get(patient_scope, "patient", patient_scope.patient_id)
+        if patient_row is None or len(intent.review_listing) > 25:
+            return None
+        checks.append(Check(patient_row.key, patient_row.version))
+        expiry = intent.created_at + timedelta(minutes=30)
+        if not intent.created_at <= now < expiry or len(intent.source_event_ids) != 1:
+            return None
+        expected = (
+            ScribeRepository(self, lambda: intent.created_at)
+            .intent(
+                from_record(doctor_row, Doctor),
+                "doctor_questions",
+                {"text": "Browser record listing."},
+                intent.source_event_ids[0],
+            )
+            .model_copy(
+                update={
+                    "review_listing": intent.review_listing,
+                    "review_listing_expires_at": expiry,
+                    "record_listing_session_id": session.id,
+                    "record_listing_subject": session.subject,
+                    "record_listing_auth_epoch": session.auth_epoch,
+                    "record_listing_patient_id": patient_scope.patient_id,
+                    "status": "suppressed",
+                    "suppression_reason": "browser_listing",
+                    "work_clock": None,
+                    "expires_at": expiry,
+                }
+            )
+        )
+        if intent != expected:
+            return None
+        if len({s.review_ref.id for s in intent.review_listing}) != len(intent.review_listing):
+            return None
+        for selected in intent.review_listing:
+            row = self.get(patient_scope, "review", selected.review_ref.id)
+            if row is None or selected.scope != patient_scope:
+                return None
+            review = from_record(row, ReviewObligation)
+            observed, source_checks = listing_source_observation(self, review)
+            if review.state == "resolved" or observed != selected:
+                return None
+            checks.append(Check(row.key, row.version))
+            checks.extend(source_checks)
+        record = to_record(intent, intent.scope)
+        marker = Key(record.pk, "OUTKEY#" + keys.digest(intent.logical_key))
+        writes = [
+            Write(record_item(record), None),
+            Write(
+                self._marker_item(marker, intent.scope, record.key, now),
+                None,
+            ),
+        ]
+        merged = self._merge_checks(writes, checks)
+        if (
+            merged is None
+            or size_failure(writes, merged)
+            or self._clock() >= min(expiry, session.idle_expires_at, session.absolute_expires_at)
+        ):
+            return None
+        return record if self._atomic(writes, merged) else None
 
     def save_question_listing(
         self, intent: OutboundIntent, basis: tuple[VersionRef, ...], now: datetime

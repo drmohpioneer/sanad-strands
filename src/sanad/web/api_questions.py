@@ -11,10 +11,12 @@ from sanad.auth.claim import ClaimService
 from sanad.concierge import reuse
 from sanad.concierge.answer_command import active_orders, owned_questions
 from sanad.concierge.plan import order_line
-from sanad.domain import Principal, TenantScope
+from sanad.domain import PatientScope, Principal, TenantScope, VersionRef
 from sanad.domain.entities import QuestionDetails
 from sanad.scribe.patients import panel
 from sanad.scribe.repository import ScribeRepository
+from sanad.steward.service import Steward
+from sanad.steward.types import CommandResult
 from sanad.store import keys
 from sanad.store.records import CommandEnvelope, Doctor, WebSession, from_record
 from sanad.web.routes import require_session
@@ -47,6 +49,65 @@ class ReuseBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
     command_id: str = Field(min_length=1, max_length=160)
     offer_id: str
+
+
+def question_command(
+    steward: Steward,
+    actor: Principal,
+    scope: PatientScope,
+    mission_id: str,
+    action: str,
+    body: AnswerBody | VersionBody | SendBody | ReuseBody,
+    *,
+    command_id: str | None = None,
+    expected_versions: tuple[VersionRef, ...] = (),
+) -> CommandEnvelope:
+    payload: dict[str, JsonValue]
+    if isinstance(body, SendBody):
+        payload = {
+            "type": "SendQuestion",
+            "mission_id": mission_id,
+            **body.model_dump(exclude={"command_id"}),
+        }
+    elif isinstance(body, ReuseBody):
+        offer = steward.store.get(
+            TenantScope(doctor_id=scope.doctor_id), "reuse_offer", body.offer_id
+        )
+        if (
+            offer is None
+            or offer.body.get("mission_id") != mission_id
+            or offer.body.get("patient_id") != scope.patient_id
+        ):
+            raise HTTPException(404)
+        payload = {"type": "ReuseAnswer", "offer_id": body.offer_id}
+    elif isinstance(body, AnswerBody):
+        payload = {
+            "type": "AnswerQuestion",
+            "mission_id": mission_id,
+            "expected_version": body.expected_version,
+            "answer_text": body.text,
+        }
+    else:
+        payload = {
+            "type": "DeferQuestion" if action == "defer" else "AnswerQuestion",
+            "mission_id": mission_id,
+            "expected_version": body.expected_version,
+        }
+        if action == "close":
+            payload["close_only"] = True
+    return CommandEnvelope(
+        command_id=command_id or "browser-question:" + body.command_id,
+        scope=scope,
+        principal=actor,
+        requested_at=steward.clock(),
+        payload=payload,
+        expected_versions=expected_versions,
+    )
+
+
+def question_action(steward: Steward, command: CommandEnvelope) -> CommandResult:
+    """Shared dispatch retains the complete immutable command outcome."""
+    return steward.handle(command)
 
 
 def question_router(claims: ClaimService) -> APIRouter:
@@ -160,46 +221,17 @@ def question_router(claims: ClaimService) -> APIRouter:
             auth_epoch=session.auth_epoch,
             session_id=session.id,
         )
-        payload: dict[str, JsonValue]
-        if isinstance(body, SendBody):
-            payload = {
-                "type": "SendQuestion",
-                "mission_id": mission_id,
-                **body.model_dump(exclude={"command_id"}),
-            }
-        elif isinstance(body, ReuseBody):
-            offer = claims.store.get(doctor.scope, "reuse_offer", body.offer_id)
-            if (
-                offer is None
-                or offer.body.get("mission_id") != mission_id
-                or offer.body.get("patient_id") != patient.id
-            ):
-                raise HTTPException(404)
-            payload = {"type": "ReuseAnswer", "offer_id": body.offer_id}
-        elif isinstance(body, AnswerBody):
-            payload = {
-                "type": "AnswerQuestion",
-                "mission_id": mission_id,
-                "expected_version": body.expected_version,
-                "answer_text": body.text,
-            }
-        else:
-            payload = {
-                "type": "DeferQuestion" if action == "defer" else "AnswerQuestion",
-                "mission_id": mission_id,
-                "expected_version": body.expected_version,
-            }
-            if action == "close":
-                payload["close_only"] = True
         steward = request.app.state.telegram.steward
-        result = steward.handle(
-            CommandEnvelope(
-                command_id="browser-question:" + body.command_id,
-                scope=patient.scope,
-                principal=actor,
-                requested_at=steward.clock(),
-                payload=payload,
-            )
+        result = question_action(
+            steward,
+            question_command(
+                steward,
+                actor,
+                patient.scope,
+                mission_id,
+                action,
+                body,
+            ),
         )
         if result.status != "accepted":
             raise HTTPException(

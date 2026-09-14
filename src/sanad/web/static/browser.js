@@ -11,6 +11,9 @@
   };
 
 (() => {
+  function displayZone(){try{const zone=Intl.DateTimeFormat().resolvedOptions().timeZone;if(zone){new Intl.DateTimeFormat('en',{timeZone:zone}).format();return zone;}}catch(_){}return 'UTC';}
+  const browserZone=displayZone();
+  function calendarDate(value){if(/^\d{4}-\d{2}-\d{2}$/.test(value||''))return new Intl.DateTimeFormat('en',{dateStyle:'medium',timeZone:'UTC'}).format(new Date(value));const date=new Date(value);return value&&Number.isFinite(+date)?new Intl.DateTimeFormat('en',{dateStyle:'medium',timeZone:browserZone}).format(date):'Not recorded';}
   const demo = document.body.dataset.demo === 'true';
   const fixtures = new Map();
   function demoFixture(name) {
@@ -98,6 +101,7 @@
     });
   }
   reduceMotion.addEventListener('change',()=>{if(reduceMotion.matches){document.querySelectorAll('.rv,.trend').forEach(el=>el.classList.add('in'));document.querySelectorAll('[data-count]').forEach(el=>el.textContent=el.dataset.count);}});
+  const adminWords={"suspended":["Suspended. Their patients need another doctor to take over.","حسابه موقوف. مرضاه محتاجين دكتور تاني يتابعهم."],"restore":["Restore access","رجّع الدخول"],"restored":["Access restored.","الدخول رجع."],"suspendConfirm":["Suspending closes this doctor's access and opens an item for you to find another doctor to take over their patients (it does not do this by itself). Restore access gives the account back.","وقف الحساب بيقفل دخول الدكتور وبيفتحلك بند عشان تلاقي دكتور تاني يتابع مرضاه (مش بيعمل ده لوحده). رجّع الدخول بيرجع الحساب."],"restoreConfirm":["Restoring access lets this doctor sign in again. Their patients' records were kept.","رجوع الدخول بيسمح للدكتور يدخل تاني. ملفات مرضاه محفوظة."]};
   if (document.getElementById('admin-applications')) {
     const target = document.getElementById('admin-applications');
     const status = document.getElementById('admin-result');
@@ -119,7 +123,7 @@
       status.textContent = response.ok ? results[path.split('/').pop()] || 'Done.' : failureReasons[result.reason] || 'Action refused. Refresh and check the account before retrying.';
       return response;
     };
-    const results={approve:'Approved.',reject:'Rejected.',suspend:'Suspended.',reinstate:'Reinstated.'};
+    const results={approve:'Approved.',reject:'Rejected.',suspend:'Suspended.',reinstate:adminWords.restored[0]};
     const load = async () => {
       const response = demo ? {ok:true, json:() => demoFixture('admin')} : await fetch('/api/admin/applications');
       if (!response.ok) { const result=await response.json().catch(()=>({}));status.textContent = failureReasons[result.reason] || 'Sign in again.'; return; }
@@ -137,18 +141,18 @@
         item.tabIndex=0;item.setAttribute('aria-expanded','false');
         const av=document.createElement('span');av.className='av';av.setAttribute('aria-hidden','true');av.textContent=String(row.name).replace(/^Dr\.?\s+/i,'').trim().split(/\s+/).slice(0,2).map(word=>Array.from(word)[0]).join('').toUpperCase();item.append(av);
         const name=document.createElement('h2');name.textContent=row.name;
-        const info=document.createElement('p');const date=new Date(row.applied_at);
-        info.textContent=`${row.specialty} · ${row.city} · applied on ${Number.isFinite(+date)?new Intl.DateTimeFormat('en',{dateStyle:'medium',timeZone:'UTC'}).format(date):'date not recorded'}`;
-        const line=document.createElement('p');line.className='application-state status '+({pending:'warning',approved:'success',suspended:'warning',rejected:'danger',revoked:'danger'}[row.status]||'quiet');line.textContent={pending:'Waiting for your decision',approved:'Approved and working',suspended:'Suspended: their patients need cover arranged',rejected:'Rejected',revoked:'Access revoked'}[row.status];item.append(name,info,line);const acts=document.createElement('div');acts.className='acts';item.append(acts);
+        const info=document.createElement('p');
+        info.textContent=`${row.specialty} · ${row.city} · applied on ${calendarDate(row.applied_at)}`;
+        const line=document.createElement('p');line.className='application-state status '+({pending:'warning',approved:'success',suspended:'warning',rejected:'danger',revoked:'danger'}[row.status]||'quiet');line.textContent={pending:'Waiting for your decision',approved:'Approved and working',suspended:adminWords.suspended[0],rejected:'Rejected',revoked:'Access revoked'}[row.status];item.append(name,info,line);const acts=document.createElement('div');acts.className='acts';item.append(acts);
         for(const verb of {pending:['approve','reject'],approved:['suspend'],suspended:['reinstate'],rejected:[],revoked:[]}[row.status]||[]){
-          const button=document.createElement('button');button.textContent=verb[0].toUpperCase()+verb.slice(1);
+          const button=document.createElement('button');button.textContent=verb==='reinstate'?adminWords.restore[0]:verb[0].toUpperCase()+verb.slice(1);
           button.onclick=async()=>{
             if(verb==='reject'){
               if(item.querySelector('form'))return;
               const form=document.createElement('form');form.innerHTML='<fieldset><legend>Why are you rejecting this application?</legend><label><input type="radio" name="reason" value="unverified" required>Identity could not be verified</label><label><input type="radio" name="reason" value="admin_rejected" required>Declined by the administrator</label></fieldset><button type="submit">Confirm rejection</button><button type="button">Cancel</button>';
               form.querySelector('[type=button]').onclick=()=>form.remove();form.onsubmit=event=>{event.preventDefault();perform(verb,form.elements.reason.value,form.querySelector('[type=submit]'));};item.append(form);form.querySelector('input').focus();return;
             }
-            const confirmation={suspend:"Suspending closes this doctor's access and opens an item for you to arrange cover for their patients (it does not arrange it by itself). Reinstate restores the account.",reinstate:"Reinstating restores this doctor's access. Their patients' records were kept."}[verb];
+            const confirmation={suspend:adminWords.suspendConfirm[0],reinstate:adminWords.restoreConfirm[0]}[verb];
             if(confirmation&&!window.confirm(confirmation))return;
             await perform(verb,verb==='suspend'?'coverage':null,button);
           };
@@ -162,7 +166,7 @@
         const panel=document.createElement('div');panel.className='detail';
         const inner=document.createElement('div');inner.className='inner';panel.append(inner);
         const facts=document.createElement('div');inner.append(facts);
-        const dateText=value=>{const date=new Date(value);return value&&Number.isFinite(+date)?new Intl.DateTimeFormat('en',{dateStyle:'medium',timeZone:'UTC'}).format(date):'Not recorded';};
+        const dateText=calendarDate;
         const details=[['Specialty',row.specialty],['City',row.city],['Applied on',dateText(row.applied_at)],['Status',labels[row.status]]];
         if(['approved','rejected'].includes(row.status))details.push(['Decided on',dateText(row.decided_at)]);
         if(row.status==='rejected')details.push(['Reason',{unverified:'Identity could not be verified',admin_rejected:'Declined by the administrator'}[row.decision_reason]||'Not recorded']);
@@ -197,7 +201,7 @@
     unmatched:['Unmatched document','مستند غير مرتبط'], accepted:['Accepted document','مستند مقبول'], rejected:['Rejected document','مستند مرفوض'], not_required:['No review required','لا تتطلب مراجعة'], correction_requested:['Correction requested','مطلوب تصحيح'],
     unassigned:['No patient associated','لم يرتبط بمريض بعد'], no_work:['No outstanding obligation recorded','لا توجد متابعة معلّقة مسجلة'], more:['other outstanding items','متابعات معلّقة أخرى'],
     refresh:['Refresh','تحديث'], updated:['Updated','تم التحديث'], timezone:['Times shown in','التوقيت المعروض'], previous:['Previous','السابق'], next:['Next','التالي'], page:['Page','صفحة'], of:['of','من'],
-    empty:['No patient needs anything in this view. Clear filters to see all patients.','لا توجد نتائج في هذه الصفحة.'], no_patients:['No patients recorded yet. Add a patient through Telegram.','لم يُسجل مرضى بعد. أضف مريضاً من تيليجرام.'],
+    empty:['No patient needs anything in this view. Clear filters to see all patients.','لا توجد نتائج في هذه الصفحة.'], no_patients:['No patients recorded yet.','لم يُسجل مرضى بعد.'],
     failed:['Could not load this view. Refresh to try again or return to Patients.','تعذر تحميل الصفحة. حدّثها للمحاولة أو ارجع للمرضى.'],
     expired:['Your session has expired. Open Telegram and use /login to sign in again.','انتهت جلسة الدخول. افتح تيليجرام واستخدم /login للدخول من جديد.'],
     denied:['This record is unavailable to your account. Return to Patients.','هذا الملف غير متاح لحسابك. ارجع للمرضى.'],
@@ -206,7 +210,7 @@
     no_plan:['No active medication is recorded.','لا يوجد دواء حالي مسجل.'], no_requests:['No upcoming request is recorded.','لا يوجد طلب قادم مسجل.'],
     received:['Received','وصل'], source:['Source','المصدر'], version:['Version','النسخة'], printed:['Printed date','التاريخ على المستند'], not_recorded:['Not recorded','غير مسجل'],
     monitoring:['Monitoring readings','قراءات المتابعة'], slot:['Scheduled time','الموعد المحدد'], reading:['Reading','القراءة'], extras:['Extra readings (outside scheduled slots)','قراءات إضافية خارج المواعيد'],
-    changed:['Material change since the original review','تغير مهم منذ المراجعة الأصلية'], notice:['First notice','أول إشعار'], reason:['Resolution reason','سبب انتهاء المراجعة'], review_note:['Acknowledgment does not resolve a review. Actions remain in Telegram.','الاطلاع لا ينهي المراجعة. إجراءات المراجعة في تيليجرام.'],
+    changed:['Material change since the original review','تغير مهم منذ المراجعة الأصلية'], notice:['First notice','أول إشعار'], reason:['Resolution reason','سبب انتهاء المراجعة'], review_note:['You have seen this. It stays open until you reply.','إنت شفت ده. هيفضل مفتوح لحد ما ترد.'],
     language:['Language','اللغة'], save:['Save language','حفظ اللغة'], saved:['Language preference saved.','تم حفظ اللغة المفضلة.'], contest:['The contest build displays English. Your stored choice is preserved.','نسخة المسابقة تعرض الإنجليزية مع حفظ اختيارك.'],
     back:['Back to patients','العودة للمرضى'], demo:['Synthetic demonstration · Fictional records only','عرض تجريبي · بيانات خيالية فقط'], demo_note:['This view uses a separate static data source. It cannot open a clinical account.','هذا العرض يستخدم بيانات تجريبية مستقلة ولا يفتح حساباً طبياً.'],
     patient_note:['Your doctor’s recorded plan. Send a message or photo below.','الخطة المسجلة من دكتورك. أرسل رسالة أو صورة أدناه.'],
@@ -236,8 +240,8 @@
     inbox_coverage:['Patient coverage needs your review','تغطية متابعة المرضى محتاجة مراجعتك'],
     open_evidence:['Open evidence','افتح المستندات'], answer_question:['Answer question','رد على السؤال'], open_history:['Open history','افتح السجل'],
     open_record:['Open record','افتح الملف'], open_requests:['Open requests','افتح الطلبات'],
-    intake_telegram:['Handled from the intake message in Telegram.','اتعامل معاه من رسالة الملف الجديد في تيليجرام.'],
-    review_telegram:['Handled from the review message in Telegram.','اتعامل معاه من رسالة المراجعة في تيليجرام.'],
+    intake_telegram:["This new patient's file needs your reply.",'ملف المريض الجديد ده محتاج ردك.'],
+    review_telegram:['This item needs your reply.','البند ده محتاج ردك.'],
     due_now:['due now','ميعاده دلوقتي'], due_today:['due today','ميعاده النهارده'], due_in:['due in','فاضل عليه'], late_by:['overdue by','متأخر بقاله'],
     day:['day','يوم'], days:['days','أيام'], hour:['hour','ساعة'], hours:['hours','ساعات'],
     current_plan:['Current plan','الخطة الحالية'], outstanding_work:['Outstanding work','المتابعة المطلوبة'], drawer_evidence:['Evidence','المستندات'], drawer_history:['History','السجل'],
@@ -285,17 +289,17 @@
     metric_when:['{metric}, {when}','{metric}، {when}'], medicines_count:['Medicines on the plan','الأدوية في الخطة'], requests_count:['Open requests','الطلبات المفتوحة'], documents_count:['Documents sent','المستندات اللي اتبعتت'],
     card_waiting:['One thing is waiting:','في حاجة مستنياك:'], card_late:['The patient is late:','المريض متأخر:'], card_settled:['Nothing is waiting.','مفيش حاجة مستنية.'],
     card_more:['{K} more on the full record','وفيه {K} كمان في الملف الكامل'], card_record:['Open the full record','افتح الملف الكامل'], card_question:['Answer the question','رد على السؤال'], card_document:['Open the document','افتح المستند'], row_open:['Open {name}','افتح {name}'],
-    chip_still:['Still open','لسه مفتوح'], chip_respond:['Respond now','رد دلوقتي'], chip_result:['Read the result','اقرا النتيجة'], chip_decide:['Decide what next','حدد الخطوة الجاية'], chip_photo:['Ask for a new photo','اطلب صورة جديدة'], chip_contact:['Check contact','راجع التواصل'], chip_change:['Confirm the change','أكد التغيير'], chip_document:['Link the document','اربط المستند'], chip_link:['Check the link','راجع الربط'], chip_clarify:['Clarify the file','وضح الملف'], chip_cover:['Check cover','راجع مين بيتابع'], chip_nudge:['Nudge the patient','فكر المريض'], chip_confirm:['Confirm in Telegram','أكد في تيليجرام'], chip_today:['Due today','ميعاده النهارده'], chip_nothing:['Nothing needed','مفيش حاجة مطلوبة']
+    chip_still:['Still open','لسه مفتوح'], chip_respond:['Respond now','رد دلوقتي'], chip_result:['Read the result','اقرا النتيجة'], chip_decide:['Decide what next','حدد الخطوة الجاية'], chip_photo:['Ask for a new photo','اطلب صورة جديدة'], chip_contact:['Check contact','راجع التواصل'], chip_change:['Confirm the change','أكد التغيير'], chip_document:['Link the document','اربط المستند'], chip_link:['Check the link','راجع الربط'], chip_clarify:['Clarify the file','وضح الملف'], chip_cover:['Check cover','راجع مين بيتابع'], chip_nudge:['Nudge the patient','فكر المريض'], chip_confirm:['Confirm the request','أكد الطلب'], chip_today:['Due today','ميعاده النهارده'], chip_nothing:['Nothing needed','مفيش حاجة مطلوبة']
   });
   const t = key => words[key]?.[en ? 0 : 1] || words.not_recorded[en ? 0 : 1];
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const bdi = value => `<bdi>${esc(value)}</bdi>`;
   const $ = id => document.getElementById(id);
-  const state = {records:[], reviews:[], evidence:[], pref:null, data:null, sort:'urgency', descending:false, page:1, query:'', filter:view==='patients'?'needs':'all', zone:'UTC'};
+  const state = {records:[], reviews:[], evidence:[], pref:null, data:null, sort:'urgency', descending:false, page:1, query:'', filter:view==='patients'?'needs':'all', zone:browserZone};
   const params = new URLSearchParams(location.search);
-  if (!demo) {state.query=params.get('q')||'';state.filter=params.get('filter')||state.filter;state.sort=params.get('sort')||'urgency';state.descending=params.get('desc')==='1';state.page=Math.max(1,Number(params.get('page'))||1);}
+  {state.query=params.get('q')||'';state.filter=params.get('filter')||state.filter;state.sort=params.get('sort')||'urgency';state.descending=params.get('desc')==='1';state.page=Math.max(1,Number(params.get('page'))||1);}
   if(!['patient','age','last_activity','urgency'].includes(state.sort))state.sort='urgency';
-  if(view==='patients'){if(!['needs','all','settled'].includes(state.filter))state.filter='needs';state.sort='urgency';state.descending=false;}
+  if(view==='patients'){if(!['needs','all','settled','danger','pending_review','overdue','due_today'].includes(state.filter))state.filter='needs';state.sort='urgency';state.descending=false;}
   else if(!['all','danger','pending_review','overdue','due_today'].includes(state.filter))state.filter='all';
   let generation=0, currentAbort=null;
   const errorText = status => status === 401 || status === 403 ? t('expired') : status === 404 ? t('denied') : status === 409 ? t('stale') : t('failed');
@@ -309,6 +313,7 @@
   function badge(key, weight=tone(key)) {return `<span class="status ${weight}"><span>${esc(t(key))}</span></span>`;}
   function time(value, zone=state.zone, compact=false) {
     if(!value) return `<span class="muted">${t('no_due')}</span>`;
+    if(/^\d{4}-\d{2}-\d{2}$/.test(value))return bdi(value);
     const date=new Date(value); if(Number.isNaN(+date)) return `<span class="muted">${t('no_due')}</span>`;
     const minutes=Math.round((+date-Date.now())/60000), abs=Math.abs(minutes);
     const unit=abs>=1440?'day':abs>=60?'hour':'minute', amount=unit==='day'?Math.trunc(minutes/1440):unit==='hour'?Math.trunc(minutes/60):minutes;
@@ -334,20 +339,20 @@
     intake_clarification:["A new patient's file needs one clarification before it is complete.","ملف مريض جديد محتاج توضيح واحد عشان يكمل."],
     delivery_patient:["A message to this patient did not arrive. Check how to reach them.","رسالة للمريض ده موصلتش. راجع طريقة التواصل معاه."],
     delivery_intake:["A message about a new patient's file did not arrive.","رسالة بخصوص ملف مريض جديد موصلتش."],
-    delivery_doctor:["A message to you did not arrive. Check your Telegram.","رسالة ليك موصلتش. راجع تيليجرام."],
+    delivery_doctor:["A message to you did not arrive.","رسالة ليك موصلتش."],
     binding_review:["Check this patient's link: who joined, or a conflict in what they asked for (stop, quiet hours).","راجع ربط المريض ده: مين انضم، أو تعارض في طلباته (وقف الرسايل، ساعات الهدوء)."],
     coverage_review:["Check who is covering these patients.","راجع مين بيتابع المرضى دول."],
-    acknowledged:["You have seen this; it stays open until handled in Telegram.","إنت شفت ده؛ هيفضل مفتوح لحد ما تتعامل معاه في تيليجرام."],
+    acknowledged:["You have seen this. It stays open until you reply.","إنت شفت ده. هيفضل مفتوح لحد ما ترد."],
     changed:["Something changed since you last looked.","في حاجة اتغيرت من آخر مرة بصيت."],
     resolved:["Reviewed on {date}: {kind} {resolution}.","اتراجع يوم {date}: {kind} {resolution}."],
-    proposed:['"{title}" is proposed and waits for your confirmation in Telegram.','"{title}" مقترح ومستني تأكيدك في تيليجرام.'],
+    proposed:['"{title}" is proposed and waits for your confirmation.','"{title}" مقترح ومستني تأكيدك.'],
     awaiting_link:['"{title}" starts once the patient joins.','"{title}" يبدأ لما المريض ينضم.'],
     future:['Nothing to do yet: "{title}" is due {date}.','لسه مفيش حاجة تعملها: ميعاد "{title}" هو {date}.'],
     late:['"{title}" was due {date} and has not arrived.','ميعاد "{title}" كان {date} ولسه موصلش.'],
     paused_late:["Reminders are paused, so nobody is chasing it.","التذكيرات واقفة، فمحدش بيتابع الطلب."],
     no_due:['"{title}" is in progress; no due date was set.','"{title}" شغال؛ متحددلوش ميعاد.'],
     waiting_patient:['Sanad asked the patient about "{title}" and is waiting for their answer.','سند سأل المريض عن "{title}" ومستني رده.'],
-    blocked:['The patient cannot do "{title}" yet. Change or cancel the request in Telegram.','المريض لسه مش قادر يعمل "{title}". غيّر الطلب أو الغيه في تيليجرام.'],
+    blocked:['The patient cannot do "{title}" yet.','المريض لسه مش قادر يعمل "{title}".'],
     unreachable:['"{title}" cannot reach the patient. Check how to contact them.','"{title}" مش بيوصل للمريض. راجع طريقة التواصل معاه.'],
     invalidated_pending_review:['"{title}" was marked done, then something changed. Confirm it is still done.','"{title}" اتسجل إنه تم، وبعدها حاجة اتغيرت. أكد إنه لسه تم.'],
     fulfilled:['"{title}": done on {date}.','"{title}": تم يوم {date}.'],
@@ -448,14 +453,14 @@
     return +new Date(m.due_at)>Date.now()?'not_yet_due':'overdue';
   }
   function tone(key) {return ['danger','incident_response','unverifiable'].includes(key)?'danger':['missing','overdue'].includes(key)?'warning':['processing','pending_review','pending','open','invalidated_pending_review'].includes(key)?'info':['fulfilled','resolved','satisfied','completed'].includes(key)?'success':'quiet';}
-  const summaryLabels=Object.assign(Object.create(null),{danger:'Needs you now',pending_review:'Waiting on you',overdue:'Patient is late',due_today:'Due today'});
+  const summaryLabels=Object.assign(Object.create(null),{danger:'Emergency',pending_review:'Waiting on you',overdue:'Patient is late',due_today:'Patient tasks due today'});
   function matchesSummary(item,filter){
     if(filter==='danger')return Boolean(item.urgent);
     if(filter==='pending_review')return Boolean(item.review)&&!item.urgent;
     if(!item.due||!Number.isFinite(+new Date(item.due)))return false;
     if(filter==='overdue')return !item.review&&+new Date(item.due)<Date.now();
     const calendar=new Intl.DateTimeFormat('en-CA',{timeZone:state.zone});
-    return filter==='due_today'&&calendar.format(new Date(item.due))===calendar.format(new Date());
+    return filter==='due_today'&&!item.review&&Boolean(item.mission||item.followup)&&+new Date(item.due)>=Date.now()&&calendar.format(new Date(item.due))===calendar.format(new Date());
   }
 
   function reviewRows(record, history=false) {return (history?record.review_history:record.reviews)||[];}
@@ -466,11 +471,12 @@
     const followups=(record.followups||[]).filter(f=>!['fulfilled','cancelled'].includes(f.state)).map(f=>({id:f.id,title:t(f.kind),due:f.due_at,status:f.state,urgent:false,followup:f}));
     return [...reviews,...missions,...followups].sort((a,b)=>Number(b.urgent)-Number(a.urgent)||(waitTime(a,record)-waitTime(b,record))||a.id.localeCompare(b.id));
   }
-  function link(record) {return demo?`/demo#${encodeURIComponent(record.patient_id)}`:`/a/patients/${encodeURIComponent(record.patient_id)}`;}
+  function link(record) {return demo?`/demo${location.search}#${encodeURIComponent(record.patient_id)}`:`/a/patients/${encodeURIComponent(record.patient_id)}`;}
   const fillWords=(key,values={})=>t(key).replace(/\{(\w+)\}/g,(_,name)=>String(values[name]??''));
   function needsMe(record){return obligations(record).some(item=>item.urgent||item.review||item.status==='overdue');}
+  function patientRoster(){return state.records.filter(record=>!record.removed_at);}
   function patientHeadline(){
-    const n=state.records.length,m=state.records.filter(needsMe).length;
+    const records=patientRoster(),n=records.length,m=records.filter(needsMe).length;
     const number=value=>en&&value<=20?['zero','one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen','eighteen','nineteen','twenty'][value]:String(value);
     let headline=fillWords('patients_headline',{N:number(n),M:number(m)});
     if(n===1)headline=headline.replace(fillWords('patients_plural',{N:number(n)}),t('patients_single'));
@@ -507,11 +513,12 @@
     return `<div class="row patient-row ${item?.urgent?'danger urgent':item?.due&&+new Date(item.due)<Date.now()?'warning':'calm'}" data-row role="button" tabindex="-1" aria-expanded="false"><div class="who2">${avatar(name)}<div><b>${esc(name)}</b>${record.age==null?'':`<small>${esc(fillWords('years_old',{age:record.age}))}</small>`}</div></div><div class="need patient-sentence">${esc(description)}</div><div class="when">${activity(record.last_activity_at)}</div><div><span class="chip ${colour}"><em></em>${esc(t(chip))}</span></div><button class="go" type="button" aria-label="${esc(fillWords('row_open',{name}))}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M8 5l7 7-7 7"/></svg></button></div><div class="detail"><div class="inner"><div><h4>${t('latest_patient')}</h4>${patientFacts(record)}</div><div class="ask"><p><b>${t(!needsMe(record)?'card_settled':item?.status==='overdue'?'card_late':'card_waiting')}</b> ${esc(description)}</p>${count>1?`<p>${esc(fillWords('card_more',{K:count-1}))}</p>`:''}<div class="acts"><a class="button primary" href="${esc(link(record))}">${t('card_record')}</a>${extra?`<a class="button" href="${esc(extra[1])}">${t(extra[0])}</a>`:''}</div></div></div></div>`;
   }
   function patientsList(){
-    const rows=tableRows();state.page=Math.min(state.page,Math.max(1,Math.ceil(rows.length/50)));
+    const records=patientRoster(),rows=tableRows();state.page=Math.min(state.page,Math.max(1,Math.ceil(rows.length/50)));
+    remember();
     const heading=document.querySelector('.page-heading h1');heading.textContent=patientHeadline();heading.classList.add('htitle');
     const header=heading.parentElement;header.classList.add('patients-heading');
     if(!header.querySelector('.hsub'))heading.insertAdjacentHTML('afterend',`<p class="hsub">${t('patients_subline')}</p>`);
-    $('content').innerHTML=`<div class="bar toolbar"><label class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg><input id="search" type="search" value="${esc(state.query)}" autocomplete="off" placeholder="${t('find_patient')}" aria-label="${t('find_patient')}"></label><div id="filter" class="seg" role="group" aria-label="${t('filter')}">${[['needs',t('needs_me')],['all',fillWords('all_count',{N:state.records.length})],['settled',t('settled')]].map(([key,label])=>`<button type="button" data-filter="${key}" aria-pressed="${state.filter===key}">${esc(label)}</button>`).join('')}</div></div><section class="card list work-surface">${rows.slice((state.page-1)*50,state.page*50).map(({record,item,count})=>patientCard(record,item,count)).join('')}${rows.length?'':emptyState(t(state.records.length?'empty':'no_patients'),t('refresh'),Boolean(state.query||state.filter!=='all'))}</section>${rows.length>50?`<div class="pager"><button id="previous" ${state.page<=1?'disabled':''}><span class="turn-arrow" aria-hidden="true">←</span> ${t('previous')}</button><span>${t('page')} ${state.page} ${t('of')} ${Math.ceil(rows.length/50)}</span><button id="next" ${state.page*50>=rows.length?'disabled':''}>${t('next')} <span class="turn-arrow" aria-hidden="true">→</span></button></div>`:''}`;
+    $('content').innerHTML=`<div class="bar toolbar"><label class="search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4 4"/></svg><input id="search" type="search" value="${esc(state.query)}" autocomplete="off" placeholder="${t('find_patient')}" aria-label="${t('find_patient')}"></label><div id="filter" class="seg" role="group" aria-label="${t('filter')}">${[['needs',t('needs_me')],['all',fillWords('all_count',{N:records.length})],['settled',t('settled')]].map(([key,label])=>`<button type="button" data-filter="${key}" aria-pressed="${state.filter===key}">${esc(label)}</button>`).join('')}</div></div><section class="card list work-surface">${rows.slice((state.page-1)*50,state.page*50).map(({record,item,count})=>patientCard(record,item,count)).join('')}${rows.length?'':emptyState(t(records.length?'empty':'no_patients'),t('refresh'),Boolean(state.query||state.filter!=='all'))}</section>${rows.length>50?`<div class="pager"><button id="previous" ${state.page<=1?'disabled':''}><span class="turn-arrow" aria-hidden="true">←</span> ${t('previous')}</button><span>${t('page')} ${state.page} ${t('of')} ${Math.ceil(rows.length/50)}</span><button id="next" ${state.page*50>=rows.length?'disabled':''}>${t('next')} <span class="turn-arrow" aria-hidden="true">→</span></button></div>`:''}`;
     $('search').addEventListener('input',event=>{const start=event.target.selectionStart;state.query=event.target.value;state.page=1;list();$('search').focus();$('search').setSelectionRange(start,start);});
     $('filter').onclick=event=>{const button=event.target.closest('[data-filter]');if(!button)return;state.filter=button.dataset.filter;state.page=1;list();document.querySelector('#filter [aria-pressed=true]').focus();};
     document.querySelector('[data-clear]')?.addEventListener('click',()=>{state.query='';state.filter='all';state.page=1;list();$('search').focus();});
@@ -525,13 +532,13 @@
   }
   function tableRows() {
     let rows=[];
-    for(const record of state.records.filter(record=>view!=='patients'||!record.removed_at)){
+    for(const record of view==='patients'?patientRoster():state.records){
       const work=obligations(record);
       if(view==='inbox'||view==='history') for(const r of reviewRows(record,view==='history')) rows.push({record,item:{id:r.id,title:t(r.review_kind),due:r.review_at,status:r.state,urgent:r.review_kind==='incident_response'&&r.state!=='resolved',review:r},count:1});
       else rows.push({record,item:(state.filter in summaryLabels?work.find(x=>matchesSummary(x,state.filter)):work[0])||null,count:work.length});
     }
     if(view==='inbox'||view==='history')for(const r of state.reviews.filter(r=>!r.patient_id)){rows.push({record:{patient_id:'',display_name:t('unassigned'),reviews:[],missions:[]},item:{id:r.id,title:t(r.review_kind),due:r.review_at,status:r.state,urgent:r.review_kind==='incident_response'&&r.state!=='resolved',review:r},count:1});}
-    if(view==='patients')return rows.filter(({record})=>record.display_name.toLocaleLowerCase().includes(state.query.toLocaleLowerCase())&&(state.filter==='all'||needsMe(record)===(state.filter==='needs'))).sort((a,b)=>Number(Boolean(b.item?.urgent))-Number(Boolean(a.item?.urgent))||(waitTime(a.item,a.record)-waitTime(b.item,b.record))||a.record.patient_id.localeCompare(b.record.patient_id));
+    if(view==='patients')return rows.filter(({record})=>record.display_name.toLocaleLowerCase().includes(state.query.toLocaleLowerCase())&&(state.filter==='all'||(state.filter in summaryLabels?obligations(record).some(item=>matchesSummary(item,state.filter)):needsMe(record)===(state.filter==='needs')))).sort((a,b)=>Number(Boolean(b.item?.urgent))-Number(Boolean(a.item?.urgent))||(waitTime(a.item,a.record)-waitTime(b.item,b.record))||a.record.patient_id.localeCompare(b.record.patient_id));
     rows=rows.filter(({record,item})=>(`${record.display_name} ${sentence(item,record)}`).toLocaleLowerCase().includes(state.query.toLocaleLowerCase())&&(
       state.filter==='all'||state.filter===record.contact_status||(state.filter in summaryLabels&&item&&matchesSummary(item,state.filter))));
     const val=row=>state.sort==='patient'?row.record.display_name:state.sort==='age'?(Number(row.record.age)||0):state.sort==='last_activity'?(+new Date(row.record.last_activity_at)||0):waitTime(row.item,row.record);
@@ -539,15 +546,14 @@
     return rows;
   }
   function remember() {
-    if(demo)return;
     const q=new URLSearchParams();if(state.query)q.set('q',state.query);if(state.filter!==(view==='patients'?'needs':'all'))q.set('filter',state.filter);if(view!=='patients'){q.set('sort',state.sort);if(state.descending)q.set('desc','1');}q.set('page',state.page);
-    history.replaceState({...history.state,scroll:scrollY},'',`${location.pathname}?${q}`);
+    history.replaceState({...history.state,scroll:scrollY},'',`${location.pathname}?${q}${location.hash}`);
   }
   function list() {
     if(view==='patients'){patientsList();return;}
     const rows=tableRows();state.page=Math.min(state.page,Math.max(1,Math.ceil(rows.length/50)));
     const columns=['patient','age','urgency','last_activity'];
-    $('content').innerHTML=`<div class="toolbar"><label class="search">${t('search')}<input id="search" type="search" value="${esc(state.query)}" autocomplete="off"></label><div class="filter-control"><span id="filter-label" class="visually-hidden">${t('filter')}</span><div id="filter" class="seg" role="group" aria-labelledby="filter-label">${['all','danger','pending_review','overdue','due_today'].map(k=>`<button type="button" data-filter="${k}" aria-pressed="${state.filter===k}">${summaryLabels[k]||t(k)}</button>`).join('')}</div></div><span class="muted">${t('timezone')}: ${bdi(state.zone)}</span></div><div class="filter-summary"><span id="result-count">${rows.length} ${t('results')} · ${summaryLabels[state.filter]||t(state.filter)}${state.query?' · '+bdi(state.query):''}</span><button id="clear">${t('clear')}</button></div><div class="work-surface"><table class="clinical" role="table"><caption>${t(view==='patients'?'outstanding':view)}. ${t('sort_help')}</caption><colgroup>${columns.map(()=>'<col>').join('')}</colgroup><thead><tr role="row">${columns.map(k=>`<th role="columnheader" scope="col" ${state.sort===k?`aria-sort="${state.descending?'descending':'ascending'}"`:''}><button data-sort="${k}">${k==='last_activity'?'Last activity':k==='urgency'?'What to do and why (urgency)':t(k)} <svg class="icon sort-chevron" viewBox="0 0 16 16" aria-hidden="true"><use href="#chevron-icon"/></svg></button></th>`).join('')}</tr></thead><tbody>${rows.slice((state.page-1)*50,state.page*50).map(({record,item,count})=>`<tr role="row" class="patient-row ${item?.urgent?'danger urgent':item?.due&&+new Date(item.due)<Date.now()?'warning':'calm'}"><td role="cell"><span class="stack-label">${t('patient')}</span>${record.patient_id?`<a data-record href="${esc(link(record))}">${bdi(record.display_name)}</a>`:`<span>${t('unassigned')}</span>`}</td><td role="cell" class="age"><span class="stack-label">${t('age')}</span><span class="age-value ${record.age==null?'muted':''}">${bdi(record.age??t('not_recorded'))}</span></td><td role="cell"><span class="stack-label">${t('outstanding')}</span><span class="patient-sentence">${esc(sentence(item,record))}</span>${count>1?`<small>and ${count-1} more</small>`:''}</td><td role="cell" class="muted"><span class="stack-label">Last activity</span>${activity(record.last_activity_at)}</td></tr>`).join('')}</tbody></table>${!rows.length?`${emptyState(t(state.records.length?'empty':'no_patients'),t('refresh'),Boolean(state.query||state.filter!=='all'))}`:''}</div><div class="pager"><button id="previous" ${state.page<=1?'disabled':''}><span class="turn-arrow" aria-hidden="true">←</span> ${t('previous')}</button><span>${t('page')} ${state.page} ${t('of')} ${Math.max(1,Math.ceil(rows.length/50))}</span><button id="next" ${state.page*50>=rows.length?'disabled':''}>${t('next')} <span class="turn-arrow" aria-hidden="true">→</span></button></div>`;
+    $('content').innerHTML=`<div class="toolbar"><label class="search">${t('search')}<input id="search" type="search" value="${esc(state.query)}" autocomplete="off"></label><div class="filter-control"><span id="filter-label" class="visually-hidden">${t('filter')}</span><div id="filter" class="seg" role="group" aria-labelledby="filter-label">${['all','danger','pending_review','overdue','due_today'].map(k=>`<button type="button" data-filter="${k}" aria-pressed="${state.filter===k}">${summaryLabels[k]||t(k)}</button>`).join('')}</div></div></div><div class="filter-summary"><span id="result-count">${rows.length} ${t('results')} · ${summaryLabels[state.filter]||t(state.filter)}${state.query?' · '+bdi(state.query):''}</span><button id="clear">${t('clear')}</button></div><div class="work-surface"><table class="clinical" role="table"><caption>${t(view==='patients'?'outstanding':view)}. ${t('sort_help')}</caption><colgroup>${columns.map(()=>'<col>').join('')}</colgroup><thead><tr role="row">${columns.map(k=>`<th role="columnheader" scope="col" ${state.sort===k?`aria-sort="${state.descending?'descending':'ascending'}"`:''}><button data-sort="${k}">${k==='last_activity'?'Last activity':k==='urgency'?'What to do and why (urgency)':t(k)} <svg class="icon sort-chevron" viewBox="0 0 16 16" aria-hidden="true"><use href="#chevron-icon"/></svg></button></th>`).join('')}</tr></thead><tbody>${rows.slice((state.page-1)*50,state.page*50).map(({record,item,count})=>`<tr role="row" class="patient-row ${item?.urgent?'danger urgent':item?.due&&+new Date(item.due)<Date.now()?'warning':'calm'}"><td role="cell"><span class="stack-label">${t('patient')}</span>${record.patient_id?`<a data-record href="${esc(link(record))}">${bdi(record.display_name)}</a>`:`<span>${t('unassigned')}</span>`}</td><td role="cell" class="age"><span class="stack-label">${t('age')}</span><span class="age-value ${record.age==null?'muted':''}">${bdi(record.age??t('not_recorded'))}</span></td><td role="cell"><span class="stack-label">${t('outstanding')}</span><span class="patient-sentence">${esc(sentence(item,record))}</span>${count>1?`<small>and ${count-1} more</small>`:''}</td><td role="cell" class="muted"><span class="stack-label">Last activity</span>${activity(record.last_activity_at)}</td></tr>`).join('')}</tbody></table>${!rows.length?`${emptyState(t(state.records.length?'empty':'no_patients'),t('refresh'),Boolean(state.query||state.filter!=='all'))}`:''}</div><div class="pager"><button id="previous" ${state.page<=1?'disabled':''}><span class="turn-arrow" aria-hidden="true">←</span> ${t('previous')}</button><span>${t('page')} ${state.page} ${t('of')} ${Math.max(1,Math.ceil(rows.length/50))}</span><button id="next" ${state.page*50>=rows.length?'disabled':''}>${t('next')} <span class="turn-arrow" aria-hidden="true">→</span></button></div>`;
     $('search').addEventListener('input',e=>{const start=e.target.selectionStart;state.query=e.target.value;state.page=1;list();$('search').focus();$('search').setSelectionRange(start,start);});
     document.querySelector('[data-clear]')?.addEventListener('click',()=>$('clear').click());
     $('filter').onclick=e=>{const button=e.target.closest('[data-filter]');if(!button)return;state.filter=button.dataset.filter;state.page=1;list();document.querySelector('#filter [aria-pressed=true]').focus();};
@@ -580,7 +586,7 @@
   function provenance(value){if(!value)return ''; const rows=Array.isArray(value)?value:[value];return rows.filter(p=>p.received_at).map(p=>`<p class="provenance">${t('received')}: ${time(p.received_at)}</p>`).join('');}
   function clinicalLabel(value){const text=String(value??'');return words[text]?t(text):text.includes('_')?t('not_recorded'):text;}
   function instruction(order){const i=order.structured_instruction||{};const comparisons={gt:'above',ge:'at least',lt:'below',le:'at most'};return ['drug','dose','frequency','timing','route','duration','text','metric','comparator','threshold','unit'].filter(k=>i[k]!==undefined&&i[k]!==null&&i[k]!=='').map(k=>bdi(k==='comparator'?comparisons[i[k]]||t('not_recorded'):k==='metric'?clinicalLabel(i[k]):i[k])).join(' · ');}
-  function monitor(m){const d=m.details||{};if(d.kind!=='MONITOR')return '';return `<table class="reading-table" role="table"><caption>${t('monitoring')} · ${bdi(clinicalLabel(d.metric))} · ${bdi(d.unit)} · ${bdi(state.zone)}</caption><thead><tr><th scope="col">${t('slot')}</th><th scope="col">${t('reading')}</th><th scope="col">${t('source')}</th></tr></thead><tbody>${(d.slots||[]).map((slot,index)=>{const r=(d.readings||[]).findLast(r=>r.slot===index);return `<tr role="row"><th role="rowheader" scope="row">${time(slot)}</th><td role="cell"><span class="stack-label">${t('reading')}</span>${r?bdi(r.value)+' '+bdi(d.unit):badge(+new Date(slot)>Date.now()?'not_yet_due':'missing')}</td><td role="cell"><span class="stack-label">${t('source')}</span>${r?`${t('received')}<small>${t('received')}: ${time(r.received_at)}</small>`:t('missing')}</td></tr>`;}).join('')}</tbody></table>${(d.readings||[]).some(r=>r.slot===null)?`<h3>${t('extras')}</h3>${d.readings.filter(r=>r.slot===null).map(r=>`<p>${bdi(r.value)} ${bdi(d.unit)} ${time(r.observed_at)}</p>`).join('')}`:''}`;}
+  function monitor(m){const d=m.details||{};if(d.kind!=='MONITOR')return '';return `<table class="reading-table" role="table"><caption>${t('monitoring')} · ${bdi(clinicalLabel(d.metric))} · ${bdi(d.unit)}</caption><thead><tr><th scope="col">${t('slot')}</th><th scope="col">${t('reading')}</th><th scope="col">${t('source')}</th></tr></thead><tbody>${(d.slots||[]).map((slot,index)=>{const r=(d.readings||[]).findLast(r=>r.slot===index);return `<tr role="row"><th role="rowheader" scope="row">${time(slot)}</th><td role="cell"><span class="stack-label">${t('reading')}</span>${r?bdi(r.value)+' '+bdi(d.unit):badge(+new Date(slot)>Date.now()?'not_yet_due':'missing')}</td><td role="cell"><span class="stack-label">${t('source')}</span>${r?`${t('received')}<small>${t('received')}: ${time(r.received_at)}</small>`:t('missing')}</td></tr>`;}).join('')}</tbody></table>${(d.readings||[]).some(r=>r.slot===null)?`<h3>${t('extras')}</h3>${d.readings.filter(r=>r.slot===null).map(r=>`<p>${bdi(r.value)} ${bdi(d.unit)} ${time(r.observed_at)}</p>`).join('')}`:''}`;}
   function holds(record){return (record.held_medications||[]).map(h=>`<article class="record-item" data-held-order="${esc(h.order_id)}"><h3>On hold</h3><p>${esc(prose('hold',{drug:h.drug,date:reviewTime(h.since),reason:h.reason||'no reason given'}))}</p></article>`).join('');}
   function joining(record){
     const lines={paused:'Reminders paused by the patient',opted_out:'The patient turned routine messages off',unreachable:'Sanad cannot reach this patient',frozen:'Contact frozen'};
@@ -622,7 +628,8 @@
     detailPresentation(record);
     if(!demo) removalControls(record);
     bindEvidenceActions();
-    $('back').onclick=e=>{if(!demo){try{const saved=sessionStorage.getItem('sanad-list-return');if(saved&&/^\/a(?:\/(?:inbox|history))?(?:\?|$)/.test(saved)){e.preventDefault();location.assign(saved);}}catch(_){}}};
+    if(!demo){try{const saved=sessionStorage.getItem('sanad-list-return');if(saved&&/^\/a(?:\/(?:inbox|history))?(?:\?|$)/.test(saved))$('back').href=saved;}catch(_){}}
+    $('back').onclick=e=>{if(!demo){try{const saved=sessionStorage.getItem('sanad-list-return');if(saved&&/^\/a(?:\/(?:inbox|history))?(?:\?|$)/.test(saved)){e.currentTarget.href=saved;}}catch(_){}}};
   }
   function removalControls(record){
     const grid=document.querySelector('.detail-grid'), words=record.removal_words;
@@ -643,7 +650,7 @@
         event.preventDefault();form.querySelector('[type="submit"]').disabled=true;
         try{
           const result=await api(`/api/patients/${encodeURIComponent(record.patient_id)}/remove`,{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':decodeURIComponent((document.cookie.split('; ').find(v=>v.startsWith('sanad_csrf='))||'').split('=')[1]||'')},body:JSON.stringify({expected_version:record.profile_version,command_id:commandId,name:input.value})});
-          const refreshed=await api(`/api/patients/${encodeURIComponent(record.patient_id)}`);detail(refreshed);
+          await load();
           const message=document.createElement('p');message.setAttribute('role','status');message.textContent=result.message||words.result;document.querySelector('.detail-grid').after(message);
         }catch(error){form.querySelector('[role="status"]').textContent=error.message;form.querySelector('[type="submit"]').disabled=false;}
       };input.focus();
@@ -712,6 +719,7 @@
   function avatar(name){return `<span class="av" aria-hidden="true">${esc(String(name||'').trim().split(/\s+/).filter(Boolean).slice(0,2).map(word=>Array.from(word)[0]).join('').toUpperCase())}</span>`;}
   let presentedQueue=null;
   function auroraPresentation(){
+    document.querySelectorAll('.reading-chart .trend span').forEach(bar=>{bar.style.height=bar.dataset.height+'%';bar.style.setProperty('--bd',bar.dataset.delay+'ms');});
     if(patient){
       document.querySelectorAll('[data-doctor-avatar] .av').forEach(el=>el.textContent=doctorInitial());
       updatePatientColumns();
@@ -736,12 +744,59 @@
     });
     reveal();
   }
+  function readingTime(row){return row.observed_at||row.recorded_at;}
+  function dateKey(value){const parts=new Intl.DateTimeFormat('en-CA',{timeZone:state.zone,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date(value));return ['year','month','day'].map(k=>parts.find(p=>p.type===k).value).join('-');}
+  function numericParts(value){const parts=/^[-+]?\d+(?:\.\d+)?(?:\s*\/\s*[-+]?\d+(?:\.\d+)?)?$/.test(String(value).trim())?String(value).split('/').map(Number):[];return parts.every(Number.isFinite)?parts:[];}
+  function readingCharts(rows,{weekly=false,record=null}={}){
+    const now=Date.now(), today=dateKey(now), day=new Date(today+'T00:00:00Z');
+    day.setUTCDate(day.getUTCDate()-((day.getUTCDay()+6)%7));const monday=day.toISOString().slice(0,10);
+    const groups=new Map();
+    for(const row of rows){const at=readingTime(row);if(!at||!Number.isFinite(+new Date(at)))continue;
+      if(weekly&&(+new Date(at)>now||dateKey(at)<monday||dateKey(at)>today))continue;
+      const key=JSON.stringify([row.metric,row.unit]);if(!groups.has(key))groups.set(key,[]);groups.get(key).push(row);
+    }
+    return [...groups.values()].map(all=>{
+      all.sort((a,b)=>+new Date(readingTime(a))-+new Date(readingTime(b)));
+      const values=weekly?all:all.slice(-10), {metric,unit}=values[0];
+      const count=Math.max(0,...values.map(r=>numericParts(r.value).length));
+      const series=Array.from({length:count},(_,component)=>{
+        const numbers=values.flatMap(row=>{const n=numericParts(row.value);return n.length===count?[{row,value:n[component]}]:[];});
+        if(!numbers.length)return '';
+        const low=Math.min(...numbers.map(n=>n.value)),high=Math.max(...numbers.map(n=>n.value)),base=Math.min(0,low),top=Math.max(0,high),range=top-base||1;
+        const label=count===2?(component===0?(en?'First component':'القيمة الأولى'):(en?'Second component':'القيمة التانية')):clinicalLabel(metric);
+        const alerts=(record?.orders||[]).filter(o=>o.status==='active'&&o.current_version?.type==='value_alert').map(o=>o.current_version.structured_instruction).filter(a=>a.metric===metric&&a.unit===unit);
+        const compare={gt:(a,b)=>a>b,ge:(a,b)=>a>=b,lt:(a,b)=>a<b,le:(a,b)=>a<=b};
+        return `<div class="reading-series"><p class="chart-scale">${esc(label)} · ${en?'Scale':'المقياس'}: ${bdi(base)} – ${bdi(top)}${unit?' '+bdi(unit):''}</p><div class="trend" aria-hidden="true">${numbers.map(({row,value},i)=>{const hot=!weekly&&dateKey(readingTime(row))===today&&alerts.some(a=>{const threshold=numericParts(a.threshold);return threshold.length===count&&compare[a.comparator]?.(value,threshold[component]);});return `<span class="${hot?'hot':''}" data-height="${(value-base)/range*100}" data-delay="${i*60}"></span>`;}).join('')}</div><div class="kv"><span>${en?'Highest':'أعلى قيمة'} · ${esc(label)}</span><b>${bdi(high)}${unit?' '+bdi(unit):''}</b></div><div class="kv"><span>${en?'Lowest':'أقل قيمة'} · ${esc(label)}</span><b>${bdi(low)}${unit?' '+bdi(unit):''}</b></div></div>`;
+      }).join('');
+      return `<div class="reading-chart"><h4>${bdi(clinicalLabel(metric))}${unit?' · '+bdi(unit):''}</h4>${series}<ol class="reading-values" aria-label="${en?'Exact readings':'القراءات زي ما اتسجلت'}">${values.map(row=>`<li>${bdi(row.value)}${row.unit?' '+bdi(row.unit):''} · ${row.observed_at?'':en?'Recorded on ':'اتسجلت يوم '}${time(readingTime(row)).replace(/<small>.*<\/small>$/,'')}</li>`).join('')}</ol></div>`;
+    }).join('');
+  }
+  function doctorReadings(record){
+    const rows=new Map();
+    for(const mission of record.missions||[]){const d=mission.details;if(d?.kind!=='MONITOR'||mission.state==='proposed')continue;
+      for(const r of d.readings||[]){const ref=r.source_ref,key=ref?JSON.stringify([ref.entity_type,ref.id,r.reading_index]):JSON.stringify([mission.id,r.observed_at,r.value,r.slot]);
+        if(!demo&&ref?.entity_type==='evidence'&&!state.evidence.some(e=>(e.id===ref.id||e.evidence_id===ref.id)&&e.version===ref.version&&!['detached','rejected'].includes(e.association_state)))continue;
+        if(ref?.entity_type==='clinical_fact'&&record.facts&&!record.facts.some(f=>f.id===ref.id&&f.version===ref.version))continue;
+        const previous=rows.get(key);if(previous&&previous.version>(ref?.version||0))continue;
+        rows.set(key,{metric:d.metric,unit:d.unit,value:r.value,observed_at:r.observed_at,received_at:r.received_at,version:ref?.version||0});
+      }
+    }
+    return [...rows.values()];
+  }
+  function fullProfile(record,heading){
+    const card=document.createElement('article');card.className='card profile rv';card.id='patient-profile';
+    const title=document.createElement('h2');title.className='htitle opened-title';title.textContent='One patient, opened';heading.before(title,card);heading.classList.remove('profile');heading.classList.add('top');card.append(heading);
+    const grid=document.createElement('div');grid.className='grid3';card.append(grid);
+    const plan=document.createElement('div');plan.className='cellp';plan.innerHTML='<h4>Current plan</h4>'+(record.orders||[]).filter(o=>o.status==='active').map(o=>`<div class="plan-item"><div>${instruction(o.current_version)}</div></div>`).join('');
+    const readings=document.createElement('div');readings.className='cellp';readings.innerHTML='<h4>Last ten readings</h4>'+readingCharts(doctorReadings(record),{record});
+    const work=document.createElement('div');work.className='cellp';grid.append(plan,readings,work);const obligation=$('what-to-do');obligation.classList.add('ask');work.append(obligation);
+  }
   function recordDecorations(record){
     const heading=document.querySelector('.record-heading');heading.insertAdjacentHTML('afterbegin',avatar(record.display_name));
     heading.classList.add('profile');
     const copy=document.createElement('div');copy.className='profile-copy';
     [...heading.children].filter(el=>!el.matches('.av')).forEach(el=>copy.append(el));heading.append(copy);
-    $('back').classList.add('button','acts');heading.append($('back'));
+    $('back').classList.add('button');$('workspace').prepend($('back'));if(demo)$('back').href='/demo'+location.search;
     document.querySelectorAll('[data-order],[data-held-order]').forEach(el=>{
       const copy=document.createElement('div');copy.className='plan-copy';copy.append(...el.childNodes);el.append(copy);
       el.classList.add('plan-item');const miss=el.hasAttribute('data-held-order');
@@ -749,6 +804,7 @@
     });
     document.querySelectorAll('[data-fact],.consent-binding p').forEach(el=>el.classList.add('kv'));
     document.querySelectorAll('[data-evidence-actions],.record-item:has([data-validate],[data-response])').forEach(el=>el.classList.add('ask'));
+    fullProfile(record,heading);
     const comparisons={gt:(a,b)=>a>b,ge:(a,b)=>a>=b,lt:(a,b)=>a<b,le:(a,b)=>a<=b};
     for(const mission of record.missions||[]){
       const d=mission.details;if(d?.kind!=='MONITOR')continue;
@@ -788,19 +844,19 @@
     }).join('')}</div>`;
   }
   function listPresentation(rows){
-    $('content').insertAdjacentHTML('afterbegin',summaryStrip(state.records,state.reviews.filter(r=>!r.patient_id&&r.state!=='resolved'),view!=='patients'));
+    $('content').insertAdjacentHTML('afterbegin',summaryStrip(state.records,state.reviews.filter(r=>!r.patient_id&&r.state!=='resolved'),true));
     const inbox=document.querySelector('nav a[href="/a/inbox"]');if(inbox)inbox.innerHTML=`${icon('review-icon')}${t('inbox')} <span class="count">${state.records.reduce((n,r)=>n+reviewRows(r).length,0)+state.reviews.filter(r=>!r.patient_id).length}</span>`;
     document.querySelectorAll('button[data-summary]').forEach(button=>button.onclick=()=>{
-      const key=button.dataset.summary;state.filter=state.filter===key?'all':key;state.page=1;list();
+      const key=button.dataset.summary;state.filter=view!=='patients'&&state.filter===key?'all':key;state.page=1;list();
       document.querySelector(`[data-summary="${key}"]`).focus();
       if(view==='inbox'&&key==='overdue')document.querySelector('.inbox-item')?.scrollIntoView({block:'nearest'});
     });
     const elements=[...document.querySelectorAll('.patient-row')];
     elements.forEach((row,i)=>{row.tabIndex=i===0?0:-1;row.onkeydown=e=>{let next;if(e.key==='ArrowDown')next=Math.min(elements.length-1,i+1);if(e.key==='ArrowUp')next=Math.max(0,i-1);if(next!==undefined){e.preventDefault();elements.forEach(x=>x.tabIndex=-1);elements[next].tabIndex=0;elements[next].focus();}if(e.key==='Enter'&&view!=='patients'){e.preventDefault();row.querySelector('[data-record],summary')?.click();}};});
     if(view==='inbox'){
-      const visible=rows.slice((state.page-1)*50,state.page*50);const groups=[['Needs you now',visible.filter(r=>r.item?.urgent)],['Waiting on you',visible.filter(r=>!r.item?.urgent)]];
+      const visible=rows.slice((state.page-1)*50,state.page*50);const groups=[['Emergency',visible.filter(r=>r.item?.urgent)],['Waiting on you',visible.filter(r=>!r.item?.urgent)]];
       const target=document.createElement('div');target.className='inbox-groups';
-      target.innerHTML=groups.map(([label,items])=>`<section class="section"><h2>${label} <span class="count ${label==='Needs you now'&&items.length?'danger':''}">${items.length}</span></h2>${items.map(({record,item})=>inboxCard(record,item)).join('')||emptyState('Nothing needs attention here.',t('refresh'))}</section>`).join('');
+      target.innerHTML=groups.map(([label,items])=>`<section class="section"><h2>${label} <span class="count ${label==='Emergency'&&items.length?'danger':''}">${items.length}</span></h2>${items.map(({record,item})=>inboxCard(record,item)).join('')||emptyState('Nothing needs attention here.',t('refresh'))}</section>`).join('');
       document.querySelector('.work-surface').replaceWith(target);
     }
   }
@@ -835,6 +891,70 @@
       if(original)pageImages(original,media.pages||[],original.closest('article'));
     }
     state.evidence.forEach((e,i)=>{const media=(record.media||[]).find(m=>m.media_id===e.media_id);if(!media){sections[4].querySelectorAll('article')[i]?.insertAdjacentHTML('beforeend','<p class="muted">Original unavailable.</p>');return;}const original=document.querySelector(`[data-media][href$="/${encodeURIComponent(media.media_id)}"]`);if(original){const copy=original.cloneNode(true);sections[4].querySelectorAll('article')[i]?.append(copy);copy.onclick=original.onclick;if(media.mime==='application/pdf')pageImages(copy,media.pages||[],sections[4].querySelectorAll('article')[i]);}});
+    recordActions(record);
+  }
+  function recordActions(record){
+    if(demo||!state.recordActionPages)return;
+    const root=$('what-to-do'), pages=state.recordActionPages, w=pages[0]?.words||{};
+    const endpoint=`/api/patients/${encodeURIComponent(record.patient_id)}/actions`;
+    const button=(label,run)=>{const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=run;return b;};
+    const paragraph=text=>{const p=document.createElement('p');p.textContent=text;return p;};
+    const sources={...record};
+    for(const key of ['missions','followups','corrections','evidence'])sources[key]=[...(record[key]||[])];
+    for(const page of pages)for(const item of page.items||[]){
+      const collection={mission:'missions',question:'missions',followup:'followups',correction:'corrections',evidence:'evidence',document:'evidence'}[item.review?.source_type];
+      if(item.source&&collection&&!sources[collection].some(x=>x.id===item.source.id))sources[collection].push(item.source);
+    }
+    for(const page of pages)for(const item of page.items||[]){
+      let p=[...root.querySelectorAll('p[data-obligation]')].find(x=>x.dataset.obligation===item.id);
+      if(!p){p=document.createElement('p');p.dataset.obligation=item.id;const a=document.createElement('a');a.href='#'+itemTarget(item,sources);a.textContent=sentence(item,sources);p.append(a);root.append(p);}
+      if(p.nextElementSibling?.classList.contains('item-actions')||!item.actions?.length)continue;
+      const actions=document.createElement('div');actions.className='item-actions';actions.dataset.itemId=item.id;p.after(actions);
+      for(const choice of item.actions)actions.append(button(choice.label,()=>open(item,choice,page.listing_token,actions)));
+    }
+    root.querySelector('[data-record-more]')?.remove();
+    const cursor=pages.at(-1)?.cursor;
+    if(cursor){const more=button(w.show_more,async()=>{more.disabled=true;const at=generation;try{const page=await api(endpoint+'?cursor='+encodeURIComponent(cursor));if(at!==generation)return;pages.push(page);recordActions(record);}catch(error){if([401,403,404].includes(error.status))await load();else toast(error.message);more.disabled=false;}});more.dataset.recordMore='';root.append(more);}
+    function open(item,choice,token,actions){
+      root.querySelectorAll('.record-action-form').forEach(f=>f.remove());
+      const form=document.createElement('form');form.className='record-action-form';actions.append(form);
+      const payload={item_kind:item.item_kind,item_id:item.id,action:choice.action,expected_version:item.version,command_id:crypto.randomUUID()};
+      if(item.review){payload.listing_token=token;payload.expected_source_version=item.review.source_version;}
+      if(choice.disposition)payload.disposition=choice.disposition;
+      if(choice.mission_id)payload.mission_id=choice.mission_id;
+      const field=(label,name,type,max)=>{const l=document.createElement('label');l.append(document.createTextNode(label));const input=document.createElement(type==='textarea'?'textarea':'input');if(type!=='textarea')input.type=type;input.name=name;input.required=true;if(max)input.maxLength=max;l.append(input);form.append(l);return input;};
+      if(item.review&&choice.action==='resolve')form.append(paragraph(w.decision_only));
+      const answer=choice.action==='answer'?field(w.your_answer,'answer','textarea',700):null;
+      const due=choice.action==='extend'?field(w.deadline,'due_at','datetime-local'):null;
+      const reason=['resolve','extend','close_unfulfilled','reject'].includes(choice.action)?field(w.reason,'reason','textarea',item.item_kind==='evidence'?1000:200):null;
+      const preview=document.createElement('div');preview.className='record-action-preview';form.append(preview);
+      let confirmed=false,inflight=false;
+      const submit=button(answer?w.preview:due?w.preview_deadline:w.confirm);submit.type='submit';form.append(submit);
+      form.append(button(w.cancel_form,()=>form.remove()));const error=paragraph('');error.setAttribute('role','alert');form.append(error);
+      form.addEventListener('input',()=>{confirmed=false;preview.replaceChildren();submit.textContent=answer?w.preview:due?w.preview_deadline:w.confirm;});
+      form.onsubmit=async event=>{
+        event.preventDefault();if(inflight||!form.reportValidity())return;
+        if(answer)payload.text=answer.value;
+        if(reason)payload.reason=reason.value;
+        if(due)payload.due_at=new Date(due.value).toISOString();
+        if((answer||due)&&!confirmed){
+          preview.replaceChildren();
+          if(answer)preview.append(paragraph(answer.value));
+          if(due){const date=new Date(payload.due_at),escalation=new Date(+date+1000*(item.mission.grace_seconds||0));const format=d=>d.toLocaleString(lang,{dateStyle:'full',timeStyle:'long'});preview.append(paragraph(w.deadline_preview.replace('{due}',format(date)).replace('{escalation}',format(escalation))));}
+          confirmed=true;submit.textContent=answer?w.send_answer:w.confirm;return;
+        }
+        inflight=true;root.querySelectorAll('button').forEach(b=>b.disabled=true);form.querySelectorAll('input,textarea').forEach(x=>x.disabled=true);
+        try{
+          const response=await fetch(endpoint,{method:'POST',credentials:'same-origin',cache:'no-store',headers:{'Content-Type':'application/json','X-CSRF-Token':decodeURIComponent(document.cookie.split('; ').find(x=>x.startsWith('sanad_csrf='))?.slice(11)||'')},body:JSON.stringify(payload)});
+          const result=await response.json().catch(()=>({}));
+          if([401,403,404].includes(response.status)){await load();return;}
+          if(response.ok||[409,422].includes(response.status)){await load();toast(typeof result.detail==='string'?result.detail:errorText(response.status));return;}
+          throw new Error(errorText(response.status));
+        }catch(failure){error.textContent=failure.message||t('failed');}
+        finally{inflight=false;root.querySelectorAll('button').forEach(b=>b.disabled=false);form.querySelectorAll('input,textarea').forEach(x=>x.disabled=false);}
+      };
+      form.querySelector('textarea,input,button')?.focus();
+    }
   }
   function lightbox(anchor){
     const url=new URL(anchor.href);if(url.origin!==location.origin||!url.pathname.startsWith('/api/patients/'))return;
@@ -864,9 +984,9 @@
       pending=false;
       const content=$('content'), controls=$('patient-controls');
       const sections=[...content.querySelectorAll(':scope>section')];
-      const top=[...content.children].filter(el=>!el.matches('section')&&!content.hidden);
+      const top=[...content.children].filter(el=>!el.matches('section,#patient-week')&&!content.hidden);
       const left=[sections[0],sections[1],controls.querySelector('.patient-talk'),controls.querySelector('.patient-upload'),sections[2]].filter(el=>el&&!el.hidden&&(!content.contains(el)||!content.hidden));
-      const right=[sections[4],sections[3],sections[5],content.querySelector('#patient-agreement')].filter(el=>el&&!content.hidden);
+      const right=[sections[4],content.querySelector('#patient-week'),sections[3],sections[5],content.querySelector('#patient-agreement')].filter(el=>el&&!content.hidden);
       const settings=$('patient-settings');if(settings&&!settings.hidden)top.push(settings);
       const result=$('patient-action-result');
       const elements=[...top,...left,...right,result].filter(Boolean);
@@ -903,14 +1023,17 @@
     const plan=data.plan||data;$('title').textContent=t('yourcare');
     // Explicit projection allow-list. No ids, kind names, raw objects or internal statuses.
     const orderHTML=(plan.orders||[]).map(o=>`<article class="record-item dose"><span class="pill" aria-hidden="true">${esc(Array.from(o.drug||'')[0]?.toUpperCase()||'')}</span><div class="dose-copy"><b>${bdi(o.drug)}</b><small>${[o.dose,o.timing,o.route,o.duration].filter(Boolean).map(bdi).join(' · ')}</small></div>${o.frequency?`<span class="status tag">${bdi(o.frequency)}</span>`:''}</article>`).join('')||empty('no_plan');
-    const requests=(plan.next_missions||[]).map(m=>`<article class="record-item dose"><div class="dose-copy"><b>${bdi(m.title)}</b><small>${t('due')}: ${time(m.due_at,plan.preferences?.timezone||'UTC')}</small></div></article>`).join('')||empty('no_requests');
+    const requests=(plan.next_missions||[]).map(m=>`<article class="record-item dose"><div class="dose-copy"><b>${bdi(m.title)}</b><small>${t('due')}: ${time(m.due_at)}</small></div></article>`).join('')||empty('no_requests');
     const reports=(plan.medication_reports||[]).map(r=>`<article class="record-item"><p>${bdi(r.text)}</p><small>${t('self_report')}</small></article>`).join('')||empty('no_reports');
     const prefs=patientPreferences||{...plan.preferences,reminders:plan.preferences?.routine_contact_enabled?"enabled":"paused"};
     const patientWords=JSON.parse($('patient-controls')?.dataset.words||'{}');
-    $('content').innerHTML=`<div class="summary-strip" aria-label="Your recorded plan">${[[t('your_plan'),(plan.orders||[]).length,'patient-medicines'],[t('your_requests'),(plan.next_missions||[]).length,'patient-requests'],[t('questions'),(plan.open_questions||[]).length,'patient-questions']].map(([label,n,id])=>`<a class="summary-tile" href="#${id}"><span>${esc(label)}</span><strong data-count="${n}">0</strong></a>`).join('')}</div><p>${t('doctor')}: ${bdi(plan.doctor_name)}</p>${section('your_plan',orderHTML)}${section('your_requests',requests)}${section('reports',reports)}${section('last_reading',plan.last_reading?`<p class="record-item">${bdi(plan.last_reading.text)}</p>`:badge('missing'))}${section('reminders',`<p id="patient-reminder-summary">${esc(patientWords[prefs.reminders]||t(prefs.reminders))}</p><p id="patient-quiet-summary">${t('quiet')}: ${bdi((prefs.quiet_hours||[]).join(', '))} · ${bdi(prefs.timezone)}</p>${prefs.resume_at?`<p>${t('resume')}: ${time(prefs.resume_at,prefs.timezone)}</p>`:''}`)}${section('questions',(plan.open_questions||[]).map(q=>`<article class="record-item"><p>${bdi(q.question)}</p><small>${t('waiting')}</small></article>`).join('')||empty('no_questions'))}`;
+    $('content').innerHTML=`<div class="summary-strip" aria-label="Your recorded plan">${[[t('your_plan'),(plan.orders||[]).length,'patient-medicines'],[t('your_requests'),(plan.next_missions||[]).length,'patient-requests'],[t('questions'),(plan.open_questions||[]).length,'patient-questions']].map(([label,n,id])=>`<a class="summary-tile" href="#${id}"><span>${esc(label)}</span><strong data-count="${n}">0</strong></a>`).join('')}</div><p>${t('doctor')}: ${bdi(plan.doctor_name)}</p>${section('your_plan',orderHTML)}${section('your_requests',requests)}${section('reports',reports)}${section('last_reading',plan.last_reading?`<p class="record-item">${bdi(plan.last_reading.text)}</p>`:badge('missing'))}${section('reminders',`<p id="patient-reminder-summary">${esc(patientWords[prefs.reminders]||t(prefs.reminders))}</p><p id="patient-quiet-summary">${t('quiet')}: ${bdi((prefs.quiet_hours||[]).join(', '))} · ${bdi(prefs.timezone)}</p>${prefs.resume_at?`<p>${t('resume')}: ${time(prefs.resume_at)}</p>`:''}`)}${section('questions',(plan.open_questions||[]).map(q=>`<article class="record-item"><p>${bdi(q.question)}</p><small>${t('waiting')}</small></article>`).join('')||empty('no_questions'))}`;
+    const charts=readingCharts(plan.reading_history||[],{weekly:true});
+    if(charts)$('content').querySelectorAll(':scope>section')[4].insertAdjacentHTML('afterend',`<article class="section card pad rv" id="patient-week"><h3>${en?'This week':'الأسبوع ده'}</h3>${charts}</article>`);
+    $('patient-week')?.style.setProperty('--d','300ms');
     const agreement=data.agreement;
     if(agreement){
-      const date=time(agreement.accepted_at,Intl.DateTimeFormat().resolvedOptions().timeZone).replace(/<small>.*<\/small>$/,'');
+      const date=time(agreement.accepted_at).replace(/<small>.*<\/small>$/,'');
       const sentence=agreement.text?`You agreed to Sanad's terms on ${date}.`:`Agreed on ${date}, version ${esc(agreement.version)}`;
       const terms=agreement.text?`<details><summary>Read the terms</summary>${agreement.text.split(/\n\n/).map(part=>`<p>${esc(part)}</p>`).join('')}</details>`:'';
       $('content').insertAdjacentHTML('beforeend',`<section class="section" id="patient-agreement" data-version="${esc(agreement.version)}"><p>${sentence}</p>${terms}</section>`);
@@ -922,7 +1045,7 @@
     $('content').querySelectorAll('.summary-tile').forEach(a=>a.onclick=()=>{const target=document.querySelector(a.hash);target.scrollIntoView({block:'start'});target.focus({preventScroll:true});});
   }
   function preferences(){
-    const p=state.pref;$('content').innerHTML=`<section class="preferences"><form id="language-form"><label for="language">${t('language')}<select id="language"><option value="en" ${p.language==='en'?'selected':''}>English</option><option value="ar" ${p.language==='ar'?'selected':''}>العربية</option></select></label>${p.contest_english?`<p class="muted">${t('contest')}</p>`:''}<button class="primary" type="submit">${t('save')}</button><p id="save-result" role="status"></p></form></section>`;
+    const p=state.pref;$('content').innerHTML=`<section class="preferences"><p>${t('timezone')} ${bdi(state.zone)}</p><form id="language-form"><label for="language">${t('language')}<select id="language"><option value="en" ${p.language==='en'?'selected':''}>English</option><option value="ar" ${p.language==='ar'?'selected':''}>${en?'Arabic':'العربية'}</option></select></label>${p.contest_english?`<p class="muted">${t('contest')}</p>`:''}<button class="primary" type="submit">${t('save')}</button><p id="save-result" role="status"></p></form></section>`;
     document.querySelector('.preferences').insertAdjacentHTML('beforeend',`<form id="digest-form"><h2>Question digest</h2><label>Daily time (${esc(p.timezone)})<input id="digest-time" type="time" value="${esc(p.digest_time)}" required></label><label>Packing<select id="digest-packing"><option value="one" ${p.digest_packing==='one'?'selected':''}>One message</option><option value="each" ${p.digest_packing==='each'?'selected':''}>One per question</option></select></label><button type="submit">Save digest</button><p id="digest-result" role="status"></p></form>`);
     $('digest-time').setAttribute('aria-describedby','digest-result');
     const help=document.querySelector('#language-form > .muted');if(help){help.id='language-help';$('language').before(help);$('language').setAttribute('aria-describedby',help.id);}
@@ -930,20 +1053,20 @@
     $('digest-form').onsubmit=async e=>{e.preventDefault();const input=$('digest-time'),result=$('digest-result');if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(input.value)){input.setAttribute('aria-invalid','true');result.textContent='Choose a valid daily time.';return;}input.removeAttribute('aria-invalid');const button=e.target.querySelector('button');button.disabled=true;try{await api('/api/preferences',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':decodeURIComponent(document.cookie.split('; ').find(x=>x.startsWith('sanad_csrf='))?.slice(11)||'')},body:JSON.stringify({digest_time:input.value,digest_packing:$('digest-packing').value,expected_version:p.version,command_id:crypto.randomUUID()})});await load();toast('Digest preferences saved.');}catch(error){result.textContent=error.message;button.disabled=false;}};
     $('language-form').onsubmit=async e=>{e.preventDefault();const button=e.target.querySelector('button');button.disabled=true;const token=document.cookie.split('; ').find(s=>s.startsWith('sanad_csrf='))?.split('=')[1]||'';try{await api('/api/preferences',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':decodeURIComponent(token)},body:JSON.stringify({language:$('language').value,expected_version:p.version,command_id:crypto.randomUUID()})});$('save-result').textContent=t('saved');location.reload();}catch(error){$('save-result').className='error';$('save-result').textContent=error.message;button.disabled=false;}};
   }
-  function render(){document.querySelector('.record-heading')?.remove();if(view!=='patients'){document.querySelector('.patients-heading .hsub')?.remove();document.querySelector('.patients-heading')?.classList.remove('patients-heading');}const heading=document.querySelector('.page-heading h1');heading.id=view==='detail'?'page-title':'title';heading.textContent=patient?t('yourcare'):t(view);$('refresh').className='ghost icon-button';if(patient){patientView(state.data);focusPatientSections();}else if(view==='preferences')preferences();else if(view==='detail')detail(state.records[0]);else {window.onhashchange=null;list();}auroraPresentation();}
+  function render(){$('back')?.remove();document.querySelector('.record-heading')?.remove();if(view!=='patients'){document.querySelector('.patients-heading .hsub')?.remove();document.querySelector('.patients-heading')?.classList.remove('patients-heading');}const heading=document.querySelector('.page-heading h1');heading.id=view==='detail'?'page-title':'title';heading.textContent=patient?t('yourcare'):t(view);$('refresh').className='ghost';if(patient){patientView(state.data);focusPatientSections();}else if(view==='preferences')preferences();else if(view==='detail')detail(state.records[0]);else {window.onhashchange=null;list();}auroraPresentation();}
   async function load(){
     const request=++generation;currentAbort?.abort();currentAbort=new AbortController();const signal=currentAbort.signal;
     const first=!state.records.length&&!state.data&&!state.pref;
     $('feedback').textContent='';$('content').setAttribute('aria-busy','true');$('refresh').disabled=true;
     const timer=setTimeout(()=>{if(request===generation){$('feedback').innerHTML=`<p>${t('loading')}</p><div class="skeleton" aria-hidden="true"></div>`;$('feedback').className='loading';}},300);
     try{
-      if(demo&&!patient){state.records=await api('/assets/demo.json',{signal});const fragment=new URLSearchParams(location.hash.slice(1));const id=fragment.get('patient')||(!fragment.has('tab')?decodeURIComponent(location.hash.slice(1)):'');if(id){const r=state.records.find(r=>r.patient_id===id);if(r){view='detail';state.records=[r];state.evidence=r.evidence||[];state.zone=r.timezone||'UTC';}}}
-      else if(patient){const [me,plan,agreement]=await Promise.all([api('/api/patient/me',{signal}),api('/api/patient/plan',{signal}),api('/api/patient/agreement',{signal})]);state.data={display_name:me.display_name,plan,agreement};state.zone=plan.preferences?.timezone||'UTC';}
+      if(demo&&!patient){view='patients';state.records=await api('/assets/demo.json',{signal});const fragment=new URLSearchParams(location.hash.slice(1));const id=fragment.get('patient')||(!fragment.has('tab')?decodeURIComponent(location.hash.slice(1)):'');if(id){const r=state.records.find(r=>r.patient_id===id);if(r){view='detail';state.records=[r];state.evidence=r.evidence||[];}}}
+      else if(patient){const [me,plan,agreement]=await Promise.all([api('/api/patient/me',{signal}),api('/api/patient/plan',{signal}),api('/api/patient/agreement',{signal})]);state.data={display_name:me.display_name,plan,agreement};}
       else if(view==='preferences'){state.pref=await api('/api/preferences',{signal});}
-      else if(view==='detail'){const id=encodeURIComponent(body.dataset.patient);const [record,evidence]=await Promise.all([api(`/api/patients/${id}`,{signal}),api(`/api/patients/${id}/evidence`,{signal})]);state.records=[record];state.evidence=evidence;state.zone=record.timezone||'UTC';}
-      else {const [panel,pref]=await Promise.all([api('/api/patients',{signal}),api('/api/preferences',{signal})]);state.zone=pref.timezone;const records=[];let index=0;await Promise.all(Array.from({length:Math.min(6,panel.length)},async()=>{while(index<panel.length){const p=panel[index++];records.push(await api(`/api/patients/${encodeURIComponent(p.patient_id)}`,{signal}));}}));if(request!==generation)return;state.records=records;if(view==='inbox'||view==='history')state.reviews=await api('/api/browser/reviews'+(view==='history'?'?history=true':''),{signal});if(view==='inbox'||view==='patients'){if(view==='inbox')state.questions=await api('/api/questions',{signal});state.evidence=(await Promise.all(records.map(async r=>{const evidence=await api(`/api/patients/${encodeURIComponent(r.patient_id)}/evidence`,{signal});if(view==='patients')r.evidence=evidence;return evidence;}))).flat();}}
+      else if(view==='detail'){const id=encodeURIComponent(body.dataset.patient);const [record,evidence,actions]=await Promise.all([api(`/api/patients/${id}`,{signal}),api(`/api/patients/${id}/evidence`,{signal}),api(`/api/patients/${id}/actions`,{signal})]);state.records=[record];state.evidence=evidence;state.recordActionPages=[actions];}
+      else {const [panel,pref]=await Promise.all([api('/api/patients',{signal}),api('/api/preferences',{signal})]);const records=[];let index=0;await Promise.all(Array.from({length:Math.min(6,panel.length)},async()=>{while(index<panel.length){const p=panel[index++];records.push(await api(`/api/patients/${encodeURIComponent(p.patient_id)}`,{signal}));}}));if(request!==generation)return;state.records=records;if(view==='inbox'||view==='history')state.reviews=await api('/api/browser/reviews'+(view==='history'?'?history=true':''),{signal});if(view==='inbox'||view==='patients'){if(view==='inbox')state.questions=await api('/api/questions',{signal});state.evidence=(await Promise.all(records.map(async r=>{const evidence=await api(`/api/patients/${encodeURIComponent(r.patient_id)}/evidence`,{signal});if(view==='patients')r.evidence=evidence;return evidence;}))).flat();}}
       if(request!==generation)return;
-      render();$('feedback').textContent='';$('freshness').textContent=!patient&&view==='patients'?'':`${t('updated')} ${new Intl.DateTimeFormat(lang,{hour:'2-digit',minute:'2-digit',second:'2-digit'}).format(new Date())}`;
+      render();$('feedback').textContent='';$('freshness').textContent=!patient&&view==='patients'?'':`${t('updated')} ${new Intl.DateTimeFormat(lang,{hour:'2-digit',minute:'2-digit',second:'2-digit',timeZone:state.zone}).format(new Date())}`;
       if((first||demo)&&!patient&&['patients','inbox','history'].includes(view)){let position=history.state?.scroll||0;try{if(sessionStorage.getItem('sanad-list-return')===location.pathname+location.search)position=Number(sessionStorage.getItem('sanad-list-scroll'))||position;}catch(_){}if(position)scrollTo(0,position);}
     }catch(error){if(error.name==='AbortError')return;if(request!==generation)return;
       // Never retain sensitive clinical content after a revoked/expired session.
@@ -961,7 +1084,7 @@
     heading.append(refresh);$('workspace').prepend(heading);
     if(patient){heading.append($('appearance-label'),$('theme'));}
     else {const account=rail.querySelector('.account');if(account){account.insertAdjacentHTML('afterbegin',avatar(account.textContent));rail.querySelector('.foot').prepend(account);}}
-    $('refresh').className='ghost icon-button';$('refresh').innerHTML=`${icon('refresh-icon')}<span class="visually-hidden">${t('refresh')}</span>`;
+    $('refresh').className='ghost';$('refresh').innerHTML=`${icon('refresh-icon')}<span>${t('refresh')}</span>`;
   }
   chrome();
   $('title').textContent=patient?t('yourcare'):t(view);
@@ -969,7 +1092,7 @@
   else $('navigation').innerHTML=patient?`<a href="/pp" aria-current="page">${icon('patients-icon')}${t('yourcare')}</a>`:['patients','inbox','history','preferences'].map(k=>`<a href="${k==='patients'?'/a':'/a/'+k}" ${view===k?'aria-current="page"':''}>${icon(k==='patients'?'patients-icon':k==='history'?'clock-icon':k==='preferences'?'appearance-icon':'review-icon')}${t(k)}</a>`).join('');
   $('refresh').onclick=load;
   window.addEventListener('pageshow',event=>{if(event.persisted)load();});
-  if(demo&&!patient)window.addEventListener('hashchange',()=>{if(location.hash==='#workspace'||(view==='detail'&&new URLSearchParams(location.hash.slice(1)).has('tab')))return;state.detailTab=0;view=location.hash?'detail':'patients';if(view==='patients')state.filter='needs';load();});
+  if(demo&&!patient)window.addEventListener('hashchange',()=>{if(location.hash==='#workspace'||(view==='detail'&&new URLSearchParams(location.hash.slice(1)).has('tab')))return;state.detailTab=0;view=location.hash?'detail':'patients';load();});
   function patientControls() {
     const root=$('patient-controls'); if(!root)return;
     const hide=(element,hidden)=>{element.hidden=hidden;if(demo)element.style.display=hidden?'none':'';};
@@ -1008,7 +1131,7 @@
       return {state:'read'};
     }
     function patientTime(value){
-      const instant=new Date(value), zone=patientPreferences?.timezone||state.zone;
+      const instant=new Date(value), zone=state.zone;
       const day=new Intl.DateTimeFormat('en-CA',{timeZone:zone});
       const today=day.format(instant)===day.format(new Date());
       const date=new Intl.DateTimeFormat('en-US',{timeZone:zone,month:'short',day:'numeric'}).format(instant);
@@ -1018,7 +1141,7 @@
     async function history(older=false){viewingOlder=older;const data=await get('/api/patient/conversation'+(older&&cursor?'?cursor='+encodeURIComponent(cursor):''));const target=$('patient-conversation'),fragment=document.createDocumentFragment();const latest=new Set(data.items.filter(i=>i.direction==='outbound').map(i=>i.id));if(waitingFor&&[...latest].some(id=>!waitingFor.has(id))){waitingSince=null;waitingFor=null;result.textContent=w('sent');}else if(waitingSince!==null&&Date.now()-waitingSince>=20000){result.textContent=w('still_working');}outgoing=latest;for(const item of data.items){const article=document.createElement('article');article.className='record-item msg '+(item.direction==='outbound'?'outbound doc':'pat');const doctorAnswer=item.direction==='outbound'&&/^(?:Your doctor's answer to your question:|رد الدكتور على سؤالك:)/.test(item.text||'');if(doctorAnswer)article.dataset.doctorAvatar='true';const name=item.direction==='outbound'?(doctorAnswer?doctorInitial():'S'):document.querySelector('.account bdi')?.textContent;article.insertAdjacentHTML('afterbegin',avatar(name));const copy=document.createElement('div');copy.className='b';article.append(copy);line(copy,item.credential?w('credential')+' '+patientTime(item.at):item.legacy?w('legacy')+' '+patientTime(item.at):item.text||'');if(item.upload)line(copy,uploadText(item.upload));const time=document.createElement('small');time.textContent=patientTime(item.at);copy.append(time);fragment.append(article);}if(older)target.prepend(fragment);else target.replaceChildren(fragment);if(!target.childNodes.length)target.innerHTML=emptyState(w('no_messages'),t('patient_note'));cursor=data.cursor;hide($('patient-older'),!cursor);}
     function renderPreferences(prefs,forceInputs=false){
       const quietChanged=!patientPreferences||JSON.stringify(patientPreferences.quiet_hours)!==JSON.stringify(prefs.quiet_hours);
-      patientPreferences=prefs;state.zone=prefs.timezone;
+      patientPreferences=prefs;
       $('patient-stop').setAttribute('aria-checked',String(prefs.reminders==='enabled'));
       $('patient-preferences').textContent=w(prefs.reminders)+' · '+prefs.timezone;
       const summary=$('patient-reminder-summary');if(summary)summary.textContent=w(prefs.reminders);
@@ -1048,17 +1171,21 @@
       if(!reply.preferences){renderPreferences(await get('/api/patient/preferences'),true);}
       result.textContent=w(confirmation?'confirm':'saved');
     }
+    let uploadsExpanded=false;
+    function renderUploads(data){
+      const target=$('patient-uploads');target.replaceChildren();$('patient-uploads-toggle')?.remove();
+      const files=[...(Array.isArray(data)?data:data.items)].sort((a,b)=>(+new Date(b.received_at)||0)-(+new Date(a.received_at)||0));
+      if(files.length){const heading=document.createElement('h3');heading.textContent=w('documents_sent');target.append(heading);}
+      for(const file of (uploadsExpanded?files:files.slice(0,5)))line(target,patientTime(file.received_at)+' · '+w(file.state));
+      if(files.length>5){const button=document.createElement('button');button.id='patient-uploads-toggle';button.type='button';button.setAttribute('aria-controls','patient-uploads');button.setAttribute('aria-expanded',String(uploadsExpanded));button.textContent=uploadsExpanded?w('show_latest'):w('show_all').replace('{N}',files.length);button.onclick=()=>{uploadsExpanded=!uploadsExpanded;renderUploads(data);$('patient-uploads-toggle').focus();};target.after(button);}
+      updatePatientColumns();
+    }
     async function refresh(){
       if(stopped)return;
       // Render each independent reply immediately; history failure cannot freeze preferences.
       await Promise.all([
         get('/api/patient/preferences').then(renderPreferences),
-        get('/api/patient/uploads').then(data=>{
-          $('patient-uploads').replaceChildren();
-          const files=Array.isArray(data)?data:data.items;
-          if(files.length){const heading=document.createElement('h3');heading.textContent=w('documents_sent');$('patient-uploads').append(heading);}
-          for(const file of files)line($('patient-uploads'),patientTime(file.received_at)+' · '+w(file.state));
-        }),history()
+        get('/api/patient/uploads').then(renderUploads),history()
       ]);
     }
     async function act(work,refreshAfter=true){if(busy||stopped)return;busy=true;root.querySelectorAll('button').forEach(b=>b.disabled=true);try{await work();if(refreshAfter)await refresh();}catch(error){failure(error);}finally{busy=false;root.querySelectorAll('button').forEach(b=>b.disabled=false);$('patient-confirm').disabled=!confirmation;}}
@@ -1075,6 +1202,7 @@
     refresh().catch(failure);
     const timer=setInterval(()=>{if(stopped){clearInterval(timer);return;}if(!busy&&!document.hidden&&!viewingOlder)refresh().catch(failure);},5000);
   }
+  document.querySelectorAll('time[data-browser-instant]').forEach(el=>{el.outerHTML=time(el.dateTime);});
   patientControls();
   if(patient)patientColumns();
   load();

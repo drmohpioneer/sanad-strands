@@ -336,6 +336,9 @@ def web_router(login: LoginService, claims: ClaimService, settings: WebSettings)
     from sanad.web.api_questions import question_router
 
     router.include_router(question_router(claims))
+    from sanad.web.api_actions import action_router
+
+    router.include_router(action_router(claims))
     from sanad.web.api_removal import removal_router
 
     router.include_router(removal_router(claims))

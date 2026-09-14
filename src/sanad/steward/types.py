@@ -37,6 +37,8 @@ class CommandResult(_BoundaryValue):
     event_ids: tuple[str, ...] = ()
     resulting_versions: tuple[VersionRef, ...] = ()
     reason_code: NonblankStr | None = None
+    outcome_label: Literal["saved", "queued", "held", "suppressed"] | None = None
+    outcome_reason: NonblankStr | None = None
 
 
 def command_result(result: CommitResult) -> CommandResult:
@@ -48,6 +50,8 @@ def command_result(result: CommitResult) -> CommandResult:
             event_ids=result.event_ids,
             resulting_versions=result.resulting_versions,
             reason_code=result.reason_code,
+            outcome_label=result.outcome_label,
+            outcome_reason=result.outcome_reason,
         )
     if result.status == "too_large":
         return CommandResult(status="invalid_input", reason_code="transaction_too_large")

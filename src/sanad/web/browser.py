@@ -55,7 +55,9 @@ def patient_content(data: dict[str, object], locale: str) -> str:
         + text(m.get("title"))
         + "</b><small>"
         + ("Due: " if en else "الموعد: ")
-        + text(m.get("due_at"))
+        + '<time data-browser-instant hidden datetime="'
+        + escape(str(m.get("due_at") or ""), quote=True)
+        + '"></time>'
         + "</small></div></article>"
         for m in rows("next_missions")
     )

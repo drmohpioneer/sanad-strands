@@ -75,6 +75,18 @@ from browser.documents30 import (
 )
 from browser.logo18h import test_aurora_entry_logo as test_aurora_entry_logo
 from browser.logo18h import test_logo_pages as test_logo_pages
+from browser.record_actions26 import (
+    test_record_answer_extend_reviews as test_record_answer_extend_reviews,
+)
+from browser.record_actions26 import (
+    test_record_empty_listing as test_record_empty_listing,
+)
+from browser.record_actions26 import (
+    test_record_page_pagination as test_record_page_pagination,
+)
+from browser.record_actions26 import (
+    test_record_removed_never_linked_actions as test_record_removed_never_linked_actions,
+)
 from browser.removal27 import (
     test_removal_browser_flow as test_removal_browser_flow,
 )
@@ -96,6 +108,16 @@ from browser.sample18h3 import (
 )
 from browser.sample18h3 import (
     test_sample18h3_reading_provenance as test_sample18h3_reading_provenance,
+)
+from browser.sample18h4 import (
+    test_sample18h4_alerts_and_motion as test_sample18h4_alerts_and_motion,
+)
+from browser.sample18h4 import test_sample18h4_browser_times as test_sample18h4_browser_times
+from browser.sample18h4 import (
+    test_sample18h4_charts_and_uploads as test_sample18h4_charts_and_uploads,
+)
+from browser.sample18h4 import (
+    test_sample18h4_groups_and_return as test_sample18h4_groups_and_return,
 )
 from browser.walkthrough20_6e import (
     test_6e_reply_and_immediate_danger as test_6e_reply_and_immediate_danger,
@@ -564,7 +586,7 @@ INBOX_CASES = [
         "incident_response",
         "intake",
         "Respond to the danger report. Nobody has answered it yet.",
-        "Handled from the intake message in Telegram.",
+        "This new patient's file needs your reply.",
         None,
     ),
     (
@@ -605,14 +627,14 @@ INBOX_CASES = [
         "media_failure",
         "intake",
         "A photo the patient sent could not be read. Ask them to send it again.",
-        "Handled from the intake message in Telegram.",
+        "This new patient's file needs your reply.",
         None,
     ),
     (
         "intake_clarification",
         "intake",
         "A new patient's file needs one clarification before it is complete.",
-        "Handled from the intake message in Telegram.",
+        "This new patient's file needs your reply.",
         None,
     ),
     (
@@ -626,21 +648,21 @@ INBOX_CASES = [
         "delivery_failure",
         "intake",
         "A message about a new patient's file did not arrive.",
-        "Handled from the intake message in Telegram.",
+        "This new patient's file needs your reply.",
         None,
     ),
     (
         "delivery_failure",
         "doctor",
-        "A message to you did not arrive. Check your Telegram.",
-        "Handled from the review message in Telegram.",
+        "A message to you did not arrive.",
+        "This item needs your reply.",
         None,
     ),
     (
         "coverage_review",
         "patient",
         "Check who is covering these patients.",
-        "Handled from the review message in Telegram.",
+        "This item needs your reply.",
         None,
     ),
     (

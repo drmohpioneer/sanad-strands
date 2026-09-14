@@ -531,6 +531,8 @@ No action-time refresh is permitted. Consumption, review transition, actor audit
 and command replay commit atomically against freshly checked authority and source
 records. Offers carry no authority. Unknown delivery never asserts reading.
 
+A review decision may also come from an authenticated record listing bound to the review snapshot and the web session.
+
 Transport remains outside the database transaction. A crash or conflicting
 snapshot after transport can leave a delivered button without a persisted offer;
 that button refuses safely and the doctor must request a fresh inbox. Provably

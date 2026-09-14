@@ -77,6 +77,14 @@ class Store(Protocol):
         self, intent: OutboundIntent, basis: tuple[VersionRef, ...], now: datetime
     ) -> StoredRecord | None: ...
 
+    def lookup_record_action(
+        self, session: WebSession, scope: PatientScope, command_id: str
+    ) -> CommitResult | None: ...
+
+    def save_record_listing(
+        self, intent: OutboundIntent, session: WebSession
+    ) -> StoredRecord | None: ...
+
     def lookup_command(self, command: CommandEnvelope) -> CommitResult | None: ...
     def list_records(
         self, scope: Scope, entity_type: str, cursor: Cursor | None = None, limit: int = 100

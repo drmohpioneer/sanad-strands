@@ -319,6 +319,15 @@ use current assignments; value-only corrections retain their slot. Cards store
 the displayed instants and refuse changed schedules before evidence validation,
 after the existing instruction-fact and authentication guards. Coverage counts
 distinct filled slots only.
+Patients may change only the reading times on eligible window-next-v1 plans,
+starting the next local day, after a version-bound, single-use confirmation.
+RescheduleMonitorTimes atomically replaces unfilled future instants at stable
+indices, appends effective-dated history, suppresses moved-slot queued prompts,
+rebinds unchanged queued prompts and primes the existing scheduler. Recorded
+readings, count, duration, explicit dates and clinical deadlines stay fixed.
+The store reconstructs the complete write set from the saved offer. Consent,
+binding and browser sessions do not advance; replacement slot identities require
+fresh quiet-hours grants. The doctor sees the history on the plan, without a push.
 The existing safety screen runs first. Text facts and photo acceptance share
 the same slot predicate and atomic Steward transaction, including fulfillment
 and independent result review. Immutable source references retain values and

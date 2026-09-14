@@ -382,4 +382,38 @@ CATALOG["concierge.patient_education_unavailable"] = {
     ),
     "ar": "الشرح مش متاح من العيادة لسه، فوصّلنا سؤالك للدكتور.",
 }
+CATALOG["concierge.patient_schedule_start"] = {
+    "en": "New times start {date}. Your earlier readings stay as they are.",
+    "ar": "المواعيد الجديدة تبدأ {date}. قراءاتك القديمة هتفضل زي ما هي.",
+}
+CATALOG["concierge.patient_schedule_yes"] = {"en": "Yes, change", "ar": "أيوه، غيّر"}
+CATALOG["concierge.patient_schedule_no"] = {"en": "No", "ar": "لا"}
+CATALOG["concierge.patient_schedule_rules"] = {
+    "en": "Times must be between 6:00 and 23:30, in order, and at least 2 hours apart.",
+    "ar": "المواعيد لازم تكون بين 6:00 و23:30، بالترتيب، وبين كل ميعاد والتاني ساعتين على الأقل.",
+}
+CATALOG["concierge.patient_schedule_refused"] = {
+    "en": "This plan's times can't be changed here. Please ask your doctor.",
+    "ar": "مواعيد الخطة دي مينفعش تتغير هنا. اسأل دكتورك لو سمحت.",
+}
+CATALOG["concierge.patient_schedule_filled"] = {
+    "en": "One of those times already has a reading.",
+    "ar": "واحد من المواعيد دي فيه قراءة مسجلة بالفعل.",
+}
+CATALOG["concierge.patient_schedule_past_end"] = {
+    "en": "The new times would go past this plan's end.",
+    "ar": "المواعيد الجديدة هتعدي نهاية الخطة دي.",
+}
+CATALOG["concierge.patient_schedule_unchanged"] = {
+    "en": "Those are already your times.",
+    "ar": "دي مواعيدك بالفعل.",
+}
+CATALOG["concierge.patient_schedule_which_half"] = {
+    "en": "Do you mean {hour} in the morning or {hour} in the evening?",
+    "ar": "تقصد {hour} الصبح ولا {hour} بالليل؟",
+}
+CATALOG["concierge.patient_schedule_choose"] = {
+    "en": "Change reading times",
+    "ar": "غيّر مواعيد القياس",
+}
 FIELDS = validate_catalog("concierge", CATALOG)

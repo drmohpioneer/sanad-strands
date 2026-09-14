@@ -267,6 +267,16 @@ and never fill another slot on legacy tolerance-3h plans. New window-next-v1
 plans store timezone and cadence; acceptance fills the observed window's slot,
 else its empty successor, else an extra. Value-only corrections preserve assignment;
 detach frees it and restore assigns against current occupancy without displacement.
+`MonitorDetails.time_history` stores ordered entries with `effective_date`,
+`old_times`, `new_times`, `moved` (stable slot indices), `generation` and
+`source_receipt_id`. An edit replaces only unfilled slots from the next local day;
+filled slots keep their instants and readings. Windows follow stored instants,
+including today's last endpoint; the final endpoint follows the latest new times.
+Monitoring prompt IDs are `monitor:<mission>:<key>` and consent IDs are
+`<mission>:<key>`. Original keys remain their index; a moved key is `r<g>-<index>`,
+where g is the latest history generation that moved that index. Unchanged instants
+retain their keys across edits. These IDs do not carry authority or inherited
+quiet-hours consent. Rescheduling changes no patient preference or web session.
 Distinct occupied indices establish coverage;
 missing values are never synthesized. The store admits a patient MONITOR
 revision only when its exact projection follows from accepted sources and the

@@ -53,6 +53,14 @@ class QuietBody(CommandBody):
     ]
 
 
+class ScheduleBody(CommandBody):
+    mission_id: str = Field(min_length=1, max_length=200)
+    version: int = Field(strict=True, ge=1)
+    times: tuple[Annotated[str, Field(pattern=r"^(?:[01][0-9]|2[0-3]):[0-5][0-9]$")], ...] = Field(
+        min_length=1, max_length=4
+    )
+
+
 class ConfirmBody(CommandBody):
     token: str = Field(pattern=r"^[A-Za-z0-9_-]{20,100}$")
 
@@ -146,6 +154,8 @@ def submit(
         "text": text,
         "web_session_id": session.id,
     }
+    if isinstance(body, ScheduleBody):
+        payload["schedule"] = body.model_dump(mode="json", exclude={"command_id"})
     if token:
         payload["callback_token_hash"] = keys.digest(token)
     receipt = InboundReceipt(
@@ -190,9 +200,10 @@ def submit(
                 runtime.dispatcher.dispatch_one(row.scoped_key(scope), transport, runtime.clock())
         return {"status": "received", "confirmation_token": None, "emergency": emergency}
     routed = route_receipt(runtime, accepted.record.scoped_key(scope), owner=transport)
-    if routed.template_id == "patient_callback_stale":
+    if routed.template_id == "patient_callback_stale" and not preference:
         raise HTTPException(409)
     confirmation: str | None = None
+    schedule_response: JsonValue = None
     for row in receipt_replies(login, scope, receipt.id):
         intent = from_record(row, OutboundIntent)
         if runtime.dispatcher.origin_receipt_id(intent) != receipt.id:
@@ -200,6 +211,8 @@ def submit(
         if runtime.dispatcher.web_reply(intent):
             runtime.dispatcher.dispatch_one(row.scoped_key(scope), transport, runtime.clock())
         markup = (intent.payload or {}).get("reply_markup")
+        if preference:
+            schedule_response = intent.payload
         if (
             preference
             and not token
@@ -222,6 +235,8 @@ def submit(
         "status": "accepted" if completed else "received",
         "confirmation_token": confirmation,
     }
+    if schedule_response is not None:
+        result["schedule_reply"] = schedule_response
     if preference:
         result.update(queued=not completed, token=receipt.id)
         if completed:
@@ -496,6 +511,7 @@ def patient_router(login: LoginService) -> APIRouter:
                     intent = from_record(row, OutboundIntent)
                     if request.app.state.telegram.dispatcher.origin_receipt_id(intent) != token:
                         continue
+                    result["schedule_reply"] = intent.payload
                     markup = (intent.payload or {}).get("reply_markup")
                     if isinstance(markup, dict):
                         keyboard = markup.get("inline_keyboard")
@@ -509,12 +525,46 @@ def patient_router(login: LoginService) -> APIRouter:
                             result["confirmation_token"] = keyboard[0][0].get("callback_data")
         return result
 
+    @router.get("/api/patient/schedules")
+    def schedules(session: Annotated[WebSession, Depends(guard)]) -> dict[str, JsonValue]:
+        from sanad.concierge.plan import load, summary
+        from sanad.monitor.reschedule import eligible, times_on, tomorrow
+
+        snapshot = load(login.store, patient_scope(session), login.clock())
+        if snapshot is None:
+            raise HTTPException(401)
+        choices = {m.id: m for m in eligible(snapshot, login.clock())}
+        projected = summary(snapshot)["next_missions"]
+        assert isinstance(projected, list)
+        result: list[JsonValue] = []
+        for item in projected:
+            if not isinstance(item, dict) or item.get("id") not in choices:
+                continue
+            mission = choices[str(item["id"])]
+            assert mission.details.kind == "MONITOR"
+            result.append(
+                {
+                    **item,
+                    "times": list(
+                        times_on(mission.details, tomorrow(mission.details, login.clock()))
+                    ),
+                    "timezone": mission.details.timezone,
+                }
+            )
+        return {"plans": result}
+
     @router.post("/api/patient/preferences")
     def preference(
-        body: ReminderBody | QuietBody,
+        body: ReminderBody | QuietBody | ScheduleBody,
         request: Request,
         session: Annotated[WebSession, Depends(guard)],
     ) -> dict[str, JsonValue]:
+        if isinstance(body, ScheduleBody):
+            row = login.store.get(patient_scope(session), "mission", body.mission_id)
+            if row is None:
+                raise HTTPException(404)
+            # A stale page gets a fresh preview from the receipt path; it never commits directly.
+            return submit(login, request, session, body, "", preference=True)
         if isinstance(body, QuietBody) and body.quiet_hours[0] == body.quiet_hours[1]:
             raise HTTPException(422)
         text = (
@@ -532,7 +582,8 @@ def patient_router(login: LoginService) -> APIRouter:
         if (
             action is None
             or action.body.get("actor_subject") != session.subject
-            or action.body.get("action") != "resume"
+            or action.body.get("action")
+            not in {"resume", "schedule_yes", "schedule_no", "schedule_choose", "quiet_slot"}
         ):
             raise HTTPException(409)
         from sanad.concierge.records import PatientAction

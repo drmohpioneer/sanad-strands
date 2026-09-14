@@ -286,8 +286,10 @@ def prepare(
     if isinstance(source, Mission):
         if source.state not in {"open", "waiting_patient"} or source.details.kind != "MONITOR":
             return
+        from sanad.monitor.reschedule import slot_id, slot_index
+
         slots = [
-            (f"monitor:{source.id}:{index}", at, at + POLICY.scheduled_prompt_window)
+            (slot_id(source, index, prompt=True), at, at + POLICY.scheduled_prompt_window)
             for index, at in enumerate(source.details.slots)
         ]
         from sanad.monitor.executor import current_details
@@ -295,9 +297,7 @@ def prepare(
 
         occupied_slots = filled(current_details(store, builder.scope, source))
         slots = [
-            (slot, at, end)
-            for slot, at, end in slots
-            if int(slot.rsplit(":", 1)[1]) not in occupied_slots
+            (slot, at, end) for slot, at, end in slots if slot_index(slot) not in occupied_slots
         ]
     else:
         if source.state != "scheduled" or source.prompt_at is None or source.due_at is None:

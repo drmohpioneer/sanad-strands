@@ -91,6 +91,10 @@ class PatientWorld(ScribeWorld):
         if self.concierge.barrier_model_factory is None:
             # Readers a test installed explicitly are kept.
             self.concierge.barrier_model_factory = no_problem_readers
+        if self.concierge.schedule_model_factory is None:
+            self.concierge.schedule_model_factory = lambda registry, role: ScriptedModel(
+                candidate({"asserted": False, "times": []})
+            )
         self.concierge.model_factory = lambda registry, role: model
         assert self.post(update(PATIENT, text, id)).status_code == 200
         receipt = self.receipt(id)

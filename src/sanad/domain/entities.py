@@ -1,7 +1,7 @@
 """Immutable contract 01 aggregates and the explicitly supplied timing policy."""
 
 import json
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from enum import StrEnum
 from typing import Annotated, Literal, Self
 
@@ -137,6 +137,15 @@ class MonitorReading(_BoundaryValue):
     value: NonblankStr
 
 
+class MonitorTimeHistory(_BoundaryValue):
+    effective_date: date
+    old_times: tuple[str, ...]
+    new_times: tuple[str, ...]
+    moved: tuple[NonnegativeInt, ...]
+    generation: PositiveVersion
+    source_receipt_id: NonblankStr
+
+
 class MonitorDetails(_BoundaryValue):
     kind: Literal["MONITOR"] = "MONITOR"
     metric: NonblankStr
@@ -147,6 +156,7 @@ class MonitorDetails(_BoundaryValue):
     slot_rule: Literal["tolerance-3h", "window-next-v1"] = "tolerance-3h"
     timezone: IanaZone | None = None
     times_per_day: Literal[1, 2, 3, 4] | None = None
+    time_history: tuple[MonitorTimeHistory, ...] = ()
 
     @model_validator(mode="after")
     def schedule_metadata(self) -> Self:

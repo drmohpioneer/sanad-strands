@@ -43,6 +43,13 @@ They start at the next slot at or after the request on its local day and keep
 the full count, continuing onto later days when needed. Explicit future starts
 are preserved; a past start asks for clarification. Confirmation refuses a card
 whose displayed slots have changed and asks the doctor to dictate again.
+Patients may edit only local reading times on open, waiting-patient or still-live
+overdue window-next-v1 plans with remaining unfilled future slots. The daily count,
+duration and doctor's explicit deadlines remain fixed. Confirmed edits take effect
+on the next local day, use 06:00 through 23:30 in daily order at least two hours
+apart, and cannot pass the plan's end or collide with a filled slot. Stopped or
+paused reminders stay stopped or paused. Moved quiet-hour reminders need fresh
+explicit consent. Legacy, removed, superseded and terminal care is not editable.
 A reading fills its observed-time window's slot if empty, else the next slot if
 empty, else stays extra. Before the first slot it uses the first window; the
 final window ends at the next local cadence time. Assignments persist through
@@ -163,7 +170,7 @@ Only the Liaison's controlled delivery gateway sends unsolicited doctor messages
 | DONE | Valid objective fulfilment, once per objective/version. State exactly what was received or self-reported and whether clinical review remains outstanding. It does not wait for clinical review. |
 | DEADLINE | Unmet objective at its escalation time; overdue question/review/follow-up work; approved pre-visit and unresolved-work reminder subtypes. State what is missing, what was attempted and the action needed. |
 
-Routine progress stays in the dashboard/timeline. All messages distinguish `queued`, `sending`, `provider_accepted`, `uncertain` and `failed`; doctor acknowledgment is a separate event. A provider-accepted send does not prove the doctor read it. Patient-facing urgent guidance does not wait for doctor acknowledgment, and it cannot claim the doctor knows when delivery failed or is uncertain.
+Patient reading-time edits appear as effective-dated history on the doctor's plan view without a proactive notice. Routine progress stays in the dashboard/timeline. All messages distinguish `queued`, `sending`, `provider_accepted`, `uncertain` and `failed`; doctor acknowledgment is a separate event. A provider-accepted send does not prove the doctor read it. Patient-facing urgent guidance does not wait for doctor acknowledgment, and it cannot claim the doctor knows when delivery failed or is uncertain.
 
 A DEADLINE rings once. Its durable card remains until Review, Extend, Close, Cancel or Answer resolves the underlying obligation. "Seen" only records acknowledgment. Unresolved cards produce one doctor-level bundle seven days after the first deadline report and weekly thereafter, through the same DEADLINE gateway. Material change may re-ring the affected card under policy; routine duplicate evidence does not. The doctor-pulled digest lists unresolved work first. Review cards cannot disappear because their parent mission was cancelled or fulfilled.
 

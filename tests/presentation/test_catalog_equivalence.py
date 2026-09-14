@@ -84,6 +84,19 @@ def test_no_keys_renamed_or_new_prose_created(surface: str) -> None:
             "concierge.patient_barrier_option_side_effect_experience",
             "concierge.patient_barrier_option_other",
         }
+        # Contract 29.
+        added |= {
+            "concierge.patient_schedule_start",
+            "concierge.patient_schedule_yes",
+            "concierge.patient_schedule_no",
+            "concierge.patient_schedule_rules",
+            "concierge.patient_schedule_refused",
+            "concierge.patient_schedule_filled",
+            "concierge.patient_schedule_past_end",
+            "concierge.patient_schedule_unchanged",
+            "concierge.patient_schedule_which_half",
+            "concierge.patient_schedule_choose",
+        }
     assert set(catalog) == {surface + "." + key for key in legacy(surface)} | added
     assert all(set(locales) == {"ar", "en"} for locales in catalog.values())
 

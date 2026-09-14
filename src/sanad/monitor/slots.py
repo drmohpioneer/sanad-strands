@@ -108,6 +108,16 @@ def window_for(details: MonitorDetails, observed_at: datetime) -> int | None:
     assert details.timezone is not None and details.times_per_day is not None
     zone = ZoneInfo(details.timezone)
     last = details.slots[-1].astimezone(zone)
+    if details.time_history:
+        from sanad.monitor.reschedule import local_instant
+
+        clocks = details.time_history[-1].new_times
+        following_clock = next((t for t in clocks if t > last.strftime("%H:%M")), None)
+        final_day = last.date() + timedelta(days=following_clock is None)
+        end = local_instant(final_day, following_clock or clocks[0], details.timezone)
+        if instant >= end:
+            return None
+        return max((i for i, at in enumerate(details.slots) if at <= instant), default=0)
     hours = policy.slot_hours[details.times_per_day]
     following = next((h for h in hours if h > last.hour), None)
     day = last.date() + timedelta(days=following is None)

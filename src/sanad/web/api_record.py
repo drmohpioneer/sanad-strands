@@ -115,6 +115,26 @@ def record_router(claims: ClaimService) -> APIRouter:
                 mission_body["details"] = current_details(claims.store, scope, mission).model_dump(
                     mode="json"
                 )
+            if isinstance(mission.details, MonitorDetails) and mission.details.time_history:
+                from sanad.monitor.reschedule import local_instant
+
+                mission_body["schedule_history"] = [
+                    {
+                        "old": [
+                            local_instant(
+                                h.effective_date, t, mission.details.timezone or mission.timezone
+                            ).isoformat()
+                            for t in h.old_times
+                        ],
+                        "new": [
+                            local_instant(
+                                h.effective_date, t, mission.details.timezone or mission.timezone
+                            ).isoformat()
+                            for t in h.new_times
+                        ],
+                    }
+                    for h in mission.details.time_history
+                ]
             missions.append({**mission_body, "review_status": status})
         orders = []
         versions = tuple(records(claims.store, scope, "care_order_version"))

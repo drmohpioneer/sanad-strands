@@ -1,7 +1,7 @@
 """Atomic accepted patient-turn effects, audit, outbox and receipt completion."""
 
 from secrets import token_urlsafe
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, JsonValue
 
@@ -22,6 +22,10 @@ from sanad.store.records import (
     from_record,
     to_record,
 )
+
+if TYPE_CHECKING:
+    from sanad.concierge.records import ScheduleOffer
+    from sanad.domain import Mission
 
 
 class PatientTurnCommit:
@@ -74,6 +78,7 @@ class PatientTurnCommit:
                 }
             )
         self.buttons: list[JsonValue] = []
+        self.schedule_cancelled = False
 
     def put(self, model: BaseModel) -> None:
         self.builder.put(to_record(model, self.snapshot.scope))
@@ -91,6 +96,7 @@ class PatientTurnCommit:
         *,
         target: VersionRef | None = None,
         slot: str | None = None,
+        quiet_schedule_generation: int | None = None,
     ) -> None:
         raw = token_urlsafe(32)
         value = PatientAction(
@@ -104,6 +110,7 @@ class PatientTurnCommit:
             action=action,
             target_ref=target,
             slot_id=slot,
+            quiet_schedule_generation=quiet_schedule_generation,
             source_receipt_id=self.receipt.id,
             delivery_epoch=self.profile.delivery_epoch,
             binding_epoch=self.profile.binding_epoch,
@@ -119,6 +126,23 @@ class PatientTurnCommit:
                 | {"version": token.version + 1, "updated_at": self.now, "consumed_at": self.now}
             )
         )
+
+    def reschedule(self, mission: "Mission", offer: "ScheduleOffer") -> None:
+        from sanad.monitor.reschedule import project, queued_changes
+
+        changed = project(mission, offer.times, offer.effective_date, self.receipt.id, self.now)
+        self.kind("RescheduleMonitorTimes")
+        self.put(changed)
+        for row in queued_changes(self.store, self.snapshot.scope, mission, changed, self.now):
+            self.builder.put(row)
+            previous = self.store.get(self.snapshot.scope, row.entity_type, row.id)
+            assert previous
+            command = self.builder.command
+            self.builder.command = command.model_copy(
+                update={
+                    "expected_versions": (*command.expected_versions, previous.ref),
+                }
+            )
 
     def finish(self, template: str, text: str, *, emit: bool = True) -> CommandResult:
         from sanad.contact.scheduler import prime

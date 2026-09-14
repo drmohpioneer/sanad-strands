@@ -313,6 +313,14 @@ def summary(snapshot: Snapshot) -> dict[str, JsonValue]:
             "title": m.title,
             "due_at": m.due_at.astimezone(ZoneInfo(patient.timezone)).isoformat(),
             "state": m.state.value,
+            **(
+                {
+                    "version": m.version,
+                    "schedule": m.details.model_dump(mode="json", exclude={"readings"}),
+                }
+                if m.details.kind == "MONITOR"
+                else {}
+            ),
         }
         for m in sorted(snapshot.missions, key=lambda m: (m.due_at, m.id))
         if m.kind != "QUESTION"

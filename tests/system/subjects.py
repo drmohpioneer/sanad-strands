@@ -122,6 +122,10 @@ class SubjectWorld(PatientWorld):
         from store.medication_fixtures import scripted_barrier_factory
 
         self.concierge.barrier_model_factory = scripted_barrier_factory
+        if self.concierge.schedule_model_factory is None:
+            self.concierge.schedule_model_factory = lambda registry, role: ScriptedModel(
+                candidate({"asserted": False, "times": []})
+            )
         self.concierge.model_factory = lambda registry, role: model
         assert self.post(update(self.patient_subject, text, id)).status_code == 200
         receipt = self.receipt(id)

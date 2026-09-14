@@ -21,7 +21,13 @@ if TYPE_CHECKING:
     from sanad.store._base import Check, StoreBase
 
 KINDS = frozenset(
-    {"ConciergeReply", "CreateSupportTicket", "RecordPatientReply", "SetContactPreference"}
+    {
+        "ConciergeReply",
+        "CreateSupportTicket",
+        "RecordPatientReply",
+        "SetContactPreference",
+        "RescheduleMonitorTimes",
+    }
 )
 ALLOWED = frozenset(
     {
@@ -201,7 +207,22 @@ def guards(store: "StoreBase", request: CommitRequest, now: datetime) -> list["C
             return None
     except (ValueError, TypeError, KeyError):
         return None
+    schedule_rows: dict[tuple[str, str], StoredRecord] = {}
+    if command.payload.get("type") == "RescheduleMonitorTimes":
+        if any(
+            r.entity_type not in {"mission", "patient_action", "outbound_intent"}
+            for r in request.puts
+        ):
+            return None
+        if any(r.body.get("audience") != "patient" for r in request.intents):
+            return None
+        reconstructed = schedule_writes(store, snap, request, at, checks)
+        if reconstructed is None:
+            return None
+        schedule_rows = reconstructed
     for row in request.puts:
+        if (row.entity_type, row.id) in schedule_rows:
+            continue
         if row.entity_type == "outbound_intent" and command.payload.get("resolver_action"):
             from sanad.resolver.guard import suppression as resolver_suppression
 
@@ -241,6 +262,10 @@ def guards(store: "StoreBase", request: CommitRequest, now: datetime) -> list["C
         if row.entity_type == "patient_action":
             action = from_record(row, PatientAction)
             if action.actor_subject != actor.subject:
+                return None
+            if action.action.startswith("schedule_") and not schedule_offer_guard(
+                store, snap, request, action, receipt, checks
+            ):
                 return None
             if not action.consumed_at and action.action in {"barrier_category", "barrier_target"}:
                 if not new_barrier_choice(store, snap, request, receipt, action, checks):
@@ -836,3 +861,178 @@ def barrier_guard(
         return not outcome.category and not outcome.citations
     expected = verify(reservation.text, outcome.readers, mission_names(snap), outcome.model_ids)
     return expected.model_copy(update={"source_receipt_id": outcome.source_receipt_id}) == outcome
+
+
+def schedule_writes(
+    store: "StoreBase",
+    snap: "Snapshot",
+    request: CommitRequest,
+    now: datetime,
+    checks: list["Check"],
+) -> dict[tuple[str, str], StoredRecord] | None:
+    """Reconstruct the target and complete queued write set from the consumed offer."""
+    from sanad.domain import Mission
+    from sanad.monitor.reschedule import Refused, eligible, project, queued_changes
+    from sanad.store._base import Check
+    from sanad.store.records import to_record
+
+    consumed = [
+        from_record(r, PatientAction)
+        for r in request.puts
+        if r.entity_type == "patient_action"
+        and r.body.get("consumed_at")
+        and r.body.get("action") == "schedule_yes"
+    ]
+    if len(consumed) != 1:
+        return None
+    offer = consumed[0]
+    if not offer.schedule or not offer.target_ref:
+        return None
+    original = next(
+        (m for m in eligible(snap, now) if to_record(m, snap.scope).ref == offer.target_ref), None
+    )
+    if original is None:
+        return None
+    try:
+        new: Mission = project(
+            original,
+            offer.schedule.times,
+            offer.schedule.effective_date,
+            str(request.command.payload["receipt_id"]),
+            now,
+        )
+    except Refused:
+        return None
+    rows = (to_record(new, snap.scope), *queued_changes(store, snap.scope, original, new, now))
+    expected = {(r.entity_type, r.id): r for r in rows}
+    actual = {
+        (r.entity_type, r.id): r
+        for r in request.puts
+        if (r.entity_type, r.id) in expected or r.entity_type == "outbound_intent"
+    }
+    if actual != expected:
+        return None
+    for row in rows:
+        previous = store.get(snap.scope, row.entity_type, row.id)
+        if previous is None:
+            return None
+        checks.append(Check(previous.key, previous.version))
+    return expected
+
+
+def schedule_offer_guard(
+    store: "StoreBase",
+    snap: "Snapshot",
+    request: CommitRequest,
+    action: PatientAction,
+    receipt: StoredRecord,
+    checks: list["Check"],
+) -> bool:
+    from datetime import timedelta
+
+    from sanad.monitor.reschedule import Refused, eligible, project, tomorrow
+    from sanad.steward.types import records
+    from sanad.store._base import Check
+    from sanad.store.records import to_record
+
+    if not action.schedule or not action.target_ref:
+        return False
+    if action.consumed_at:
+        if action.action == "schedule_no" and request.intents:
+            return False
+        # Yes and No are different tokens for one offer; either one uses it up.
+        for row in records(store, snap.scope, "patient_action"):
+            if row.body.get("source_receipt_id") == action.source_receipt_id and str(
+                row.body.get("action", "")
+            ).startswith("schedule_"):
+                if row.body.get("consumed_at"):
+                    return False
+                checks.append(Check(row.key, row.version))
+        return True
+    from sanad.concierge.records import ScheduleReading
+    from sanad.monitor.reschedule import verify_readers
+
+    payload = receipt.body.get("payload")
+    typed = payload.get("schedule") if isinstance(payload, dict) else None
+    renewed = [
+        from_record(r, PatientAction)
+        for r in request.puts
+        if r.entity_type == "patient_action"
+        and r.body.get("consumed_at")
+        and str(r.body.get("action", "")).startswith("schedule_")
+    ]
+    if receipt.body.get("transport") == "web-preference" and isinstance(typed, dict):
+        if typed.get("mission_id") != action.target_ref.id or typed.get("times") != list(
+            action.schedule.times
+        ):
+            return False
+    elif renewed:
+        if not any(
+            a.schedule
+            and a.target_ref
+            and a.target_ref.id == action.target_ref.id
+            and a.schedule.times == action.schedule.times
+            for a in renewed
+        ):
+            return False
+    else:
+        raw_readers = request.command.payload.get("schedule_readers")
+        text = request.command.payload.get("schedule_text")
+        if not isinstance(raw_readers, list) or not isinstance(text, str):
+            return False
+        if receipt.body.get("kind") == "text" and (
+            not isinstance(payload, dict) or payload.get("text") != text
+        ):
+            return False
+        try:
+            verified = verify_readers(
+                text, tuple(ScheduleReading.model_validate(r) for r in raw_readers)
+            )
+        except ValueError:
+            return False
+        if verified is None or verified[1] != action.schedule.times:
+            return False
+        if (
+            verified[0] is not None
+            and verified[0] != action.target_ref.id
+            and action.action != "schedule_choose"
+        ):
+            return False
+    mission = next(
+        (m for m in eligible(snap, request.command.requested_at) if m.id == action.target_ref.id),
+        None,
+    )
+    if mission is None or mission.details.kind != "MONITOR":
+        return False
+    refs = {to_record(mission, snap.scope).ref}
+    refs.update(r.ref for r in request.puts if r.entity_type == "mission" and r.id == mission.id)
+    if (
+        action.version != 1
+        or action.source_receipt_id != receipt.id
+        or action.created_at != request.command.requested_at
+        or action.expires_at != action.created_at + timedelta(minutes=30)
+        or action.delivery_epoch != snap.profile.delivery_epoch
+        or action.binding_epoch != snap.profile.binding_epoch
+        or action.consent_version != snap.consent.version
+        or action.target_ref not in refs
+        or action.schedule.effective_date != tomorrow(mission.details, request.command.requested_at)
+    ):
+        return False
+    try:
+        if action.action == "schedule_choose":
+            from sanad.monitor.reschedule import validate_times
+
+            # Choosing a plan is not confirmation. Its cadence is checked before
+            # issuing Yes/No, once the patient has selected that plan.
+            validate_times(action.schedule.times, len(action.schedule.times))
+        else:
+            project(
+                mission,
+                action.schedule.times,
+                action.schedule.effective_date,
+                receipt.id,
+                request.command.requested_at,
+            )
+    except Refused:
+        return False
+    return True

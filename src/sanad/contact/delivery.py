@@ -63,7 +63,9 @@ def contact_freshness(store: Store, intent: OutboundIntent, now: datetime) -> st
         mission = from_record(row, Mission)
         if mission.details.kind != "MONITOR" or mission.state not in {"open", "waiting_patient"}:
             return "slot_invalid"
-        slots = {f"monitor:{mission.id}:{i}": at for i, at in enumerate(mission.details.slots)}
+        from sanad.monitor.reschedule import slot_id
+
+        slots = {slot_id(mission, i, prompt=True): at for i, at in enumerate(mission.details.slots)}
         at = slots.get(intent.slot_id or "")
         if at is None or not at <= now < at + POLICY.scheduled_prompt_window:
             return "slot_invalid"

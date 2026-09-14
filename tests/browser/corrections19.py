@@ -75,6 +75,12 @@ from browser.documents30 import (
 )
 from browser.logo18h import test_aurora_entry_logo as test_aurora_entry_logo
 from browser.logo18h import test_logo_pages as test_logo_pages
+from browser.patient_schedule29 import (
+    test_patient_schedule29_cancel as test_patient_schedule29_cancel,
+)
+from browser.patient_schedule29 import (
+    test_patient_schedule29_editor_history as test_patient_schedule29_editor_history,
+)
 from browser.record_actions26 import (
     test_record_answer_extend_reviews as test_record_answer_extend_reviews,
 )

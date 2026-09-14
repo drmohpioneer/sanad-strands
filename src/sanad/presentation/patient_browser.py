@@ -79,6 +79,10 @@ CATALOG: Catalog = {
     "quiet_start": {"en": "Quiet hours start", "ar": "ساعات الهدوء تبدأ إمتى"},
     "quiet_end": {"en": "Quiet hours end", "ar": "ساعات الهدوء تخلص إمتى"},
     "save": {"en": "Save quiet hours", "ar": "احفظ ساعات الهدوء"},
+    "schedule_change": {"en": "Change reading times", "ar": "غيّر مواعيد القياس"},
+    "schedule_save": {"en": "Save", "ar": "احفظ"},
+    "schedule_yes": {"en": "Yes, change", "ar": "أيوه، غيّر"},
+    "schedule_no": {"en": "No", "ar": "لا"},
     "saved": {"en": "Saved.", "ar": "اتحفظ."},
     "sent": {"en": "Message received.", "ar": "رسالتك وصلت."},
     "still_working": {

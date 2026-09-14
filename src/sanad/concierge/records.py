@@ -1,5 +1,6 @@
 """Typed self-reports and single-use patient choices; no authority from models."""
 
+from datetime import date
 from typing import Literal
 
 from pydantic import Field, StrictBool
@@ -46,6 +47,22 @@ class ReportFactPayload(_BoundaryValue):
     original_receipt_id: str | None = None
 
 
+class ScheduleOffer(_BoundaryValue):
+    times: tuple[str, ...] = Field(min_length=1, max_length=4)
+    effective_date: date
+
+
+class ScheduleTime(_BoundaryValue):
+    value: str
+    quote: str = Field(min_length=1, max_length=256, repr=False)
+
+
+class ScheduleReading(_BoundaryValue):
+    mission_id: str | None = None
+    times: tuple[ScheduleTime, ...] = Field(default=(), max_length=4)
+    asserted: StrictBool = False
+
+
 class PatientAction(_BoundaryValue):
     entity_type: Literal["patient_action"] = "patient_action"
     id: NonblankStr
@@ -67,6 +84,9 @@ class PatientAction(_BoundaryValue):
         "task_report",
         "barrier_category",
         "barrier_target",
+        "schedule_yes",
+        "schedule_no",
+        "schedule_choose",
     ]
     evidence_id: str | None = None
     evidence_version: PositiveVersion | None = None
@@ -84,6 +104,8 @@ class PatientAction(_BoundaryValue):
     monitor_received_at: UtcInstant | None = None
     barrier_category: BarrierType | None = None
     choice_number: int | None = None
+    schedule: ScheduleOffer | None = None
+    quiet_schedule_generation: PositiveVersion | None = None
 
 
 class ProblemReading(_BoundaryValue):

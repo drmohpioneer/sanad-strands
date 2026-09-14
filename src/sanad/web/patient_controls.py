@@ -64,6 +64,8 @@ def controls(locale: str) -> str:
 </label>
 <button type="submit">{w("save")}</button>
 </form>
+<div id="patient-schedules">
+</div>
 </section>
 <p id="patient-action-result" role="status">
 </p>

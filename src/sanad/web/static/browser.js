@@ -586,7 +586,7 @@
   function provenance(value){if(!value)return ''; const rows=Array.isArray(value)?value:[value];return rows.filter(p=>p.received_at).map(p=>`<p class="provenance">${t('received')}: ${time(p.received_at)}</p>`).join('');}
   function clinicalLabel(value){const text=String(value??'');return words[text]?t(text):text.includes('_')?t('not_recorded'):text;}
   function instruction(order){const i=order.structured_instruction||{};const comparisons={gt:'above',ge:'at least',lt:'below',le:'at most'};return ['drug','dose','frequency','timing','route','duration','text','metric','comparator','threshold','unit'].filter(k=>i[k]!==undefined&&i[k]!==null&&i[k]!=='').map(k=>bdi(k==='comparator'?comparisons[i[k]]||t('not_recorded'):k==='metric'?clinicalLabel(i[k]):i[k])).join(' · ');}
-  function monitor(m){const d=m.details||{};if(d.kind!=='MONITOR')return '';return `<table class="reading-table" role="table"><caption>${t('monitoring')} · ${bdi(clinicalLabel(d.metric))} · ${bdi(d.unit)}</caption><thead><tr><th scope="col">${t('slot')}</th><th scope="col">${t('reading')}</th><th scope="col">${t('source')}</th></tr></thead><tbody>${(d.slots||[]).map((slot,index)=>{const r=(d.readings||[]).findLast(r=>r.slot===index);return `<tr role="row"><th role="rowheader" scope="row">${time(slot)}</th><td role="cell"><span class="stack-label">${t('reading')}</span>${r?bdi(r.value)+' '+bdi(d.unit):badge(+new Date(slot)>Date.now()?'not_yet_due':'missing')}</td><td role="cell"><span class="stack-label">${t('source')}</span>${r?`${t('received')}<small>${t('received')}: ${time(r.received_at)}</small>`:t('missing')}</td></tr>`;}).join('')}</tbody></table>${(d.readings||[]).some(r=>r.slot===null)?`<h3>${t('extras')}</h3>${d.readings.filter(r=>r.slot===null).map(r=>`<p>${bdi(r.value)} ${bdi(d.unit)} ${time(r.observed_at)}</p>`).join('')}`:''}`;}
+  function monitor(m){const d=m.details||{};if(d.kind!=='MONITOR')return '';const clock=value=>new Intl.DateTimeFormat('en-GB',{timeZone:state.zone,hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(new Date(value));const history=(m.schedule_history||[]).map(h=>`<p class="schedule-history">${esc(`Patient changed reading times from ${h.old.map(clock).join(', ')} to ${h.new.map(clock).join(', ')}, starting ${new Intl.DateTimeFormat('en-CA',{timeZone:state.zone}).format(new Date(h.new[0]))}.`)}</p>`).join('');return `${history}<table class="reading-table" role="table"><caption>${t('monitoring')} · ${bdi(clinicalLabel(d.metric))} · ${bdi(d.unit)}</caption><thead><tr><th scope="col">${t('slot')}</th><th scope="col">${t('reading')}</th><th scope="col">${t('source')}</th></tr></thead><tbody>${(d.slots||[]).map((slot,index)=>{const r=(d.readings||[]).findLast(r=>r.slot===index);return `<tr role="row"><th role="rowheader" scope="row">${time(slot)}</th><td role="cell"><span class="stack-label">${t('reading')}</span>${r?bdi(r.value)+' '+bdi(d.unit):badge(+new Date(slot)>Date.now()?'not_yet_due':'missing')}</td><td role="cell"><span class="stack-label">${t('source')}</span>${r?`${t('received')}<small>${t('received')}: ${time(r.received_at)}</small>`:t('missing')}</td></tr>`;}).join('')}</tbody></table>${(d.readings||[]).some(r=>r.slot===null)?`<h3>${t('extras')}</h3>${d.readings.filter(r=>r.slot===null).map(r=>`<p>${bdi(r.value)} ${bdi(d.unit)} ${time(r.observed_at)}</p>`).join('')}`:''}`;}
   function holds(record){return (record.held_medications||[]).map(h=>`<article class="record-item" data-held-order="${esc(h.order_id)}"><h3>On hold</h3><p>${esc(prose('hold',{drug:h.drug,date:reviewTime(h.since),reason:h.reason||'no reason given'}))}</p></article>`).join('');}
   function joining(record){
     const lines={paused:'Reminders paused by the patient',opted_out:'The patient turned routine messages off',unreachable:'Sanad cannot reach this patient',frozen:'Contact frozen'};
@@ -1202,8 +1202,68 @@
     refresh().catch(failure);
     const timer=setInterval(()=>{if(stopped){clearInterval(timer);return;}if(!busy&&!document.hidden&&!viewingOlder)refresh().catch(failure);},5000);
   }
+  function patientSchedules() {
+    const root=$('patient-schedules');if(!root||demo)return;
+    const words=JSON.parse($('patient-controls').dataset.words),w=key=>words[key]||words.failed;
+    let stopped=false;
+    const csrf=()=>decodeURIComponent(document.cookie.split('; ').find(x=>x.startsWith('sanad_csrf='))?.slice(11)||'');
+    async function request(path,body){
+      const options=body?{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf()},body:JSON.stringify(body)}:{};
+      const response=await fetch(path,options);
+      if(!response.ok){if([401,403].includes(response.status)){stopped=true;root.replaceChildren();}throw new Error(w([401,403].includes(response.status)?'expired':response.status===409?'conflict':'failed'));}
+      return response.json();
+    }
+    function showReply(target,data){
+      target.replaceChildren();if(!data)return;const text=document.createElement('p');text.textContent=data.text||'';target.append(text);
+      for(const row of data?.reply_markup?.inline_keyboard||[]){for(const choice of row){
+        const button=document.createElement('button');button.type='button';button.textContent=choice.text;target.append(button);
+        const command={command_id:crypto.randomUUID(),token:choice.callback_data};
+        button.onclick=async()=>{
+          target.querySelectorAll('button').forEach(b=>b.disabled=true);
+          try{await result(target,await request('/api/patient/preferences/confirm',command));}
+          catch(error){text.textContent=error.message;target.querySelectorAll('button').forEach(b=>b.disabled=false);}
+        };
+      }}
+    }
+    async function result(target,reply){
+      if(reply.queued){
+        target.textContent=w('pending');const deadline=Date.now()+20000;
+        while(!stopped&&Date.now()<deadline){
+          await new Promise(resolve=>setTimeout(resolve,1000));
+          const current=await request('/api/patient/preferences?token='+encodeURIComponent(reply.token));
+          if(!current.queued){showReply(target,current.schedule_reply);return;}
+        }
+        target.textContent=w('still_working');return;
+      }
+      showReply(target,reply.schedule_reply);
+    }
+    async function refresh(){
+      if(stopped)return;const data=await request('/api/patient/schedules');root.replaceChildren();
+      for(const plan of data.plans){
+        const fieldset=document.createElement('fieldset'),legend=document.createElement('legend');
+        legend.textContent=plan.title+' · '+plan.timezone;fieldset.append(legend);
+        const open=document.createElement('button');open.type='button';open.textContent=w('schedule_change');fieldset.append(open);
+        const form=document.createElement('form');form.hidden=true;form.style.display='none';
+        for(const value of plan.times){const label=document.createElement('label');label.textContent=String(form.querySelectorAll('input').length+1);const input=document.createElement('input');input.type='time';input.className='clock';input.required=true;input.min='06:00';input.max='23:30';input.value=value;label.append(input);form.append(label);}
+        const save=document.createElement('button');save.type='submit';save.textContent=w('schedule_save');form.append(save);fieldset.append(form);
+        const output=document.createElement('div');output.setAttribute('role','status');fieldset.append(output);root.append(fieldset);
+        open.onclick=()=>{form.hidden=false;form.style.display='';form.querySelector('input').focus();};
+        let pending=null;
+        form.onsubmit=async event=>{event.preventDefault();if(save.disabled)return;save.disabled=true;
+          const times=Array.from(form.querySelectorAll('input'),input=>input.value);
+          if(!pending||JSON.stringify(pending.times)!==JSON.stringify(times))pending={command_id:crypto.randomUUID(),mission_id:plan.id,version:plan.version,times};
+          try{await result(output,await request('/api/patient/preferences',pending));pending=null;}
+          catch(error){output.textContent=error.message;}finally{save.disabled=false;}
+        };
+      }
+    }
+    $('refresh').addEventListener('click',()=>refresh().catch(error=>root.textContent=error.message));
+    window.addEventListener('patient-session-expired',()=>{stopped=true;root.replaceChildren();});
+    refresh().catch(error=>root.textContent=error.message);
+  }
   document.querySelectorAll('time[data-browser-instant]').forEach(el=>{el.outerHTML=time(el.dateTime);});
   patientControls();
+  patientSchedules();
   if(patient)patientColumns();
   load();
 })();

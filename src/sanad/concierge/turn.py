@@ -54,6 +54,7 @@ class ConciergeTurn:
         synthetic: bool = False,
         model_factory: Callable[[ModelRegistry, ModelRole], Model] = bedrock_model,
         barrier_model_factory: Callable[[ModelRegistry, ModelRole], Model] | None = None,
+        schedule_model_factory: Callable[[ModelRegistry, ModelRole], Model] | None = None,
         speech_factory: Callable[[Provenance], SpeechAdapter] | None = None,
         media_factory: Callable[[InboundReceipt, Principal], MediaRetriever] | None = None,
         vision_factory: Callable[[Provenance], VisionAdapter] | None = None,
@@ -64,6 +65,7 @@ class ConciergeTurn:
         self.runtime, self.store = runtime, runtime.store
         self.synthetic, self.model_factory = synthetic, model_factory
         self.barrier_model_factory = barrier_model_factory
+        self.schedule_model_factory = schedule_model_factory
         self.speech_factory, self.media_factory = speech_factory, media_factory
         self.observe, self.checkpoint = observe, checkpoint
         self.places_provider = places_provider
@@ -327,7 +329,10 @@ class ConciergeTurn:
 
                 stage_reply(tx, str(resolver_target), template, reply)
             result = tx.finish(
-                template, reply, emit=not tx.builder.command.payload.get("media_reply_owned", False)
+                template,
+                reply,
+                emit=not tx.builder.command.payload.get("media_reply_owned", False)
+                and not tx.schedule_cancelled,
             )
             self.checkpoint("turn_persisted")
             if result.status in {"accepted", "duplicate"}:
@@ -416,6 +421,9 @@ class ConciergeTurn:
                 or token.consent_version != tx.snapshot.consent.version
             ):
                 return reply("patient_callback_stale")
+            schedule_choice = preferences.schedule_callback(tx, token)
+            if schedule_choice:
+                return schedule_choice
             tx.consume(token)
             from sanad.concierge.barriers import callback as barrier_callback
 
@@ -436,6 +444,21 @@ class ConciergeTurn:
                     preferences.apply(tx, preferences.Preference("resume"), confirmed=True)
                 )
             if token.action == "quiet_slot":
+                schedule_quiet = preferences.schedule_quiet_callback(tx, token)
+                if schedule_quiet:
+                    return schedule_quiet
+                from sanad.monitor.reschedule import slot_id
+
+                for m in tx.snapshot.missions:
+                    if (
+                        m.details.kind == "MONITOR"
+                        and token.slot_id
+                        and token.slot_id.startswith(m.id + ":")
+                    ):
+                        if token.slot_id not in {
+                            slot_id(m, i) for i in range(len(m.details.slots))
+                        }:
+                            return reply("patient_callback_stale")
                 return reply(
                     preferences.apply(
                         tx, preferences.Preference("quiet"), slot_id=token.slot_id, confirmed=True
@@ -568,6 +591,9 @@ class ConciergeTurn:
                 return reply("patient_task_choose")
             question.open_ticket(tx, text)
             return reply("patient_task_missing")
+        schedule_choice = preferences.schedule_request(self, tx, text, reading, source)
+        if schedule_choice:
+            return schedule_choice
         from sanad.concierge import barriers
         from sanad.concierge.barrier_evidence import category
         from sanad.concierge.barrier_reading import outcome_for, read

@@ -251,6 +251,7 @@ body.standalone main{inline-size:calc(100% - 32px);max-inline-size:440px;margin-
 .summary-tile[data-summary]:hover{transform:translateY(-5px);box-shadow:var(--shadow),var(--glow);border-color:var(--line-strong)}
 .summary-tile[data-summary] .spark{position:absolute;inset-inline-end:-30px;inset-block-end:-30px;inline-size:120px;block-size:120px;border-radius:50%;background:radial-gradient(circle,rgba(109,123,255,.35),transparent 70%);opacity:0;transition:opacity .45s}
 .summary-tile[data-summary]:hover .spark{opacity:1}
+#content:has(>.bar) .summary-tile[aria-pressed=true]{background:var(--l2);color:var(--fg);box-shadow:var(--shadow)}
 .summary-tile[data-summary].danger strong{background:none;-webkit-text-fill-color:var(--danger);color:var(--danger)}
 .summary-tile[data-summary].danger{border-color:var(--danger-tile-edge)}
 .summary-tile[data-summary].danger::after{content:"";position:absolute;inset-block:-1px;inset-inline:-1px;border-radius:var(--r);pointer-events:none;box-shadow:0 0 0 1px var(--danger) inset;animation:pulse 2.4s ease-in-out infinite}

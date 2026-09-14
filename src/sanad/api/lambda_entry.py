@@ -102,18 +102,25 @@ def configure(revision: str) -> FastAPI:
         "webhook-secret",
         "tick-secret",
         "admin-telegram-id",
+        "doctor-access-code",
         "public-base-url",
         "bot-username",
     )
     response = ssm.get_parameters(Names=[prefix + n for n in names], WithDecryption=True)
     values = {p["Name"].removeprefix(prefix): p["Value"] for p in response["Parameters"]}
-    if set(values) != set(names) or any(not v for v in values.values()):
+    optional = {"doctor-access-code"}
+    if set(values) - optional != set(names) - optional or any(
+        not v for n, v in values.items() if n not in optional
+    ):
         raise ValueError("SSM configuration incomplete")
     settings = TelegramSettings(
         bot_id=values["bot-token"].split(":", 1)[0],
         bot_token=SecretStr(values["bot-token"]),
         webhook_secret=SecretStr(values["webhook-secret"]),
         admin_user_id=values["admin-telegram-id"],
+        doctor_access_code=SecretStr(values["doctor-access-code"])
+        if values.get("doctor-access-code")
+        else None,
     )
     store = DynamoStore(boto3.client("dynamodb", config=config), os.environ["SANAD_TABLE"])
     invoker = AsyncReceiptInvoker(

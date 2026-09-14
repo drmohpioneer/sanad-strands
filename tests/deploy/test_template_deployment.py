@@ -35,7 +35,7 @@ def test_template_declares_scoped_stack_and_account_concurrency_cap() -> None:
         "Amount": 20,
         "Unit": "USD",
     }
-    assert len(PARAMETERS) == 10 and sum(p[0] == "SecureString" for p in PARAMETERS.values()) == 5
+    assert len(PARAMETERS) == 11 and sum(p[0] == "SecureString" for p in PARAMETERS.values()) == 6
     for forbidden in (
         "TELEGRAM_BOT_TOKEN_SANAD_STRANDS=",
         "AWS_SECRET_ACCESS_KEY",

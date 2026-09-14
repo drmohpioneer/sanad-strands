@@ -17,7 +17,7 @@ called one dangerous. That was a deliberate gap and it is now closed with the
 same mechanism the lab values use: a fixed table, in code, applied to the number
 whether the patient typed it or photographed the machine.
 
-The cutoffs, set by Mohamed on 2026-08-29:
+The cutoffs used by this build:
 
     systolic  >= 180    hypertensive crisis   red card AND the emergency line
     diastolic >= 120    hypertensive crisis   red card AND the emergency line

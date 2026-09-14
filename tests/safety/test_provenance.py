@@ -1,10 +1,11 @@
 import ast
 import hashlib
+from base64 import b64decode
 from pathlib import Path
 
 import pytest
 
-from sanad.safety._provenance import REUSED_MODULES, TABLE_HASHES
+from sanad.safety._provenance import REUSED_MODULES, SCRUBBED_TEST_LINES, TABLE_HASHES
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -42,6 +43,9 @@ def test_provenance_headers_and_inventory() -> None:
         assert type(record).model_validate_json(record.model_dump_json()) == record
         text = (ROOT / record.destination).read_text()
         if record.destination.startswith("tests/"):
+            for published, original in SCRUBBED_TEST_LINES.get(record.destination, ()):
+                assert text.count(published + "\n") == 1
+                text = text.replace(published + "\n", b64decode(original).decode() + "\n")
             restored = text.replace("from sanad.safety import ", "from core import ")
             assert hashlib.sha256(restored.encode()).hexdigest() == record.source_sha256
         else:

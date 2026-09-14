@@ -1,6 +1,8 @@
 """Explicit environment loading; health never reads credentials."""
 
+import logging
 import os
+import re
 from typing import Annotated, Self
 
 from pydantic import (
@@ -22,6 +24,7 @@ ENV_NAMES = (
     "SANAD_TELEGRAM_WEBHOOK_SECRET",
     "SANAD_ADMIN_TELEGRAM_USER_ID",
 )
+logger = logging.getLogger(__name__)
 
 
 class TelegramSettings(_BoundaryValue):
@@ -40,6 +43,7 @@ class TelegramSettings(_BoundaryValue):
     admin_user_id: Annotated[str, Field(strict=True, pattern=r"^[0-9]+$", max_length=32)] = Field(
         alias="SANAD_ADMIN_TELEGRAM_USER_ID"
     )
+    doctor_access_code: SecretStr | None = Field(default=None, alias="SANAD_DOCTOR_ACCESS_CODE")
     api_base: str = Field(default=DEFAULT_API_BASE, alias="SANAD_TELEGRAM_API_BASE")
     test_mode: bool = Field(default=False, exclude=True, repr=False)
 
@@ -50,7 +54,20 @@ class TelegramSettings(_BoundaryValue):
             raise ValueError("required environment variable is blank")
         return value
 
-    @field_serializer("bot_token", "webhook_secret")
+    @field_validator("doctor_access_code")
+    @classmethod
+    def access_code_format(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is None:
+            return None
+        code = value.get_secret_value()
+        if not code.strip():
+            return None
+        if re.fullmatch(r"[A-Za-z0-9_-]{16,64}", code) is None:
+            logger.warning("doctor access code invalid")
+            return None
+        return value
+
+    @field_serializer("bot_token", "webhook_secret", "doctor_access_code")
     def redact(self, value: SecretStr) -> str:
         return "**********"
 
@@ -75,6 +92,7 @@ class TelegramSettings(_BoundaryValue):
         values["SANAD_TELEGRAM_API_BASE"] = os.environ.get(
             "SANAD_TELEGRAM_API_BASE", DEFAULT_API_BASE
         )
+        values["SANAD_DOCTOR_ACCESS_CODE"] = os.environ.get("SANAD_DOCTOR_ACCESS_CODE", "")
         values["test_mode"] = for_tests
         return cls.model_validate(values)
 

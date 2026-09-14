@@ -330,11 +330,11 @@ def test_sample18h3_counts_and_pager(rendered: RenderedApp) -> None:
         expect(page.locator("h1")).to_have_text(headline)
         expect(page.locator(".patient-row")).to_have_count(m)
         page.locator('#filter [data-filter="all"]').click()
-        expect(page.locator(".patient-row")).to_have_count(min(n, 50))
-        expect(page.locator("#next")).to_have_count(int(n > 50))
-        if n > 50:
+        expect(page.locator(".patient-row")).to_have_count(min(n, 20))
+        expect(page.locator("#next")).to_have_count(int(n > 20))
+        if n > 20:
             page.locator("#next").click()
-            expect(page.locator(".patient-row")).to_have_count(1)
+            expect(page.locator(".patient-row")).to_have_count(min(n - 20, 20))
             assert "page=2" in page.url
 
 

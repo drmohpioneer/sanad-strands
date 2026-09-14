@@ -28,6 +28,15 @@ from browser.aurora18h import (
     test_aurora_trends as test_aurora_trends,
 )
 from browser.conftest import RenderedApp
+from browser.dashboard18h5 import (
+    test_dashboard18h5_counts_and_search as test_dashboard18h5_counts_and_search,
+)
+from browser.dashboard18h5 import (
+    test_dashboard18h5_demo_and_motion as test_dashboard18h5_demo_and_motion,
+)
+from browser.dashboard18h5 import (
+    test_dashboard18h5_pages as test_dashboard18h5_pages,
+)
 from browser.demo18f import test_demo_admin_controls as test_demo_admin_controls
 from browser.demo18f import (
     test_demo_does_not_unlock_real_apis as test_demo_does_not_unlock_real_apis,

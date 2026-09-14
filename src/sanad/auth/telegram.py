@@ -37,6 +37,8 @@ class IdentityRouting:
             and self.claims.store.get(self.claims.scope, "claim_callback", callback_hash)
         )
         login = text in {"/login", "login", "/login admin", "/logout"}
+        if hash and auth.binding is None and self.runtime.accounts.access_code_matches(str(hash)):
+            hash = None  # doctor access code: continue to the doctor application route
         if not (hash or known_callback or login):
             return None
         runtime, store, now = self.runtime, self.runtime.store, self.runtime.clock()

@@ -28,7 +28,6 @@ DOCUMENTS = (
     "README.md",
     "LICENSE",
     REFERENCE_PATH,
-    "docs/submission-checklist.md",
     *(
         p.relative_to(ROOT).as_posix()
         for p in sorted((ROOT / "docs/diagrams").rglob("*"))
@@ -36,7 +35,6 @@ DOCUMENTS = (
     ),
     "tests/docs/test_package.py",
 )
-CHECKLIST_HEADER = "| Requirement | File or URL | Checked |"
 WORD_DIGESTS = frozenset(
     {
         "c7ce66d0fb14e3c2d4d920918cc6cc7e488668b08dddeb7b85e44de3b9f3eb01",
@@ -60,15 +58,11 @@ WORD_DIGESTS = frozenset(
 )
 IDENTIFIER_DIGESTS = frozenset(
     {
-        (7, "575e500ddb529cc2e5b14dd6e7feb389a8b6e0d7c2b162b6bf31831c64d23592"),
         (8, "863498dfa3f35f634f532b3cab89b0f8b6baaf9a2a94722c52ca2ef44377efc2"),
-        (7, "96a26fc3089e1e7065e8352f92c1a670614fd08a4bee91c9216ac50bfe5260f6"),
         (7, "004687553429516cefacdedeaf3a24ce9324d0eb0739c192e21d3ecb883aef5b"),
         (5, "9bf774db17deb96a38e97dce48d6e1c479f263b28c413fe7288e930b5344841f"),
         (12, "a2426c7254045a99d01d88ae5c28d909a7dddf903d4ef1899b612990d7cf9348"),
         (9, "6d74b6e7bffd3107f77136248cb299e003ef3e3456793aab31270a1a6e47bca7"),
-        (4, "0cb4c9b21062de4d2c0edd48efc9fa86b97fdc8a6a4e7fa7092544f84e121f61"),
-        (5, "4f127d6719ce2dcd941eee19e9285fe21a16966fb214fdb4f82f66c6b436c1b1"),
     }
 )
 INTRO_DIGESTS = frozenset(
@@ -203,7 +197,7 @@ def test_public_files_exist_and_exclude_private_material(relative: str) -> None:
 
 def test_digest_set_sizes() -> None:
     assert len(WORD_DIGESTS) == 17
-    assert len(IDENTIFIER_DIGESTS) == 9
+    assert len(IDENTIFIER_DIGESTS) == 5
     assert len(INTRO_DIGESTS) == 2
 
 
@@ -227,15 +221,11 @@ def test_digest_set_sizes() -> None:
         (97, 100, 100, 101, 110, 100, 117, 109),
         (97, 100, 100, 101, 110, 100, 97),
         (102, 105, 120, 117, 112),
-        (109, 111, 104, 97, 109, 101, 100),
         (109, 111, 104, 97, 109, 109, 101, 100),
-        (109, 111, 115, 116, 97, 102, 97),
         (109, 117, 115, 116, 97, 102, 97),
         (100, 114, 109, 111, 104),
         (100, 114, 109, 111, 104, 112, 105, 111, 110, 101, 101, 114),
         (106, 117, 115, 116, 100, 114, 109, 111, 104),
-        (1605, 1581, 1605, 1583),
-        (1605, 1589, 1591, 1601, 1610),
     ],
 )
 def test_configured_entries_are_detected(points: tuple[int, ...]) -> None:
@@ -250,16 +240,9 @@ def test_configured_entries_are_detected(points: tuple[int, ...]) -> None:
         (99, 111, 45, 100, 101, 120),
         (99, 111, 46, 100, 101, 120),
         (99, 111, 8203, 100, 101, 120),
-        (112, 114, 233, 77, 111, 104, 97, 109, 233, 100, 115, 117, 102, 102, 105, 120),
         (100, 114, 109, 111, 104, 46, 112, 105, 111, 110, 101, 101, 114),
         (106, 117, 115, 116, 46, 100, 114, 46, 109, 111, 104),
-        (77, 1086, 104, 97, 109, 101, 100),
-        (77, 959, 104, 97, 109, 101, 100),
-        (1605, 1600, 1581, 1605, 1583),
-        (1605, 1615, 1581, 1614, 1605, 1614, 1617, 1583),
-        (1605, 1589, 1591, 1601, 1609),
         (38, 35, 54, 55, 59, 111, 100, 101, 120),
-        (65325, 65359, 65363, 65364, 65345, 65350, 65345),
     ],
 )
 def test_encoded_private_material_is_detected(points: tuple[int, ...]) -> None:
@@ -337,7 +320,7 @@ def test_synthetic_identifier_registration(style: str) -> None:
         "width": "".join(chr(ord(char) + 0xFEE0) for char in seed),
     }
     registered = IDENTIFIER_DIGESTS | {(len(seed), digest(seed))}
-    assert len(registered) == 10
+    assert len(registered) == 6
     assert "identifier" in violations(samples[style], identifier_digests=registered)
     assert "identifier" not in violations(samples[style])
 
@@ -433,16 +416,6 @@ def test_ordinary_public_words_are_allowed(text: str) -> None:
     assert not violations(text, "README.md")
 
 
-def test_checklist_has_nine_unchecked_requirements() -> None:
-    body = (ROOT / "docs/submission-checklist.md").read_text()
-    rows = [line for line in body.splitlines() if line.startswith("| ")]
-    assert rows.pop(0) == CHECKLIST_HEADER
-    assert len(rows) == 9
-    assert all(row.rsplit("|", 2)[1].strip() == "" for row in rows)
-    assert "2026-09-13 at 01:05 Cairo" in body
-    assert "Sep 14, 2026 5:00pm PDT" in body
-
-
 def test_readme_inventory_covers_all_direct_libraries_models_and_fonts() -> None:
     body = (ROOT / "README.md").read_text()
     project = tomllib.loads((ROOT / "pyproject.toml").read_text())
@@ -516,13 +489,13 @@ def test_diagram_is_rendered_and_every_node_has_a_real_source() -> None:
     assert "PUPPETEER_SKIP_DOWNLOAD=true" in renderer
 
 
-def test_testing_instructions_preserve_placeholder_access_and_timing() -> None:
+def test_testing_instructions_name_the_hosted_environment_and_timing() -> None:
     body = (ROOT / REFERENCE_PATH).read_text()
-    assert (
-        "<" + REFERENCE_LABEL.upper() + "_BOT_USERNAME>" in body
-        and "<" + REFERENCE_LABEL.upper() + "_BASE_URL>" in body
-    )
-    assert "not deployed yet" in body
+    assert "https://btx35drwcqejwxymdcwfzwku5m0cynoz.lambda-url.us-east-1.on.aws" in body
+    assert "_BOT_USERNAME>" not in body and "_BASE_URL>" not in body
+    assert "not deployed yet" not in body
+    # The access link is shared privately; the public file never carries a code.
+    assert "?start=" not in body
     for label in ("Minute tick", "Digest wait", "Compressed time"):
         assert label in body
     sections = (

@@ -107,7 +107,7 @@ def deploy(
         assert existing is not None
         values, _ = parameter_values(ssm, env)
         config_revision = configuration_revision(ssm, env)
-        required = set(values) - {"public-base-url", "clinic-contact"}
+        required = set(values) - {"public-base-url", "clinic-contact", "doctor-access-code"}
         if len(required) != 7 or not all(values[k] for k in required):
             raise OperationError(
                 "Missing SSM configuration; run ops.py secrets set before the app pass"

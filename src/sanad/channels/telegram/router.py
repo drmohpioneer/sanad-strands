@@ -65,6 +65,7 @@ class TelegramRuntime:
             lambda key, language, fields: wording.render(key, language, **fields),
             approve_label=(wording.APPROVE_BUTTON, "Approve"),
             reject_label=(wording.REJECT_BUTTON, "Reject"),
+            doctor_access_code=settings.doctor_access_code,
         )
         self.steward = Steward(store, clock, lambda scope: StewardPolicy(DRAFT_POLICY_2026_09))
         self.inbound = InboundProcessor(self.steward, transport="telegram")
@@ -315,6 +316,8 @@ def route_receipt(
         status = "welcome_back" if template == "doctor_welcome_back" else "deferred_capability"
     elif route in {"unknown", "admin"} and auth.binding is None:
         raw_text = payload.get("text")
+        # Ingress stores a /start parameter only as its digest (invitation_hash).
+        invitation = payload.get("invitation_hash")
         result = runtime.accounts.apply(
             ApplyAsDoctor(
                 command_id="apply:" + receipt.id,
@@ -322,7 +325,8 @@ def route_receipt(
                 private_chat_id=receipt.source_chat,
                 claimed_name=str(payload.get("sender_name", "")),
                 restart_rejected=isinstance(raw_text, str) and raw_text.strip() == "/start",
-            )
+            ),
+            start_parameter=str(invitation) if isinstance(invitation, str) and invitation else None,
         )
         if result.status not in {"accepted", "duplicate", "already_in_state"}:
             return RouteResult(route=route, status=result.status)

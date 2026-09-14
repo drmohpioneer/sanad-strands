@@ -1,6 +1,6 @@
 # Care missions, deadlines and communication
 
-Version: 1.0 · Reconciled full-build specification · Awaiting the final plan audit, then release of individual coding contracts. Nothing described here is implemented.
+Version: 1.0 · Reconciled full-build specification
 
 This document specifies the full agreed product, including all seven mission types, patient education, practical barrier solving and durable follow-up. The hackathon is a checkpoint. Required product capabilities cannot be dropped to fit its date. [Decisions](decisions.md) records owner choices; [roadmap](roadmap.md) assigns implementation slices.
 
@@ -96,7 +96,7 @@ Precedence is the explicit doctor date/time, otherwise the Scribe's contextual p
 
 The current proposed operational defaults are TEST 14 days, MONITOR schedule end plus one day, MEDICATION acknowledgment within three days, SEND_RECORDS three days, VISIT 30 days when no date is given, QUESTION 48 hours and TASK seven days. These are draft timing policies to approve and test, not medically validated safe waiting periods. The current inferred-only bounds are one to 180 days. An inferred objective deadline does not authorize inferred dosing, treatment duration, clinical preparation or an unapproved monitoring cadence.
 
-`due_at` is when the objective is wanted. `review_at` is when unfinished/review work must be revisited. `escalation_at = due_at + grace` is when an unmet objective produces a DEADLINE notice. The reconciled recommendation is zero default grace for every mission type, matching the accepted behavior that an unfinished mission reaches the doctor's phone when its date passes. A doctor can explicitly choose grace on the confirmation card or in an approved policy; the card always displays the resulting escalation time. This zero-default change is part of the plan for the final audit, not a claim that the clinical approver separately approved every numeric default. A policy change never retroactively moves an existing explicit doctor instruction without a visible revision.
+`due_at` is when the objective is wanted. `review_at` is when unfinished/review work must be revisited. `escalation_at = due_at + grace` is when an unmet objective produces a DEADLINE notice. The reconciled recommendation is zero default grace for every mission type, matching the accepted behavior that an unfinished mission reaches the doctor's phone when its date passes. A doctor can explicitly choose grace on the confirmation card or in an approved policy; the card always displays the resulting escalation time. This zero-default change is part of the plan for the final architecture audit, not a claim that the clinical approver separately approved every numeric default. A policy change never retroactively moves an existing explicit doctor instruction without a visible revision.
 
 A result's review clock starts from its fulfilment event; a draft's intake-review time is not reused as if it were the review deadline for a later result. The proposed result-review interval is three days, subject to the approved policy and risk context. QUESTION uses a 48-hour default offset snapped to the policy local clock on that date, with zero grace (11b draft, OWNER_REVIEW_PENDING). Pausing contact does not pause `due_at`, review work or safety incidents; a pause has `resume_at`, bounded by the approved policy.
 

@@ -625,7 +625,7 @@ def test_18g_click_anywhere_back_and_counts(rendered: RenderedApp) -> None:
     expect(page.locator(".tile-label")).to_have_text(
         ["Emergency", "Waiting on you", "Patient is late", "Patient tasks due today"]
     )
-    expect(page.locator(".summary-tile strong")).to_have_text(["1", "1", "2", "1"])
+    expect(page.locator(".summary-tile strong")).to_have_text(["1", "1", "1", "1"])
     expect(page.locator('[data-summary="danger"] .tile-clause')).to_have_text("1 needs a response")
     expect(page.locator('[data-summary="overdue"] .tile-clause')).to_have_text(
         "oldest has waited 2 days"

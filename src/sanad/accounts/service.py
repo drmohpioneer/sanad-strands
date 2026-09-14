@@ -1,12 +1,13 @@
 """Account transitions through the same conditional store transaction as the Steward."""
 
+import hmac
 from collections.abc import Callable
 from datetime import datetime
 from secrets import token_urlsafe
 from typing import Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, JsonValue
+from pydantic import BaseModel, JsonValue, SecretStr
 
 from sanad.accounts.commands import (
     AccountCommand,
@@ -75,11 +76,13 @@ class AccountService:
         approve_label: tuple[str, str],
         reject_label: tuple[str, str],
         policy: AccountPolicy = DEFAULT_ACCOUNT_POLICY,
+        doctor_access_code: SecretStr | None = None,
     ):
         self.store, self.clock, self.identity = store, clock, identity
         self.scope = AccountScope(bot_id=identity.bot_id)
         self.present, self.policy = present, policy
         self.approve_label, self.reject_label = approve_label, reject_label
+        self.doctor_access_code = doctor_access_code
         store.configure_identity(identity)
 
     def application(self, id: str) -> Application | None:
@@ -342,7 +345,7 @@ class AccountService:
             self._commit(command, intents=(intent,))
         return False
 
-    def apply(self, command: ApplyAsDoctor) -> AccountResult:
+    def apply(self, command: ApplyAsDoctor, *, start_parameter: str | None = None) -> AccountResult:
         actor = command.actor
         if (
             actor.bot_id != self.identity.bot_id
@@ -364,6 +367,12 @@ class AccountService:
         application = self.application(id)
         if application is not None and application.private_chat_id != command.private_chat_id:
             return Forbidden()
+        if (
+            start_parameter is not None
+            and (application is None or application.status == "pending")
+            and self.access_code_matches(start_parameter)
+        ):
+            return self._approve_with_access_code(command, id, application)
         new = application is None or (application.status == "rejected" and command.restart_rejected)
         models: list[BaseModel] = []
         intents: list[OutboundIntent] = []
@@ -434,6 +443,110 @@ class AccountService:
         if not models:
             return AlreadyInState(entity_id=id, state=application.status)
         return self._commit(command, tuple(models), tuple(intents))
+
+    def access_code_matches(self, start_parameter: str) -> bool:
+        # Ingress keeps /start parameters only as digests, so compare like for like.
+        if self.doctor_access_code is None:
+            return False
+        return hmac.compare_digest(
+            start_parameter, keys.digest(self.doctor_access_code.get_secret_value())
+        )
+
+    def _approve_with_access_code(
+        self, command: ApplyAsDoctor, id: str, application: Application | None
+    ) -> AccountResult:
+        # The store admits doctor, binding and authority rows only from the
+        # administrator actor, so the approval rides an administrator command.
+        approval = ApproveDoctor(
+            command_id="access-code:" + command.command_id,
+            actor=self.store.authorize(self.identity.bot_id, self.identity.admin_user_id).principal,
+            application_id=id,
+            expected_application_version=1 if application is None else application.version,
+        )
+        prior = self._prior(approval)
+        if prior is not None:
+            return prior
+        now, doctor_id = self.clock(), uuid4().hex
+        base = (
+            {
+                "id": id,
+                "scope": self.scope,
+                "telegram_user_id": command.actor.subject,
+                "private_chat_id": command.private_chat_id,
+                "claimed_name": command.claimed_name,
+                "claimed_specialty": command.claimed_specialty,
+                "claimed_city": command.claimed_city,
+                "version": 1,
+                "created_at": now,
+            }
+            if application is None
+            else application.model_dump() | {"version": application.version + 1}
+        )
+        decided = Application.model_validate(
+            base
+            | {
+                "updated_at": now,
+                "status": "approved",
+                "reviewer_id": self.identity.admin_user_id,
+                "reviewed_at": now,
+                "doctor_id": doctor_id,
+                "approval_reference": "access_code",
+                "work_clock": None,
+            }
+        )
+        doctor = Doctor(
+            id=doctor_id,
+            scope=TenantScope(doctor_id=doctor_id),
+            telegram_bot_id=self.identity.bot_id,
+            telegram_user_id=command.actor.subject,
+            private_chat_id=command.private_chat_id,
+            name=command.claimed_name,
+            specialty=command.claimed_specialty,
+            city=command.claimed_city,
+            status="approved",
+            approved_by=self.identity.admin_user_id,
+            approved_at=now,
+            auth_epoch=1,
+            policy_version=self.policy.policy_version,
+            application_id=id,
+            created_at=now,
+            updated_at=now,
+        )
+        binding = SubjectBinding(
+            id=keys.subject(self.identity.bot_id, command.actor.subject).pk,
+            scope=self.scope,
+            telegram_user_id=command.actor.subject,
+            role_set=frozenset({"doctor"}),
+            doctor_id=doctor_id,
+            private_chat_id=command.private_chat_id,
+            created_at=now,
+            updated_at=now,
+        )
+        authority = DoctorAuthority(
+            id=doctor_id,
+            doctor_id=doctor_id,
+            approved=True,
+            subject=command.actor.subject,
+            recipient_ref=command.private_chat_id,
+            auth_epoch=1,
+            created_at=now,
+            updated_at=now,
+        )
+        intent = self.intent(
+            to_record(decided, self.scope),
+            "doctor_approved",
+            command.actor.subject,
+            command.private_chat_id,
+            "doctor",
+            auth_epoch=1,
+            fields={"name": doctor.name},
+        )
+        result = self._commit(approval, (decided, doctor, authority, binding), (intent,))
+        if result.status == "stale_version":
+            current = self.application(id)
+            if current and current.status == "approved":
+                return AlreadyInState(entity_id=current.id, state="approved")
+        return result
 
     def approve(
         self, command: ApproveDoctor, *, token: CallbackToken | None = None

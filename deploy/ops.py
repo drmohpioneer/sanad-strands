@@ -64,6 +64,8 @@ def secrets_set(
     out = outputs(client(aws, "cloudformation"), env)
     values = {}
     for suffix, (_, name) in PARAMETERS.items():
+        if suffix == "doctor-access-code":
+            continue
         if suffix == "clinic-contact":
             if clinic_contact is not None:
                 values[suffix] = clinic_contact
@@ -89,6 +91,22 @@ def secrets_set(
                 Name=f"/sanad/{env}/{suffix}", Value=values[suffix], Type=kind, Overwrite=True
             )
         print(f"/sanad/{env}/{suffix} configured")
+
+
+def doctor_access_code(ssm: Any, env: str, action: str) -> str | None:
+    """Set a new doctor access code (printed once) or clear it."""
+    name = f"/sanad/{env}/doctor-access-code"
+    if action == "clear":
+        try:
+            ssm.delete_parameter(Name=name)
+        except ssm.exceptions.ParameterNotFound:
+            pass
+        print(f"{name} cleared")
+        return None
+    code = secrets.token_urlsafe(12)
+    ssm.put_parameter(Name=name, Value=code, Type="SecureString", Overwrite=True)
+    print(f"{name} set; share this code only privately: {code}")
+    return code
 
 
 def redact_log(text: str) -> str:
@@ -122,6 +140,7 @@ def main() -> None:
         "webhook": ("register", "info"),
         "tick": ("fire",),
         "logs": ("tail",),
+        "doctor-access-code": ("set", "clear"),
     }.items():
         child = groups.add_parser(name)
         sub = child.add_subparsers(dest="action", required=True)
@@ -155,6 +174,8 @@ def main() -> None:
             for n in PARAMETERS:
                 name = f"/sanad/{args.env}/{n}"
                 print(name, "exists" if name in found else "missing")
+    elif args.group == "doctor-access-code":
+        doctor_access_code(ssm, args.env, args.action)
     elif args.group == "webhook":
         values, _ = parameter_values(ssm, args.env)
         settings = telegram_settings(values)

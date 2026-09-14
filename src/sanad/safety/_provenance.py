@@ -131,6 +131,57 @@ REUSED_MODULES: tuple[ReusedModule, ...] = (
 )
 
 
+# Reviewer wording removed from the copied tests for publication. Each entry is the
+# published line and the original line as base64; the provenance test restores the
+# original before comparing the recorded source hash.
+SCRUBBED_TEST_LINES: dict[str, tuple[tuple[str, str], ...]] = {
+    "tests/safety/test_labs.py": (
+        (
+            "    an adversarial review finding: a check that was not done, reported as done.",
+            "ICAgIENvZGV4IGl0ZW0gMzogYSBjaGVjayB0aGF0IHdhcyBub3QgZG9uZSwgcmVwb3J0ZWQgYXMgZG9uZS4=",
+        ),
+        (
+            '    """Public adversarial regression, S11 wave A item 2:',
+            "ICAgICIiIlB1YmxpYyBDb2RleCBhZHZlcnNhcmlhbCByZWdyZXNzaW9uLCBTMTEgd2F2ZSBBIGl0ZW0gMjo=",
+        ),
+        (
+            "# Public adversarial-review finding reproduced by the regression below:",
+            "IyBQdWJsaWMgQ29kZXggYWR2ZXJzYXJpYWwtcmV2aWV3IGZpbmRpbmcgcmVwcm9kdWNlZCBieSB0aGUgcmVncmVzc2lvbiBiZWxvdzo=",
+        ),
+    ),
+    "tests/safety/test_sentinel.py": (
+        (
+            "    Every one of these walked past the phrase table in the red-team review. They",
+            "ICAgIEV2ZXJ5IG9uZSBvZiB0aGVzZSB3YWxrZWQgcGFzdCB0aGUgcGhyYXNlIHRhYmxlIGluIHRoZSBDb2RleCByZWQgdGVhbS4gVGhleQ==",
+        ),
+        (
+            "# Public adversarial-review finding reproduced by the regression below:",
+            "IyBQdWJsaWMgQ29kZXggYWR2ZXJzYXJpYWwtcmV2aWV3IGZpbmRpbmcgcmVwcm9kdWNlZCBieSB0aGUgcmVncmVzc2lvbiBiZWxvdzo=",
+        ),
+    ),
+    "tests/safety/test_validator.py": (
+        (
+            "    because 7 was 7 (red-team review). Every number is now typed by the unit",
+            "ICAgIGJlY2F1c2UgNyB3YXMgNyAoQ29kZXggcmVkIHRlYW0pLiBFdmVyeSBudW1iZXIgaXMgbm93IHR5cGVkIGJ5IHRoZSB1bml0",
+        ),
+        (
+            '    """Public adversarial regression, S11 wave A item 4:',
+            "ICAgICIiIlB1YmxpYyBDb2RleCBhZHZlcnNhcmlhbCByZWdyZXNzaW9uLCBTMTEgd2F2ZSBBIGl0ZW0gNDo=",
+        ),
+        (
+            "    def test_a_bare_number_is_not_a_blood_pressure(self) -> None:",
+            "ICAgIGRlZiB0ZXN0X3RoZV9jb2RleF9zZW50ZW5jZShzZWxmKSAtPiBOb25lOg==",
+        ),
+    ),
+    "tests/safety/test_vitals.py": (
+        (
+            "    def test_the_table_is_the_approved_numbers(self) -> None:",
+            "ICAgIGRlZiB0ZXN0X3RoZV90YWJsZV9pc190aGVfbnVtYmVyc19tb2hhbWVkX2dhdmUoc2VsZikgLT4gTm9uZTo=",
+        ),
+    ),
+}
+
+
 class TableHash(_BoundaryValue):
     module: NonblankStr
     name: NonblankStr

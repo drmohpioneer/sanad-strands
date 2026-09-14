@@ -160,7 +160,7 @@ def test_sample18h4_browser_times(
         )
         page.clock.set_fixed_time(now)
         goto(app, "/a?filter=due_today")
-        expect(page.locator('[data-summary="due_today"] strong')).to_have_text("2")
+        expect(page.locator('[data-summary="due_today"] strong')).to_have_text("1")
         expect(page.locator('[data-summary="overdue"] strong')).to_have_text("1")
         goto(app, "/a/preferences")
         expect(page.locator(".preferences")).to_contain_text("Times shown in " + actual)

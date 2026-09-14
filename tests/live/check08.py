@@ -3,6 +3,7 @@
 import asyncio
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 import threading
@@ -328,7 +329,11 @@ async def run_check(destination: Path = EVIDENCE) -> dict[str, Any]:
             stale_commit_rejected=stale_rejected,
         )
         # Produce an ogg/opus cut locally, then exercise the shipped mp3 conversion path.
-        binary = Path("~/.local/bin/ffmpeg")
+        ffmpeg = os.environ.get("SANAD_FFMPEG") or shutil.which("ffmpeg")
+        ffprobe = os.environ.get("SANAD_FFPROBE") or shutil.which("ffprobe")
+        if not ffmpeg or not ffprobe:
+            raise SystemExit("ffmpeg_missing")
+        binary = Path(ffmpeg)
         with tempfile.TemporaryDirectory(prefix="sanad-live08-") as directory:
             ogg = Path(directory) / "synthetic-note.ogg"
             subprocess.run(
@@ -351,7 +356,7 @@ async def run_check(destination: Path = EVIDENCE) -> dict[str, Any]:
                 timeout=20,
                 shell=False,
             )
-            converter = FFmpegConverter(str(binary), str(binary.with_name("ffprobe")))
+            converter = FFmpegConverter(ffmpeg, ffprobe)
             caller = BedrockCaller(client, POLICY.policy_version, observe=metadata.append)
             transcript = await SpeechAdapter(caller, converter, context.source).transcribe(
                 ogg.read_bytes(), "ogg"

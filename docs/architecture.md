@@ -1,6 +1,6 @@
 # Sanad Architecture
 
-Version: 2.0 · Reconciled design for the final audit · 2026-09-05
+Version: 2.0 · Reconciled design · 2026-09-05
 
 This is the proposed full-product architecture, not implementation approval. No product code has been written. The hackathon is a delivery milestone and does not authorize removing required capabilities. [domain-model.md](domain-model.md) defines entities, states, clocks and store interfaces. [decisions.md](decisions.md) records product choices. Resolve contradictions before releasing a coding contract.
 
@@ -41,7 +41,7 @@ Patient output passes the Concierge or an approved template and its validator. A
 
 Python 3.12, FastAPI, Pydantic, Strands Agents SDK, boto3, DynamoDB and private S3. Bedrock supplies reasoning/vision models from the Amazon Nova family (Decision 017); exact IDs and dependency versions are pinned after real access and compatibility checks. Amazon Transcribe and CPU faster-whisper are measured on Egyptian Arabic, mixed drug names and numbers before choosing the voice adapter. Amazon Location Service supplies place search with measured local coverage and a truthful no-result fallback.
 
-One codebase and container image contain the HTTP application and bounded worker handlers. ECS Express Mode on Fargate in us-east-1 is the preferred, **unproven** host. The health/HTTPS/tick/cost spike must establish availability, sizing and deployment. Container-image Lambda is an evaluated hosting fallback, not an assumed compatible substitute. A host change does not delete a feature. New bot, AWS resources and identities isolate the frozen Google entry.
+One codebase and container image contain the HTTP application and bounded worker handlers. The image runs on AWS Lambda in us-east-1 behind a function URL, the host selected after measurement, and an EventBridge schedule triggers the signed minute tick through a private relay.
 
 EventBridge invokes one tick Lambda every minute, calling authenticated worker routes. Work is persisted before an in-process invocation. A local task can reduce latency but is never the only executor. Worker calls have execution budgets, reclaim expired work and leave remaining pages due for another call. One minute is trigger cadence, not a maximum latency guarantee. Use separate deployment/task/tick permissions, SSM SecureString, TLS, private buckets and usage controls. Browsers never query DynamoDB directly. Uptime, restore, cost and clinical deployment are separate gates. Synthetic and eventual clinical environments are isolated.
 
@@ -462,7 +462,7 @@ Strands uses a BedrockModel factory, fresh Agents, structured outputs, scoped @t
 
 Failures preserve input and owed work. Database outages cannot receive a saved ACK; model/schema failures cannot change clinical truth; unreadable media stays timed; conflicts re-read. Every unresolved item has an owner, action and time. Reconciliation repairs missing derived work without manufacturing success.
 
-Contracts 00–21 deliver the full product: typed foundation; state/deadlines; store/recovery; safety/identity/deployment/Strands; complete care flow; corrections; integration and operational/pilot readiness. Contract 22 packages the contest entry. No product code starts before the final audit and release of a bounded contract.
+Contracts 00–21 deliver the full product: typed foundation; state/deadlines; store/recovery; safety/identity/deployment/Strands; complete care flow; corrections; integration and operational/pilot readiness. Contract 22 packages the contest entry. No product code starts before the final architecture audit and release of a bounded contract.
 
 A patient start report received after routine contact is stopped still records the report and the independent day-three anchor. The follow-up remains contact-suppressed, with its disposition review intact; anchoring does not renew contact consent. Start replies show the stored check-in time or acknowledge that reminders remain stopped. Ambiguous reported start dates require clarification before fulfillment.
 

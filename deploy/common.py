@@ -29,6 +29,7 @@ PARAMETERS = {
     "budget-email": ("String", "SANAD_BUDGET_EMAIL"),
     "operator-name": ("String", None),
     "clinic-contact": ("String", None),
+    "doctor-access-code": ("SecureString", None),
 }
 
 

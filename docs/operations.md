@@ -55,7 +55,7 @@ Deleting the development stack intentionally removes its table, functions, logs,
 
 Record permitted account/region, deployment principal/roles, model IDs, ASR choice, credit terms, daily/per-turn token limits and spend ceiling. Use least-privilege short-lived deployment access where practical; do not default to broadly privileged permanent keys. Never print credentials.
 
-Forecast the whole ECS resource set, including compute, load balancer, networking/public IP/NAT when used, data transfer, logs, table/storage and model/ASR requests. ECS Express charges for underlying resources, so a container-only estimate is incomplete. [AWS cost model](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/express-service-overview.html)
+Forecast the whole AWS resource set, including Lambda compute, the function URL and relay, data transfer, logs, table/storage and model/ASR requests. [AWS Lambda pricing](https://aws.amazon.com/lambda/pricing/)
 
 Budget alarms are notifications, not hard spending caps. Add application model/token/concurrency/rate limits, bounded retries and an operator stop switch. Verify credit service eligibility; no assumed free deployment. Hosting through judging requires coverage to **2026-10-09 03:00 Cairo**. The old project's billing/trial is a separate obligation and must not be changed by this build.
 
@@ -104,4 +104,4 @@ Clinical/legal review results and decisions must be recorded before actual enrol
 
 ## Judge handover
 
-Synthetic judge access must work without an operator attending each run. Separate a clearly labeled public synthetic board from authenticated clinical routes; any reset/demo clock affects only its synthetic environment. Use real integrations in the recorded journey and label compressed time. Setup instructions, architecture diagram and reuse/license inventory describe actual code. Funding/access persists through the verified judging period.
+Synthetic testing access must work without an operator attending each run. Separate a clearly labeled public synthetic board from authenticated clinical routes; any reset/demo clock affects only its synthetic environment. Use real integrations in the recorded journey and label compressed time. Setup instructions, architecture diagram and reuse/license inventory describe actual code. Funding/access persists through the verified judging period.

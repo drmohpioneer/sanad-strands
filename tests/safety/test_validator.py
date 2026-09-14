@@ -156,7 +156,7 @@ class ABareNumberStillCarriesAClass(unittest.TestCase):
     has to match too.
     """
 
-    def test_the_reviewers_attack_sentence(self) -> None:
+    def test_a_bare_number_is_not_a_blood_pressure(self) -> None:
         verdict = validator.validate("Your blood pressure is 40.", "plan", PLAN)
         self.assertEqual(verdict.action, "relay")
         self.assertIn("40", verdict.numbers_outside_plan)

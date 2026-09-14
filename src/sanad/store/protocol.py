@@ -124,7 +124,13 @@ class Store(Protocol):
         start_extraction: bool = False,
     ) -> Claim | None: ...
     def acquire_patient(
-        self, scope: PatientScope, owner: str, now: datetime, ttl: timedelta
+        self,
+        scope: PatientScope,
+        owner: str,
+        now: datetime,
+        ttl: timedelta,
+        *,
+        expected_version: int | None = None,
     ) -> Lease | None: ...
     def release_patient(self, lease: Lease) -> None: ...
 

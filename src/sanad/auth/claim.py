@@ -150,7 +150,11 @@ class ClaimService(IdentityService):
         patient = self.patient(doctor.id, command.patient_id)
         if not self.contact_available(doctor.id):
             return Forbidden()
-        if patient is None or patient.contact_status == "active":
+        if (
+            patient is None
+            or patient.contact_status == "active"
+            or ((profile := self.store.get_patient_profile(patient.scope)) and profile.removed_at)
+        ):
             return Forbidden()
         now, token = self.clock(), issue_token()
         head, old_head, condition = self.token_head(

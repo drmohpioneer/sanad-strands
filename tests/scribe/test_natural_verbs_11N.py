@@ -258,6 +258,9 @@ def test_citation_metadata_fingerprint_and_anchor_revalidation() -> None:
 
 
 def test_prompt_preserves_other_rules() -> None:
+    from sanad.scribe.extract import REMOVAL_PROMPT_EN
+
+    assert REMOVAL_PROMPT_EN in ENGLISH_SYSTEM_PROMPT
     # Full baseline prompt hash after reversing only the released substitutions.
     new = (
         "Decide each order's action from the meaning of the sentence, whatever the wording. "
@@ -278,7 +281,11 @@ def test_prompt_preserves_other_rules() -> None:
     assert new in ENGLISH_SYSTEM_PROMPT
     assert "Express add, begin" not in ENGLISH_SYSTEM_PROMPT
     assert "Taking/on means continue" not in ENGLISH_SYSTEM_PROMPT
-    restored = ENGLISH_SYSTEM_PROMPT.replace("scribe-v10", "scribe-v9", 1).replace(new, old)
+    restored = (
+        ENGLISH_SYSTEM_PROMPT.replace("scribe-v10", "scribe-v9", 1)
+        .replace(new, old)
+        .replace(REMOVAL_PROMPT_EN, "", 1)
+    )
     assert (
         hashlib.sha256(restored.encode()).hexdigest()
         == "d3c0b00598efd64a2bd20ae8f58cdfb37bbea33c1a9b9e7fa6e88ed23f3975c0"

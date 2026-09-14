@@ -287,10 +287,16 @@ def _worker(
         question_digest=question_digest,
         review=review,
     )
-    if upload_handler:
-        handlers["operational"] = lambda row: (
-            upload_handler(row) if row.entity_type == "upload_stage" else None
-        )
+
+    def operational(row: StoredRecord) -> None:
+        from sanad.steward.removal import wake
+
+        if row.entity_type == "patient_removal":
+            wake(runtime.steward, row)
+        elif row.entity_type == "upload_stage" and upload_handler:
+            upload_handler(row)
+
+    handlers["operational"] = operational
     if claim_handler:
         handlers["claim"] = claim_handler
     if runtime.scribe_route is not None:

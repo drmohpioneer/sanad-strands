@@ -113,6 +113,23 @@ def identity_guards(
     if any(r.entity_type not in WRITE_SETS[str(kind)] for r in request.puts):
         return None
     checks: list[Check] = []
+    if kind in {"IssueInvitation", "ClaimInvitation", "RecordConsent", "ConfirmPatientClaim"}:
+        for removal_row in request.puts:
+            if removal_row.entity_type in {"patient", "patient_claim", "invitation"}:
+                if removal_row.entity_type == "patient":
+                    removal_scope = PatientScope(
+                        doctor_id=str(removal_row.doctor_id), patient_id=removal_row.id
+                    )
+                else:
+                    removal_scope = PatientScope(
+                        doctor_id=str(removal_row.body["doctor_id"]),
+                        patient_id=str(removal_row.body["patient_id"]),
+                    )
+                profile = store.get_patient_profile(removal_scope)
+                if profile and profile.removed_at:
+                    return None
+                if profile:
+                    checks.append(Check(keys.patient(removal_scope), profile.version))
     expiries: list[datetime] = []
     if command.worker:
         expiries.append(command.worker.auth_expiry)
@@ -359,6 +376,19 @@ def identity_guards(
                 return None
         if row.entity_type in {"doctor_login", "patient_login", "admin_login"}:
             exchange = from_record(row, LoginExchange)
+            if exchange.removal_destination:
+                removal_target = PatientScope(
+                    doctor_id=exchange.doctor_id or "",
+                    patient_id=exchange.removal_destination.rsplit("/", 1)[1],
+                )
+                patient = store.get(removal_target, "patient", removal_target.patient_id)
+                if (
+                    exchange.intended_role != "doctor"
+                    or not patient
+                    or removal_target.doctor_id != actor.doctor_id
+                ):
+                    return None
+                checks.append(Check(patient.key, patient.version))
             if row.version == 1:
                 if (
                     kind

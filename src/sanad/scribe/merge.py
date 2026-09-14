@@ -177,6 +177,15 @@ def merge_candidates(
     single: list[str] = []
     issues: list[ProposalIssue] = []
     values: dict[str, object] = {}
+    quote = first.removal_quote or (second.removal_quote if second else None)
+    if quote is not None:
+        values["removal_quote"] = quote
+        if (
+            second is None
+            or first.removal_quote != second.removal_quote
+            or first.patient != second.patient
+        ):
+            issues.append(ProposalIssue(item="all", field="removal", code="clarification"))
     order_indices: dict[int, int] = {}
     for family, attr in (
         ("order", "orders"),

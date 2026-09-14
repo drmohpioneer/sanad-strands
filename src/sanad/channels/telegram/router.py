@@ -217,6 +217,16 @@ def route_receipt(
             route="patient", status=patient_result.status if patient_result else "busy"
         )
     if isinstance(receipt.scope, PatientScope):
+        profile = store.get_patient_profile(receipt.scope)
+        if profile and profile.removed_at:
+            from sanad.steward.removal import finish_removed_work
+
+            removal_result = finish_removed_work(runtime.steward, row)
+            return RouteResult(
+                route="unknown",
+                status=removal_result.reason_code or removal_result.status,
+                template_id="patient_emergency" if verdict.level == "danger" else None,
+            )
         # An identity change cannot turn an old patient receipt into an account action.
         return RouteResult(route="refused", status="binding_changed")
     claim = store.claim_work(
@@ -258,6 +268,18 @@ def route_receipt(
             runtime.general("patient_emergency"),
             "safety_response",
         )
+    elif (
+        auth.binding
+        and auth.binding.doctor_id
+        and auth.binding.patient_id
+        and (
+            profile := store.get_patient_profile(
+                PatientScope(doctor_id=auth.binding.doctor_id, patient_id=auth.binding.patient_id)
+            )
+        )
+        and profile.removed_at
+    ):
+        status = "removed_patient_unbound"
     elif receipt.kind == "callback":
         result = runtime.accounts.callback_by_hash(
             str(payload.get("callback_token_hash", "")), auth.principal, "callback:" + receipt.id

@@ -9,6 +9,7 @@ from sanad.scribe.card import dictation_questions, medication_line
 from sanad.scribe.extract import (
     CORRECTION_PROMPT_VERSION,
     PROMPT_VERSION,
+    REMOVAL_PROMPT_AR,
     DictationCandidate,
     ProposalIssue,
     scribe_prompt,
@@ -79,7 +80,10 @@ def test_one_english_monitor_rule_and_preserved_arabic(correction: bool) -> None
     arabic = scribe_prompt("Concor", language="ar", correction=correction)
     if correction:
         assert arabic.startswith(CORRECTION_PROMPT_VERSION + ".")
-    preserved = arabic.replace("scribe-correction-v9", "scribe-correction-v8")
+    assert arabic.count(REMOVAL_PROMPT_AR) == 1
+    preserved = arabic.replace(REMOVAL_PROMPT_AR, "", 1).replace(
+        "scribe-correction-v9", "scribe-correction-v8"
+    )
     assert hashlib.sha256(preserved.encode()).hexdigest() == (
         "e4b7fb060034bdcad0163ebb40bdbabebf177223d83cefbca6a9a78a59cf1384"
         if correction

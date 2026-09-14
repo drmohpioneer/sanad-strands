@@ -52,6 +52,9 @@ def lookup(
             break
     ranked = []
     for patient in panel(store, scope):
+        profile = store.get_patient_profile(patient.scope)
+        if profile and profile.removed_at:
+            continue
         name = normalized_name(patient.display_name)
         identifiers = set(patient.identifiers)
         exact_identifier = bool(identifiers.intersection(candidate.identifiers))

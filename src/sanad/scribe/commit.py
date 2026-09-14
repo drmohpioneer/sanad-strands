@@ -697,6 +697,12 @@ class ScribeCommit:
             or proposal.doctor_id != doctor.id
         ):
             return ConfirmationResult("stale", "scribe_stale")
+        if proposal.selected_patient_id:
+            profile = self.repo.store.get_patient_profile(
+                PatientScope(doctor_id=doctor.id, patient_id=proposal.selected_patient_id)
+            )
+            if profile and profile.removed_at:
+                return ConfirmationResult("forbidden", "scribe_removal_refused")
         from sanad.scribe.monitoring import compile_schedule
         from sanad.store.records import from_record
 

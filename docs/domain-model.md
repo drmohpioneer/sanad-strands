@@ -187,6 +187,25 @@ Lost/mistaken binding resolution uses explicit authenticated commands, records a
 
 Contract 10 adds `ReportFactPayload` to patient-released `ClinicalFact` values: medication start, day-three reply, raw reading or repeated-question attachment, always retaining patient-report provenance. `Reading` keeps the exact quoted measurement span separately from parsed value/unit and policy judgment. Patient routine-contact flags and snooze expiry are separate from clinical consent; a preference revision updates Patient, PatientProfile, Consent and PatientBinding together and increments delivery epoch. Hashed, expiring `PatientAction` choices bind renewed reminder consent or a specific current START/quiet slot to the patient, receipt and authority epochs. No model can provide these mutations.
 
+A doctor removes a patient through an authenticated, typed-name confirmation. The
+patient profile records `removed_at`, `removed_by` and `purge_due_at` (30 days later).
+The atomic `RemovePatient` write withdraws consent, rejects a pending claim, revokes
+outstanding invitations and an active binding, freezes contact and increments the
+authority epochs. It also records one `PatientRemoved` event and a durable
+`PatientRemoval` operational task. No record or media is deleted at this step.
+
+The recovery task suppresses queued and uncertain routine patient messages before
+cancelling eligible open missions and follow-ups in bounded transactions. Messages
+already sending may arrive. Questions, reviews, incidents, fulfilled parents and
+missions with a danger history remain available to the doctor. The roster and
+patient-task tiles omit removed patients, while the inbox and direct record remain
+readable. Routine patient contact and new plans are refused; review, question,
+evidence and record-correction work remains possible. Question replies are saved
+with removal suppression. A delayed receipt retains its original identity and
+completes as `removed_patient_unbound`; pending media ends `removed` without a fetch.
+The fixed emergency reply remains available without routing new care to the doctor.
+Undo and deletion across media versions/backups require later contracts.
+
 ## Missions, follow-up and review
 
 Contract 16a adds `Mission.barrier_attempts`, an ordered tuple of typed,

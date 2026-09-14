@@ -84,6 +84,17 @@ Versioned active orders are the sole executable clinical view. History remains c
 
 Separate synthetic development/judge environments from clinical deployment. No real identifiers in the repository, test assets, videos, screenshots or public traces. Store evidence privately, authorize each access and retain its provenance. Export/delete/retention/account-recovery requests use authenticated workflows; a conversational suggestion is not authorization for irreversible record deletion.
 
+Patient removal requires a live doctor session, CSRF protection, patient ownership,
+a current profile version and the typed patient name. A verified Telegram request
+only issues a single-use ten-minute sign-in exchange bound to that doctor's patient
+record; it never removes a patient. Removal immediately fences routine contact,
+withdraws consent and linking authority, and starts recoverable cancellation. No
+final patient message is sent. Emergency safety replies remain available; messages
+already being sent may still arrive. Questions, reviews, accepted records and danger
+history remain for doctor accountability. The recorded 30-day purge deadline does
+not itself delete data: the coordinated media/version/backup deletion job is a
+separate authenticated retention contract.
+
 The full build includes backup/restore verification, restore-time reconciliation, access revocation, retention/deletion behavior, monitored failed delivery, operational ownership and incident response. Before clinical use, confirm applicable privacy/medical duties, controller/operator responsibilities, provider terms and processing regions with qualified review, then approve consent and clinic response coverage. Clinical release also waits for the 30-day raw-message/media deletion job, including old file versions (contract 27 part 3). This is an operational acceptance gate within the required full build, not permission to stop at a synthetic demonstration or claim legal compliance.
 
 Language/accessibility checks include the actual Arabic/English mix used by the doctor and patients, drug names and numbers in voice notes, readable mobile consent, and safety messages understood by the intended patient. A live provider demonstration, hermetic tests and clinical review establish different evidence and must be reported separately.

@@ -38,6 +38,7 @@ from sanad.store.records import (
 
 SUPPORTED = frozenset(
     {
+        "RemovePatient",
         "ConfirmProposal",
         "ExtendMission",
         "ReopenMission",
@@ -67,6 +68,7 @@ SUPPORTED = frozenset(
 )
 INTERNAL = frozenset(
     {
+        "_RemovalBatch",
         "_Deadline",
         "_FollowupDeadline",
         "_Wake",
@@ -203,8 +205,6 @@ class Steward:
             return CommandResult(status="forbidden")
         doctor = from_record(doctor_record, DoctorAuthority)
         actor = command.principal
-        if kind == "SetContactPreference" and actor.actor_kind != "patient":
-            return CommandResult(status="forbidden")
         if actor.actor_kind == "system":
             worker = command.worker
             if (
@@ -266,6 +266,15 @@ class Steward:
         prior = self.store.lookup_command(command)
         if prior is not None:
             return command_result(prior)
+        from sanad.steward.removal import REFUSED
+        from sanad.steward.removal import handle as handle_removal
+
+        if kind in {"RemovePatient", "_RemovalBatch"}:
+            return handle_removal(self, command)
+        if profile.removed_at and kind in REFUSED:
+            return CommandResult(status="forbidden", reason_code="patient_removed")
+        if kind == "SetContactPreference" and actor.actor_kind != "patient":
+            return CommandResult(status="forbidden")
         if kind in CORRECTION_COMMANDS:
             if any(
                 getattr(command, field) is not None and getattr(command, field) != actual
@@ -299,6 +308,8 @@ class Steward:
             if profile is None or doctor_record is None:
                 return CommandResult(status="forbidden")
             doctor = from_record(doctor_record, DoctorAuthority)
+            if profile.removed_at and kind in REFUSED:
+                return CommandResult(status="forbidden", reason_code="patient_removed")
             if actor.actor_kind == "doctor" and (
                 not doctor.approved
                 or actor.subject != doctor.subject

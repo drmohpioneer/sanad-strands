@@ -131,6 +131,8 @@ def freshness(
         if intent.notification_purpose == "DANGER":
             return None
     elif intent.audience == "patient":
+        if profile.removed_at and not safety:
+            return "patient_removed"
         if (
             profile.recipient_ref != intent.recipient_ref
             or profile.recipient_subject is None
@@ -214,8 +216,24 @@ def freshness(
             for id in correction.prior_report_ids
         ):
             return "prior_report_not_accepted"
-    if safety and (
-        intent.template_id is None or not any(row.entity_type == "incident" for row in sources)
+    removed_screen = sources[0].body.get("safety_result") if len(sources) == 1 else None
+    removed_emergency = bool(
+        profile.removed_at
+        and intent.template_id == "patient_emergency"
+        and len(sources) == 1
+        and sources[0].entity_type == "inbound_receipt"
+        and sources[0].body.get("source_subject") == profile.recipient_subject
+        and sources[0].body.get("source_chat") == profile.recipient_ref
+        and sources[0].body.get("state") == "completed"
+        and isinstance(removed_screen, dict)
+        and removed_screen.get("level") == "danger"
+    )
+    if (
+        safety
+        and not removed_emergency
+        and (
+            intent.template_id is None or not any(row.entity_type == "incident" for row in sources)
+        )
     ):
         return "safety_template_or_incident_missing"
     if intent.notification_purpose == "routine_prompt" and intent.slot_id is None:

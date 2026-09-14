@@ -43,6 +43,7 @@ class SessionIssued(_BoundaryValue):
     cookie: SecretStr
     csrf: SecretStr
     session: WebSession
+    destination: str | None = None
 
 
 def log_revocation(reason: str, path: str, session_id: str) -> None:
@@ -109,7 +110,21 @@ class LoginService(IdentityService):
                 binding_epoch=binding.binding_epoch,
                 consent_version=binding.consent_version,
             )
+        removal_patient = None
+        if isinstance(command, IssueDoctorLogin) and command.removal_patient_id:
+            from sanad.store.records import Patient
+
+            target = PatientScope(doctor_id=doctor.id, patient_id=command.removal_patient_id)
+            removal_patient = self.load(target, "patient", target.patient_id, Patient)
+            target_profile = self.store.get_patient_profile(target)
+            if removal_patient is None or target_profile is None or target_profile.removed_at:
+                return Forbidden()
+            fields["removal_destination"] = "/a/patients/" + removal_patient.id
         now, token = self.clock(), issue_token()
+        if removal_patient:
+            fields["removal_binding_hash"] = keys.digest(
+                f"{token.hash}|{doctor.id}|{fields['removal_destination']}"
+            )
         purpose: Literal["doctor_login", "patient_login"] = (
             "doctor_login" if role == "doctor" else "patient_login"
         )
@@ -141,10 +156,12 @@ class LoginService(IdentityService):
         intent = (
             self.account_intent(
                 exchange,
-                "doctor_login_link",
+                "scribe_removal_link" if removal_patient else "doctor_login_link",
                 actor.subject,
                 "doctor",
-                fields={"link": link},
+                fields={"link": link, "name": removal_patient.display_name}
+                if removal_patient
+                else {"link": link},
                 auth_epoch=doctor.auth_epoch,
                 expires_at=exchange.expires_at,
             )
@@ -413,7 +430,12 @@ class LoginService(IdentityService):
             return ExchangeRefused(status="commit_failed")
         if previous and previous.revoked_at is None:
             log_revocation("session_replaced", "auth/exchange", previous.id)
-        return SessionIssued(cookie=cookie.secret, csrf=secret.secret, session=session)
+        return SessionIssued(
+            cookie=cookie.secret,
+            csrf=secret.secret,
+            session=session,
+            destination=exchange.removal_destination,
+        )
 
     def session(self, raw_cookie: str) -> WebSession | None:
         digest = token_hash(raw_cookie)

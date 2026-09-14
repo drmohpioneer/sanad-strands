@@ -1053,6 +1053,51 @@ class ScribeTurn:
                 choices and (candidate.patient.name_as_spoken or candidate.patient.identifiers)
             ),
         )
+        if candidate.removal_quote is not None:
+            from sanad.auth.commands import IssueDoctorLogin
+            from sanad.scribe.grounding import removal_request
+
+            verified = removal_request(
+                candidate.removal_quote, source_text, candidate.patient.name_as_spoken or ""
+            )
+            if verified != "negated":
+                template = "scribe_removal_who"
+                if (
+                    verified == "verified"
+                    and len(choices) == 1
+                    and not any(i.field == "removal" for i in candidate._merge_issues)
+                ):
+                    if (
+                        candidate.orders
+                        or candidate.missions
+                        or candidate.facts
+                        or candidate.alerts
+                    ):
+                        template = "scribe_removal_alone"
+                    else:
+                        from sanad.auth.login import LoginService
+
+                        login = LoginService(
+                            self.runtime.accounts,
+                            self.claims.public_base_url,
+                            policy=self.claims.policy,
+                        )
+                        result = login.issue(
+                            IssueDoctorLogin(
+                                command_id="removal-link:" + receipt.id,
+                                actor=actor,
+                                removal_patient_id=choices[0].patient_id,
+                            ),
+                            claim=claim,
+                        )
+                        return RouteResult(
+                            route="doctor",
+                            status="remove_patient"
+                            if result.status in {"accepted", "duplicate"}
+                            else result.status,
+                            template_id="scribe_removal_link",
+                        )
+                return self._reply(receipt, actor, claim, template, "clarification")
         if force_new:
             intent = "create_patient"
         elif command in {"/find", "/qr"}:
@@ -1103,6 +1148,23 @@ class ScribeTurn:
                         field="task" if task_request(source_text) else None,
                     )
                 )
+        from sanad.scribe.patients import normalized_name, panel
+
+        removed_name = bool(
+            not force_new
+            and not choices
+            and candidate.patient.name_as_spoken
+            and any(
+                normalized_name(p.display_name) == normalized_name(candidate.patient.name_as_spoken)
+                and (removal_profile := self.repo.store.get_patient_profile(p.scope))
+                and removal_profile.removed_at
+                for p in panel(self.repo.store, doctor.scope)
+            )
+        )
+        if removed_name:
+            issues.append(
+                ProposalIssue(item="patient", field="removed_name", code="patient_missing")
+            )
         lookup_only = intent == "find_patient" and (command in {"/find", "/qr"} or not issues)
         if lookup_only and not choices:
             return self._reply(receipt, actor, claim, "doctor_patient_not_found", "not_found")
@@ -1135,6 +1197,10 @@ class ScribeTurn:
                         choice_of(p)
                         for p in panel(self.repo.store, doctor.scope)
                         if p.id == previous.selected_patient_id
+                        and not (
+                            (removal_profile := self.repo.store.get_patient_profile(p.scope))
+                            and removal_profile.removed_at
+                        )
                     ),
                     None,
                 )
@@ -1142,7 +1208,10 @@ class ScribeTurn:
             from sanad.scribe.patients import choice_of
 
             explicit = self.claims.patient(doctor.id, selected_id)
-            if explicit is None:
+            if explicit is None or (
+                (removal_profile := self.repo.store.get_patient_profile(explicit.scope))
+                and removal_profile.removed_at
+            ):
                 return self._reply(receipt, actor, claim, "scribe_stale", "stale_version")
             selected = choice_of(explicit)
             intent, lookup_only = "update_record", False
@@ -1156,7 +1225,10 @@ class ScribeTurn:
                 text=wording.label("patient", doctor.language) + selected.display_name,
             )
         creating = force_new or (
-            intent == "create_patient" and not choices and bool(candidate.patient.name_as_spoken)
+            not removed_name
+            and intent == "create_patient"
+            and not choices
+            and bool(candidate.patient.name_as_spoken)
         )
         if (not selected and not creating) or (creating and not candidate.patient.name_as_spoken):
             issues.append(ProposalIssue(item="patient", code="patient_missing"))
@@ -1466,7 +1538,12 @@ class ScribeTurn:
         buttons: list[JsonValue] = []
         for action, label, patient_id in choices:
             if action in wording.BUTTONS:
-                label = wording.button(action, language)
+                label = wording.button(
+                    {"new": "removal_new", "reject": "removal_cancel"}.get(action, action)
+                    if any(i.field == "removed_name" for i in proposal.issues)
+                    else action,
+                    language,
+                )
             token = issue_token()
             raw, hash = (
                 (confirm_raw, proposal.confirmation_nonce_hash)
@@ -1652,7 +1729,31 @@ class ScribeTurn:
         doctor = self.claims.doctor(actor)
         assert doctor is not None
         choice = next((c for c in proposal.choices if c.patient_id == token.patient_id), None)
-        if token.action == "select" and choice is None:
+        removed_choice = False
+        if choice:
+            profile = self.repo.store.get_patient_profile(
+                PatientScope(doctor_id=doctor.id, patient_id=choice.patient_id)
+            )
+            if profile and profile.removed_at:
+                removed_choice = True
+                choice = None
+                proposal = proposal.model_copy(
+                    update={
+                        "choices": tuple(
+                            c
+                            for c in proposal.choices
+                            if not (
+                                (
+                                    p := self.repo.store.get_patient_profile(
+                                        PatientScope(doctor_id=doctor.id, patient_id=c.patient_id)
+                                    )
+                                )
+                                and p.removed_at
+                            )
+                        )
+                    }
+                )
+        if token.action == "select" and choice is None and not removed_choice:
             return self._reply(receipt, actor, claim, "scribe_stale", "stale_version")
         if (
             choice
@@ -1685,6 +1786,14 @@ class ScribeTurn:
         )
         issues = [i for i in issues if i.code != "order_missing"]
         issues.extend(amendment_issues)
+        if removed_choice:
+            issues.append(
+                ProposalIssue(
+                    item="patient",
+                    code="patient_missing",
+                    field="removed_name" if not proposal.choices else None,
+                )
+            )
         if not choice and not proposal.candidate.patient.name_as_spoken:
             issues.append(ProposalIssue(item="patient", code="patient_missing"))
         timings, timing_issues = candidate_timings(
@@ -1704,7 +1813,7 @@ class ScribeTurn:
             selected_patient_id=choice.patient_id if choice else None,
             selected_display_name=choice.display_name if choice else None,
             creating_patient=token.action == "new",
-            choices=(),
+            choices=proposal.choices if removed_choice else (),
             base_versions=tuple(versions),
             confirmation_nonce_hash=nonce.hash,
             issues=tuple(issues),
@@ -1728,7 +1837,8 @@ class ScribeTurn:
             payload={"proposal_id": proposal.id, "nonce_hash": token.id},
         )
         self.runtime.transport.answer_callback(
-            str((receipt.payload or {}).get("callback_query_id", "")), ""
+            str((receipt.payload or {}).get("callback_query_id", "")),
+            wording.render("scribe_removal_selected", doctor.language) if removed_choice else "",
         )
         return RouteResult(route="callback", status=result.status, template_id="scribe_card")
 

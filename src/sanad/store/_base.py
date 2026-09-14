@@ -263,6 +263,7 @@ class StoreBase(ABC):
             "incident": "INCIDENT",
             "evidence_annotation": "FACT",
             "media_work": "MEDIA",
+            "patient_removal": "PATIENT_REMOVAL",
             "document_page_work": "DOCUMENT_PAGE",
         }
         if entity_type in {"mission", "followup", "patient_profile"} and not isinstance(
@@ -569,6 +570,7 @@ class StoreBase(ABC):
             "evidence_annotation": "FACT#",
             "care_order": "ORDER#",
             "media_work": "MEDIA#",
+            "patient_removal": "PATIENT_REMOVAL#",
             "document_page_work": "DOCUMENT_PAGE#",
         }
         if entity_type not in prefixes:
@@ -695,6 +697,12 @@ class StoreBase(ABC):
         if any(row.entity_type == "upload_stage" for row in request.puts):
             return Forbidden()
         command = request.command
+        removal = command.payload.get("type") in {
+            "RemovePatient",
+            "_RemovalBatch",
+            "_RemovedMedia",
+            "_RemovedReceipt",
+        }
         review_action = command.payload.get("type") in {"AcknowledgeReview", "ResolveReview"}
         notice_issue = command.payload.get("type") == "_DecorateNotice"
         concierge = command.payload.get("executor") == "concierge-v1"
@@ -728,6 +736,7 @@ class StoreBase(ABC):
                     "bundle",
                     "question_digest",
                     "delivery",
+                    *(("operational",) if removal else ()),
                 }
             )
         )
@@ -773,8 +782,15 @@ class StoreBase(ABC):
             ):
                 return Forbidden()
             authority_checks.append(Check(admin_row.key, admin_row.version))
-        if request.identity_reads and not (identity or scribe):
+        if request.identity_reads and not (identity or scribe or removal):
             return Forbidden()
+        if removal:
+            from sanad.store.removal import guards as removal_guards
+
+            guarded_removal = removal_guards(self, request, utc_instant(self._clock()))
+            if guarded_removal is None:
+                return Forbidden()
+            authority_checks.extend(guarded_removal)
         if scribe:
             from sanad.store.scribe import scribe_guards
 
@@ -1032,6 +1048,10 @@ class StoreBase(ABC):
             patient = self.get(scope, "patient_profile", scope.patient_id)
             if patient is not None:
                 profile = from_record(patient, PatientProfile)
+                from sanad.steward.removal import REFUSED
+
+                if profile.removed_at and command.payload.get("type") in REFUSED:
+                    return Forbidden()
                 page_only = bool(request.puts) and all(
                     r.entity_type == "document_page_work" for r in request.puts
                 )
@@ -1101,7 +1121,7 @@ class StoreBase(ABC):
                 if not valid_patient_projection(self, record):
                     return Forbidden()
             if not (
-                identity or scribe or concierge or evidence or contact_projection
+                identity or scribe or concierge or evidence or contact_projection or removal
             ) and record.entity_type in {
                 "patient_action",
                 "patient",
@@ -1124,7 +1144,7 @@ class StoreBase(ABC):
                 and command.payload.get("type") in {"ScribeLanguage", "ScribeDigest"}
                 and record.entity_type == "doctor"
             )  # scribe_guards already compared every other Doctor field.
-            if not (account or language_only) and record.entity_type in {
+            if not (account or language_only or removal) and record.entity_type in {
                 "application",
                 "doctor",
                 "subject_binding",
@@ -1176,6 +1196,8 @@ class StoreBase(ABC):
                     pass  # Reconstructed against the doctor's due set above.
                 elif concierge and record.entity_type == "web_session":
                     pass  # identity.preference_session checks this exact session revision.
+                elif removal:
+                    pass  # Exact removal write set reconstructed by its guard.
                 elif scribe:
                     pass  # The scribe guard checked every target, owner and patient fence.
                 elif not account or not isinstance(scope, AccountScope):
@@ -1265,7 +1287,7 @@ class StoreBase(ABC):
                         return Forbidden()
                     stages = ("fetch", "normalize", "extract", "associate")
                     delta = stages.index(model.stage) - stages.index(old_media.stage)
-                    if old_media.state == "completed" or delta not in {0, 1}:
+                    if old_media.state in {"completed", "removed"} or delta not in {0, 1}:
                         return Forbidden()
                     if old_media.document_pages:
                         if len(old_media.document_pages) != len(model.document_pages):
@@ -1317,6 +1339,12 @@ class StoreBase(ABC):
                     return StaleVersion(conflicts=("claimed_record",))
                 if isinstance(model, PatientProfile):
                     old = from_record(current, PatientProfile)
+                    if not removal and (model.removed_at, model.removed_by, model.purge_due_at) != (
+                        old.removed_at,
+                        old.removed_by,
+                        old.purge_due_at,
+                    ):
+                        return Forbidden()
                     if (model.lease_owner, model.lease_expires_at, model.lease_generation) != (
                         old.lease_owner,
                         old.lease_expires_at,
@@ -1325,7 +1353,9 @@ class StoreBase(ABC):
                         return Forbidden()
                 if isinstance(model, OutboundIntent):
                     old_intent = from_record(current, OutboundIntent)
-                    if model.logical_key != old_intent.logical_key or old_intent.status != "queued":
+                    if model.logical_key != old_intent.logical_key or old_intent.status not in (
+                        {"queued", "uncertain"} if removal else {"queued"}
+                    ):
                         return Forbidden()
             elif isinstance(model, PatientProfile) and model.lease_generation != 0:
                 return Forbidden()
@@ -1833,12 +1863,20 @@ class StoreBase(ABC):
         return self._update(record_item(changed), record.version)
 
     def acquire_patient(
-        self, scope: PatientScope, owner: str, now: datetime, ttl: timedelta
+        self,
+        scope: PatientScope,
+        owner: str,
+        now: datetime,
+        ttl: timedelta,
+        *,
+        expected_version: int | None = None,
     ) -> Lease | None:
         now = utc_instant(now)
         for _ in range(3):
             record = self.get(scope, "patient_profile", scope.patient_id)
             if record is None or ttl <= timedelta() or not owner.strip():
+                return None
+            if expected_version is not None and record.version != expected_version:
                 return None
             profile = from_record(record, PatientProfile)
             if profile.lease_expires_at is not None and profile.lease_expires_at > now:

@@ -37,6 +37,12 @@ def test_every_doctor_template_has_real_english_and_literal_arabic(key: str) -> 
         | BEFORE["SCRIBE_TEMPLATES"]
         | {"scribe_brand_change_line": "{old_drug} {old} ← {new_drug} {new}"}
         | {
+            "scribe_removal_link": "لإزالة {name}، أكّد من لوحة المتابعة: {link} (صالح 10 دقائق).",
+            "scribe_removal_alone": "ابعت طلب الإزالة لوحده من فضلك.",
+            "scribe_removal_refused": "المريض ده اتشال. مفيش حاجة اتسجلت.",
+            "scribe_removal_selected": "المريض ده اتشال.",
+            "scribe_removed_name": "الاسم ده لمريض اتشال. تعمل مريض جديد بنفس الاسم؟",
+            "scribe_removal_who": "مين المريض؟",
             "dashboard_signed_out": "تم تسجيل الخروج من لوحة المتابعة.",
             "account_suspended": "حسابك موقوف. تواصل مع الإدارة.",
             "patient_not_linked": "لسه مش مرتبط بدكتور. افتح رابط الدعوة اللي بعته الدكتور.",

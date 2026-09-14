@@ -3,6 +3,7 @@
 from datetime import datetime
 
 from sanad.accounts.records import Application, Doctor
+from sanad.domain import PatientScope
 from sanad.store.keys import AccountScope
 from sanad.store.protocol import Store
 from sanad.store.records import (
@@ -38,6 +39,27 @@ def account_freshness(
     auth = store.authorize(scope.bot_id, intent.recipient_subject)
     if auth.binding and auth.binding.private_chat_id != intent.recipient_ref:
         return "recipient_authority"
+    if intent.template_id != "patient_emergency" and intent.audience != "doctor":
+        scopes = []
+        if auth.binding and auth.binding.patient_id and auth.binding.doctor_id:
+            scopes.append(
+                PatientScope(doctor_id=auth.binding.doctor_id, patient_id=auth.binding.patient_id)
+            )
+        for ref in intent.source_versions:
+            source = store.get_account_source(scope, ref)
+            if source and source.entity_type == "patient_claim":
+                linked_claim = from_record(source, PatientClaim)
+                if linked_claim.candidate_subject == intent.recipient_subject:
+                    scopes.append(
+                        PatientScope(
+                            doctor_id=linked_claim.doctor_id, patient_id=linked_claim.patient_id
+                        )
+                    )
+        if any(
+            (profile := store.get_patient_profile(target)) and profile.removed_at
+            for target in scopes
+        ):
+            return "patient_removed"
     if intent.template_id == "consent_terms":
         for ref in intent.source_versions:
             row = store.get_account_source(scope, ref)
@@ -72,7 +94,8 @@ def account_freshness(
         elif row.entity_type == "doctor_login":
             exchange = from_record(row, LoginExchange)
             if (
-                intent.template_id != "doctor_login_link"
+                intent.template_id
+                != ("scribe_removal_link" if exchange.removal_destination else "doctor_login_link")
                 or exchange.state != "issued"
                 or exchange.expires_at <= now
                 or exchange.subject != intent.recipient_subject

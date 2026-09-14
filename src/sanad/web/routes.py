@@ -169,7 +169,16 @@ def web_router(login: LoginService, claims: ClaimService, settings: WebSettings)
             clear_cookies(response)
             return response
         response = RedirectResponse(
-            "/admin" if role == "admin" else "/a" if role == "doctor" else "/pp", status_code=303
+            (
+                result.destination + "#remove"
+                if result.destination
+                else "/admin"
+                if role == "admin"
+                else "/a"
+                if role == "doctor"
+                else "/pp"
+            ),
+            status_code=303,
         )
         seconds = int(login.policy.absolute_ttl.total_seconds())
         set_cookie(response, SESSION_COOKIE, result.cookie.get_secret_value(), seconds)
@@ -327,6 +336,9 @@ def web_router(login: LoginService, claims: ClaimService, settings: WebSettings)
     from sanad.web.api_questions import question_router
 
     router.include_router(question_router(claims))
+    from sanad.web.api_removal import removal_router
+
+    router.include_router(removal_router(claims))
     return router
 
 

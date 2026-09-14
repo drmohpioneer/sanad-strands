@@ -183,7 +183,9 @@ def patient_intent(
             **(
                 {
                     "status": "suppressed",
-                    "suppression_reason": "question_delivery_pending",
+                    "suppression_reason": "patient_removed"
+                    if profile.removed_at
+                    else "question_delivery_pending",
                     "work_clock": None,
                 }
                 if pending
@@ -286,7 +288,7 @@ def prepare_answer(
                     "held_answer_by": actor,
                     "held_answer_ready": False,
                     "held_answer_amendment_ref": None,
-                    "held_answer_consumed_at": None,
+                    "held_answer_consumed_at": builder.now if profile.removed_at else None,
                 }
             )
             changed = revise(mission, builder.now, details=held)
@@ -303,7 +305,7 @@ def prepare_answer(
                 "patient_question_plan_pending",
                 templates.render("patient_question_plan_pending", patient.language),
             )
-            return "doctor_question_held"
+            return "patient_removed" if profile.removed_at else "doctor_question_held"
         key = "patient_question_answered"
         body = templates.render(key, patient.language, answer=answer)
         if len(body) > POLICY.reply_max_chars:
@@ -381,6 +383,8 @@ def prepare_answer(
 
         issue(builder, mission, result.aggregate, args.answer_text.strip(), args.listing_token)
     pending = patient_intent(builder, result.aggregate, profile, key, body)
+    if profile.removed_at:
+        return "patient_removed"
     return "doctor_question_delivery_pending" if pending else "doctor_question_recorded"
 
 
@@ -848,7 +852,10 @@ def doctor_command(
         if result_command.status == "accepted"
         else "doctor_question_refused"
     )
-    key = key or "doctor_question_recorded"
+    removed_outcome = key == "patient_removed"
+    key = (
+        "doctor_question_delivery_pending" if removed_outcome else key or "doctor_question_recorded"
+    )
     body = templates.render(
         key,
         doctor.language,
@@ -858,6 +865,10 @@ def doctor_command(
             else {}
         ),
     )
+    if removed_outcome:
+        from sanad.presentation.removal import words
+
+        body = words("")["not_sent"]
     offer_ref = next(
         (r for r in result_command.resulting_versions if r.entity_type == "reuse_offer"), None
     )

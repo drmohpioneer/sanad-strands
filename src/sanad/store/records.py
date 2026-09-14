@@ -331,6 +331,9 @@ class PatientProfile(_Metadata):
     entity_type: Literal["patient_profile"] = "patient_profile"
     doctor_id: NonblankStr
     patient_id: NonblankStr
+    removed_at: UtcInstant | None = None
+    removed_by: NonblankStr | None = None
+    purge_due_at: UtcInstant | None = None
     normalized_name: str = ""
     lease_owner: NonblankStr | None = None
     lease_expires_at: UtcInstant | None = None
@@ -456,6 +459,8 @@ class TokenHead(_Metadata):
 
 
 class LoginExchange(_Metadata):
+    removal_destination: str | None = Field(default=None, exclude_if=lambda value: value is None)
+    removal_binding_hash: str | None = Field(default=None, exclude_if=lambda value: value is None)
     entity_type: Literal["doctor_login", "patient_login", "admin_login"]
     scope: AccountScope
     intended_role: Literal["doctor", "patient", "admin"]
@@ -474,6 +479,19 @@ class LoginExchange(_Metadata):
 
     @model_validator(mode="after")
     def identity(self) -> Self:
+        if self.removal_destination is not None:
+            import re
+
+            if self.intended_role != "doctor" or not re.fullmatch(
+                r"/a/patients/[A-Za-z0-9_-]+", self.removal_destination
+            ):
+                raise ValueError("invalid removal destination")
+            if self.removal_binding_hash != keys.digest(
+                f"{self.id}|{self.doctor_id}|{self.removal_destination}"
+            ):
+                raise ValueError("removal destination hash mismatch")
+        elif self.removal_binding_hash is not None:
+            raise ValueError("removal hash requires a destination")
         keys.token(self.entity_type, self.id)
         if self.entity_type != self.intended_role + "_login":
             raise ValueError("exchange role mismatch")
@@ -1042,7 +1060,7 @@ class MediaWork(_Metadata):
     size: NonnegativeInt | None = None
     duration: Annotated[float, Field(gt=0, le=300, allow_inf_nan=False)] | None = None
     stage: Literal["fetch", "normalize", "extract", "associate"] = "fetch"
-    state: Literal["pending", "processing", "completed", "needs_attention"] = "pending"
+    state: Literal["pending", "processing", "completed", "needs_attention", "removed"] = "pending"
     processing_claim: ProcessingClaim | None = None
     work_clock: OperationalClock | None
     last_error: NonblankStr | None = None
@@ -1064,10 +1082,12 @@ class MediaWork(_Metadata):
             raise ValueError("invalid_document_manifest")
         if self.id != keys.digest(self.receipt_id):
             raise ValueError("media work identity must derive from its scoped receipt")
-        if (self.state == "completed") != (self.work_clock is None):
+        if (self.state in {"completed", "removed"}) != (self.work_clock is None):
             raise ValueError("unfinished media work requires a clock")
         if self.work_clock and self.work_clock.work_lane != "media":
             raise ValueError("media work requires media lane")
+        if self.state == "removed":
+            return self
         if self.state == "completed" and self.stage != "associate":
             raise ValueError("extraction alone cannot complete association")
         if self.state == "needs_attention" and not (
@@ -1086,6 +1106,26 @@ class MediaWork(_Metadata):
             raise ValueError("normalization requires durable source bytes")
         if self.stage in {"extract", "associate"} and self.normalized_blob_ref is None:
             raise ValueError("extraction requires normalized source")
+        return self
+
+
+class PatientRemoval(_Metadata):
+    """Durable, bounded cleanup after the atomic contact fence."""
+
+    entity_type: Literal["patient_removal"] = "patient_removal"
+    scope: PatientScope
+    phase: Literal["suppress", "cancel", "completed"] = "suppress"
+    processed: NonnegativeInt = 0
+    work_clock: OperationalClock | None
+
+    @model_validator(mode="after")
+    def recovery(self) -> Self:
+        if self.id != self.scope.patient_id:
+            raise ValueError("removal identity must be the patient")
+        if (self.phase == "completed") != (self.work_clock is None):
+            raise ValueError("unfinished removal requires a clock")
+        if self.work_clock and self.work_clock.work_lane != "operational":
+            raise ValueError("removal requires operational lane")
         return self
 
 
@@ -1431,6 +1471,7 @@ type InboundReceiptRecord = StoredRecord
 
 
 MODELS: dict[str, type[BaseModel]] = {
+    "patient_removal": PatientRemoval,
     "document_page_work": DocumentPageWork,
     "sweep_position": SweepPosition,
     "correction": Correction,
@@ -1500,9 +1541,7 @@ MODELS: dict[str, type[BaseModel]] = {
 
 
 def model_scope(model: BaseModel) -> Scope:
-    if isinstance(model, DocumentPageWork):
-        return model.scope
-    if isinstance(model, SweepPosition):
+    if isinstance(model, (SweepPosition, PatientRemoval, DocumentPageWork)):
         return model.scope
     if isinstance(
         model,
@@ -1602,6 +1641,8 @@ def scope_owns(scope: Scope, other: Scope) -> bool:
 
 
 def model_key(model: BaseModel, scope: Scope) -> Key:
+    if isinstance(model, PatientRemoval):
+        return Key(keys.partition(model.scope), f"PATIENT_REMOVAL#{keys.component(model.id)}")
     if isinstance(model, DocumentPageWork):
         return Key(keys.partition(model.scope), f"DOCUMENT_PAGE#{keys.component(model.id)}")
     if isinstance(model, SweepPosition):

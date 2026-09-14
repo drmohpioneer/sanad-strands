@@ -75,6 +75,9 @@ from browser.documents30 import (
 )
 from browser.logo18h import test_aurora_entry_logo as test_aurora_entry_logo
 from browser.logo18h import test_logo_pages as test_logo_pages
+from browser.removal27 import (
+    test_removal_browser_flow as test_removal_browser_flow,
+)
 from browser.sample18h3 import (
     test_sample18h3_admin_details as test_sample18h3_admin_details,
 )

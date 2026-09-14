@@ -211,6 +211,36 @@ def _action_at(source: str, span: tuple[int, int]) -> tuple[str, tuple[int, int]
     return str(action.lastgroup), (begin, end), negative or historical
 
 
+def removal_request(
+    quote: str, source: str, name: str
+) -> Literal["verified", "negated", "unverified"]:
+    """Verify the model's citation and its patient, without selecting verbs by a word list."""
+    if not quote.strip() or len(quote.split()) > 12 or quote not in source:
+        return "unverified"
+    spans = grounded(quote, source)
+    names = grounded(name, source)
+    if len(spans) != 1 or not names or normalize(quote) == normalize(name):
+        return "unverified"
+    left, right = clause(source, *spans[0])
+    if not any(left <= a < b <= right for a, b in names):
+        return "unverified"
+    context = normalize(source[left:right])
+    if _NEGATIVE.search(context):
+        return "negated"
+    if (
+        _OTHER.search(context)
+        or _PAST.search(context)
+        or re.search(
+            r"\b(?:he|she|they|someone|yesterday|last week|said|asked|requested)\b|"
+            r"(?<!\w)(?:قال|قالت|طلب|طلبت|امبارح|أمس)(?!\w)",
+            context,
+            re.I,
+        )
+    ):
+        return "unverified"
+    return "verified"
+
+
 def _cited_action(
     order: OrderCandidate, source: str, drug_span: tuple[int, int]
 ) -> tuple[tuple[int, int], bool] | None:

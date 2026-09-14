@@ -525,7 +525,7 @@
   }
   function tableRows() {
     let rows=[];
-    for(const record of state.records){
+    for(const record of state.records.filter(record=>view!=='patients'||!record.removed_at)){
       const work=obligations(record);
       if(view==='inbox'||view==='history') for(const r of reviewRows(record,view==='history')) rows.push({record,item:{id:r.id,title:t(r.review_kind),due:r.review_at,status:r.state,urgent:r.review_kind==='incident_response'&&r.state!=='resolved',review:r},count:1});
       else rows.push({record,item:(state.filter in summaryLabels?work.find(x=>matchesSummary(x,state.filter)):work[0])||null,count:work.length});
@@ -608,8 +608,8 @@
   function detail(record){
     const orders=(record.orders||[]).filter(o=>o.status==='active');
     const consentHTML=`<div class="consent-binding"><h3>Consent and joining</h3>${record.contact_preferences?`<p>${t('reminders')}: ${esc(t(record.contact_preferences.reminders))} · ${t('quiet')}: ${bdi(record.contact_preferences.quiet_hours.join(' to ')||t('not_recorded'))} · ${bdi(record.contact_preferences.timezone)}</p>`:''}${(record.consents||[]).map(c=>`<p>Agreed to Sanad messages on ${esc(reviewTime(c.accepted_at))} (consent version ${bdi(c.version)})</p>${c.withdrawn_at?`<p>Withdrew consent on ${esc(reviewTime(c.withdrawn_at))}</p>`:''}`).join('')||'<p>No consent recorded.</p>'}</div>`;
-    const ordersHTML=orders.map(o=>`<article class="record-item" data-order="${esc(o.id)}"><p>${instruction(o.current_version||{})}</p><small>${t(o.status)}</small>${provenance(o.current_version?.provenance)}${!demo?`<button data-amend="${esc(o.id)}">Amend instruction</button>`:''}<details><summary>${t('order_history')}</summary>${(o.history||[]).filter(h=>h.id!==o.current_version?.id).map(h=>`<p>${t('historical')} · ${instruction(h)}</p>${provenance(h.provenance)}`).join('')||empty()}</details></article>`).join('')+holds(record)||empty('no_plan');
-    const missions=(record.missions||[]).map(m=>`<article class="record-item" data-mission="${esc(m.id)}"><h3>${bdi(m.title)}</h3>${badge(stateOf(m),tone(stateOf(m)))}${['fulfilled','cancelled','closed_unfulfilled','superseded'].includes(stateOf(m))?`<p>${esc(sentence({mission:m},record))}</p>`:''} <p>${t('due')}: ${time(m.due_at)}</p>${monitor(m)}${!demo&&['fulfilled','cancelled','closed_unfulfilled'].includes(m.state)?`<button data-reopen="${esc(m.id)}">Preview reopening</button>`:''}</article>`).join('')||empty('no_requests');
+    const ordersHTML=orders.map(o=>`<article class="record-item" data-order="${esc(o.id)}"><p>${instruction(o.current_version||{})}</p><small>${t(o.status)}</small>${provenance(o.current_version?.provenance)}${!demo&&!record.removed_at?`<button data-amend="${esc(o.id)}">Amend instruction</button>`:''}<details><summary>${t('order_history')}</summary>${(o.history||[]).filter(h=>h.id!==o.current_version?.id).map(h=>`<p>${t('historical')} · ${instruction(h)}</p>${provenance(h.provenance)}`).join('')||empty()}</details></article>`).join('')+holds(record)||empty('no_plan');
+    const missions=(record.missions||[]).map(m=>`<article class="record-item" data-mission="${esc(m.id)}"><h3>${bdi(m.title)}</h3>${badge(stateOf(m),tone(stateOf(m)))}${['fulfilled','cancelled','closed_unfulfilled','superseded'].includes(stateOf(m))?`<p>${esc(sentence({mission:m},record))}</p>`:''} <p>${t('due')}: ${time(m.due_at)}</p>${monitor(m)}${!demo&&!record.removed_at&&['fulfilled','cancelled','closed_unfulfilled'].includes(m.state)?`<button data-reopen="${esc(m.id)}">Preview reopening</button>`:''}</article>`).join('')||empty('no_requests');
     const followups=(record.followups||[]).map(f=>`<article class="record-item" data-followup="${esc(f.id)}"><h3>${esc(t(f.kind))}</h3>${badge(f.state)}${['fulfilled','cancelled'].includes(f.state)?`<p>${esc(sentence({followup:f},record))}</p>`:''}<p>${t('due')}: ${time(f.due_at)}</p></article>`).join('');
     const facts=(record.facts||[]).map(f=>`<article class="record-item" data-fact="${esc(f.id)}"><p>${bdi(f.payload?.text||f.payload?.clinical_en||f.text||t('retained'))}</p>${provenance(f.provenance)}${!demo?`<button data-correct-fact="${esc(f.id)}">Correct or detach</button>`:''}</article>`).join('')||empty();
     const evidence=state.evidence.map(e=>`<article class="record-item" data-evidence="${esc(e.id)}"><h3>${esc(t(e.category))}</h3>${badge(e.association_state)}<p>${t('printed')}: ${bdi(e.printed_date||t('not_recorded'))}</p><p>${t('received')}: ${time(e.provenance?.received_at)}</p>${(e.extracted_values||[]).map(v=>`<p>${bdi(clinicalLabel(v.name||v.analyte||''))} · ${v.dose?bdi(v.dose):bdi(v.value??t('not_recorded'))} ${v.dose?'':bdi(v.unit||t('not_recorded'))}${v.frequency?' · '+bdi(v.frequency):''}</p>`).join('')}${provenance(e.provenance)}${evidenceActions(e)}${!demo&&['accepted','detached'].includes(e.association_state)?`<button data-correct-evidence="${esc(e.id)}">Correct or detach</button>`:''}</article>`).join('')||empty('no_evidence');
@@ -620,8 +620,35 @@
     document.querySelectorAll('[data-mission],[data-followup],[data-evidence],[data-correction]').forEach(element=>{element.id=element.dataset.mission||element.dataset.followup||element.dataset.evidence||element.dataset.correction;element.tabIndex=-1;});
     recordAnatomy($('content'));
     detailPresentation(record);
+    if(!demo) removalControls(record);
     bindEvidenceActions();
     $('back').onclick=e=>{if(!demo){try{const saved=sessionStorage.getItem('sanad-list-return');if(saved&&/^\/a(?:\/(?:inbox|history))?(?:\?|$)/.test(saved)){e.preventDefault();location.assign(saved);}}catch(_){}}};
+  }
+  function removalControls(record){
+    const grid=document.querySelector('.detail-grid'), words=record.removal_words;
+    if(!words)return;
+    if(record.removed_at){
+      const banner=document.createElement('p');banner.className='removed-banner';
+      banner.textContent=words.banner.replace('{date}',new Intl.DateTimeFormat(lang,{dateStyle:'medium',timeStyle:'short',timeZone:state.zone}).format(new Date(record.removed_at)));
+      grid.before(banner);return;
+    }
+    const control=document.createElement('div');control.className='removal';
+    control.innerHTML=`<button type="button">${esc(words.open)}</button>`;grid.after(control);
+    const open=()=>{
+      if(control.querySelector('form'))return;
+      control.innerHTML=`<form><p>${esc(words.confirm)}</p><label>${esc(words.name)}<input name="name" autocomplete="off" required></label><p role="status"></p><button type="submit">${esc(words.remove)}</button><button type="button" data-keep>${esc(words.keep)}</button></form>`;
+      const form=control.querySelector('form'), input=form.elements.name, commandId=crypto.randomUUID();
+      control.querySelector('[data-keep]').onclick=()=>{control.innerHTML=`<button type="button">${esc(words.open)}</button>`;control.firstChild.onclick=open;control.firstChild.focus();};
+      form.onsubmit=async event=>{
+        event.preventDefault();form.querySelector('[type="submit"]').disabled=true;
+        try{
+          const result=await api(`/api/patients/${encodeURIComponent(record.patient_id)}/remove`,{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':decodeURIComponent((document.cookie.split('; ').find(v=>v.startsWith('sanad_csrf='))||'').split('=')[1]||'')},body:JSON.stringify({expected_version:record.profile_version,command_id:commandId,name:input.value})});
+          const refreshed=await api(`/api/patients/${encodeURIComponent(record.patient_id)}`);detail(refreshed);
+          const message=document.createElement('p');message.setAttribute('role','status');message.textContent=result.message||words.result;document.querySelector('.detail-grid').after(message);
+        }catch(error){form.querySelector('[role="status"]').textContent=error.message;form.querySelector('[type="submit"]').disabled=false;}
+      };input.focus();
+    };
+    control.firstChild.onclick=open;if(location.hash==='#remove')open();
   }
   function recordAnatomy(root){
     root.querySelectorAll('.record-item').forEach(item=>{
@@ -749,9 +776,9 @@
     return esc(lines.join(' ')||`Correction recorded on ${date}.`);
   }
   function summaryStrip(records,unassigned=[],interactive=false){
-    const work=[...records.flatMap(obligations),...unassigned.map(r=>({due:r.review_at,review:r,urgent:r.review_kind==='incident_response'}))];
+    const work=[...records.flatMap(record=>obligations(record).map(item=>({...item,removed:!!record.removed_at}))),...unassigned.map(r=>({due:r.review_at,review:r,urgent:r.review_kind==='incident_response'}))];
     return `<div class="summary-strip" aria-label="Outstanding work">${Object.entries(summaryLabels).map(([key,label])=>{
-      const items=work.filter(x=>matchesSummary(x,key)), n=items.length;
+      const items=work.filter(x=>!(['due_today','overdue'].includes(key)&&x.removed)&&matchesSummary(x,key)), n=items.length;
       const oldest=items.map(x=>x.review?sourceDate(x.review,records.find(r=>r.patient_id===(x.review.patient_id||x.review.scope?.patient_id)||r.reviews?.some(v=>v.id===x.review.id))||{}):x.due).filter(Boolean).map(x=>+new Date(x)).filter(Number.isFinite).sort((a,b)=>a-b)[0];
       const days=oldest===undefined?0:Math.max(0,Math.floor((Date.now()-oldest)/86400000));
       const clause=key==='danger'?(n?`${n} ${n===1?'needs':'need'} a response`:'nothing urgent right now'):key==='due_today'?(n?`${n} due today`:'none today'):n?(oldest===undefined?`${n} ${key==='overdue'?'late':'waiting for you'}`:`oldest has waited ${days} ${days===1?'day':'days'}`):(key==='overdue'?'no patient is late':'nothing waiting on you');
@@ -821,7 +848,7 @@
   function questions(){
     const data=state.questions;if(!data)return;const root=document.createElement('section');root.className='section';root.id='questions';root.innerHTML='<h2>Patient questions</h2><p>Review a proposed reply, write an answer, or defer until at least tomorrow.</p>';
     for(const q of data.questions){const article=document.createElement('article');article.className='record-item question-card';article.innerHTML=`<h3>${bdi(q.patient_name)}</h3><p>${bdi(q.context_line)}</p><p>${bdi(q.text)}</p><small>${q.hours_waiting} hours waiting</small>${q.proposed_reply?`<blockquote>${bdi(q.proposed_reply.text)}</blockquote>`:'<p>No approved reply is available. Write an answer.</p>'}<div class="action-bar"><button data-action="send" ${q.proposed_reply?'':'disabled'}>Send</button><button data-action="answer">Answer</button><button data-action="defer">Defer</button></div><div class="question-confirm"></div>`;
-      article.querySelectorAll('[data-action]').forEach(b=>b.onclick=()=>{const action=b.dataset.action,target=article.querySelector('.question-confirm');root.querySelectorAll('button.primary').forEach(x=>x.classList.remove('primary'));root.querySelectorAll('.question-confirm').forEach(x=>x.replaceChildren());target.innerHTML=`<form><p>${action==='defer'?'Defer until at least tomorrow? A later deadline stays unchanged.':'Confirm your answer for this patient.'}</p>${action==='answer'?'<label>Your answer<textarea name="answer" required maxlength="700"></textarea></label>':''}<button class="primary">Confirm</button><button type="button" class="cancel">Cancel</button><p role="alert"></p></form>`;target.querySelector('.cancel').onclick=()=>{target.replaceChildren();root.querySelector('[data-action=send]:not([disabled])')?.classList.add('primary');};target.querySelector('form').onsubmit=async event=>{event.preventDefault();const button=target.querySelector('.primary');button.disabled=true;try{const payload=action==='send'?{listing_token:data.listing_token,n:q.n,mission_version:q.version,reusable_id:q.proposed_reply.reusable_id,reusable_version:q.proposed_reply.version}:{expected_version:q.version,...(action==='answer'?{text:target.querySelector('textarea').value}:{})};await api(`/api/questions/${encodeURIComponent(q.id)}/${action}`,{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':decodeURIComponent(document.cookie.split('; ').find(x=>x.startsWith('sanad_csrf='))?.slice(11)||'')},body:JSON.stringify({command_id:crypto.randomUUID(),...payload})});await load();toast(action==='defer'?'Question deferred.':'Answer recorded.','/a/inbox#questions');}catch(error){target.querySelector('[role=alert]').textContent=error.message;button.disabled=false;}};});root.append(article);}
+      article.querySelectorAll('[data-action]').forEach(b=>b.onclick=()=>{const action=b.dataset.action,target=article.querySelector('.question-confirm');root.querySelectorAll('button.primary').forEach(x=>x.classList.remove('primary'));root.querySelectorAll('.question-confirm').forEach(x=>x.replaceChildren());target.innerHTML=`<form><p>${action==='defer'?'Defer until at least tomorrow? A later deadline stays unchanged.':'Confirm your answer for this patient.'}</p>${action==='answer'?'<label>Your answer<textarea name="answer" required maxlength="700"></textarea></label>':''}<button class="primary">Confirm</button><button type="button" class="cancel">Cancel</button><p role="alert"></p></form>`;target.querySelector('.cancel').onclick=()=>{target.replaceChildren();root.querySelector('[data-action=send]:not([disabled])')?.classList.add('primary');};target.querySelector('form').onsubmit=async event=>{event.preventDefault();const button=target.querySelector('.primary');button.disabled=true;try{const payload=action==='send'?{listing_token:data.listing_token,n:q.n,mission_version:q.version,reusable_id:q.proposed_reply.reusable_id,reusable_version:q.proposed_reply.version}:{expected_version:q.version,...(action==='answer'?{text:target.querySelector('textarea').value}:{})};const outcome=await api(`/api/questions/${encodeURIComponent(q.id)}/${action}`,{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':decodeURIComponent(document.cookie.split('; ').find(x=>x.startsWith('sanad_csrf='))?.slice(11)||'')},body:JSON.stringify({command_id:crypto.randomUUID(),...payload})});await load();toast(outcome.reason==='patient_removed'?(state.records.find(r=>r.patient_id===q.patient_id)?.removal_words?.not_sent||'Not sent: this patient was removed.'):action==='defer'?'Question deferred.':'Answer recorded.','/a/inbox#questions');}catch(error){target.querySelector('[role=alert]').textContent=error.message;button.disabled=false;}};});root.append(article);}
     root.querySelector('[data-action=send]:not([disabled])')?.classList.add('primary');
     if(!data.questions.length)root.insertAdjacentHTML('beforeend',emptyState('No questions are waiting for an answer.',t('refresh')));$('content').querySelector('.summary-strip').after(root);
   }

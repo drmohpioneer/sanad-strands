@@ -61,6 +61,7 @@ def record_router(claims: ClaimService) -> APIRouter:
 
         language = effective(from_record(doctor_row, Doctor).language)
         from sanad.corrections import Correction
+        from sanad.presentation.removal import words as removal_words
         from sanad.steward.corrections import current_facts, rendered_notice
 
         profile = claims.store.get_patient_profile(scope)
@@ -254,6 +255,11 @@ def record_router(claims: ClaimService) -> APIRouter:
                 "timezone": patient.timezone,
             },
             "record_version": patient.record_version,
+            "profile_version": profile.version if profile else None,
+            "removed_at": profile.removed_at.isoformat()
+            if profile and profile.removed_at
+            else None,
+            "removal_words": removal_words(patient.display_name),
             "medication_list_seen": [
                 {
                     "evidence_id": e.evidence_id,

@@ -152,6 +152,8 @@ def card_actions(proposal: Proposal) -> tuple[tuple[str, str | None], ...]:
 
     if proposal.photo and unreadable_read(proposal.photo.reads):
         return ()
+    if any(i.field == "removed_name" for i in proposal.issues):
+        return (("new", None), ("reject", None))
     if proposal.pending_reply:
         return (("correct_reply", None), ("new_reply", None), ("reject", None))
     if proposal.choices and not proposal.selected_patient_id and not proposal.creating_patient:
@@ -175,10 +177,20 @@ def card_actions(proposal: Proposal) -> tuple[tuple[str, str | None], ...]:
 def card_footer(proposal: Proposal, language: str) -> str:
     from sanad.channels.telegram import wording
 
-    return " | ".join(
+    prefix = (
+        wording.render("scribe_removed_name", language) + "\n"
+        if any(i.field == "removed_name" for i in proposal.issues)
+        else ""
+    )
+    return prefix + " | ".join(
         next(c.display_name for c in proposal.choices if c.patient_id == patient_id)
         if action == "select"
-        else wording.button(action, language)
+        else wording.button(
+            {"new": "removal_new", "reject": "removal_cancel"}.get(action, action)
+            if any(i.field == "removed_name" for i in proposal.issues)
+            else action,
+            language,
+        )
         for action, patient_id in card_actions(proposal)
     )
 

@@ -25,7 +25,15 @@ def test_english_required_description_and_frozen_arabic_description() -> None:
         "The exact words, copied from the same sentence as the drug, "
         "that told you this order's action. Always present.."
     ) in describe_schema(envelope)
-    assert hashlib.sha256(describe_schema(DictationCandidate).encode()).hexdigest() == (
+    removal_block = (
+        "- removal_quote: optional; one of:\n"
+        "- removal_quote: string; optional; maxLength: 200.\n"
+        "- removal_quote: null; optional.\n"
+    )
+    arabic = describe_schema(DictationCandidate)
+    assert arabic.count(removal_block) == 1
+    preserved = arabic.replace(removal_block, "", 1)
+    assert hashlib.sha256(preserved.encode()).hexdigest() == (
         "1422c472f3372b8338369f757b1111540fa4d2a1ce0c2f683fcd23482edd7af8"
     )
 

@@ -784,17 +784,29 @@ class ConciergeTurn:
     @invoked("tick")
     def sweep(self, row: StoredRecord) -> None:
         """Recover persisted media and screen evidence before association."""
+        if row.entity_type == "media_work":
+            work = from_record(row, MediaWork)
+            if isinstance(work.scope, PatientScope):
+                profile = self.store.get_patient_profile(work.scope)
+                if profile and profile.removed_at:
+                    from sanad.steward.removal import finish_removed_work
+
+                    if work.state != "removed":
+                        finish_removed_work(self.runtime.steward, row)
+                    return
         if row.entity_type == "document_page_work":
             from sanad.store.records import DocumentPageWork
 
             page = from_record(row, DocumentPageWork)
             parent = self.store.get(page.scope, "media_work", page.parent_id)
-            if parent is None:
-                return
-            row = parent
-        if row.entity_type != "media_work" or not self.media_factory:
+            if parent is not None:
+                self.sweep(parent)
+            return
+        if row.entity_type != "media_work":
             return
         work = from_record(row, MediaWork)
+        if not self.media_factory:
+            return
         receipt_row = self.store.get(work.scope, "inbound_receipt", work.receipt_id)
         if not receipt_row:
             return

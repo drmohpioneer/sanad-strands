@@ -41,6 +41,7 @@ class ConsentPolicy(_BoundaryValue):
 
 class IssueDoctorLogin(AccountCommand):
     type: Literal["IssueDoctorLogin"] = "IssueDoctorLogin"
+    removal_patient_id: str | None = None
 
 
 class IssueAdminLogin(AccountCommand):

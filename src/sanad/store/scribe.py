@@ -152,6 +152,22 @@ def scribe_guards(
             (from_record(r, Proposal) for r in request.puts if r.entity_type == "scribe_proposal"),
             None,
         )
+        if changed_proposal and changed_proposal.selected_patient_id:
+            profile = store.get_patient_profile(
+                PatientScope(doctor_id=doctor.id, patient_id=changed_proposal.selected_patient_id)
+            )
+            if profile and profile.removed_at:
+                return None
+            if profile:
+                checks.append(
+                    Check(
+                        to_record(
+                            profile,
+                            PatientScope(doctor_id=doctor.id, patient_id=profile.patient_id),
+                        ).key,
+                        profile.version,
+                    )
+                )
         if changed_proposal:
             try:
                 compensation_values = compensation_models(

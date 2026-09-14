@@ -3,6 +3,24 @@
 from sanad.presentation.catalog import Catalog, validate_catalog
 
 CATALOG: Catalog = {
+    "doctor.scribe_removal_link": {
+        "ar": "لإزالة {name}، أكّد من لوحة المتابعة: {link} (صالح 10 دقائق).",
+        "en": "To remove {name}, confirm on the dashboard: {link} (valid 10 minutes).",
+    },
+    "doctor.scribe_removal_alone": {
+        "ar": "ابعت طلب الإزالة لوحده من فضلك.",
+        "en": "Please send the removal on its own.",
+    },
+    "doctor.scribe_removal_refused": {
+        "ar": "المريض ده اتشال. مفيش حاجة اتسجلت.",
+        "en": "This patient was removed. Nothing was saved.",
+    },
+    "doctor.scribe_removal_selected": {"ar": "المريض ده اتشال.", "en": "This patient was removed."},
+    "doctor.scribe_removed_name": {
+        "ar": "الاسم ده لمريض اتشال. تعمل مريض جديد بنفس الاسم؟",
+        "en": "This name belongs to a removed patient. Create a new patient with this name?",
+    },
+    "doctor.scribe_removal_who": {"ar": "مين المريض؟", "en": "Who is the patient?"},
     "doctor.dashboard_signed_out": {
         "ar": "تم تسجيل الخروج من لوحة المتابعة.",
         "en": "Signed out of the dashboard.",

@@ -179,6 +179,24 @@ ENROLLMENT_TEMPLATES = {
 }
 # Preserve the accepted account catalog; enrollment has its own public catalog.
 SCRIBE_TEMPLATES = {
+    "scribe_removal_link": (
+        "لإزالة {name}، أكّد من لوحة المتابعة: {link} (صالح 10 دقائق).",
+        "To remove {name}, confirm on the dashboard: {link} (valid 10 minutes).",
+    ),
+    "scribe_removal_alone": (
+        "ابعت طلب الإزالة لوحده من فضلك.",
+        "Please send the removal on its own.",
+    ),
+    "scribe_removal_refused": (
+        "المريض ده اتشال. مفيش حاجة اتسجلت.",
+        "This patient was removed. Nothing was saved.",
+    ),
+    "scribe_removal_selected": ("المريض ده اتشال.", "This patient was removed."),
+    "scribe_removed_name": (
+        "الاسم ده لمريض اتشال. تعمل مريض جديد بنفس الاسم؟",
+        "This name belongs to a removed patient. Create a new patient with this name?",
+    ),
+    "scribe_removal_who": ("مين المريض؟", "Who is the patient?"),
     "doctor_photo_unreadable": (
         "مش قادر أقرا الصورة: {reason}. صوّر من فوق في نور كويس وابعتها تاني.",
         "I could not read the image: {reason}. "
@@ -285,6 +303,8 @@ ALL_TEMPLATES = TEMPLATES | ENROLLMENT_TEMPLATES | SCRIBE_TEMPLATES
 
 # Existing fixed button/call-site labels, separate from outbound template ids.
 BUTTONS = {
+    "removal_new": ("إنشاء مريض جديد", "Create new patient"),
+    "removal_cancel": ("إلغاء", "Cancel"),
     "confirm": ("✅ تمام", "✅ Confirm"),
     "edit": ("✏️ تعديل", "✏️ Edit"),
     "reject": ("❌ إلغاء", "❌ Cancel"),
@@ -359,6 +379,7 @@ FIELDS.update(
     {
         "doctor_approved": frozenset({"name"}),
         "doctor_photo_unreadable": frozenset({"reason"}),
+        "scribe_removal_link": frozenset({"name", "link"}),
         "scribe_amendment_line": frozenset({"drug", "old", "new"}),
         "scribe_brand_change_line": frozenset({"old_drug", "old", "new_drug", "new"}),
     }

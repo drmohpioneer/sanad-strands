@@ -62,6 +62,7 @@ def test_6e_two_minutes_polling_and_saves(
         w.clock.advance(timedelta(seconds=5))
         page.clock.run_for(5000)
         if role == "patient" and i % 6 == 0:
+            page.locator('[role="tab"][aria-controls="patient-settings"]').click()
             page.locator("#patient-quiet-start").fill("22:00")
             page.locator("#patient-quiet-end").fill("07:00")
             with page.expect_response(

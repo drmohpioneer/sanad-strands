@@ -318,7 +318,16 @@ def scribe_guards(
         if (
             old_work is None
             or old_work.body.get("status") != "pending"
-            or work.status == "pending"
+            or work.version != old_work.version + 1
+            or (
+                work.status == "pending"
+                and (
+                    work.work_clock is None
+                    or work.work_clock.last_error_code != "clinic_contact_missing"
+                    or work.work_clock.next_action_at <= now
+                    or work.generation != old_work.body.get("generation", 0)
+                )
+            )
             or parent is None
             or parent.body.get("status") != "confirmed"
             or work.patient_id != old_work.body.get("patient_id")

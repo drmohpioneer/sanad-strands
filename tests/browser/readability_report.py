@@ -493,6 +493,7 @@ def report() -> None:
                         with synthetic_browser(browser, scenario, width, theme) as page:
                             origin = page.url.split("/a")[0].split("/pp")[0]
                             if scenario == "patient":
+                                page.get_by_role("tab", name="Settings", exact=True).click()
                                 page.locator('#patient-stop[aria-checked="true"]').wait_for()
                                 capture(page, label + "-enabled")
                                 page.locator("#patient-stop").click()
@@ -545,7 +546,10 @@ def report() -> None:
                                 capture(page, label + "-pending-digest")
                                 page.unroute("**/api/preferences")
                                 continue
-                            page.locator("[data-record]").first.click()
+                            page.goto(origin + "/a?filter=all")
+                            page.locator('#content[aria-busy="false"]').wait_for()
+                            page.locator(".patient-row").first.click()
+                            page.locator(".patient-row.open + .detail a.primary").click()
                             page.locator("#what-to-do").wait_for()
                             for tab in ("Medicines", "Requests", "Documents", "History"):
                                 page.get_by_role("tab", name=tab, exact=True).click()
@@ -612,7 +616,6 @@ def report() -> None:
         "## Owner questions",
         "",
         "- Keyboard focus uses the sample glow. Keep it, or request a different treatment?",
-        "- Five filters scroll sideways on a phone. Keep this arrangement?",
         "- Fold: see the contract report's product and sample measurements.",
         "",
         "## Coverage",

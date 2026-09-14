@@ -43,17 +43,31 @@ def telegram_settings(values: dict[str, str]) -> TelegramSettings:
     )
 
 
-def secrets_set(aws: Any, env: str, *, operator_name: str | None = None) -> None:
+def secrets_set(
+    aws: Any, env: str, *, operator_name: str | None = None, clinic_contact: str | None = None
+) -> None:
     if operator_name is not None:
         safe_public_text(operator_name)
         if not operator_name.strip() or len(operator_name) > 80 or "\n" in operator_name:
             raise OperationError("Operator name must be a plain name of 1-80 characters")
+    if clinic_contact is not None:
+        safe_public_text(clinic_contact)
+        if (
+            not clinic_contact.strip()
+            or len(clinic_contact) > 160
+            or any(ord(c) < 32 for c in clinic_contact)
+        ):
+            raise OperationError("Clinic contact must be plain text of 1-160 characters")
     ssm = client(aws, "ssm")
     local = env_values({value[1] for value in PARAMETERS.values() if value[1] is not None})
     current, _ = parameter_values(ssm, env, include_operator=True)
     out = outputs(client(aws, "cloudformation"), env)
     values = {}
     for suffix, (_, name) in PARAMETERS.items():
+        if suffix == "clinic-contact":
+            if clinic_contact is not None:
+                values[suffix] = clinic_contact
+            continue
         if suffix == "operator-name":
             if operator_name is not None:
                 values[suffix] = operator_name
@@ -116,6 +130,7 @@ def main() -> None:
             environment(action_parser)
             if name == "secrets" and action == "set":
                 action_parser.add_argument("--operator-name")
+                action_parser.add_argument("--clinic-contact")
     args = parser.parse_args()
     if args.group == "health-report":
         dev_only(args.env)
@@ -125,7 +140,9 @@ def main() -> None:
     ssm = client(aws, "ssm")
     if args.group == "secrets":
         if args.action == "set":
-            secrets_set(aws, args.env, operator_name=args.operator_name)
+            secrets_set(
+                aws, args.env, operator_name=args.operator_name, clinic_contact=args.clinic_contact
+            )
         elif args.action == "delete":
             ssm.delete_parameters(Names=[f"/sanad/{args.env}/{n}" for n in PARAMETERS])
             for n in PARAMETERS:

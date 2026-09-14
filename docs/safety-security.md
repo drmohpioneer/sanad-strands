@@ -32,7 +32,17 @@ One private identity represents one patient in the agreed first release. Caregiv
 
 ## Consent and contact preferences
 
-Before disclosure, explain the AI role, the relationship with the named doctor, which data will be processed, the involved channel/cloud/model providers, routine contact schedule, limitations, opt-out, retention and clinic contact. Keep a versioned consent record. Telegram bot messaging must not be presented as end-to-end encrypted clinical communication.
+Before disclosure, the short consent screen names the doctor, AI role, processed
+input, Telegram, Amazon and Google Gemini, the emergency limitation and the right
+to stop reminders or withdraw through the clinic. Full terms are one tap away,
+with schedule, retention and the configured clinic contact; agreement takes one
+tap whether or not the terms were opened. Telegram bot messaging is explicitly
+not end-to-end encrypted clinical communication. Freeze the exact offered text,
+version, language, configuration and digest, and retain the patient's reference
+to it. Changed terms require a fresh offer before acceptance. Full terms remain
+available on the authenticated patient's own page; legacy agreements retain their
+date and version without reconstructed text. Missing clinic contact refuses new
+invitations and claims, and temporarily refuses acceptance without consuming it.
 
 Doctor-confirmed scheduled prompts require patient consent to their cadence and any quiet-hour exception. A disabled reminder does not alter medication or measurement timing. Patient stop immediately suppresses routine queued and future messages; the clinical plan and outstanding review obligations remain visible. The bot can screen and respond to later patient-initiated messages under the approved safety/consent policy. Renewed proactive contact requires explicit renewed consent.
 
@@ -74,7 +84,7 @@ Versioned active orders are the sole executable clinical view. History remains c
 
 Separate synthetic development/judge environments from clinical deployment. No real identifiers in the repository, test assets, videos, screenshots or public traces. Store evidence privately, authorize each access and retain its provenance. Export/delete/retention/account-recovery requests use authenticated workflows; a conversational suggestion is not authorization for irreversible record deletion.
 
-The full build includes backup/restore verification, restore-time reconciliation, access revocation, retention/deletion behavior, monitored failed delivery, operational ownership and incident response. Before clinical use, confirm applicable privacy/medical duties, controller/operator responsibilities, provider terms and processing regions with qualified review, then approve consent and clinic response coverage. This is an operational acceptance gate within the required full build, not permission to stop at a synthetic demonstration or claim legal compliance.
+The full build includes backup/restore verification, restore-time reconciliation, access revocation, retention/deletion behavior, monitored failed delivery, operational ownership and incident response. Before clinical use, confirm applicable privacy/medical duties, controller/operator responsibilities, provider terms and processing regions with qualified review, then approve consent and clinic response coverage. Clinical release also waits for the 30-day raw-message/media deletion job, including old file versions (contract 27 part 3). This is an operational acceptance gate within the required full build, not permission to stop at a synthetic demonstration or claim legal compliance.
 
 Language/accessibility checks include the actual Arabic/English mix used by the doctor and patients, drug names and numbers in voice notes, readable mobile consent, and safety messages understood by the intended patient. A live provider demonstration, hermetic tests and clinical review establish different evidence and must be reported separately.
 

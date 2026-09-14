@@ -13,7 +13,7 @@ Deep navy ground, glass layers, indigo to cyan glow, real motion on load and int
 
 ## Reading
 - Every page speaks the doctor's or the patient's language, never the engine's state names ("Needs review", "Material change since the original review", "Awaiting link", "coverage" are failures).
-- Each patient row says in one sentence what to do and why; a click anywhere opens the profile; nothing repeats the row.
+- Each patient row says in one sentence what to do and why; on the patients list a click opens the patient's card inside the list, and "Open the full record" opens the profile (owner, 2026-09-13 22:55).
 - English only on the doctor surface (his decision); Arabic on the patient side delivers meaning the way an Egyptian doctor would say it.
 - Human to human: if a sentence would not be said across a desk, rewrite it.
 

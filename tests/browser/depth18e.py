@@ -69,7 +69,7 @@ def test_depth_screenshots_and_computed_surfaces(rendered: RenderedApp, tmp_path
     expect(page.locator(".summary-tile").first).to_have_class(
         __import__("re").compile(r"\bsummary-tile\b.*\bdanger\b")
     )
-    expect(page.locator(".sort-chevron")).to_have_count(4)
+    expect(page.locator(".sort-chevron")).to_have_count(0)
     assert page.locator(".summary-tile strong,.patient-row time,.kv b").evaluate_all(
         "es=>es.every(e=>getComputedStyle(e).fontVariantNumeric.includes('tabular-nums'))"
     )
@@ -86,8 +86,10 @@ def test_depth_screenshots_and_computed_surfaces(rendered: RenderedApp, tmp_path
         with Image.open(output / name) as shot:
             assert shot.width == viewport["width"] * 2
             assert shot.height >= viewport["height"] * 2
-    page.locator("[data-record]").first.click()
-    expect(page.locator("#title")).to_contain_text("Ahmed")
+    name = page.locator(".patient-row .who2 b").first.inner_text()
+    page.locator(".patient-row").first.click()
+    page.locator(".patient-row.open + .detail a.primary").click()
+    expect(page.locator("#title")).to_have_text(name)
     page.wait_for_timeout(300)
     name = f"record-{size}-{theme}.png"
     page.screenshot(path=str(output / name))
@@ -99,27 +101,17 @@ def test_depth_screenshots_and_computed_surfaces(rendered: RenderedApp, tmp_path
 @RETINA
 def test_depth_summary_filters_chips_and_primary(rendered: RenderedApp) -> None:
     page = ready(rendered)
+    page.locator('#filter [data-filter="all"]').click()
     expect(page.locator(".patient-row .status")).to_have_count(0)
     assert page.locator(".patient-row.danger").count()
     assert page.locator(".patient-row.warning,.patient-row.calm").count()
     expect(page.locator("#refresh")).not_to_have_class("primary")
-    for key in ("danger", "overdue", "pending_review", "due_today"):
-        tile = page.locator(f'[data-summary="{key}"]')
-        number = int(tile.locator("strong").get_attribute("data-count") or "0")
-        assert str(number) in (tile.get_attribute("aria-label") or "")
-        tile.click()
-        expect(tile).to_have_attribute("aria-pressed", "true")
-        expect(tile).to_be_focused()
+    counts = {}
+    for key in ("needs", "all", "settled"):
+        page.locator(f'#filter [data-filter="{key}"]').click()
         expect(page.locator('#filter [aria-pressed="true"]')).to_have_attribute("data-filter", key)
-        rows = page.locator(".clinical tbody tr.patient-row")
-        assert rows.count() > 0 if number else rows.count() == 0
-        if key == "danger":
-            assert rows.count() == page.locator(".clinical tbody tr.patient-row.urgent").count()
-        tile.click()
-        expect(tile).to_have_attribute("aria-pressed", "false")
-        expect(page.locator('#filter [aria-pressed="true"]')).to_have_attribute(
-            "data-filter", "all"
-        )
+        counts[key] = page.locator(".patient-row").count()
+    assert counts["needs"] + counts["settled"] == counts["all"] == 18
     for path in ("/a", "/a/inbox", "/a/history", "/a/preferences"):
         ready(rendered, path)
         if path == "/a":
@@ -256,13 +248,15 @@ def test_depth_keyboard_and_motion(rendered: RenderedApp) -> None:
     page.locator(".skip").focus()
     page.keyboard.press("Enter")
     expect(page.locator("#workspace")).to_be_focused()
-    rows = page.locator(".clinical tbody tr.patient-row")
+    rows = page.locator(".patient-row")
     rows.first.focus()
     page.keyboard.press("ArrowDown")
     expect(rows.nth(1)).to_be_focused()
     page.keyboard.press("ArrowUp")
     expect(rows.first).to_be_focused()
     page.keyboard.press("Enter")
+    expect(rows.first).to_have_attribute("aria-expanded", "true")
+    page.locator(".patient-row.open + .detail a.primary").click()
     expect(page.locator("#what-to-do")).to_be_visible()
     expect(page.locator("#patient-drawer")).to_have_count(0)
     motionless()
@@ -320,27 +314,17 @@ def fits(page: Page) -> None:
 @RETINA
 def test_depth_queue_density_and_groups(rendered: RenderedApp) -> None:
     page = ready(rendered)
+    page.locator('#filter [data-filter="all"]').click()
     groups = page.locator(".day-group")
     expect(groups).to_have_count(0)
-    expect(page.locator(".patient-row")).to_have_count(50)
-    expect(page.locator(".clinical col")).to_have_count(4)
-    values = page.locator(".age-value")
-    assert values.evaluate_all("""es=>es.every(e=>{
-      const s=getComputedStyle(e);return s.whiteSpace==='nowrap'&&
-        Math.abs(e.scrollHeight-parseFloat(s.lineHeight))<=.5&&e.scrollWidth<=e.clientWidth;
-    })""")
-    assert "Missing" not in values.all_text_contents()
+    expect(page.locator(".patient-row")).to_have_count(18)
     assert page.locator("main").evaluate("e=>getComputedStyle(e).maxInlineSize") == "1180px"
-    assert page.locator(".clinical").evaluate("e=>getComputedStyle(e).tableLayout") == "fixed"
     if page.viewport_size and page.viewport_size["width"] == 1440:
         assert (
             page.locator(".patient-row").first.evaluate("e=>getComputedStyle(e).display") == "grid"
         )
-        name = page.locator(".patient-row td").first.bounding_box()
-        age = page.locator(".patient-row td.age").first.bounding_box()
-        assert name and age and age["y"] >= name["y"] + name["height"]
         assert (
-            page.locator(".patient-row td a").first.evaluate("e=>getComputedStyle(e).fontSize")
+            page.locator(".patient-row .who2 b").first.evaluate("e=>getComputedStyle(e).fontSize")
             == "14.5px"
         )
     else:
@@ -348,19 +332,9 @@ def test_depth_queue_density_and_groups(rendered: RenderedApp) -> None:
 
         normalized_fold(page)
         assert (
-            page.locator(".patient-row td:nth-child(3)").first.evaluate(
-                "e=>getComputedStyle(e).gridColumn"
-            )
+            page.locator(".patient-row .need").first.evaluate("e=>getComputedStyle(e).gridColumn")
             == "1 / -1"
         )
-    fits(page)
-    page.locator('[data-sort="urgency"]').click()
-    expect(page.locator('th[aria-sort="descending"]')).to_contain_text("urgency")
-    page.locator('[data-sort="patient"]').click()
-    expect(groups).to_have_count(0)
-    page.locator('[data-sort="last_activity"]').click()
-    expect(page.locator('th[aria-sort="ascending"]')).to_contain_text("Last activity")
-    expect(groups).to_have_count(0)
     fits(page)
 
 
@@ -377,7 +351,7 @@ def test_depth_route_geometry_and_empty_anatomy(rendered: RenderedApp) -> None:
     page.locator("#search").fill("Nobody matches this synthetic search")
     expect(page.locator(".empty [data-clear]")).to_be_visible()
     page.locator(".empty [data-clear]").click()
-    expect(page.locator("[data-record]")).to_have_count(50)
+    expect(page.locator(".patient-row")).to_have_count(18)
     rendered.detail()
     for tab in ("Medicines", "Requests", "Documents", "History"):
         page.get_by_role("tab", name=tab, exact=True).click()
@@ -389,6 +363,7 @@ def test_depth_route_geometry_and_empty_anatomy(rendered: RenderedApp) -> None:
         )
     rendered.login(PATIENT)
     ready(rendered, "/pp")
+    page.locator('[role="tab"][aria-controls="patient-settings"]').click()
     page.locator('#patient-stop[aria-checked="true"]').wait_for()
     fits(page)
     assert page.locator("main").evaluate("e=>getComputedStyle(e).maxInlineSize") == "1180px"
@@ -414,8 +389,9 @@ def test_depth_route_geometry_and_empty_anatomy(rendered: RenderedApp) -> None:
 @RETINA
 @pytest.mark.parametrize("world", ["medication"], indirect=True)
 def test_depth_record_loading_and_retry(rendered: RenderedApp) -> None:
-    page = ready(rendered, "/a")
-    anchor = page.locator("[data-record]").first
+    page = ready(rendered, "/a?filter=all")
+    page.locator(".patient-row").first.click()
+    anchor = page.locator(".patient-row.open + .detail a.primary")
     held: list[Route] = []
     pattern = "**/api/patients/*/evidence"
     page.route(pattern, lambda route: held.append(route))

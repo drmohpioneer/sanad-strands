@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from collections.abc import Callable
+from datetime import timedelta
 from time import monotonic
 from typing import TYPE_CHECKING
 from uuid import uuid4
@@ -15,12 +16,14 @@ from sanad.agents.factory import Proposal as ModelProposal
 from sanad.agents.factory import ProposalFailure, bedrock_model, make_agent
 from sanad.agents.tools import AgentScope, drug_lookup_tool
 from sanad.auth.claim import ClaimService
+from sanad.auth.commands import IssueInvitation
 from sanad.auth.service import read_of, revise
 from sanad.auth.tokens import issue_token
 from sanad.channels.telegram import wording
 from sanad.channels.telegram.router import RouteResult
 from sanad.domain import DRAFT_POLICY_2026_09, PatientScope, Principal, Provenance, TenantScope
 from sanad.domain.language import effective as contest_language
+from sanad.domain.operations import transition_operational_clock
 from sanad.media.audio import ConvertedAudio
 from sanad.media.numbers import numbers_in
 from sanad.media.retrieve import MediaRetriever, fetch_telegram_file, invoked
@@ -29,6 +32,7 @@ from sanad.media.telegram import MediaFailure
 from sanad.models.io import CallMetadata, ModelUnavailable
 from sanad.models.registry import ModelRegistry, ModelRole
 from sanad.models.timeouts import EXTRACTION_TIMEOUT as EXTRACTION_TIMEOUT
+from sanad.presentation import consent_terms
 from sanad.safety import screen_text
 from sanad.scribe import amend
 from sanad.scribe.change_binding import SourcePartition, append_reply, partition_for
@@ -546,6 +550,15 @@ class ScribeTurn:
                 )
             return self._reply(receipt, principal, claim, "scribe_discarded", "cancelled")
         if command == "/qr":
+            if not self.claims.contact_available(doctor.id):
+                return self._reply(
+                    receipt,
+                    principal,
+                    claim,
+                    "consent_contact_unavailable",
+                    "clinic_contact_missing",
+                    text=consent_terms.INVITE_CONTACT_MISSING,
+                )
             choices = lookup(
                 self.repo.store, doctor.scope, PatientCandidate(name_as_spoken=argument or None)
             )
@@ -1730,6 +1743,15 @@ class ScribeTurn:
         display_name: str,
     ) -> RouteResult:
         if proposal.invitation_requested:
+            if not self.claims.contact_available(proposal.scope.doctor_id):
+                return self._reply(
+                    receipt,
+                    actor,
+                    claim,
+                    "consent_contact_unavailable",
+                    "clinic_contact_missing",
+                    text=consent_terms.INVITE_CONTACT_MISSING,
+                )
             qr_result = issue_qr(self.claims, actor, patient_id, "qr-selection:" + proposal.id)
             if qr_result.status not in {"issued", "duplicate"}:
                 return self._reply(receipt, actor, claim, "scribe_stale", "invitation_unavailable")
@@ -1781,21 +1803,64 @@ class ScribeTurn:
             return
         doctor = from_record(row, Doctor)
         auth = self.repo.store.authorize(doctor.telegram_bot_id, doctor.telegram_user_id)
+        now = self.repo.clock()
+        actor = Principal(subject="scribe-work", actor_kind="system", doctor_id=doctor.id)
+        assert work.work_clock is not None
+        command_id = f"qr-work:{work.id}:{work.generation}:{work.work_clock.attempt_count}"
         if self.claims.doctor(auth.principal):
-            result = issue_qr(
-                self.claims, auth.principal, work.patient_id, "qr-after:" + work.proposal_id
+            issuance = IssueInvitation(
+                command_id="qr-after:" + work.proposal_id,
+                actor=auth.principal,
+                patient_id=work.patient_id,
+                include_qr=True,
             )
-            if result.status not in {"issued", "duplicate", "forbidden"}:
+            prior = self.repo.store.lookup_command(self.claims.envelope(issuance))
+            patient = self.claims.patient(doctor.id, work.patient_id)
+            active = (
+                self.claims.invitation(patient.invitation_id)
+                if patient and patient.invitation_id
+                else None
+            )
+            if active and active.state in {"issued", "claimed", "consumed"}:
+                own = prior.original if prior and prior.status == "duplicate" else prior
+                status = (
+                    "issued"
+                    if own
+                    and own.status == "accepted"
+                    and any(
+                        r.entity_type == "invitation" and r.id == active.id and r.version == 1
+                        for r in own.resulting_versions
+                    )
+                    else "superseded"
+                )
+            elif not self.claims.contact_available(doctor.id):
+                self.repo.commit(
+                    actor,
+                    "ScribeWork",
+                    command_id,
+                    (
+                        revise(
+                            work,
+                            now,
+                            work_clock=transition_operational_clock(
+                                work.work_clock,
+                                now + timedelta(minutes=15),
+                                attempt_delta=1,
+                                error="clinic_contact_missing",
+                            ),
+                        ),
+                    ),
+                )
                 return
-            status = "issued" if result.status in {"issued", "duplicate"} else "suppressed"
+            else:
+                result = issue_qr(self.claims, auth.principal, work.patient_id, issuance.command_id)
+                if result.status not in {"issued", "duplicate", "forbidden"}:
+                    return
+                status = "issued" if result.status in {"issued", "duplicate"} else "suppressed"
         else:
             status = "suppressed"
-        actor = Principal(subject="scribe-work", actor_kind="system", doctor_id=doctor.id)
         self.repo.commit(
-            actor,
-            "ScribeWork",
-            "qr-work:" + work.id,
-            (revise(work, self.repo.clock(), status=status, work_clock=None),),
+            actor, "ScribeWork", command_id, (revise(work, now, status=status, work_clock=None),)
         )
 
     @invoked("tick")

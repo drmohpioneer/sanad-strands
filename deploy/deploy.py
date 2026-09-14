@@ -107,10 +107,14 @@ def deploy(
         assert existing is not None
         values, _ = parameter_values(ssm, env)
         config_revision = configuration_revision(ssm, env)
-        required = set(values) - {"public-base-url"}
+        required = set(values) - {"public-base-url", "clinic-contact"}
         if len(required) != 7 or not all(values[k] for k in required):
             raise OperationError(
                 "Missing SSM configuration; run ops.py secrets set before the app pass"
+            )
+        if not values.get("clinic-contact"):
+            raise OperationError(
+                "clinic-contact is required for the enrollment smoke; set it first"
             )
         client(aws, "s3").put_object(Bucket=existing["BucketName"], Key=relay_key, Body=relay)
         image_uri = existing["RepositoryUri"] + "@" + image
@@ -135,6 +139,7 @@ def deploy(
                 "RelayCodeKey": relay_key if image else "",
                 "SsmKeyArn": key_arn,
                 "ConfigRevision": config_revision,
+                "ClinicContact": values.get("clinic-contact", "") if image is not None else "",
             }.items()
         ],
         "Tags": [{"Key": "Project", "Value": "Sanad"}, {"Key": "Environment", "Value": env}],

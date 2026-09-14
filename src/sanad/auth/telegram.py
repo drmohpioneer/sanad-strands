@@ -12,6 +12,7 @@ from sanad.auth.service import InternalCommand, revise
 from sanad.channels.telegram import wording
 from sanad.channels.telegram.router import RouteResult, TelegramRuntime
 from sanad.domain import PatientScope
+from sanad.presentation import consent_terms
 from sanad.store.records import (
     Authorization,
     ClaimCallback,
@@ -108,13 +109,27 @@ class IdentityRouting:
             else "login_refused"
         )
         if known_callback:
+            refusal = wording.render(
+                "claim_refused", runtime.accounts.language(receipt.source_subject)
+            )
+            token = self.claims.load(
+                self.claims.scope, "claim_callback", callback_hash, ClaimCallback
+            )
+            pending = self.claims.patient_claim(token.claim_id) if token else None
+            if (
+                token
+                and pending
+                and token.actor_subject == receipt.source_subject
+                and token.expires_at > now
+                and pending.state == "pending"
+                and pending.consent_id is None
+                and pending.review_at > now
+                and token.offer_generation < pending.offer_generation
+            ):
+                refusal = consent_terms.OFFER_SUPERSEDED
             runtime.transport.answer_callback(
                 str(payload.get("callback_query_id", "")),
-                ""
-                if accepted
-                else wording.render(
-                    "claim_refused", runtime.accounts.language(receipt.source_subject)
-                ),
+                "" if accepted else refusal,
             )
         if not accepted:
             source = auth.binding or revise(

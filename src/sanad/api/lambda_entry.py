@@ -128,13 +128,20 @@ def configure(revision: str) -> FastAPI:
     web_settings = WebSettings(
         public_base_url=values["public-base-url"],
         bot_username=values["bot-username"],
+        clinic_contact=os.environ.get("SANAD_CLINIC_CONTACT", ""),
         **(
             {"consent_retention": os.environ["SANAD_CONSENT_RETENTION"]}
             if os.environ.get("SANAD_CONSENT_RETENTION")
             else {}
         ),
     )
-    policy = consent_policy(retention=web_settings.consent_retention)
+    policy = (
+        consent_policy(
+            retention=web_settings.consent_retention, clinic_contact=web_settings.clinic_contact
+        )
+        if web_settings.clinic_contact.strip()
+        else None
+    )
     app = create_app(
         revision,
         synthetic=os.environ.get("SANAD_ENV") in {"dev", "synthetic", "test", "judge"},

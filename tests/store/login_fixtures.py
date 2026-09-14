@@ -149,12 +149,13 @@ class LoginWorld(AccountWorld):
         assert isinstance(markup, dict)
         keyboard = markup["inline_keyboard"]
         assert isinstance(keyboard, list) and isinstance(keyboard[0], list)
-        button = keyboard[0][index]
+        buttons = [b for row in keyboard for b in cast(list[object], row)]
+        button = buttons[index]
         assert isinstance(button, dict)
         return str(button["callback_data"])
 
     def consent(self, pending: PatientClaim, *, accept: bool = True, id: int = 101) -> PatientClaim:
-        token = self.action_token(pending.id, "consent_request", 0 if accept else 1)
+        token = self.action_token(pending.id, "consent_request", 1 if accept else 2)
         assert self.post(callback(token, pending.candidate_subject, id)).status_code == 200
         changed = self.claims.patient_claim(pending.id)
         assert changed is not None

@@ -167,6 +167,7 @@ class Application(_Metadata):
     status: Literal["pending", "approved", "rejected"] = "pending"
     reviewer_id: NonblankStr | None = None
     reviewed_at: UtcInstant | None = None
+    decision_reason: Literal["admin_rejected", "unverified"] | None = None
     approval_reference: NonblankStr | None = None
     doctor_id: NonblankStr | None = None
     work_clock: OperationalClock | None
@@ -391,11 +392,24 @@ class Patient(_Metadata):
         return self
 
 
+class ConsentOffer(_BoundaryValue):
+    generation: PositiveVersion
+    text_version: NonblankStr
+    language: Literal["ar", "en"]
+    short_text: NonblankStr
+    full_text: NonblankStr
+    configuration: dict[str, JsonValue]
+    digest: Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")]
+
+
 class Consent(_Metadata):
     entity_type: Literal["consent"] = "consent"
     scope: PatientScope
     binding_id: NonblankStr
     policy_text_version: NonblankStr
+    offer_claim_id: NonblankStr | None = None
+    offer_generation: PositiveVersion | None = None
+    language: Literal["ar", "en"] | None = None
     accepted_at: UtcInstant
     accepted_by: NonblankStr
     permitted_channels: frozenset[Literal["telegram"]] = frozenset({"telegram"})
@@ -526,6 +540,8 @@ class PatientClaim(_Metadata):
     consent_id: NonblankStr | None = None
     consent_version: PositiveVersion | None = None
     consent_policy: dict[str, JsonValue]
+    offer_generation: NonnegativeInt = 0
+    consent_offers: tuple[ConsentOffer, ...] = ()
     state: Literal["pending", "approved", "rejected", "expired"] = "pending"
     proof_method: Literal["verified_private_telegram", "doctor_confirmation"]
     proof_reference: NonblankStr
@@ -560,7 +576,8 @@ class ClaimCallback(_Metadata):
     scope: AccountScope
     claim_id: NonblankStr
     actor_subject: NonblankStr
-    action: Literal["accept", "decline", "confirm", "reject"]
+    action: Literal["read_terms", "accept", "decline", "confirm", "reject"]
+    offer_generation: NonnegativeInt = 0
     expected_versions: tuple[VersionRef, ...]
     expires_at: UtcInstant
     consumed_at: UtcInstant | None = None

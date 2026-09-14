@@ -82,9 +82,9 @@ TEMPLATES: dict[str, tuple[str, str]] = {
 }
 APPROVE_BUTTON = "Approve"
 REJECT_BUTTON = "Reject"
-CONSENT_TEXT_VERSION = "consent-draft-2026-09-06-v1"
-CONSENT_ACCEPT_BUTTON = "Accept"
-CONSENT_DECLINE_BUTTON = "Decline"
+CONSENT_TEXT_VERSION = "consent-terms-2026-09-13-v1"
+CONSENT_ACCEPT_BUTTON = "I agree"
+CONSENT_DECLINE_BUTTON = "I don't agree"
 CLAIM_CONFIRM_BUTTON = "Confirm patient identity"
 ENROLLMENT_TEMPLATES = {
     "admin_login_link": (

@@ -12,11 +12,14 @@ from sanad.auth.commands import (
     AuthPolicy,
     ClaimInvitation,
     ConfirmPatientClaim,
+    ConsentContactUnavailable,
     ConsentPolicy,
     CreatePatientStub,
     IssuedInvitation,
     IssueInvitation,
+    ReadConsentTerms,
     RecordConsent,
+    RefreshConsentOffer,
     RejectClaim,
     RevokeBinding,
 )
@@ -31,12 +34,17 @@ from sanad.auth.service import (
 from sanad.auth.tokens import issue_token
 from sanad.channels.telegram import wording
 from sanad.domain import PatientScope, Principal, VersionRef
+from sanad.domain.language import Language, effective
+from sanad.presentation import consent_terms
+from sanad.presentation.context import PresentationContext
 from sanad.store import keys
 from sanad.store.records import (
     Claim,
     ClaimCallback,
     CommitResult,
     Consent,
+    ConsentOffer,
+    Doctor,
     Forbidden,
     IdentityRead,
     Invitation,
@@ -50,13 +58,14 @@ from sanad.store.records import (
     SubjectBinding,
     WebSession,
     canonical_json,
+    to_record,
 )
 
 
 def consent_policy(
     *,
     quiet_hours: tuple[str, str] = ("22:00", "08:00"),
-    clinic_contact: str = "Contact your clinic directly. Sanad is not an emergency service.",
+    clinic_contact: str,
     retention: str = "Development environment: synthetic data only, reset at any time.",
     urgent_response_policy_id: str = "draft-2026-09",
 ) -> ConsentPolicy:
@@ -139,6 +148,8 @@ class ClaimService(IdentityService):
         if prior is not None:
             return prior  # Plaintext is deliberately unrecoverable after its one return.
         patient = self.patient(doctor.id, command.patient_id)
+        if not self.contact_available(doctor.id):
+            return Forbidden()
         if patient is None or patient.contact_status == "active":
             return Forbidden()
         now, token = self.clock(), issue_token()
@@ -205,6 +216,72 @@ class ClaimService(IdentityService):
             result=result,
         )
 
+    def contact_available(self, doctor_id: str) -> bool:
+        policy = self.consent_policy(doctor_id)
+        return policy is not None and bool(policy.clinic_contact.strip())
+
+    @staticmethod
+    def _offer(
+        doctor: Doctor, policy: ConsentPolicy, generation: int, language: Language
+    ) -> ConsentOffer:
+        fields = {
+            "doctor": doctor.name,
+            "quiet_start": policy.quiet_hours[0],
+            "quiet_end": policy.quiet_hours[1],
+            "timezone": doctor.timezone,
+            "clinic_contact": policy.clinic_contact,
+        }
+        if language == "en":
+            short, full = consent_terms.render(**fields)
+        else:
+            short = wording.render(
+                "consent_request",
+                PresentationContext("ar", "patient"),
+                **fields,
+                retention=policy.retention,
+            )
+            full = short
+        configuration = policy.model_dump(mode="json") | {
+            "doctor": doctor.name,
+            "timezone": doctor.timezone,
+        }
+        frozen = {
+            "text_version": wording.CONSENT_TEXT_VERSION,
+            "language": language,
+            "short_text": short,
+            "full_text": full,
+            "configuration": configuration,
+        }
+        return ConsentOffer(
+            generation=generation,
+            digest=keys.digest(canonical_json(frozen).decode()),
+            text_version=wording.CONSENT_TEXT_VERSION,
+            language=language,
+            short_text=short,
+            full_text=full,
+            configuration=configuration,
+        )
+
+    def _offer_message(
+        self, pending: PatientClaim
+    ) -> tuple[tuple[ClaimCallback, ...], OutboundIntent]:
+        offer = pending.consent_offers[-1]
+        tokens, markup = self._buttons(
+            pending,
+            ("read_terms", "accept", "decline"),
+            pending.candidate_subject,
+            (VersionRef(entity_type="patient_claim", id=pending.id, version=pending.version),),
+        )
+        return tokens, self.account_intent(
+            pending,
+            "consent_request",
+            pending.candidate_subject,
+            "applicant",
+            text=offer.short_text,
+            markup=markup,
+            expires_at=pending.review_at,
+        )
+
     def _absent_subject(self, subject: str) -> IdentityRead:
         return IdentityRead(
             scope=self.scope, entity_type="subject_binding", id=subject, version=None
@@ -213,13 +290,14 @@ class ClaimService(IdentityService):
     def _buttons(
         self,
         patient_claim: PatientClaim,
-        actions: tuple[Literal["accept", "decline", "confirm", "reject"], ...],
+        actions: tuple[Literal["read_terms", "accept", "decline", "confirm", "reject"], ...],
         actor: str,
         expected: tuple[VersionRef, ...],
     ) -> tuple[tuple[ClaimCallback, ...], JsonValue]:
         tokens = []
         buttons: list[JsonValue] = []
         labels = {
+            "read_terms": "Read the full terms",
             "accept": wording.CONSENT_ACCEPT_BUTTON,
             "decline": wording.CONSENT_DECLINE_BUTTON,
             "confirm": wording.CLAIM_CONFIRM_BUTTON,
@@ -234,6 +312,7 @@ class ClaimService(IdentityService):
                     claim_id=patient_claim.id,
                     actor_subject=actor,
                     action=action,
+                    offer_generation=patient_claim.offer_generation,
                     expected_versions=expected,
                     expires_at=patient_claim.review_at,
                     created_at=now,
@@ -243,7 +322,10 @@ class ClaimService(IdentityService):
             buttons.append(
                 {"text": labels[action], "callback_data": token.secret.get_secret_value()}
             )
-        return tuple(tokens), {"inline_keyboard": [buttons]}
+        rows: list[JsonValue] = (
+            [[buttons[0]], buttons[1:]] if actions[0] == "read_terms" else [buttons]
+        )
+        return tuple(tokens), {"inline_keyboard": rows}
 
     def claim_invitation(
         self, command: ClaimInvitation, *, claim: Claim | None = None
@@ -276,6 +358,7 @@ class ClaimService(IdentityService):
             or doctor is None
             or doctor.status != "approved"
             or policy is None
+            or not policy.clinic_contact.strip()
         ):
             return Forbidden()
         pending = PatientClaim(
@@ -291,6 +374,10 @@ class ClaimService(IdentityService):
             minimal_claim_identifier=actor.subject,
             binding_id=uuid4().hex,
             consent_policy=policy.model_dump(mode="json"),
+            offer_generation=1,
+            consent_offers=(
+                self._offer(doctor, policy, 1, effective(doctor.language, audience="patient")),
+            ),
             proof_method="verified_private_telegram",
             proof_reference=command.command_id,
             review_at=inv.expires_at,
@@ -299,28 +386,7 @@ class ClaimService(IdentityService):
             updated_at=now,
         )
         claimed = revise(inv, now, state="claimed", pending_claim_id=pending.id)
-        tokens, markup = self._buttons(
-            pending,
-            ("accept", "decline"),
-            actor.subject,
-            (VersionRef(entity_type="patient_claim", id=pending.id, version=1),),
-        )
-        intent = self.account_intent(
-            pending,
-            "consent_request",
-            actor.subject,
-            "applicant",
-            fields={
-                "doctor": doctor.name,
-                "quiet_start": policy.quiet_hours[0],
-                "quiet_end": policy.quiet_hours[1],
-                "timezone": doctor.timezone,
-                "retention": policy.retention,
-                "clinic_contact": policy.clinic_contact,
-            },
-            markup=markup,
-            expires_at=inv.expires_at,
-        )
+        tokens, intent = self._offer_message(pending)
         return self.commit(
             command,
             (claimed, pending, *tokens),
@@ -364,6 +430,97 @@ class ClaimService(IdentityService):
             for m in (pending, inv, patient, consent)
         )
 
+    def _refresh_offer(
+        self,
+        command: RecordConsent,
+        pending: PatientClaim,
+        inv: Invitation,
+        patient: Patient,
+        doctor: Doctor,
+        offer: ConsentOffer,
+        claim: Claim | None,
+    ) -> CommitResult:
+        changed = revise(
+            pending,
+            self.clock(),
+            offer_generation=offer.generation,
+            consent_offers=(*pending.consent_offers, offer),
+            consent_policy={
+                k: v for k, v in offer.configuration.items() if k not in {"doctor", "timezone"}
+            },
+        )
+        tokens, intent = self._offer_message(changed)
+        return self.commit(
+            RefreshConsentOffer(
+                command_id=command.command_id, actor=command.actor, claim_id=pending.id
+            ),
+            (changed, *tokens),
+            (intent,),
+            reads=(
+                read_of(inv),
+                read_of(patient),
+                read_of(doctor),
+                self._absent_subject(command.actor.subject),
+            ),
+            claim=claim,
+        )
+
+    def _current_offer(self, pending: PatientClaim, doctor: Doctor) -> ConsentOffer | None:
+        policy = self.consent_policy(doctor.id)
+        if policy is None or not policy.clinic_contact.strip():
+            return None
+        language = (
+            pending.consent_offers[-1].language
+            if pending.consent_offers
+            else effective(doctor.language, audience="patient")
+        )
+        return self._offer(doctor, policy, pending.offer_generation + 1, language)
+
+    def read_terms(self, command: ReadConsentTerms, *, claim: Claim | None = None) -> CommitResult:
+        found = self._pending(command.claim_id)
+        if found is None:
+            return Forbidden()
+        pending, inv, patient = found
+        if (
+            pending.candidate_subject != command.actor.subject
+            or pending.consent_id is not None
+            or command.offer_generation != pending.offer_generation
+        ):
+            return Forbidden()
+        doctor = self.accounts.doctor(pending.doctor_id)
+        if doctor is None or doctor.status != "approved":
+            return Forbidden()
+        if not pending.consent_offers:
+            return Forbidden()
+        if self.store.lookup_command(self.envelope(command, claim)) is not None:
+            return Forbidden()
+        offer = pending.consent_offers[-1]
+        # The source version is the immutable offer generation, not the mutable claim revision.
+        intent = self.accounts.intent(
+            to_record(pending, self.scope),
+            "consent_terms",
+            pending.candidate_subject,
+            pending.private_chat_id,
+            "applicant",
+            text=offer.full_text,
+            source_version=offer.generation,
+        )
+        intent = OutboundIntent.model_validate(
+            intent.model_dump() | {"expires_at": pending.review_at}
+        )
+        return self.commit(
+            command,
+            intents=(intent,),
+            reads=(
+                read_of(pending),
+                read_of(inv),
+                read_of(patient),
+                read_of(doctor),
+                self._absent_subject(command.actor.subject),
+            ),
+            claim=claim,
+        )
+
     def record_consent(
         self,
         command: RecordConsent,
@@ -384,18 +541,44 @@ class ClaimService(IdentityService):
         models: list[BaseModel] = []
         intents = []
         if command.accept:
+            current = self._current_offer(pending, doctor)
+            if current is None:
+                return self.commit(
+                    ConsentContactUnavailable(
+                        command_id=command.command_id, actor=command.actor, claim_id=pending.id
+                    ),
+                    intents=(
+                        self.account_intent(
+                            pending,
+                            "consent_contact_unavailable",
+                            pending.candidate_subject,
+                            "applicant",
+                            text=consent_terms.CONTACT_UNAVAILABLE,
+                            suffix=command.command_id,
+                            expires_at=pending.review_at,
+                        ),
+                    ),
+                    reads=(read_of(pending), read_of(inv), read_of(patient), read_of(doctor)),
+                    claim=claim,
+                )
+            if not pending.consent_offers or current.digest != pending.consent_offers[-1].digest:
+                return self._refresh_offer(command, pending, inv, patient, doctor, current, claim)
+            offer = pending.consent_offers[-1]
             policy = ConsentPolicy.model_validate(pending.consent_policy)
             consent = Consent(
                 id=uuid4().hex,
                 scope=patient.scope,
                 binding_id=pending.binding_id,
-                policy_text_version=wording.CONSENT_TEXT_VERSION,
+                policy_text_version=offer.text_version,
+                offer_claim_id=pending.id,
+                offer_generation=offer.generation,
+                language=offer.language,
                 accepted_at=now,
                 accepted_by=command.actor.subject,
                 quiet_hours=policy.quiet_hours,
-                timezone=doctor.timezone,
+                timezone=str(offer.configuration["timezone"]),
                 urgent_response_policy_id=policy.urgent_response_policy_id,
-                policy_digest=keys.digest(canonical_json(pending.consent_policy).decode()),
+                policy_digest=offer.digest,
                 created_at=now,
                 updated_at=now,
             )
@@ -439,11 +622,24 @@ class ClaimService(IdentityService):
         intents.append(
             self.account_intent(changed, patient_template, pending.candidate_subject, "applicant")
         )
+        if callback:
+            command = command.model_copy(
+                update={
+                    "command_id": (
+                        f"consent:{pending.id}:{pending.offer_generation}:{callback.action}"
+                    )
+                }
+            )
         return self.commit(
             command,
             tuple(models),
             tuple(intents),
-            reads=(read_of(inv), read_of(patient), self._absent_subject(command.actor.subject)),
+            reads=(
+                read_of(inv),
+                read_of(patient),
+                read_of(doctor),
+                self._absent_subject(command.actor.subject),
+            ),
             claim=claim,
         )
 
@@ -663,7 +859,7 @@ class ClaimService(IdentityService):
         ):
             return Forbidden()
         pending = self.patient_claim(token.claim_id)
-        if pending is None:
+        if pending is None or token.offer_generation != pending.offer_generation:
             return Forbidden()
         for ref in token.expected_versions:
             scope = PatientScope(doctor_id=pending.doctor_id, patient_id=pending.patient_id)
@@ -674,6 +870,17 @@ class ClaimService(IdentityService):
             )
             if row is None or row.version != ref.version:
                 return Forbidden()
+        if token.action == "read_terms":
+            return self.read_terms(
+                ReadConsentTerms(
+                    command_id=f"consent:{pending.id}:{pending.offer_generation}:read_terms",
+                    actor=actor,
+                    claim_id=pending.id,
+                    offer_generation=pending.offer_generation,
+                    callback_hash=hash,
+                ),
+                claim=claim,
+            )
         if token.action in {"accept", "decline"}:
             return self.record_consent(
                 RecordConsent(

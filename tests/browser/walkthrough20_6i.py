@@ -22,6 +22,7 @@ def test_6i_hidden_and_queued_preferences(
     rendered.login(PATIENT)
     page.goto(rendered.origin + "/pp")
     expect(page.locator("#patient-stop")).to_have_attribute("aria-checked", "true")
+    page.locator('[role="tab"][aria-controls="patient-settings"]').click()
     expect(page.locator("#patient-confirm")).to_be_hidden()
     assert page.locator("#patient-confirm").evaluate("e=>getComputedStyle(e).display") == "none"
     from sanad.channels.telegram.router import route_receipt
@@ -108,6 +109,7 @@ def test_6i_preference_poll_has_time_limit(rendered: RenderedApp, stalled: bool)
             route.fulfill(json=state | {"queued": True})
 
     page.route("**/api/patient/preferences?token=*", poll)
+    page.locator('[role="tab"][aria-controls="patient-settings"]').click()
     page.locator("#patient-stop").click()
     for _ in range(21):
         page.clock.run_for(1000)
@@ -132,6 +134,7 @@ def test_6i_passive_poll_preserves_quiet_edit(rendered: RenderedApp) -> None:
     page.clock.install(time=rendered.world.clock())
     page.goto(rendered.origin + "/pp")
     expect(page.locator("#patient-quiet-start")).to_have_value("22:00")
+    page.locator('[role="tab"][aria-controls="patient-settings"]').click()
     state = page.request.get(rendered.origin + "/api/patient/preferences").json()
 
     def preference(route: Route) -> None:

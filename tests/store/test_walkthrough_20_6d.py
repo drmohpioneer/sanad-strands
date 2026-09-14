@@ -48,6 +48,7 @@ def test_configure_enrollment(
         "SANAD_ENV": "dev",
         "SANAD_BUCKET": "synthetic",
         "AWS_LAMBDA_FUNCTION_NAME": "synthetic",
+        "SANAD_CLINIC_CONTACT": "Synthetic clinic contact",
     }.items():
         monkeypatch.setenv(key, value)
     monkeypatch.setattr("boto3.client", client)
@@ -230,6 +231,7 @@ def test_enrollment_smoke_runs_deployed_receipt_path(
                 "bot-token": "4242:synthetic-token-value",
                 "admin-telegram-id": ADMIN,
                 "webhook-secret": "synthetic-webhook-secret",
+                "clinic-contact": "Synthetic clinic contact",
             },
         )
     assert result == {"invitation_issued": True, "pending_claim": True, "patient_activated": False}

@@ -122,6 +122,7 @@ def test_6f_parallel_patient(rendered: RenderedApp, monkeypatch: pytest.MonkeyPa
     other = page.context.new_page()
     other.goto(rendered.origin + "/pp")
     expect(other.locator("#patient-preferences")).to_contain_text("Reminders enabled")
+    other.locator('[role="tab"][aria-controls="patient-settings"]').click()
     page.locator("#patient-file").set_input_files(
         {
             "name": "synthetic.png",
@@ -189,6 +190,7 @@ def test_6f_patient_wording(rendered: RenderedApp, monkeypatch: pytest.MonkeyPat
         "Today " + local_time.strftime("%H:%M")
     )
     expect(page.locator("#patient-conversation small").first).not_to_contain_text("T12:")
+    page.locator('[role="tab"][aria-controls="patient-settings"]').click()
     expect(page.get_by_role("switch", name="Reminders")).to_have_count(1)
     expect(page.get_by_role("button", name="Resume reminders", exact=True)).to_have_count(0)
     page.get_by_role("switch", name="Reminders").click()

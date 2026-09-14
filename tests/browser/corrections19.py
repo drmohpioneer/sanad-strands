@@ -72,6 +72,25 @@ from browser.depth18e import (
 )
 from browser.logo18h import test_aurora_entry_logo as test_aurora_entry_logo
 from browser.logo18h import test_logo_pages as test_logo_pages
+from browser.sample18h3 import (
+    test_sample18h3_admin_details as test_sample18h3_admin_details,
+)
+from browser.sample18h3 import (
+    test_sample18h3_chip_sources_and_actions as test_sample18h3_chip_sources_and_actions,
+)
+from browser.sample18h3 import test_sample18h3_counts_and_pager as test_sample18h3_counts_and_pager
+from browser.sample18h3 import (
+    test_sample18h3_demo_cards as test_sample18h3_demo_cards,
+)
+from browser.sample18h3 import (
+    test_sample18h3_headline_and_url as test_sample18h3_headline_and_url,
+)
+from browser.sample18h3 import (
+    test_sample18h3_patient_tabs_and_bubbles as test_sample18h3_patient_tabs_and_bubbles,
+)
+from browser.sample18h3 import (
+    test_sample18h3_reading_provenance as test_sample18h3_reading_provenance,
+)
 from browser.walkthrough20_6e import (
     test_6e_reply_and_immediate_danger as test_6e_reply_and_immediate_danger,
 )
@@ -302,7 +321,8 @@ def test_dashboard_and_patient_scripts_render(rendered: RenderedApp) -> None:
         response = page.goto(rendered.origin + path)
         assert response and response.status == 200
         page.locator('#content[aria-busy="false"]').wait_for()
-        expect(page.locator("#freshness")).not_to_be_empty()
+        if path in ("/a/inbox", "/a/history", "/a/preferences"):
+            expect(page.locator("#freshness")).not_to_be_empty()
         expect(page.locator("#feedback")).to_be_empty()
     rendered.login(PATIENT)
     response = page.goto(rendered.origin + "/pp")
@@ -355,20 +375,18 @@ def test_keyboard_record_sort_and_reduced_motion(rendered: RenderedApp) -> None:
     page = rendered.page
     page.goto(rendered.origin + "/demo")
     page.locator('#content[aria-busy="false"]').wait_for()
-    rows = page.locator(".clinical tbody tr.patient-row")
+    rows = page.locator(".patient-row")
     rows.first.focus()
     page.keyboard.press("ArrowDown")
     expect(rows.nth(1)).to_be_focused()
     page.keyboard.press("Enter")
+    expect(rows.nth(1)).to_have_attribute("aria-expanded", "true")
+    page.locator(".patient-row.open + .detail a.primary").click()
     expect(page.locator("#what-to-do")).to_be_visible()
     expect(page.locator("#patient-drawer")).to_have_count(0)
     assert_identity(page)
     page.locator("#back").click()
     page.locator('#content[aria-busy="false"]').wait_for()
-    page.locator('[data-sort="patient"]').click()
-    expect(page.locator('th[aria-sort="ascending"]')).to_contain_text("Patient")
-    page.locator('[data-sort="patient"]').click()
-    expect(page.locator('th[aria-sort="descending"]')).to_contain_text("Patient")
     page.emulate_media(reduced_motion="reduce")
     assert rows.first.evaluate("e => getComputedStyle(e).animationName") == "none"
     assert (
@@ -737,10 +755,11 @@ def test_walkthrough_record_four_groups(
 ) -> None:
     monkeypatch.setenv("SANAD_CONTEST_ENGLISH", "1")
     w, page = rendered.world, rendered.page
-    page.goto(rendered.origin + "/a")
+    page.goto(rendered.origin + "/a?filter=all")
     page.locator('#content[aria-busy="false"]').wait_for()
     with page.expect_response(lambda r: r.url.endswith("/evidence")) as response:
-        page.locator("[data-record]").first.click()
+        page.locator(".patient-row").first.click()
+        page.locator(".patient-row.open + .detail a.primary").click()
     assert response.value.status == 200
     record_page = page.locator("#content")
     expect(page.locator("#patient-drawer")).to_have_count(0)
@@ -830,18 +849,16 @@ def test_6d_last_activity_and_record_amend(
     monkeypatch.setenv("SANAD_CONTEST_ENGLISH", "1")
     world, page = rendered.world, rendered.page
     page.clock.set_fixed_time(world.clock() + timedelta(hours=2))
-    page.goto(rendered.origin + "/a")
+    page.goto(rendered.origin + "/a?filter=all")
     page.locator('#content[aria-busy="false"]').wait_for()
-    expect(page.get_by_role("columnheader", name="Last activity")).to_be_visible()
-    row = page.locator(".clinical tbody tr.patient-row").first
+    row = page.locator(".patient-row").first
     expect(row).to_contain_text(
         "قبل ساعتين" if page.locator("html").get_attribute("lang") == "ar" else "2 hours ago"
     )
-    assert row.locator("td").nth(3).locator("time").get_attribute("datetime")
-    assert page.locator("caption").evaluate("e=>getComputedStyle(e).display") == "block"
-    assert row.locator("td").nth(1).evaluate("e=>getComputedStyle(e).whiteSpace") == "nowrap"
+    assert row.locator(".when time").get_attribute("datetime")
     page.screenshot(path=str(tmp_path / "6d-patient-list.png"), full_page=True)
-    row.locator("[data-record]").click()
+    row.click()
+    page.locator(".patient-row.open + .detail a.primary").click()
     page.locator("#what-to-do").wait_for()
     page.get_by_role("button", name="Amend instruction").click()
     dialog = page.locator("#correction-dialog")

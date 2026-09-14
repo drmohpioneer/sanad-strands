@@ -74,6 +74,19 @@ An invitation contains only an opaque random token, stored hashed, scoped to one
 
 The intended patient identifies their account in private Telegram, provides a minimal claim identifier and accepts consent/contact preferences. The doctor then confirms through the encounter or an established contact process that this account is the intended patient. QR possession alone is not proof. Persist a pending claim; a second scan cannot overwrite its claimant. The doctor may reject/reset a wrong claim by revoking the invitation.
 
+Consent is offered as a short introduction with Read the full terms, I agree and
+I don't agree. Telegram, Amazon and Google Gemini are named explicitly. Opening
+the full terms is independent of agreement and sends one plain-text message once
+per offer generation. Each claim retains immutable rendered short and full text,
+version, language, configuration and SHA-256 digest. Agreement records that exact
+offer. A changed current version or rendering requires a fresh offer and new
+buttons; accepted claims awaiting doctor confirmation retain their saved terms.
+A missing clinic contact refuses invitations and claims. Deferred invitation work
+retries after fifteen minutes and yields to a manual invitation without replacing
+it. Temporary contact loss refuses agreement without consuming its button.
+The authenticated patient page shows the saved agreement date and full terms;
+older agreements keep their date and version without reconstructed terms.
+
 Final consumption, approved claim, patient binding and globally unique bot-subject mapping are one transaction. A bot identity may have explicitly authorized admin and doctor roles together. A patient role/binding is exclusive of clinician/admin roles and has one immutable doctor owner. Reject replay, expiry and conflicting bindings without disclosing another record. Claims have review deadlines, so an unscanned QR cannot hide overdue care. Caregiver access and reassignment require a separately approved workflow.
 
 The patient browser uses its own short-lived POST exchange delivered to the verified Telegram account, bound to the active PatientBinding and consent version. An ordinary web request cannot prove a Telegram identity. A browser-first claim remains pending without clinical disclosure until the same consent/doctor-proof gate completes. Revocable patient sessions expose only the released plan and exchanged data, never private doctor notes. Binding recovery freezes disclosure/contact until explicit identity resolution.

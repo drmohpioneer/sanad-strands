@@ -27,6 +27,10 @@
     "SsmKeyArn": {
       "Type": "String"
     },
+    "ClinicContact": {
+      "Type": "String",
+      "Default": ""
+    },
     "ConfigRevision": {
       "Type": "String",
       "Default": "infrastructure-only"
@@ -773,6 +777,9 @@
             },
             "SANAD_OSM_USER_AGENT": {
               "Fn::Sub": "Sanad/${Environment} (clinical follow-up assistant; https://github.com/sanad-strands)"
+            },
+            "SANAD_CLINIC_CONTACT": {
+              "Ref": "ClinicContact"
             },
             "SANAD_CONFIG_REVISION": {
               "Ref": "ConfigRevision"

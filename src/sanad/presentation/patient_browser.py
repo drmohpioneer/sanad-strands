@@ -3,6 +3,7 @@
 from sanad.presentation.catalog import Catalog, validate_catalog
 
 CATALOG: Catalog = {
+    "settings": {"en": "Settings", "ar": "الإعدادات"},
     "conversation": {"en": "Your conversation", "ar": "كلامك مع سند"},
     "message": {"en": "Your message", "ar": "رسالتك"},
     "send": {"en": "Send", "ar": "ابعت"},

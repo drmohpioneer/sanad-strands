@@ -212,7 +212,8 @@ def test_aurora_performance(rendered: RenderedApp) -> None:
     ]
     assert tasks, sorted({e.get("name", "") for e in trace if e.get("ph") == "X"})
     assert max(e.get("dur", 0) for e in tasks) <= 200_000
-    expect(page.locator(".patient-row")).to_have_count(50)
+    page.locator('#filter [data-filter="all"]').click()
+    expect(page.locator(".patient-row")).to_have_count(18)
     assert page.locator("body *").evaluate_all("""es=>es.filter(e=>
       getComputedStyle(e).backdropFilter!=='none').length<=40""")
     assert page.locator("body *").evaluate_all("""es=>es.every(e=>
@@ -281,7 +282,7 @@ def test_aurora_trends(rendered: RenderedApp, aurora_monitor: dict[str, Any]) ->
 def test_aurora_keyboard_focus(rendered: RenderedApp) -> None:
     page = ready(rendered)
     page.emulate_media(reduced_motion="reduce")
-    for key in ("danger", "pending_review", "overdue", "due_today", "all"):
+    for key in ("needs", "all", "settled"):
         segment = page.locator(f'#filter [data-filter="{key}"]')
         segment.focus()
         page.keyboard.press("Enter")
@@ -291,7 +292,7 @@ def test_aurora_keyboard_focus(rendered: RenderedApp) -> None:
         assert segment.evaluate("e=>getComputedStyle(e).boxShadow") != "none"
 
     check_focus_controls(page)
-    ready(rendered, "/demo#demo-040")
+    ready(rendered, "/demo#demo-000")
     for tab in ("Medicines", "Requests", "Documents", "History"):
         page.get_by_role("tab", name=tab, exact=True).click()
         check_focus_controls(page)

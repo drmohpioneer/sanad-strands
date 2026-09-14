@@ -115,6 +115,7 @@ def test_demo_patient_controls(rendered: RenderedApp, tmp_path: Path) -> None:
         "This is a demonstration reply."
     )
 
+    page.locator('[role="tab"][aria-controls="patient-settings"]').click()
     switch = page.get_by_role("switch", name="Reminders")
     switch.click()
     expect(switch).to_have_attribute("aria-checked", "false")
@@ -137,6 +138,7 @@ def test_demo_patient_controls(rendered: RenderedApp, tmp_path: Path) -> None:
     expect(page.locator("#patient-action-result")).to_have_text("Choose two different times.")
     expect(page.locator("#patient-quiet-summary")).to_contain_text("21:00, 06:00")
 
+    page.locator('[role="tab"][aria-controls="content"]').click()
     page.locator("#patient-file").set_input_files(
         {"name": "synthetic.png", "mimeType": "image/png", "buffer": png()}
     )

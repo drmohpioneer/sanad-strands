@@ -156,12 +156,12 @@ are remapped together and the original source remains in provenance.
 |---|---|
 | Doctor | telegram_bot_id, telegram_user_id, private_chat_id, name, specialty, city, language, timezone, status (pending/approved/rejected/suspended/revoked), approved_by/at optional, auth_epoch, policy_version, clinical_policy_version optional, approval_reference optional |
 | DoctorPolicy | policy_version, timezone, quiet_hours, daily_chase_limit, per_mission_chase_limit, evidence_request_limit, barrier_question/search_limits, default_deadlines by kind, default_grace_seconds=0, permitted_inference_bounds, draft_review_interval, result_review_interval, pause_max_interval, followup_response_window, incident_coverage_policy_id, knowledge_scope_ids, session_idle/absolute_ttl, invitation_ttl; versioned and applicability-scoped |
-| Application | bot_id, telegram_user_id, private_chat_id, claimed_name/specialty/city, status (pending/approved/rejected), reviewer_id/at, approval_reference; pending applications have operational review ownership |
+| Application | bot_id, telegram_user_id, private_chat_id, claimed_name/specialty/city, status (pending/approved/rejected), reviewer_id/at, approval_reference, decision_reason (admin_rejected/unverified or null; absent stored values default to null); pending applications have operational review ownership |
 | SubjectBinding | key(bot_id, telegram_user_id), role_set, doctor_id optional, patient_id optional, status (active/frozen/revoked), binding_epoch; admin+doctor may coexist, patient role is exclusive of clinician/admin roles |
 | Patient | immutable doctor_id, display_name, identifiers allowed by policy, date_of_birth/age/sex optional with provenance, timezone, language, contact_status (awaiting_link/active/paused/opted_out/unreachable/frozen), active_binding_id optional, consent_id/version optional, record_version, delivery_epoch, safety_epoch, lease_generation, lease_owner/expiry optional, current_plan_id/version optional; clinical history is typed facts, not unversioned active orders |
-| Consent | patient_id, binding_id, version, policy_text_version, accepted_at/by, permitted_channels, routine_contact_enabled, urgent_response_policy_id, scheduled_slot_consents, quiet_hours, withdrawn_at optional; changing it increments Patient.delivery_epoch |
+| Consent | patient_id, binding_id, version, policy_text_version, offer_claim_id/offer_generation and language (absent for legacy agreements), accepted_at/by, permitted_channels, routine_contact_enabled, urgent_response_policy_id, scheduled_slot_consents, quiet_hours, withdrawn_at optional; changing it increments Patient.delivery_epoch |
 | Invitation | token_hash, doctor_id, patient_id, issued_by, expires_at, state (issued/claimed/consumed/revoked/expired), pending_claim_id optional, consumed_at optional, review_at, WorkClock while unfinished; proposed default expiry 24 hours, shown to doctor |
-| PatientClaim | invitation_id, candidate_subject, minimal_claim_identifier, consent_version, proof_method/reference, doctor_confirmed_by/at optional, state (pending/approved/rejected/expired), review_at, WorkClock; no record disclosure while pending |
+| PatientClaim | invitation_id, candidate_subject, minimal_claim_identifier, consent_version, offer_generation and append-only consent_offers (generation, text_version, language, short_text, full_text, configuration, digest), proof_method/reference, doctor_confirmed_by/at optional, state (pending/approved/rejected/expired), review_at, WorkClock; no record disclosure while pending |
 | PatientBinding | patient_id, subject_key, status (active/frozen/revoked), binding_epoch, claim_id, consent_id/version, doctor_confirmed_by/at; doctor/patient ownership fixed at activation |
 | LoginExchange | token_hash, intended_role/subject, binding_id optional, auth_epoch, consent_version optional, issued_at, expires_at (doctor default 10 minutes), state (issued/consumed/revoked/expired), consumed_at optional; GET is non-consuming, POST atomic consumption only |
 | WebSession | session_hash, role, subject, doctor_id, patient_id/binding_id optional, auth_epoch, binding_epoch/consent_version optional, csrf_secret_ref, issued_at, last_seen_at, idle_expires_at, absolute_expires_at, revoked_at optional; no PHI in cookie |
@@ -171,6 +171,15 @@ are remapped together and the original source remains in provenance.
 | CarePlan | plan_id, plan_version, order_refs, mission_ids, followup_ids, status (proposed/confirmed/superseded), confirmed_by/at optional, source_proposal_id; a confirmed batch explicitly records accepted and deferred items |
 | Proposal | patient_candidate_ids, selected_patient_id optional, proposed fact/order/mission deltas, base_versions, source_observation_ids, created_by_agent/command, validation_results, expires_at, confirmation_nonce_hash, status (pending/confirmed/rejected/expired), review_at, WorkClock while pending |
 | IntakeDraft | owner_doctor_id, source_receipt_ids, media_work_ids, proposal_id optional, selected_patient_id optional, state (pending/associated/rejected/expired), safety_epoch, ProcessingClaim, review_at, WorkClock until associated/rejected or handed to timed disposition; unassigned material remains doctor-private |
+
+Each consent offer freezes its rendered text and configuration for the claim's
+lifetime. Refresh appends a generation without altering earlier offers. Callback
+tokens bind the offer generation; their action key is claim, generation and action.
+ReadConsentTerms commits its receipt and one full-text outbox intent without
+revising the claim or consuming agreement. Terms delivery follows the offer
+generation across acceptance, but stops at confirmation or closure. Agreement
+references the frozen offer; legacy agreements have no invented text. Patient
+agreement reads derive their patient and consent solely from the live session.
 
 Invitation confirmation transaction checks: valid unreplayed invitation/claim, verified private subject, consent, doctor authority, unchanged patient owner/version, absent conflicting global SubjectBinding, and current invitation generation. It writes consumption, approved claim, PatientBinding, global SubjectBinding and patient contact/consent references together. Reissue revokes pending claims. No automatic merge or reassignment occurs.
 

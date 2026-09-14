@@ -228,7 +228,11 @@ def tenant(aws: Any, table: str, url: str, *, bot_id: str | None = None) -> dict
         and store.authorize(bot, actors[0].subject).principal.doctor_id == doctors[0],
         "tenant A authorization isolation",
     )
-    claims = ClaimService(accounts, url, consent_policy=lambda doctor_id: consent_policy())
+    claims = ClaimService(
+        accounts,
+        url,
+        consent_policy=lambda doctor_id: consent_policy(clinic_contact="Synthetic clinic contact"),
+    )
     created = claims.create_stub(
         CreatePatientStub(
             command_id=uuid4().hex, actor=actors[0], display_name="Synthetic Deployment Patient"
@@ -278,7 +282,11 @@ def enrollment(
         approve_label=(wording.APPROVE_BUTTON, "Approve"),
         reject_label=(wording.REJECT_BUTTON, "Reject"),
     )
-    claims = ClaimService(accounts, url, consent_policy=lambda doctor_id: consent_policy())
+    claims = ClaimService(
+        accounts,
+        url,
+        consent_policy=lambda doctor_id: consent_policy(clinic_contact=values["clinic-contact"]),
+    )
     invitation = claims.issue_invitation(
         IssueInvitation(
             command_id=uuid4().hex,

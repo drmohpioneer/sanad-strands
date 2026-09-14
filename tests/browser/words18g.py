@@ -326,7 +326,7 @@ def test_18g_every_outstanding_sentence(rendered: RenderedApp) -> None:
         )
     for data, text, expected_phrase in cases:
         projected(app, data)
-        goto(app, "/a")
+        goto(app, "/a?filter=all")
         expect(page.locator(".patient-sentence")).to_have_text(text)
         old_word_walk(page)
         goto(app, f"/a/patients/{data['patient_id']}")
@@ -373,8 +373,9 @@ def test_18g_dates_targets_and_no_repeats(rendered: RenderedApp) -> None:
         }
     ]
     projected(app, data, evidence)
-    goto(app, "/a")
-    expect(page.locator(".patient-row small").filter(has_text="and 6 more")).to_have_count(1)
+    goto(app, "/a?filter=all")
+    page.locator(".patient-row").click()
+    expect(page.locator(".detail")).to_contain_text("6 more on the full record")
     list_sentence = page.locator(".patient-sentence").inner_text()
     goto(app, f"/a/patients/{data['patient_id']}")
     expect(page.locator("#what-to-do [data-obligation]")).to_have_count(7)
@@ -480,7 +481,7 @@ def test_18g_terminal_states_history_and_contact(rendered: RenderedApp) -> None:
         ],
     )
     projected(app, data, evidence)
-    goto(app, "/a")
+    goto(app, "/a?filter=all")
     expect(page.locator(".patient-sentence")).to_have_text(QUIET)
     goto(app, f"/a/patients/{data['patient_id']}")
     expect(page.locator("#what-to-do")).to_contain_text(QUIET)
@@ -589,7 +590,7 @@ def test_18g_terminal_states_history_and_contact(rendered: RenderedApp) -> None:
     ]:
         data = record(app, contact_status=contact)
         projected(app, data)
-        goto(app, "/a")
+        goto(app, "/a?filter=all")
         expect(page.locator(".patient-sentence")).to_have_text(line)
         goto(app, f"/a/patients/{data['patient_id']}")
         expect(page.locator(".record-heading")).to_contain_text(heading)
@@ -618,37 +619,47 @@ def test_18g_click_anywhere_back_and_counts(rendered: RenderedApp) -> None:
         "oldest has waited 2 days"
     )
     for key in ("danger", "pending_review", "overdue", "due_today"):
-        page.locator(f'[data-summary="{key}"]').click()
-        expect(page.locator('#filter [aria-pressed="true"]')).to_have_attribute("data-filter", key)
-        expect(page.locator(".patient-row")).to_have_count(1)
-        page.locator(f'[data-summary="{key}"]').click()
-    for selector in ("td.age", ".patient-sentence", "[data-record]"):
-        page.locator(".patient-row").first.locator(selector).click()
-        expect(page).to_have_url(app.origin + f"/a/patients/{data['patient_id']}")
-        expect(page.locator("#patient-drawer")).to_have_count(0)
-        page.locator("#back").click()
-        page.locator('#content[aria-busy="false"]').wait_for()
-    page.locator(".patient-row").first.focus()
+        tile = page.locator(f'[data-summary="{key}"]')
+        assert tile.get_attribute("aria-pressed") is None
+        tile.click()
+        expect(page.locator('#filter [aria-pressed="true"]')).to_have_attribute(
+            "data-filter", "needs"
+        )
+    for selector in (".who2 small", ".need", ".who2 b"):
+        row = page.locator(".patient-row").first
+        row.locator(selector).click()
+        expect(row).to_have_attribute("aria-expanded", "true")
+        row.locator(selector).click()
+        expect(row).to_have_attribute("aria-expanded", "false")
+    row.focus()
     page.keyboard.press("Enter")
+    expect(row).to_have_attribute("aria-expanded", "true")
+    page.keyboard.press("Enter")
+    expect(row).to_have_attribute("aria-expanded", "false")
+    row.click()
+    page.locator(".patient-row.open + .detail a.primary").click()
+    expect(page).to_have_url(app.origin + f"/a/patients/{data['patient_id']}")
     expect(page.locator("#what-to-do")).to_be_visible()
+    expect(page.locator("#patient-drawer")).to_have_count(0)
     page.go_back()
     page.locator('#content[aria-busy="false"]').wait_for()
-    for selector in ("td.age", ".patient-sentence", "[data-record]"):
-        with page.context.expect_page() as opened:
-            page.locator(".patient-row").first.locator(selector).click(modifiers=["Meta"])
-        expect(opened.value).to_have_url(app.origin + "/a/patients/" + data["patient_id"])
-        opened.value.close()
+    page.locator(".patient-row").first.click()
+    with page.context.expect_page() as opened:
+        page.locator(".patient-row.open + .detail a.primary").click(modifiers=["Meta"])
+    expect(opened.value).to_have_url(app.origin + "/a/patients/" + data["patient_id"])
+    opened.value.close()
     page.unroute(app.origin + "/api/patients")
-    # Demo is sufficiently long to verify scroll restoration and pagination.
+    # Restore the list position on the default Needs me tab.
     goto(app, "/demo")
     old_word_walk(page)
-    expect(page.locator("[data-record]")).to_have_count(50)
-    page.locator("#next").click()
-    expect(page.locator("[data-record]")).to_have_count(10)
-    page.locator("#previous").click()
-    page.locator(".patient-row").nth(25).scroll_into_view_if_needed()
+    page.locator('#filter [data-filter="all"]').click()
+    expect(page.locator(".patient-row")).to_have_count(18)
+    expect(page.locator("#next")).to_have_count(0)
+    page.locator('#filter [data-filter="needs"]').click()
+    page.locator(".patient-row").last.scroll_into_view_if_needed()
     position = page.evaluate("scrollY")
-    page.locator(".patient-row").nth(25).locator("td.age").click()
+    page.locator(".patient-row").last.click()
+    page.locator(".patient-row.open + .detail a.primary").click()
     expect(page.locator("#what-to-do")).to_be_visible()
     page.locator("#back").click()
     page.locator('#content[aria-busy="false"]').wait_for()
@@ -827,16 +838,17 @@ def test_18g_demo_catalog(rendered: RenderedApp) -> None:
     app, page = rendered, rendered.page
     fixture_path = Path(__file__).parents[2] / "src/sanad/web/static/demo.json"
     fixture = json.loads(fixture_path.read_text())
-    assert len(fixture) == 60
+    assert len(fixture) == 18
     assert not re.search(r"[\u0600-\u06ff]", json.dumps(fixture, ensure_ascii=False))
     page.clock.set_fixed_time(NOW)
     goto(app, "/demo")
+    page.locator('#filter [data-filter="all"]').click()
     sentences = page.locator(".patient-sentence").all_text_contents()
     old_word_walk(page)
-    page.locator("#next").click()
-    sentences += page.locator(".patient-sentence").all_text_contents()
-    assert len(sentences) == 60
-    old_word_walk(page)
+    assert len(sentences) == 18
+    for patient in fixture:
+        goto(app, "/demo#" + patient["patient_id"])
+        sentences += page.locator("#what-to-do a").all_text_contents()
     for wording in (
         "Respond to the danger report.",
         "Read the result that arrived",
@@ -869,12 +881,12 @@ def test_18g_demo_catalog(rendered: RenderedApp) -> None:
         "The follow-up cannot be sent:",
     ):
         assert any(wording in sentence for sentence in sentences), wording
-    goto(app, "/demo#demo-055")
+    goto(app, "/demo#" + next(r["patient_id"] for r in fixture if r["held_medications"]))
     expect(page.locator("[data-held-order]")).to_contain_text(
         "Aspirin is on hold since yesterday: bruising reported."
     )
     old_word_walk(page)
-    for patient in ("demo-005", "demo-010", "demo-020", "demo-056", "demo-057"):
+    for patient in (r["patient_id"] for r in fixture):
         goto(app, "/demo#" + patient)
         for tab in ("Medicines", "Requests", "Documents", "History"):
             page.get_by_role("tab", name=tab, exact=True).click()
@@ -918,10 +930,11 @@ def test_18g_urgency_uses_source_wait(rendered: RenderedApp) -> None:
     for path, payload in [
         ("/api/patients", [{"patient_id": r["patient_id"]} for r in records]),
         *[("/api/patients/" + r["patient_id"], r) for r in records],
+        *[("/api/patients/" + r["patient_id"] + "/evidence", []) for r in records],
     ]:
         page.route(app.origin + path, partial(fulfill_projection, payload))
-    goto(app, "/a")
-    expect(page.locator("[data-record]")).to_have_text(
+    goto(app, "/a?filter=all")
+    expect(page.locator(".patient-row .who2 b")).to_have_text(
         ["Danger Patient", "Older Patient", "Newer Patient", "Quiet Patient"]
     )
     expect(page.locator('[data-summary="pending_review"] .tile-clause')).to_have_text(

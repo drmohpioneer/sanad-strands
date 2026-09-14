@@ -76,6 +76,23 @@ class RecordConsent(AccountCommand):
     accept: bool
 
 
+class ReadConsentTerms(AccountCommand):
+    type: Literal["ReadConsentTerms"] = "ReadConsentTerms"
+    claim_id: NonblankStr
+    offer_generation: int
+    callback_hash: NonblankStr
+
+
+class RefreshConsentOffer(AccountCommand):
+    type: Literal["RefreshConsentOffer"] = "RefreshConsentOffer"
+    claim_id: NonblankStr
+
+
+class ConsentContactUnavailable(AccountCommand):
+    type: Literal["ConsentContactUnavailable"] = "ConsentContactUnavailable"
+    claim_id: NonblankStr
+
+
 class ConfirmPatientClaim(AccountCommand):
     type: Literal["ConfirmPatientClaim"] = "ConfirmPatientClaim"
     claim_id: NonblankStr

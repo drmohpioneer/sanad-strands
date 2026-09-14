@@ -28,6 +28,7 @@ PARAMETERS = {
     "bot-username": ("String", "SANAD_TELEGRAM_BOT_USERNAME"),
     "budget-email": ("String", "SANAD_BUDGET_EMAIL"),
     "operator-name": ("String", None),
+    "clinic-contact": ("String", None),
 }
 
 

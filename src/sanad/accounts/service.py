@@ -547,6 +547,9 @@ class AccountService:
                 "status": "rejected",
                 "reviewer_id": command.actor.subject,
                 "reviewed_at": now,
+                "decision_reason": command.reason_code
+                if command.reason_code in ("admin_rejected", "unverified")
+                else None,
                 "work_clock": None,
             }
         )
@@ -667,6 +670,14 @@ class AccountService:
             for row in rows:
                 application = from_record(row, Application)
                 doctor = self.doctor(application.doctor_id) if application.doctor_id else None
+                coverage_row = (
+                    self.store.get(self.scope, "operational_issue", "coverage:" + doctor.id)
+                    if doctor and doctor.status == "suspended"
+                    else None
+                )
+                coverage = from_record(coverage_row, OperationalIssue) if coverage_row else None
+                if coverage and coverage.status != "open":
+                    coverage = None
                 result.append(
                     {
                         "id": application.id,
@@ -678,6 +689,12 @@ class AccountService:
                         "status": doctor.status if doctor else application.status,
                         "doctor_id": doctor.id if doctor else None,
                         "doctor_version": doctor.version if doctor else None,
+                        "decided_at": application.reviewed_at.isoformat()
+                        if application.reviewed_at
+                        else None,
+                        "decision_reason": application.decision_reason,
+                        "suspended_at": coverage.updated_at.isoformat() if coverage else None,
+                        "suspension_reason": coverage.reason if coverage else None,
                     }
                 )
             if cursor is None:

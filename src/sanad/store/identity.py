@@ -51,6 +51,9 @@ WRITE_SETS = {
     "IssueInvitation": {"invitation", "token_head", "patient", "patient_claim"},
     "ClaimInvitation": {"invitation", "patient_claim", "claim_callback"},
     "RecordConsent": {"consent", "patient_claim", "claim_callback"},
+    "RefreshConsentOffer": {"patient_claim", "claim_callback"},
+    "ReadConsentTerms": set(),
+    "ConsentContactUnavailable": set(),
     "ConfirmPatientClaim": {
         "mission",
         "review",
@@ -93,6 +96,9 @@ def identity_guards(
     if kind not in DOCTOR_COMMANDS | {
         "ClaimInvitation",
         "RecordConsent",
+        "RefreshConsentOffer",
+        "ReadConsentTerms",
+        "ConsentContactUnavailable",
         "IssueAdminLogin",
         "RevokeAdminSessions",
         "IssuePatientLogin",
@@ -171,6 +177,69 @@ def identity_guards(
             or auth.principal.verified_roles
         ):
             return None
+    if kind in {"ReadConsentTerms", "RefreshConsentOffer", "ConsentContactUnavailable"}:
+        target = store.get(scope, "patient_claim", str(command.payload.get("claim_id", "")))
+        if target is None:
+            return None
+        pending = from_record(target, PatientClaim)
+        inv_row = store.get(scope, "invitation", pending.invitation_id)
+        patient_scope = PatientScope(doctor_id=pending.doctor_id, patient_id=pending.patient_id)
+        patient_row = store.get(patient_scope, "patient", pending.patient_id)
+        doctor_row = store.get(
+            TenantScope(doctor_id=pending.doctor_id), "doctor", pending.doctor_id
+        )
+        if (
+            pending.state != "pending"
+            or pending.consent_id is not None
+            or pending.candidate_subject != actor.subject
+            or pending.private_chat_id != actor.subject
+            or pending.review_at <= now
+            or auth.binding is not None
+            or auth.principal.verified_roles
+            or actor.bot_id != scope.bot_id
+            or actor.user_id != actor.subject
+            or inv_row is None
+            or inv_row.body.get("state") != "claimed"
+            or inv_row.body.get("pending_claim_id") != pending.id
+            or patient_row is None
+            or patient_row.body.get("invitation_id") != pending.invitation_id
+            or doctor_row is None
+            or doctor_row.body.get("status") != "approved"
+            or doctor_row.body.get("telegram_bot_id") != scope.bot_id
+        ):
+            return None
+        checks.extend(Check(r.key, r.version) for r in (target, inv_row, patient_row, doctor_row))
+        checks.append(Check(keys.subject(scope.bot_id, actor.subject), None))
+        expiries.append(pending.review_at)
+        if kind == "ReadConsentTerms":
+            token_row = store.get(
+                scope, "claim_callback", str(command.payload.get("callback_hash", ""))
+            )
+            if token_row is None:
+                return None
+            token = from_record(token_row, ClaimCallback)
+            if (
+                token.action != "read_terms"
+                or token.actor_subject != actor.subject
+                or token.claim_id != pending.id
+                or token.consumed_at
+                or token.expires_at <= now
+                or token.offer_generation != pending.offer_generation
+                or command.payload.get("offer_generation") != pending.offer_generation
+                or not pending.consent_offers
+                or len(request.intents) != 1
+            ):
+                return None
+            intent = request.intents[0]
+            payload = intent.body.get("payload")
+            if (
+                intent.body.get("template_id") != "consent_terms"
+                or not isinstance(payload, dict)
+                or payload.get("text") != pending.consent_offers[-1].full_text
+            ):
+                return None
+            checks.append(Check(token_row.key, token_row.version))
+            expiries.append(token.expires_at)
     admin_exchange = kind == "ExchangeLogin" and any(
         r.entity_type == "admin_login" and r.body.get("state") == "consumed" for r in request.puts
     )
@@ -366,10 +435,69 @@ def identity_guards(
                 or claim.candidate_subject != actor.subject
             ):
                 return None
-            if kind in {"RecordConsent", "ConfirmPatientClaim", "RejectClaim"}:
+            if old:
+                assert old_row is not None
+                old_claim = from_record(old_row, PatientClaim)
+                if kind == "RefreshConsentOffer":
+                    if (
+                        old_claim.state != "pending"
+                        or old_claim.consent_id is not None
+                        or claim.offer_generation != old_claim.offer_generation + 1
+                        or claim.consent_offers[:-1] != old_claim.consent_offers
+                        or len(claim.consent_offers) != len(old_claim.consent_offers) + 1
+                        or claim.consent_offers[-1].generation != claim.offer_generation
+                        or claim.model_dump(
+                            exclude={
+                                "version",
+                                "updated_at",
+                                "consent_policy",
+                                "offer_generation",
+                                "consent_offers",
+                            }
+                        )
+                        != old_claim.model_dump(
+                            exclude={
+                                "version",
+                                "updated_at",
+                                "consent_policy",
+                                "offer_generation",
+                                "consent_offers",
+                            }
+                        )
+                    ):
+                        return None
+                elif (
+                    claim.consent_offers != old_claim.consent_offers
+                    or claim.offer_generation != old_claim.offer_generation
+                    or claim.consent_policy != old_claim.consent_policy
+                ):
+                    return None
+            if kind in {
+                "RecordConsent",
+                "RefreshConsentOffer",
+                "ConfirmPatientClaim",
+                "RejectClaim",
+            }:
                 if claim.review_at <= now:
                     return None
                 expiries.append(claim.review_at)
+        if row.entity_type == "consent" and kind == "RecordConsent":
+            consent = from_record(row, Consent)
+            pending_row = next((r for r in request.puts if r.entity_type == "patient_claim"), None)
+            if pending_row is None:
+                return None
+            pending = from_record(pending_row, PatientClaim)
+            if not pending.consent_offers:
+                return None
+            offer = pending.consent_offers[-1]
+            if (
+                consent.offer_claim_id != pending.id
+                or consent.offer_generation != offer.generation
+                or consent.policy_digest != offer.digest
+                or consent.policy_text_version != offer.text_version
+                or consent.language != offer.language
+            ):
+                return None
         if row.entity_type == "claim_callback":
             callback = from_record(row, ClaimCallback)
             if old:
@@ -392,6 +520,8 @@ def identity_guards(
                 if target_row is None:
                     return None
                 callback_claim = from_record(target_row, PatientClaim)
+                if callback.offer_generation != callback_claim.offer_generation:
+                    return None
                 for ref in callback.expected_versions:
                     target_scope = PatientScope(
                         doctor_id=callback_claim.doctor_id, patient_id=callback_claim.patient_id

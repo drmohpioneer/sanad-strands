@@ -194,7 +194,8 @@ class InvitationWork(ScribeRecord):
     scope: TenantScope
     patient_id: NonblankStr
     proposal_id: NonblankStr
-    status: Literal["pending", "issued", "suppressed"] = "pending"
+    generation: int = 0
+    status: Literal["pending", "issued", "suppressed", "superseded"] = "pending"
     work_clock: OperationalClock | None
 
     @model_validator(mode="after")

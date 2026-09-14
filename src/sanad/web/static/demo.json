@@ -1,8 +1,8 @@
 [
   {
     "patient_id": "demo-000",
-    "display_name": "Ahmed Abdelrahman Mostafa Alexander Hamilton Longname",
-    "age": null,
+    "display_name": "Nadia Farouk",
+    "age": "61",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
     "last_activity_at": "2026-09-12T07:00:00Z",
@@ -27,17 +27,95 @@
       }
     ],
     "review_history": [],
-    "orders": [],
+    "orders": [
+      {
+        "id": "demo-order-nadia",
+        "status": "active",
+        "current_version": {
+          "id": "demo-order-nadia-v1",
+          "version": 1,
+          "type": "medication",
+          "structured_instruction": {
+            "drug": "Amlodipine",
+            "dose": "5 mg",
+            "frequency": "Once daily"
+          },
+          "provenance": {
+            "received_at": "2026-09-09T08:00:00Z"
+          }
+        },
+        "history": []
+      }
+    ],
     "facts": [],
-    "missions": [],
+    "missions": [
+      {
+        "id": "demo-monitor-nadia",
+        "title": "Send your blood pressure reading",
+        "state": "open",
+        "due_at": "2026-09-19T07:00:00Z",
+        "review_status": "not_required",
+        "details": {
+          "kind": "MONITOR",
+          "metric": "blood_pressure",
+          "unit": "mmHg",
+          "slots": [
+            "2026-09-11T07:00:00Z",
+            "2026-09-12T07:00:00Z"
+          ],
+          "readings": [
+            {
+              "slot": 0,
+              "value": "141/88",
+              "observed_at": "2026-09-11T07:00:00Z",
+              "received_at": "2026-09-11T07:00:00Z"
+            },
+            {
+              "slot": 1,
+              "value": "158/96",
+              "observed_at": "2026-09-12T07:00:00Z",
+              "received_at": "2026-09-12T07:00:00Z"
+            }
+          ]
+        }
+      },
+      {
+        "id": "demo-request-42",
+        "title": "Send your morning blood pressure reading",
+        "state": "open",
+        "due_at": "2026-09-12T20:00:00Z",
+        "review_status": "not_required",
+        "details": {
+          "kind": "TASK"
+        }
+      }
+    ],
     "followups": [],
-    "evidence": [],
-    "corrections": []
+    "evidence": [
+      {
+        "id": "demo-document-nadia",
+        "evidence_id": "demo-document-nadia",
+        "category": "lab_result",
+        "association_state": "accepted",
+        "provenance": {
+          "received_at": "2026-09-10T06:00:00Z"
+        },
+        "extracted_values": [
+          {
+            "name": "Potassium",
+            "value": "4.2",
+            "unit": "mmol/L"
+          }
+        ]
+      }
+    ],
+    "corrections": [],
+    "held_medications": []
   },
   {
     "patient_id": "demo-001",
-    "display_name": "Ahmed Abdelrahman Mostafa Alexander Hamilton Longname Grace",
-    "age": "33",
+    "display_name": "Omar Zaki",
+    "age": "54",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
     "last_activity_at": "2026-09-12T07:00:00Z",
@@ -49,12 +127,12 @@
     ],
     "reviews": [
       {
-        "id": "demo-review-1",
+        "id": "demo-review-25",
         "patient_id": "demo-001",
-        "state": "acknowledged",
-        "review_kind": "incident_response",
-        "source_type": "patient",
-        "source_id": "demo-source-1",
+        "state": "open",
+        "review_kind": "unmet_objective",
+        "source_type": "mission",
+        "source_id": "demo-source-25",
         "source_version": 1,
         "last_material_change_version": 1,
         "review_at": "2026-09-11T08:00:00Z",
@@ -64,15 +142,38 @@
     "review_history": [],
     "orders": [],
     "facts": [],
-    "missions": [],
+    "missions": [
+      {
+        "id": "demo-request-40",
+        "title": "Send your morning blood pressure reading",
+        "state": "open",
+        "due_at": "2026-09-09T06:00:00Z",
+        "review_status": "not_required",
+        "details": {
+          "kind": "TASK"
+        }
+      },
+      {
+        "id": "demo-source-25",
+        "title": "Send the blood test result",
+        "state": "closed_unfulfilled",
+        "due_at": "2026-09-10T06:00:00Z",
+        "created_at": "2026-09-09T08:00:00Z",
+        "review_status": "pending",
+        "details": {
+          "kind": "TASK"
+        }
+      }
+    ],
     "followups": [],
     "evidence": [],
-    "corrections": []
+    "corrections": [],
+    "held_medications": []
   },
   {
     "patient_id": "demo-002",
-    "display_name": "Ahmed Abdelrahman Mostafa Alexander Hamilton Longname Robin",
-    "age": "34",
+    "display_name": "Hassan Gamal",
+    "age": "58",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
     "last_activity_at": "2026-09-12T07:00:00Z",
@@ -84,12 +185,12 @@
     ],
     "reviews": [
       {
-        "id": "demo-review-2",
+        "id": "demo-review-20",
         "patient_id": "demo-002",
         "state": "open",
-        "review_kind": "incident_response",
-        "source_type": "patient",
-        "source_id": "demo-source-2",
+        "review_kind": "correction_disposition",
+        "source_type": "correction",
+        "source_id": "demo-source-20",
         "source_version": 1,
         "last_material_change_version": 2,
         "review_at": "2026-09-11T08:00:00Z",
@@ -102,12 +203,24 @@
     "missions": [],
     "followups": [],
     "evidence": [],
-    "corrections": []
+    "corrections": [
+      {
+        "id": "demo-source-20",
+        "created_at": "2026-09-11T08:00:00Z",
+        "before": {
+          "value": "120/80"
+        },
+        "after": {
+          "value": "125/82"
+        }
+      }
+    ],
+    "held_medications": []
   },
   {
     "patient_id": "demo-003",
-    "display_name": "Ahmed Abdelrahman Mostafa Alexander Hamilton Longname Taylor",
-    "age": "35",
+    "display_name": "Layla Shafik",
+    "age": "47",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
     "last_activity_at": "2026-09-12T07:00:00Z",
@@ -119,12 +232,24 @@
     ],
     "reviews": [
       {
-        "id": "demo-review-3",
+        "id": "demo-review-15",
         "patient_id": "demo-003",
         "state": "open",
-        "review_kind": "incident_response",
-        "source_type": "patient",
-        "source_id": "demo-source-3",
+        "review_kind": "question_answer",
+        "source_type": "mission",
+        "source_id": "demo-source-15",
+        "source_version": 1,
+        "last_material_change_version": 1,
+        "review_at": "2026-09-11T08:00:00Z",
+        "first_notice_at": "2026-09-10T08:00:00Z"
+      },
+      {
+        "id": "demo-review-10",
+        "patient_id": "demo-003",
+        "state": "open",
+        "review_kind": "evidence_association",
+        "source_type": "evidence",
+        "source_id": "demo-source-10",
         "source_version": 1,
         "last_material_change_version": 1,
         "review_at": "2026-09-11T08:00:00Z",
@@ -134,15 +259,45 @@
     "review_history": [],
     "orders": [],
     "facts": [],
-    "missions": [],
+    "missions": [
+      {
+        "id": "demo-source-15",
+        "title": "Can I take my medicine with breakfast?",
+        "state": "fulfilled",
+        "due_at": "2026-09-10T06:00:00Z",
+        "created_at": "2026-09-09T08:00:00Z",
+        "review_status": "pending",
+        "details": {
+          "kind": "QUESTION"
+        }
+      }
+    ],
     "followups": [],
-    "evidence": [],
-    "corrections": []
+    "evidence": [
+      {
+        "id": "demo-source-10",
+        "evidence_id": "demo-source-10",
+        "category": "lab_result",
+        "association_state": "candidate",
+        "provenance": {
+          "received_at": "2026-09-10T06:00:00Z"
+        },
+        "extracted_values": [
+          {
+            "name": "Potassium",
+            "value": "4.2",
+            "unit": "mmol/L"
+          }
+        ]
+      }
+    ],
+    "corrections": [],
+    "held_medications": []
   },
   {
     "patient_id": "demo-004",
-    "display_name": "Ahmed Abdelrahman Mostafa Alexander Hamilton Longname Morgan",
-    "age": "36",
+    "display_name": "Karim Adel",
+    "age": "66",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
     "last_activity_at": "2026-09-12T07:00:00Z",
@@ -152,32 +307,35 @@
         "confirmed_at": "2026-09-09T08:00:00Z"
       }
     ],
-    "reviews": [
+    "reviews": [],
+    "review_history": [
       {
-        "id": "demo-review-4",
-        "patient_id": "demo-004",
-        "state": "open",
-        "review_kind": "incident_response",
-        "source_type": "patient",
-        "source_id": "demo-source-4",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-11T08:00:00Z",
-        "first_notice_at": "2026-09-10T08:00:00Z"
+        "id": "demo-reviewed",
+        "review_kind": "result_review",
+        "state": "resolved",
+        "resolved_at": "2026-09-11T08:00:00Z",
+        "resolved_reason": "doctor_reviewed"
       }
     ],
-    "review_history": [],
     "orders": [],
     "facts": [],
     "missions": [],
     "followups": [],
     "evidence": [],
-    "corrections": []
+    "corrections": [],
+    "held_medications": [
+      {
+        "order_id": "demo-held",
+        "drug": "Aspirin",
+        "reason": "bruising reported",
+        "since": "2026-09-11T08:00:00Z"
+      }
+    ]
   },
   {
     "patient_id": "demo-005",
-    "display_name": "Mariam Hassan",
-    "age": "37",
+    "display_name": "Mona Rashad",
+    "age": "39",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
     "last_activity_at": "2026-09-12T07:00:00Z",
@@ -205,7 +363,14 @@
     "orders": [],
     "facts": [],
     "missions": [],
-    "followups": [],
+    "followups": [
+      {
+        "id": "demo-followup-33",
+        "kind": "MEDICATION_DAY3",
+        "state": "overdue",
+        "due_at": "2026-09-10T06:00:00Z"
+      }
+    ],
     "evidence": [
       {
         "id": "demo-source-5",
@@ -224,12 +389,13 @@
         ]
       }
     ],
-    "corrections": []
+    "corrections": [],
+    "held_medications": []
   },
   {
     "patient_id": "demo-006",
-    "display_name": "Mariam Hassan Grace",
-    "age": "38",
+    "display_name": "Tarek Sabry",
+    "age": "52",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
     "last_activity_at": "2026-09-12T07:00:00Z",
@@ -276,14 +442,15 @@
         ]
       }
     ],
-    "corrections": []
+    "corrections": [],
+    "held_medications": []
   },
   {
     "patient_id": "demo-007",
-    "display_name": "Mariam Hassan Robin",
-    "age": "39",
+    "display_name": "Hana Moussa",
+    "age": "44",
     "timezone": "Africa/Cairo",
-    "contact_status": "active",
+    "contact_status": "paused",
     "last_activity_at": "2026-09-12T07:00:00Z",
     "bindings": [
       {
@@ -291,51 +458,22 @@
         "confirmed_at": "2026-09-09T08:00:00Z"
       }
     ],
-    "reviews": [
-      {
-        "id": "demo-review-7",
-        "patient_id": "demo-007",
-        "state": "open",
-        "review_kind": "result_review",
-        "source_type": "evidence",
-        "source_id": "demo-source-7",
-        "source_version": 1,
-        "last_material_change_version": 2,
-        "review_at": "2026-09-11T08:00:00Z",
-        "first_notice_at": "2026-09-10T08:00:00Z"
-      }
-    ],
+    "reviews": [],
     "review_history": [],
     "orders": [],
     "facts": [],
     "missions": [],
     "followups": [],
-    "evidence": [
-      {
-        "id": "demo-source-7",
-        "evidence_id": "demo-source-7",
-        "category": "lab_result",
-        "association_state": "accepted",
-        "provenance": {
-          "received_at": "2026-09-10T06:00:00Z"
-        },
-        "extracted_values": [
-          {
-            "name": "Potassium",
-            "value": "4.2",
-            "unit": "mmol/L"
-          }
-        ]
-      }
-    ],
-    "corrections": []
+    "evidence": [],
+    "corrections": [],
+    "held_medications": []
   },
   {
     "patient_id": "demo-008",
-    "display_name": "Mariam Hassan Taylor",
-    "age": "40",
+    "display_name": "Youssef Bakr",
+    "age": "63",
     "timezone": "Africa/Cairo",
-    "contact_status": "active",
+    "contact_status": "opted_out",
     "last_activity_at": "2026-09-12T07:00:00Z",
     "bindings": [
       {
@@ -343,51 +481,22 @@
         "confirmed_at": "2026-09-09T08:00:00Z"
       }
     ],
-    "reviews": [
-      {
-        "id": "demo-review-8",
-        "patient_id": "demo-008",
-        "state": "open",
-        "review_kind": "result_review",
-        "source_type": "evidence",
-        "source_id": "demo-source-8",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-11T08:00:00Z",
-        "first_notice_at": "2026-09-10T08:00:00Z"
-      }
-    ],
+    "reviews": [],
     "review_history": [],
     "orders": [],
     "facts": [],
     "missions": [],
     "followups": [],
-    "evidence": [
-      {
-        "id": "demo-source-8",
-        "evidence_id": "demo-source-8",
-        "category": "lab_result",
-        "association_state": "accepted",
-        "provenance": {
-          "received_at": "2026-09-10T06:00:00Z"
-        },
-        "extracted_values": [
-          {
-            "name": "Potassium",
-            "value": "4.2",
-            "unit": "mmol/L"
-          }
-        ]
-      }
-    ],
-    "corrections": []
+    "evidence": [],
+    "corrections": [],
+    "held_medications": []
   },
   {
     "patient_id": "demo-009",
-    "display_name": "Mariam Hassan Morgan",
+    "display_name": "Rania Fathy",
     "age": "41",
     "timezone": "Africa/Cairo",
-    "contact_status": "active",
+    "contact_status": "unreachable",
     "last_activity_at": "2026-09-12T07:00:00Z",
     "bindings": [
       {
@@ -395,51 +504,22 @@
         "confirmed_at": "2026-09-09T08:00:00Z"
       }
     ],
-    "reviews": [
-      {
-        "id": "demo-review-9",
-        "patient_id": "demo-009",
-        "state": "open",
-        "review_kind": "result_review",
-        "source_type": "evidence",
-        "source_id": "demo-source-9",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-11T08:00:00Z",
-        "first_notice_at": "2026-09-10T08:00:00Z"
-      }
-    ],
+    "reviews": [],
     "review_history": [],
     "orders": [],
     "facts": [],
     "missions": [],
     "followups": [],
-    "evidence": [
-      {
-        "id": "demo-source-9",
-        "evidence_id": "demo-source-9",
-        "category": "lab_result",
-        "association_state": "accepted",
-        "provenance": {
-          "received_at": "2026-09-10T06:00:00Z"
-        },
-        "extracted_values": [
-          {
-            "name": "Potassium",
-            "value": "4.2",
-            "unit": "mmol/L"
-          }
-        ]
-      }
-    ],
-    "corrections": []
+    "evidence": [],
+    "corrections": [],
+    "held_medications": []
   },
   {
     "patient_id": "demo-010",
-    "display_name": "Youssef Abdelaziz",
-    "age": "42",
+    "display_name": "Amr Samy",
+    "age": "57",
     "timezone": "Africa/Cairo",
-    "contact_status": "active",
+    "contact_status": "frozen",
     "last_activity_at": "2026-09-12T07:00:00Z",
     "bindings": [
       {
@@ -447,913 +527,20 @@
         "confirmed_at": "2026-09-09T08:00:00Z"
       }
     ],
-    "reviews": [
-      {
-        "id": "demo-review-10",
-        "patient_id": "demo-010",
-        "state": "open",
-        "review_kind": "evidence_association",
-        "source_type": "evidence",
-        "source_id": "demo-source-10",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-11T08:00:00Z",
-        "first_notice_at": "2026-09-10T08:00:00Z"
-      }
-    ],
+    "reviews": [],
     "review_history": [],
     "orders": [],
     "facts": [],
     "missions": [],
     "followups": [],
-    "evidence": [
-      {
-        "id": "demo-source-10",
-        "evidence_id": "demo-source-10",
-        "category": "lab_result",
-        "association_state": "candidate",
-        "provenance": {
-          "received_at": "2026-09-10T06:00:00Z"
-        },
-        "extracted_values": [
-          {
-            "name": "Potassium",
-            "value": "4.2",
-            "unit": "mmol/L"
-          }
-        ]
-      }
-    ],
-    "corrections": []
+    "evidence": [],
+    "corrections": [],
+    "held_medications": []
   },
   {
     "patient_id": "demo-011",
-    "display_name": "Youssef Abdelaziz Grace",
-    "age": "43",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
-      {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [
-      {
-        "id": "demo-review-11",
-        "patient_id": "demo-011",
-        "state": "acknowledged",
-        "review_kind": "evidence_association",
-        "source_type": "evidence",
-        "source_id": "demo-source-11",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-11T08:00:00Z",
-        "first_notice_at": "2026-09-10T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [],
-    "followups": [],
-    "evidence": [
-      {
-        "id": "demo-source-11",
-        "evidence_id": "demo-source-11",
-        "category": "lab_result",
-        "association_state": "candidate",
-        "provenance": {
-          "received_at": "2026-09-10T06:00:00Z"
-        },
-        "extracted_values": [
-          {
-            "name": "Potassium",
-            "value": "4.2",
-            "unit": "mmol/L"
-          }
-        ]
-      }
-    ],
-    "corrections": []
-  },
-  {
-    "patient_id": "demo-012",
-    "display_name": "Youssef Abdelaziz Robin",
-    "age": "44",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
-      {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [
-      {
-        "id": "demo-review-12",
-        "patient_id": "demo-012",
-        "state": "open",
-        "review_kind": "evidence_association",
-        "source_type": "evidence",
-        "source_id": "demo-source-12",
-        "source_version": 1,
-        "last_material_change_version": 2,
-        "review_at": "2026-09-11T08:00:00Z",
-        "first_notice_at": "2026-09-10T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [],
-    "followups": [],
-    "evidence": [
-      {
-        "id": "demo-source-12",
-        "evidence_id": "demo-source-12",
-        "category": "lab_result",
-        "association_state": "candidate",
-        "provenance": {
-          "received_at": "2026-09-10T06:00:00Z"
-        },
-        "extracted_values": [
-          {
-            "name": "Potassium",
-            "value": "4.2",
-            "unit": "mmol/L"
-          }
-        ]
-      }
-    ],
-    "corrections": []
-  },
-  {
-    "patient_id": "demo-013",
-    "display_name": "Youssef Abdelaziz Taylor",
-    "age": "45",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
-      {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [
-      {
-        "id": "demo-review-13",
-        "patient_id": "demo-013",
-        "state": "open",
-        "review_kind": "evidence_association",
-        "source_type": "evidence",
-        "source_id": "demo-source-13",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-11T08:00:00Z",
-        "first_notice_at": "2026-09-10T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [],
-    "followups": [],
-    "evidence": [
-      {
-        "id": "demo-source-13",
-        "evidence_id": "demo-source-13",
-        "category": "lab_result",
-        "association_state": "candidate",
-        "provenance": {
-          "received_at": "2026-09-10T06:00:00Z"
-        },
-        "extracted_values": [
-          {
-            "name": "Potassium",
-            "value": "4.2",
-            "unit": "mmol/L"
-          }
-        ]
-      }
-    ],
-    "corrections": []
-  },
-  {
-    "patient_id": "demo-014",
-    "display_name": "Youssef Abdelaziz Morgan",
-    "age": "46",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
-      {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [
-      {
-        "id": "demo-review-14",
-        "patient_id": "demo-014",
-        "state": "open",
-        "review_kind": "evidence_association",
-        "source_type": "evidence",
-        "source_id": "demo-source-14",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-11T08:00:00Z",
-        "first_notice_at": "2026-09-10T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [],
-    "followups": [],
-    "evidence": [
-      {
-        "id": "demo-source-14",
-        "evidence_id": "demo-source-14",
-        "category": "lab_result",
-        "association_state": "candidate",
-        "provenance": {
-          "received_at": "2026-09-10T06:00:00Z"
-        },
-        "extracted_values": [
-          {
-            "name": "Potassium",
-            "value": "4.2",
-            "unit": "mmol/L"
-          }
-        ]
-      }
-    ],
-    "corrections": []
-  },
-  {
-    "patient_id": "demo-015",
-    "display_name": "Nour El Din",
-    "age": "47",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
-      {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [
-      {
-        "id": "demo-review-15",
-        "patient_id": "demo-015",
-        "state": "open",
-        "review_kind": "question_answer",
-        "source_type": "mission",
-        "source_id": "demo-source-15",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-11T08:00:00Z",
-        "first_notice_at": "2026-09-10T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-source-15",
-        "title": "Can I take my medicine with breakfast?",
-        "state": "fulfilled",
-        "due_at": "2026-09-10T06:00:00Z",
-        "created_at": "2026-09-09T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "QUESTION"
-        }
-      }
-    ],
-    "followups": [],
-    "evidence": [],
-    "corrections": []
-  },
-  {
-    "patient_id": "demo-016",
-    "display_name": "Nour El Din Grace",
-    "age": "48",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
-      {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [
-      {
-        "id": "demo-review-16",
-        "patient_id": "demo-016",
-        "state": "acknowledged",
-        "review_kind": "question_answer",
-        "source_type": "mission",
-        "source_id": "demo-source-16",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-11T08:00:00Z",
-        "first_notice_at": "2026-09-10T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-source-16",
-        "title": "Can I take my medicine with breakfast?",
-        "state": "fulfilled",
-        "due_at": "2026-09-10T06:00:00Z",
-        "created_at": "2026-09-09T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "QUESTION"
-        }
-      }
-    ],
-    "followups": [],
-    "evidence": [],
-    "corrections": []
-  },
-  {
-    "patient_id": "demo-017",
-    "display_name": "Nour El Din Robin",
-    "age": "49",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
-      {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [
-      {
-        "id": "demo-review-17",
-        "patient_id": "demo-017",
-        "state": "open",
-        "review_kind": "question_answer",
-        "source_type": "mission",
-        "source_id": "demo-source-17",
-        "source_version": 1,
-        "last_material_change_version": 2,
-        "review_at": "2026-09-11T08:00:00Z",
-        "first_notice_at": "2026-09-10T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-source-17",
-        "title": "Can I take my medicine with breakfast?",
-        "state": "fulfilled",
-        "due_at": "2026-09-10T06:00:00Z",
-        "created_at": "2026-09-09T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "QUESTION"
-        }
-      }
-    ],
-    "followups": [],
-    "evidence": [],
-    "corrections": []
-  },
-  {
-    "patient_id": "demo-018",
-    "display_name": "Nour El Din Taylor",
-    "age": "50",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
-      {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [
-      {
-        "id": "demo-review-18",
-        "patient_id": "demo-018",
-        "state": "open",
-        "review_kind": "question_answer",
-        "source_type": "mission",
-        "source_id": "demo-source-18",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-11T08:00:00Z",
-        "first_notice_at": "2026-09-10T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-source-18",
-        "title": "Can I take my medicine with breakfast?",
-        "state": "fulfilled",
-        "due_at": "2026-09-10T06:00:00Z",
-        "created_at": "2026-09-09T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "QUESTION"
-        }
-      }
-    ],
-    "followups": [],
-    "evidence": [],
-    "corrections": []
-  },
-  {
-    "patient_id": "demo-019",
-    "display_name": "Nour El Din Morgan",
-    "age": "51",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
-      {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [
-      {
-        "id": "demo-review-19",
-        "patient_id": "demo-019",
-        "state": "open",
-        "review_kind": "question_answer",
-        "source_type": "mission",
-        "source_id": "demo-source-19",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-11T08:00:00Z",
-        "first_notice_at": "2026-09-10T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-source-19",
-        "title": "Can I take my medicine with breakfast?",
-        "state": "fulfilled",
-        "due_at": "2026-09-10T06:00:00Z",
-        "created_at": "2026-09-09T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "QUESTION"
-        }
-      }
-    ],
-    "followups": [],
-    "evidence": [],
-    "corrections": []
-  },
-  {
-    "patient_id": "demo-020",
-    "display_name": "Salma Mahmoud",
-    "age": "52",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
-      {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [
-      {
-        "id": "demo-review-20",
-        "patient_id": "demo-020",
-        "state": "open",
-        "review_kind": "correction_disposition",
-        "source_type": "correction",
-        "source_id": "demo-source-20",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-11T08:00:00Z",
-        "first_notice_at": "2026-09-10T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [],
-    "followups": [],
-    "evidence": [],
-    "corrections": [
-      {
-        "id": "demo-source-20",
-        "created_at": "2026-09-11T08:00:00Z",
-        "before": {
-          "value": "120/80"
-        },
-        "after": {
-          "value": "125/82"
-        }
-      }
-    ]
-  },
-  {
-    "patient_id": "demo-021",
-    "display_name": "Salma Mahmoud Grace",
-    "age": "53",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
-      {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [
-      {
-        "id": "demo-review-21",
-        "patient_id": "demo-021",
-        "state": "open",
-        "review_kind": "intake_clarification",
-        "source_type": "patient",
-        "source_id": "demo-source-21",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-11T08:00:00Z",
-        "first_notice_at": "2026-09-10T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [],
-    "followups": [],
-    "evidence": [],
-    "corrections": []
-  },
-  {
-    "patient_id": "demo-022",
-    "display_name": "Salma Mahmoud Robin",
-    "age": "54",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
-      {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [
-      {
-        "id": "demo-review-22",
-        "patient_id": "demo-022",
-        "state": "open",
-        "review_kind": "media_failure",
-        "source_type": "patient",
-        "source_id": "demo-source-22",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-11T08:00:00Z",
-        "first_notice_at": "2026-09-10T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [],
-    "followups": [],
-    "evidence": [],
-    "corrections": []
-  },
-  {
-    "patient_id": "demo-023",
-    "display_name": "Salma Mahmoud Taylor",
-    "age": "55",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
-      {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [
-      {
-        "id": "demo-review-23",
-        "patient_id": "demo-023",
-        "state": "open",
-        "review_kind": "binding_review",
-        "source_type": "patient",
-        "source_id": "demo-source-23",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-11T08:00:00Z",
-        "first_notice_at": "2026-09-10T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [],
-    "followups": [],
-    "evidence": [],
-    "corrections": []
-  },
-  {
-    "patient_id": "demo-024",
-    "display_name": "Salma Mahmoud Morgan",
-    "age": "56",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
-      {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [
-      {
-        "id": "demo-review-24",
-        "patient_id": "demo-024",
-        "state": "open",
-        "review_kind": "coverage_review",
-        "source_type": "patient",
-        "source_id": "demo-source-24",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-11T08:00:00Z",
-        "first_notice_at": "2026-09-10T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [],
-    "followups": [],
-    "evidence": [],
-    "corrections": []
-  },
-  {
-    "patient_id": "demo-025",
-    "display_name": "Omar Ibrahim",
-    "age": "57",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
-      {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [
-      {
-        "id": "demo-review-25",
-        "patient_id": "demo-025",
-        "state": "open",
-        "review_kind": "unmet_objective",
-        "source_type": "mission",
-        "source_id": "demo-source-25",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-11T08:00:00Z",
-        "first_notice_at": "2026-09-10T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-source-25",
-        "title": "Send the blood test result",
-        "state": "closed_unfulfilled",
-        "due_at": "2026-09-10T06:00:00Z",
-        "created_at": "2026-09-09T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "TASK"
-        }
-      }
-    ],
-    "followups": [],
-    "evidence": [],
-    "corrections": []
-  },
-  {
-    "patient_id": "demo-026",
-    "display_name": "Omar Ibrahim Grace",
-    "age": "58",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
-      {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [
-      {
-        "id": "demo-review-26",
-        "patient_id": "demo-026",
-        "state": "acknowledged",
-        "review_kind": "unmet_objective",
-        "source_type": "mission",
-        "source_id": "demo-source-26",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-11T08:00:00Z",
-        "first_notice_at": "2026-09-10T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-source-26",
-        "title": "Send the blood test result",
-        "state": "closed_unfulfilled",
-        "due_at": "2026-09-10T06:00:00Z",
-        "created_at": "2026-09-09T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "TASK"
-        }
-      }
-    ],
-    "followups": [],
-    "evidence": [],
-    "corrections": []
-  },
-  {
-    "patient_id": "demo-027",
-    "display_name": "Omar Ibrahim Robin",
-    "age": "59",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
-      {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [
-      {
-        "id": "demo-review-27",
-        "patient_id": "demo-027",
-        "state": "open",
-        "review_kind": "unmet_objective",
-        "source_type": "mission",
-        "source_id": "demo-source-27",
-        "source_version": 1,
-        "last_material_change_version": 2,
-        "review_at": "2026-09-11T08:00:00Z",
-        "first_notice_at": "2026-09-10T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-source-27",
-        "title": "Send the blood test result",
-        "state": "closed_unfulfilled",
-        "due_at": "2026-09-10T06:00:00Z",
-        "created_at": "2026-09-09T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "TASK"
-        }
-      }
-    ],
-    "followups": [],
-    "evidence": [],
-    "corrections": []
-  },
-  {
-    "patient_id": "demo-028",
-    "display_name": "Omar Ibrahim Taylor",
-    "age": "60",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
-      {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [
-      {
-        "id": "demo-review-28",
-        "patient_id": "demo-028",
-        "state": "open",
-        "review_kind": "unmet_objective",
-        "source_type": "mission",
-        "source_id": "demo-source-28",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-11T08:00:00Z",
-        "first_notice_at": "2026-09-10T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-source-28",
-        "title": "Send the blood test result",
-        "state": "closed_unfulfilled",
-        "due_at": "2026-09-10T06:00:00Z",
-        "created_at": "2026-09-09T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "TASK"
-        }
-      }
-    ],
-    "followups": [],
-    "evidence": [],
-    "corrections": []
-  },
-  {
-    "patient_id": "demo-029",
-    "display_name": "Omar Ibrahim Morgan",
-    "age": "61",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
-      {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [
-      {
-        "id": "demo-review-29",
-        "patient_id": "demo-029",
-        "state": "open",
-        "review_kind": "unmet_objective",
-        "source_type": "mission",
-        "source_id": "demo-source-29",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-11T08:00:00Z",
-        "first_notice_at": "2026-09-10T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-source-29",
-        "title": "Send the blood test result",
-        "state": "closed_unfulfilled",
-        "due_at": "2026-09-10T06:00:00Z",
-        "created_at": "2026-09-09T08:00:00Z",
-        "review_status": "pending",
-        "details": {
-          "kind": "TASK"
-        }
-      }
-    ],
-    "followups": [],
-    "evidence": [],
-    "corrections": []
-  },
-  {
-    "patient_id": "demo-030",
-    "display_name": "Laila Ali",
-    "age": "62",
+    "display_name": "Salma Nabil",
+    "age": "35",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
     "last_activity_at": "2026-09-12T07:00:00Z",
@@ -1374,30 +561,7 @@
         "kind": "MEDICATION_DAY3",
         "state": "awaiting_anchor",
         "due_at": null
-      }
-    ],
-    "evidence": [],
-    "corrections": []
-  },
-  {
-    "patient_id": "demo-031",
-    "display_name": "Laila Ali Grace",
-    "age": "63",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
-      {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [],
-    "followups": [
+      },
       {
         "id": "demo-followup-31",
         "kind": "MEDICATION_DAY3",
@@ -1406,12 +570,13 @@
       }
     ],
     "evidence": [],
-    "corrections": []
+    "corrections": [],
+    "held_medications": []
   },
   {
-    "patient_id": "demo-032",
-    "display_name": "Laila Ali Robin",
-    "age": "64",
+    "patient_id": "demo-012",
+    "display_name": "Mostafa Emad",
+    "age": "60",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
     "last_activity_at": "2026-09-12T07:00:00Z",
@@ -1432,143 +597,22 @@
         "kind": "MEDICATION_DAY3",
         "state": "waiting_response",
         "due_at": "2026-09-15T06:00:00Z"
-      }
-    ],
-    "evidence": [],
-    "corrections": []
-  },
-  {
-    "patient_id": "demo-033",
-    "display_name": "Laila Ali Taylor",
-    "age": "65",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
+      },
       {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [],
-    "followups": [
-      {
-        "id": "demo-followup-33",
-        "kind": "MEDICATION_DAY3",
-        "state": "overdue",
-        "due_at": "2026-09-10T06:00:00Z"
-      }
-    ],
-    "evidence": [],
-    "corrections": []
-  },
-  {
-    "patient_id": "demo-034",
-    "display_name": "Laila Ali Morgan",
-    "age": "66",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
-      {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [],
-    "followups": [
-      {
-        "id": "demo-followup-34",
-        "kind": "MEDICATION_DAY3",
-        "state": "contact_suppressed",
+        "id": "demo-followup-38",
+        "kind": "CLINICAL_CHECKIN",
+        "state": "waiting_response",
         "due_at": "2026-09-15T06:00:00Z"
       }
     ],
     "evidence": [],
-    "corrections": []
+    "corrections": [],
+    "held_medications": []
   },
   {
-    "patient_id": "demo-035",
-    "display_name": "Hassan Mahmoud",
-    "age": "67",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
-      {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [
-      {
-        "id": "demo-review-35",
-        "patient_id": "demo-035",
-        "state": "open",
-        "review_kind": "followup_disposition",
-        "source_type": "patient",
-        "source_id": "demo-source-35",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-11T08:00:00Z",
-        "first_notice_at": "2026-09-10T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [],
-    "followups": [],
-    "evidence": [],
-    "corrections": []
-  },
-  {
-    "patient_id": "demo-036",
-    "display_name": "Hassan Mahmoud Grace",
-    "age": "68",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
-      {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [
-      {
-        "id": "demo-review-36",
-        "patient_id": "demo-036",
-        "state": "open",
-        "review_kind": "delivery_failure",
-        "source_type": "patient",
-        "source_id": "demo-source-36",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-11T08:00:00Z",
-        "first_notice_at": "2026-09-10T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [],
-    "followups": [],
-    "evidence": [],
-    "corrections": []
-  },
-  {
-    "patient_id": "demo-037",
-    "display_name": "Hassan Mahmoud Robin",
-    "age": "69",
+    "patient_id": "demo-013",
+    "display_name": "Hoda Kamal",
+    "age": "49",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
     "last_activity_at": "2026-09-12T07:00:00Z",
@@ -1589,244 +633,22 @@
         "kind": "CLINICAL_CHECKIN",
         "state": "scheduled",
         "due_at": "2026-09-15T06:00:00Z"
-      }
-    ],
-    "evidence": [],
-    "corrections": []
-  },
-  {
-    "patient_id": "demo-038",
-    "display_name": "Hassan Mahmoud Taylor",
-    "age": "70",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
+      },
       {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [],
-    "followups": [
-      {
-        "id": "demo-followup-38",
-        "kind": "CLINICAL_CHECKIN",
-        "state": "waiting_response",
+        "id": "demo-followup-34",
+        "kind": "MEDICATION_DAY3",
+        "state": "contact_suppressed",
         "due_at": "2026-09-15T06:00:00Z"
       }
     ],
     "evidence": [],
-    "corrections": []
+    "corrections": [],
+    "held_medications": []
   },
   {
-    "patient_id": "demo-039",
-    "display_name": "Hassan Mahmoud Morgan",
-    "age": "71",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
-      {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [
-      {
-        "id": "demo-review-39",
-        "patient_id": "demo-039",
-        "state": "open",
-        "review_kind": "binding_review",
-        "source_type": "patient",
-        "source_id": "demo-source-39",
-        "source_version": 1,
-        "last_material_change_version": 1,
-        "review_at": "2026-09-11T08:00:00Z",
-        "first_notice_at": "2026-09-10T08:00:00Z"
-      }
-    ],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [],
-    "followups": [],
-    "evidence": [],
-    "corrections": []
-  },
-  {
-    "patient_id": "demo-040",
-    "display_name": "Sophie Grant",
-    "age": "72",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
-      {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-40",
-        "title": "Send your morning blood pressure reading",
-        "state": "open",
-        "due_at": "2026-09-10T06:00:00Z",
-        "review_status": "not_required",
-        "details": {
-          "kind": "TASK"
-        }
-      }
-    ],
-    "followups": [],
-    "evidence": [],
-    "corrections": []
-  },
-  {
-    "patient_id": "demo-041",
-    "display_name": "Sophie Grant Grace",
-    "age": "73",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
-      {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-41",
-        "title": "Send your morning blood pressure reading",
-        "state": "open",
-        "due_at": "2026-09-19T06:00:00Z",
-        "review_status": "not_required",
-        "details": {
-          "kind": "TASK"
-        }
-      }
-    ],
-    "followups": [],
-    "evidence": [],
-    "corrections": []
-  },
-  {
-    "patient_id": "demo-042",
-    "display_name": "Sophie Grant Robin",
-    "age": "74",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
-      {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-42",
-        "title": "Send your morning blood pressure reading",
-        "state": "open",
-        "due_at": "2026-09-12T20:00:00Z",
-        "review_status": "not_required",
-        "details": {
-          "kind": "TASK"
-        }
-      }
-    ],
-    "followups": [],
-    "evidence": [],
-    "corrections": []
-  },
-  {
-    "patient_id": "demo-043",
-    "display_name": "Sophie Grant Taylor",
-    "age": "75",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
-      {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-43",
-        "title": "Send your morning blood pressure reading",
-        "state": "open",
-        "due_at": null,
-        "review_status": "not_required",
-        "details": {
-          "kind": "TASK"
-        }
-      }
-    ],
-    "followups": [],
-    "evidence": [],
-    "corrections": []
-  },
-  {
-    "patient_id": "demo-044",
-    "display_name": "Sophie Grant Morgan",
-    "age": "76",
-    "timezone": "Africa/Cairo",
-    "contact_status": "paused",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
-      {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-44",
-        "title": "Send your morning blood pressure reading",
-        "state": "overdue",
-        "due_at": "2026-09-10T06:00:00Z",
-        "review_status": "not_required",
-        "details": {
-          "kind": "TASK"
-        }
-      }
-    ],
-    "followups": [],
-    "evidence": [],
-    "corrections": []
-  },
-  {
-    "patient_id": "demo-045",
-    "display_name": "Oliver Reed",
-    "age": "77",
+    "patient_id": "demo-014",
+    "display_name": "Ahmed Salah",
+    "age": "55",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
     "last_activity_at": "2026-09-12T07:00:00Z",
@@ -1850,30 +672,7 @@
         "details": {
           "kind": "TASK"
         }
-      }
-    ],
-    "followups": [],
-    "evidence": [],
-    "corrections": []
-  },
-  {
-    "patient_id": "demo-046",
-    "display_name": "Oliver Reed Grace",
-    "age": "78",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
-      {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [
+      },
       {
         "id": "demo-request-46",
         "title": "Send your morning blood pressure reading",
@@ -1887,12 +686,13 @@
     ],
     "followups": [],
     "evidence": [],
-    "corrections": []
+    "corrections": [],
+    "held_medications": []
   },
   {
-    "patient_id": "demo-047",
-    "display_name": "Oliver Reed Robin",
-    "age": "79",
+    "patient_id": "demo-015",
+    "display_name": "Dalia Fouad",
+    "age": "38",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
     "last_activity_at": "2026-09-12T07:00:00Z",
@@ -1916,25 +716,7 @@
         "details": {
           "kind": "TASK"
         }
-      }
-    ],
-    "followups": [],
-    "evidence": [],
-    "corrections": []
-  },
-  {
-    "patient_id": "demo-048",
-    "display_name": "Oliver Reed Taylor",
-    "age": "80",
-    "timezone": "Africa/Cairo",
-    "contact_status": "awaiting_link",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [],
-    "reviews": [],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [
+      },
       {
         "id": "demo-request-48",
         "title": "Send your morning blood pressure reading",
@@ -1948,12 +730,13 @@
     ],
     "followups": [],
     "evidence": [],
-    "corrections": []
+    "corrections": [],
+    "held_medications": []
   },
   {
-    "patient_id": "demo-049",
-    "display_name": "Oliver Reed Morgan",
-    "age": "32",
+    "patient_id": "demo-016",
+    "display_name": "Sherif Younis",
+    "age": "64",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
     "last_activity_at": "2026-09-12T07:00:00Z",
@@ -1977,178 +760,7 @@
         "details": {
           "kind": "TASK"
         }
-      }
-    ],
-    "followups": [],
-    "evidence": [],
-    "corrections": []
-  },
-  {
-    "patient_id": "demo-050",
-    "display_name": "Amelia Brooks",
-    "age": "33",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
-      {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [],
-    "review_history": [
-      {
-        "id": "demo-reviewed",
-        "review_kind": "result_review",
-        "state": "resolved",
-        "resolved_at": "2026-09-11T08:00:00Z",
-        "resolved_reason": "doctor_reviewed"
-      }
-    ],
-    "orders": [],
-    "facts": [],
-    "missions": [],
-    "followups": [],
-    "evidence": [],
-    "corrections": []
-  },
-  {
-    "patient_id": "demo-051",
-    "display_name": "Amelia Brooks Grace",
-    "age": "34",
-    "timezone": "Africa/Cairo",
-    "contact_status": "awaiting_link",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
-      {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [],
-    "followups": [],
-    "evidence": [],
-    "corrections": []
-  },
-  {
-    "patient_id": "demo-052",
-    "display_name": "Amelia Brooks Robin",
-    "age": "35",
-    "timezone": "Africa/Cairo",
-    "contact_status": "paused",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
-      {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [],
-    "followups": [],
-    "evidence": [],
-    "corrections": []
-  },
-  {
-    "patient_id": "demo-053",
-    "display_name": "Amelia Brooks Taylor",
-    "age": "36",
-    "timezone": "Africa/Cairo",
-    "contact_status": "opted_out",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
-      {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [],
-    "followups": [],
-    "evidence": [],
-    "corrections": []
-  },
-  {
-    "patient_id": "demo-054",
-    "display_name": "Amelia Brooks Morgan",
-    "age": "37",
-    "timezone": "Africa/Cairo",
-    "contact_status": "unreachable",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
-      {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [],
-    "followups": [],
-    "evidence": [],
-    "corrections": []
-  },
-  {
-    "patient_id": "demo-055",
-    "display_name": "James Bennett",
-    "age": "38",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
-      {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [],
-    "followups": [],
-    "evidence": [],
-    "corrections": [],
-    "held_medications": [
-      {
-        "order_id": "demo-held",
-        "drug": "Aspirin",
-        "reason": "bruising reported",
-        "since": "2026-09-11T08:00:00Z"
-      }
-    ]
-  },
-  {
-    "patient_id": "demo-056",
-    "display_name": "James Bennett Grace",
-    "age": "39",
-    "timezone": "Africa/Cairo",
-    "contact_status": "active",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
-      {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [
+      },
       {
         "id": "demo-request-56",
         "title": "Send your morning blood pressure reading",
@@ -2163,12 +775,13 @@
     ],
     "followups": [],
     "evidence": [],
-    "corrections": []
+    "corrections": [],
+    "held_medications": []
   },
   {
-    "patient_id": "demo-057",
-    "display_name": "James Bennett Robin",
-    "age": "40",
+    "patient_id": "demo-017",
+    "display_name": "Basma Ashraf",
+    "age": "46",
     "timezone": "Africa/Cairo",
     "contact_status": "active",
     "last_activity_at": "2026-09-12T07:00:00Z",
@@ -2192,57 +805,12 @@
         "details": {
           "kind": "TASK"
         }
-      }
-    ],
-    "followups": [],
-    "evidence": [],
-    "corrections": []
-  },
-  {
-    "patient_id": "demo-058",
-    "display_name": "James Bennett Taylor",
-    "age": "41",
-    "timezone": "Africa/Cairo",
-    "contact_status": "frozen",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
+      },
       {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [],
-    "followups": [],
-    "evidence": [],
-    "corrections": []
-  },
-  {
-    "patient_id": "demo-059",
-    "display_name": "James Bennett Morgan",
-    "age": "42",
-    "timezone": "Africa/Cairo",
-    "contact_status": "opted_out",
-    "last_activity_at": "2026-09-12T07:00:00Z",
-    "bindings": [
-      {
-        "status": "active",
-        "confirmed_at": "2026-09-09T08:00:00Z"
-      }
-    ],
-    "reviews": [],
-    "review_history": [],
-    "orders": [],
-    "facts": [],
-    "missions": [
-      {
-        "id": "demo-request-59",
+        "id": "demo-request-43",
         "title": "Send your morning blood pressure reading",
-        "state": "overdue",
-        "due_at": "2026-09-10T06:00:00Z",
+        "state": "open",
+        "due_at": null,
         "review_status": "not_required",
         "details": {
           "kind": "TASK"
@@ -2251,6 +819,7 @@
     ],
     "followups": [],
     "evidence": [],
-    "corrections": []
+    "corrections": [],
+    "held_medications": []
   }
 ]

@@ -177,7 +177,7 @@ def test_demo_does_not_read_store_or_open_session(
         assert response.status_code == 200
         assert "set-cookie" not in response.headers
         data = client.get("/assets/demo.json").json()
-        assert len(data) >= 60
+        assert len(data) == 18
         assert all(p["patient_id"].startswith("demo-") for p in data)
     script = Path("src/sanad/web/static/browser.js").read_text()
     assert "credentials:demo?'omit':'same-origin'" in script

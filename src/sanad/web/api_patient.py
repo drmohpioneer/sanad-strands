@@ -17,10 +17,13 @@ from sanad.steward.credential_message import is_credential_message
 from sanad.steward.types import bounded_records as records
 from sanad.store import keys
 from sanad.store.records import (
+    Consent,
     Cursor,
     InboundReceipt,
     OperationalClock,
     OutboundIntent,
+    Patient,
+    PatientClaim,
     StoredRecord,
     WebSession,
     from_record,
@@ -296,6 +299,47 @@ def patient_router(login: LoginService) -> APIRouter:
                 ]
             ).encode()
         ).decode()
+
+    @router.get("/api/patient/agreement")
+    def agreement(
+        request: Request, session: Annotated[WebSession, Depends(guard)]
+    ) -> dict[str, JsonValue]:
+        if request.query_params:
+            raise HTTPException(400)
+        scope = patient_scope(session)
+        row = login.store.get(scope, "patient", scope.patient_id)
+        if row is None:
+            raise HTTPException(401)
+        patient = from_record(row, Patient)
+        row = login.store.get(scope, "consent", patient.consent_id or "")
+        if row is None:
+            raise HTTPException(401)
+        consent = from_record(row, Consent)
+        text = None
+        if consent.offer_claim_id:
+            saved = login.store.get(session.scope, "patient_claim", consent.offer_claim_id)
+            pending = from_record(saved, PatientClaim) if saved else None
+            if (
+                pending
+                and pending.doctor_id == scope.doctor_id
+                and pending.patient_id == scope.patient_id
+                and pending.candidate_subject == session.subject
+            ):
+                offer = next(
+                    (
+                        o
+                        for o in pending.consent_offers
+                        if o.generation == consent.offer_generation
+                        and o.digest == consent.policy_digest
+                    ),
+                    None,
+                )
+                text = offer.full_text if offer else None
+        return {
+            "version": consent.policy_text_version,
+            "accepted_at": consent.accepted_at.isoformat(),
+            "text": text,
+        }
 
     @router.get("/api/patient/uploads")
     def list_uploads(

@@ -207,7 +207,7 @@ def test_wrong_actor_callback_and_one_time_action(enrollment: LoginWorld, action
         pending = world.consent(pending)
     template = "consent_request" if action == "accept" else "claim_awaiting_doctor"
     intended = PATIENT if action == "accept" else APPLICANT
-    token = world.action_token(pending.id, template)
+    token = world.action_token(pending.id, template, 1 if action == "accept" else 0)
     assert world.post(callback(token, "50005", 103)).status_code == 200
     assert world.transport.callback_calls[-1].text == wording.render("claim_refused", "en")
     assert world.post(callback(token, intended, 104)).status_code == 200

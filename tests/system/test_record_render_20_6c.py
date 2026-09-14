@@ -108,9 +108,12 @@ def test_t38_all_record_kinds_render(
         if peer is journey[0]:
             assert len(record["held_medications"]) == 1
             assert record["held_medications"][0]["drug"] == "Aspirin"
-            page.goto(rendered.origin + "/a")
+            page.goto(rendered.origin + "/a?filter=all")
             page.locator('#content[aria-busy="false"]').wait_for()
-            page.locator(f'[data-record][href$="/{peer.patient_scope.patient_id}"]').click()
+            page.locator(
+                f'.patient-row:has(+ .detail a.primary[href$="/{peer.patient_scope.patient_id}"])'
+            ).click()
+            page.locator(".patient-row.open + .detail a.primary").click()
             record_page = page.locator("#content")
             expect(record_page.locator("[data-held-order]")).to_contain_text(
                 "Aspirin is on hold since"

@@ -13,6 +13,7 @@ class WebSettings(_BoundaryValue):
     model_config = ConfigDict(
         frozen=True, extra="forbid", hide_input_in_errors=True, populate_by_name=True
     )
+    clinic_contact: str = Field(default="", alias="SANAD_CLINIC_CONTACT", max_length=160)
     consent_retention: str = Field(
         default="Development environment: synthetic data only, reset at any time.",
         alias="SANAD_CONSENT_RETENTION",
@@ -61,4 +62,6 @@ class WebSettings(_BoundaryValue):
             data[name] = value
         if value := os.environ.get("SANAD_CONSENT_RETENTION"):
             data["SANAD_CONSENT_RETENTION"] = value
+        if value := os.environ.get("SANAD_CLINIC_CONTACT"):
+            data["SANAD_CLINIC_CONTACT"] = value
         return cls.model_validate(data)

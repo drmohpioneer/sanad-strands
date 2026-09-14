@@ -7,7 +7,11 @@
     "applied_at": "2026-09-12",
     "status": "pending",
     "version": 1,
-    "doctor_id": null
+    "doctor_id": null,
+    "decided_at": null,
+    "decision_reason": null,
+    "suspended_at": null,
+    "suspension_reason": null
   },
   {
     "id": "demo-application-2",
@@ -18,7 +22,11 @@
     "status": "approved",
     "version": 1,
     "doctor_id": "demo-doctor-2",
-    "doctor_version": 1
+    "doctor_version": 1,
+    "decided_at": "2026-09-10",
+    "decision_reason": null,
+    "suspended_at": null,
+    "suspension_reason": null
   },
   {
     "id": "demo-application-3",
@@ -29,7 +37,11 @@
     "status": "suspended",
     "version": 1,
     "doctor_id": "demo-doctor-3",
-    "doctor_version": 2
+    "doctor_version": 2,
+    "decided_at": "2026-09-09",
+    "decision_reason": null,
+    "suspended_at": "2026-09-11",
+    "suspension_reason": "coverage"
   },
   {
     "id": "demo-application-4",
@@ -39,6 +51,10 @@
     "applied_at": "2026-09-08",
     "status": "rejected",
     "version": 2,
-    "doctor_id": null
+    "doctor_id": null,
+    "decided_at": "2026-09-08",
+    "decision_reason": "unverified",
+    "suspended_at": null,
+    "suspension_reason": null
   }
 ]

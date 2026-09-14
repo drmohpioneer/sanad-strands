@@ -38,6 +38,15 @@ def account_freshness(
     auth = store.authorize(scope.bot_id, intent.recipient_subject)
     if auth.binding and auth.binding.private_chat_id != intent.recipient_ref:
         return "recipient_authority"
+    if intent.template_id == "consent_terms":
+        for ref in intent.source_versions:
+            row = store.get_account_source(scope, ref)
+            if row is not None and row.entity_type == "patient_claim":
+                pending = from_record(row, PatientClaim)
+                if pending.state == "approved":
+                    return "claim_confirmed"
+                if pending.state != "pending" or pending.review_at <= now:
+                    return "claim_closed"
     if (
         intent.audience == "applicant"
         and auth.binding is not None
@@ -87,7 +96,13 @@ def account_freshness(
                 or claim.private_chat_id != intent.recipient_ref
                 or not (
                     (
-                        intent.template_id in {"consent_request", "consent_recorded_wait_doctor"}
+                        intent.template_id
+                        in {
+                            "consent_request",
+                            "consent_recorded_wait_doctor",
+                            "consent_terms",
+                            "consent_contact_unavailable",
+                        }
                         and claim.state == "pending"
                         and claim.review_at > now
                     )
@@ -174,7 +189,10 @@ def account_freshness(
                 return "recipient_authority"
         else:
             return "source_version"
-        if row.version != ref.version:
+        if row.entity_type == "patient_claim" and intent.template_id == "consent_terms":
+            if from_record(row, PatientClaim).offer_generation != ref.version:
+                return "offer_superseded"
+        elif row.version != ref.version:
             return "source_version"
     if intent.audience == "doctor" and intent.template_id != "doctor_suspended_notice":
         if (

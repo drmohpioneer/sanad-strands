@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from sanad.auth.claim import ClaimService
 from sanad.auth.login import LoginService
 from sanad.domain.language import Audience, effective
+from sanad.presentation.patient_browser import CATALOG
 from sanad.store.records import WebSession
 from sanad.web.pages import admin_home, demo_banner, inline_logo
 from sanad.web.patient_controls import controls
@@ -30,7 +31,8 @@ def patient_content(data: dict[str, object], locale: str) -> str:
         return [r for r in value if isinstance(r, dict)] if isinstance(value, list) else []
 
     def section(title: str, content: str) -> str:
-        return '<section class="section"><h2>' + title + "</h2>" + content + "</section>"
+        classes = "section remind" if title in ("Reminders", "التذكيرات") else "section"
+        return '<section class="' + classes + '"><h2>' + title + "</h2>" + content + "</section>"
 
     orders = "".join(
         '<article class="record-item dose"><span class="pill" aria-hidden="true">'
@@ -151,6 +153,17 @@ def surface(
         if patient_plan is not None
         else "<p>" + ("جار تحميل الصفحة…" if locale == "ar" else "Loading your page…") + "</p>"
     )
+    patient_tabs = ""
+    if audience == "patient":
+        settings = escape(CATALOG["patient_browser.settings"][locale])
+        patient_tabs = (
+            f'<div class="tabs" role="tablist" aria-label="{title}" id="patient-tabs">'
+            f'<button type="button" role="tab" id="patient-tab-care" '
+            f'aria-controls="content" aria-selected="true">{title}</button>'
+            f'<button type="button" role="tab" id="patient-tab-settings" '
+            f'aria-controls="patient-settings" aria-selected="false" tabindex="-1">'
+            f"{settings}</button></div>"
+        )
     return f'''<!doctype html>
 <html lang="{locale}" dir="{direction}">
 <head>
@@ -212,8 +225,10 @@ def surface(
 </div>
 <div id="feedback" role="status" aria-live="polite">
 </div>
+{patient_tabs}
 {'<div class="two">' if audience == "patient" else ""}
-<div id="content" aria-busy="true">
+<div id="content" aria-busy="true"
+{' role="tabpanel" aria-labelledby="patient-tab-care"' if audience == "patient" else ""}>
 {initial}
 </div>
 {controls(locale) if audience == "patient" else ""}

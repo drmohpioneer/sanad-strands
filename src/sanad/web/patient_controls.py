@@ -49,7 +49,8 @@ def controls(locale: str) -> str:
 <div id="patient-uploads">
 </div>
 </section>
-<section class="section remind">
+<section class="section remind" id="patient-settings" role="tabpanel"
+ aria-labelledby="patient-tab-settings">
 <h2>{w("preferences")}</h2>
 <p id="patient-preferences">
 </p>

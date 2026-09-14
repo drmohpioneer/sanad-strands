@@ -201,6 +201,8 @@ def scribe_guards(
         allowed = {"photo_association_work", "intake_draft", "intake_concern"}
     if kind == "PhotoUnreadable":
         allowed = {"intake_draft", "patient_media"}
+    if kind in {"IntakeCreate", "IntakeAction"} and request.command.payload.get("document_final"):
+        allowed |= {"media_work"}
     if any(r.entity_type not in allowed for r in request.puts):
         return None
     for read in request.identity_reads:
@@ -267,6 +269,15 @@ def scribe_guards(
     proposals = [
         from_record(r, Proposal) for r in request.puts if r.entity_type == "scribe_proposal"
     ]
+    for pdf_proposal in proposals:
+        if pdf_proposal.photo and pdf_proposal.photo.document_page_refs:
+            from sanad.media.documents import check_item_size
+            from sanad.store.records import to_record
+
+            try:
+                check_item_size(to_record(pdf_proposal, pdf_proposal.scope))
+            except ValueError:
+                return None
     if kind == "ScribeNameCache":
         from sanad.scribe.policy import DRAFT_SCRIBE_POLICY
 
@@ -451,7 +462,23 @@ def scribe_guards(
                 return None
     if command.work_claim:
         claim = command.work_claim
-        receipt = store.get(claim.record_key.scope, "inbound_receipt", claim.record_key.pk)
+        if command.payload.get("document_final") and kind in {"IntakeCreate", "IntakeAction"}:
+            from sanad.store.records import MediaWork
+
+            parent_row = store.get(
+                claim.record_key.scope, "media_work", claim.record_key.sk.removeprefix("MEDIA#")
+            )
+            if parent_row is None or parent_row.version != claim.version:
+                return None
+            pdf_parent = from_record(parent_row, MediaWork)
+            if (
+                pdf_parent.mime != "application/pdf"
+                or pdf_parent.scope.doctor_id != scope.doctor_id
+            ):
+                return None
+            receipt = store.get(scope, "inbound_receipt", pdf_parent.receipt_id)
+        else:
+            receipt = store.get(claim.record_key.scope, "inbound_receipt", claim.record_key.pk)
         if (
             receipt is None
             or receipt.body.get("source_subject") != doctor.telegram_user_id

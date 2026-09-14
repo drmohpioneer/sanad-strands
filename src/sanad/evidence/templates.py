@@ -5,6 +5,38 @@ from sanad.presentation.context import PresentationContext
 
 OWNER_REVIEW_PENDING = True
 TEXT = {
+    "patient_document_too_many_pages": (
+        "ابعت لحد {max_pages} صفحات لو سمحت، الصفحات اللي فيها النتائج بس.",
+        "Please send up to {max_pages} pages: just the pages with the results.",
+    ),
+    "patient_document_too_large": (
+        "حجم الملف كبير. ابعت ملف أصغر أو صور لصفحات النتائج لو سمحت.",
+        "This file is too large. Please send a smaller file or photos of the result pages.",
+    ),
+    "patient_document_encrypted": (
+        "الملف محمي بكلمة سر. ابعته من غير كلمة سر أو على شكل صور لو سمحت.",
+        "This file is password protected. Please send it without a password or as photos.",
+    ),
+    "patient_document_invalid": (
+        "مش قادرين نفتح الملف. ابعته تاني أو على شكل صور لو سمحت.",
+        "This file could not be opened. Please send it again or as photos.",
+    ),
+    "patient_document_unreadable": (
+        "مش قادرين نقرا الملف. ابعت صور لصفحات النتائج لو سمحت.",
+        "This file could not be read. Please send photos of the result pages.",
+    ),
+    "patient_document_blank": (
+        "الملف باين فاضي. ابعت الصفحات اللي فيها النتائج لو سمحت.",
+        "This file looks empty. Please send the pages with the results.",
+    ),
+    "patient_document_too_detailed": (
+        "شكرًا. دكتورك هيراجع المستند ده.",
+        "Thank you. Your doctor will review this document.",
+    ),
+    "patient_document_word_unsupported": (
+        "لسه مش بنقرا ملفات Word. ابعته PDF أو صور لصفحات النتائج لو سمحت.",
+        "Word files can't be read yet. Please send it as a PDF or as photos of the result pages.",
+    ),
     "doctor_evidence_refused": (
         "مقدرتش أسجل القرار. افتح /evidence وحاول تاني.",
         "This evidence decision could not be recorded. Open /evidence and try again.",

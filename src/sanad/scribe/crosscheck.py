@@ -105,6 +105,12 @@ def two_readers(read: DocumentRead) -> bool:
 
 
 def unreadable_reply(read: DocumentRead, language: str = "ar") -> str:
+    if read.blocked_pages and read.first.failure_reason:
+        from sanad.channels.telegram import wording
+
+        key = "doctor_" + read.first.failure_reason
+        if key in wording.SCRIBE_TEMPLATES:
+            return wording.render(key, language)
     if not two_readers(read):
         return handwriting_reply(language) + "\n" + single_reader_warning(language)
     return handwriting_reply(language) + (
@@ -122,13 +128,15 @@ def render_card(proposal: "Proposal", language: str | None = None) -> tuple[str,
 
 
 def unreadable_read(read: DocumentRead) -> bool:
-    if not two_readers(read):
+    if read.blocked_pages or not two_readers(read):
         return True
     total = max(len(read.first.items), len(read.second.items))
     return total == 0 or agreed_rows(read) < (total + 1) // 2
 
 
 class PhotoReview(_BoundaryValue):
+    document_page_refs: tuple[str, ...] = ()
+    row_pages: tuple[tuple[int, ...], ...] = ()
     reads: DocumentRead
     kind: Literal["prescription", "lab", "other"]
     resolved_fields: tuple[str, ...] = ()

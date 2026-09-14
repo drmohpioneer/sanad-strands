@@ -10,6 +10,7 @@ OWNER_REVIEW_PENDING = True
 class EvidencePolicy:
     association_clarification: timedelta = timedelta(hours=24)
     max_candidates_per_receipt: int = 3
+    # Each PDF counts as one document here; its separate file limit is ten pages.
     evidence_max_pages_per_turn: int = 5
     identity_match_min_tokens: int = 1
     duplicate_window: None = None

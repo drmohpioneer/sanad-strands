@@ -2,7 +2,9 @@
 
 import struct
 import zlib
+from io import BytesIO
 from typing import Literal
+from zipfile import BadZipFile, ZipFile
 
 from sanad.domain.boundaries import _BoundaryValue
 
@@ -11,6 +13,8 @@ MAX_AUDIO_BYTES = 20 * 1024 * 1024
 MAX_DIMENSION = 8000
 MAX_PIXELS = 20_000_000
 MAX_AUDIO_SECONDS = 300.0
+MAX_DOCUMENT_BYTES = 20_000_000
+MAX_DOCUMENT_PAGES = 10
 
 
 class ImageInfo(_BoundaryValue):
@@ -25,6 +29,17 @@ class MediaInvalid(ValueError):
 
 
 def sniff(data: bytes) -> str:
+    if data.startswith(b"%PDF-"):
+        return "pdf"
+    if data.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"):
+        return "doc"
+    if data.startswith(b"PK\x03\x04") and len(data) <= MAX_DOCUMENT_BYTES:
+        try:
+            with ZipFile(BytesIO(data)) as archive:
+                if "word/document.xml" in archive.namelist():
+                    return "docx"
+        except (BadZipFile, ValueError):
+            pass
     if data.startswith(b"\x89PNG\r\n\x1a\n"):
         return "png"
     if data.startswith(b"\xff\xd8\xff"):

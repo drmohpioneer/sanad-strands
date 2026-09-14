@@ -45,6 +45,7 @@ from sanad.store.records import (
     DeliveryResolution,
     Doctor,
     DoctorAuthority,
+    DocumentPageWork,
     DueItem,
     DuePage,
     Duplicate,
@@ -262,6 +263,7 @@ class StoreBase(ABC):
             "incident": "INCIDENT",
             "evidence_annotation": "FACT",
             "media_work": "MEDIA",
+            "document_page_work": "DOCUMENT_PAGE",
         }
         if entity_type in {"mission", "followup", "patient_profile"} and not isinstance(
             scope, PatientScope
@@ -567,6 +569,7 @@ class StoreBase(ABC):
             "evidence_annotation": "FACT#",
             "care_order": "ORDER#",
             "media_work": "MEDIA#",
+            "document_page_work": "DOCUMENT_PAGE#",
         }
         if entity_type not in prefixes:
             return (), None
@@ -1029,7 +1032,15 @@ class StoreBase(ABC):
             patient = self.get(scope, "patient_profile", scope.patient_id)
             if patient is not None:
                 profile = from_record(patient, PatientProfile)
-                if profile.lease_generation > 0 and command.fence is None and not urgent:
+                page_only = bool(request.puts) and all(
+                    r.entity_type == "document_page_work" for r in request.puts
+                )
+                if (
+                    profile.lease_generation > 0
+                    and command.fence is None
+                    and not urgent
+                    and not page_only
+                ):
                     return StaleVersion(conflicts=("patient_fence",))
             checks.append(Check(keys.patient(scope), patient.version if patient else None))
         if command.fence is not None:
@@ -1054,11 +1065,14 @@ class StoreBase(ABC):
             checkpointing = claimed is not None and claimed.entity_type in {
                 "inbound_receipt",
                 "media_work",
+                "document_page_work",
             }
             stored_token = (
                 (
                     from_record(claimed, InboundReceipt).processing_claim
                     if claimed.entity_type == "inbound_receipt"
+                    else from_record(claimed, DocumentPageWork).processing_claim
+                    if claimed.entity_type == "document_page_work"
                     else from_record(claimed, MediaWork).processing_claim
                 )
                 if checkpointing and claimed is not None
@@ -1198,7 +1212,23 @@ class StoreBase(ABC):
             if record.entity_type in {"delivery_attempt", "session_snapshot"}:
                 return Forbidden()  # Their fenced operations own these writes.
             current = self._owned(actual_scope, record.key)
+            if isinstance(model, DocumentPageWork):
+                from sanad.media.documents import page_guards
+
+                page_checks = page_guards(self, request, model, current)
+                if page_checks is None:
+                    return Forbidden()
+                checks.extend(page_checks)
             if isinstance(model, MediaWork):
+                if (
+                    model.mime == "application/pdf"
+                    and model.state == "completed"
+                    and not (
+                        request.command.payload.get("document_claim")
+                        or request.command.payload.get("document_final")
+                    )
+                ):
+                    return Forbidden()
                 if current is None:
                     source = self.get(actual_scope, "inbound_receipt", model.receipt_id)
                     if source is None and isinstance(actual_scope, keys.IntakeScope):
@@ -1237,6 +1267,18 @@ class StoreBase(ABC):
                     delta = stages.index(model.stage) - stages.index(old_media.stage)
                     if old_media.state == "completed" or delta not in {0, 1}:
                         return Forbidden()
+                    if old_media.document_pages:
+                        if len(old_media.document_pages) != len(model.document_pages):
+                            return Forbidden()
+                        for before, after in zip(
+                            old_media.document_pages, model.document_pages, strict=True
+                        ):
+                            if before.model_dump(
+                                exclude={"blob_ref", "byte_hash"}
+                            ) != after.model_dump(exclude={"blob_ref", "byte_hash"}):
+                                return Forbidden()
+                            if before.byte_hash and before != after:
+                                return Forbidden()
                     if old_media.source_blob_ref is not None and any(
                         getattr(old_media, f) != getattr(model, f)
                         for f in ("source_blob_ref", "byte_hash", "mime", "size")
@@ -1651,7 +1693,7 @@ class StoreBase(ABC):
         model = from_record(record, MODELS[record.entity_type])
         previous = (
             model.processing_claim
-            if isinstance(model, (InboundReceipt, MediaWork))
+            if isinstance(model, (InboundReceipt, MediaWork, DocumentPageWork))
             else record.processing_claim
         )
         if previous is not None and previous.expires_at > now:
@@ -1663,7 +1705,7 @@ class StoreBase(ABC):
             expires_at=now + ttl,
             attempt_charged=count_attempt,
         )
-        if isinstance(model, (InboundReceipt, MediaWork)):
+        if isinstance(model, (InboundReceipt, MediaWork, DocumentPageWork)):
             extractor_ready = (
                 start_extraction
                 and isinstance(model, MediaWork)

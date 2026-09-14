@@ -31,8 +31,33 @@ def intake_guards(
     if len(drafts) != 1:
         return None
     draft = drafts[0]
+    if draft.document_page_refs:
+        from sanad.media.documents import check_item_size
+        from sanad.store.records import to_record
+
+        try:
+            check_item_size(to_record(draft, draft.scope))
+        except ValueError:
+            return None
+    for row in request.puts:
+        if row.entity_type == "media_work" and (
+            row.id not in draft.media_work_ids
+            or row.body.get("mime") != "application/pdf"
+            or row.body.get("state") != "completed"
+            or row.body.get("association_ref") != "intake:" + draft.id
+        ):
+            return None
     old_row = store.get(scope, "intake_draft", draft.id)
     checks, expiry = [], now + timedelta(days=1)
+    for pdf_row in request.puts:
+        if pdf_row.entity_type == "media_work":
+            from sanad.media.documents import final_page_checks
+            from sanad.store.records import MediaWork
+
+            page_checks = final_page_checks(store, from_record(pdf_row, MediaWork))
+            if page_checks is None:
+                return None
+            checks.extend(page_checks)
     if kind == "IntakeCreate":
         if old_row or draft.version != 1 or draft.state != "pending" or draft.safety_epoch:
             return None
@@ -41,7 +66,10 @@ def intake_guards(
             if receipt is None or receipt.body.get("source_subject") != actor.subject:
                 return None
             checks.append(Check(receipt.key, receipt.version))
-        if any(r.entity_type != "intake_draft" for r in request.puts) or request.intents:
+        allowed = {"intake_draft"} | (
+            {"media_work"} if request.command.payload.get("document_final") else set()
+        )
+        if any(r.entity_type not in allowed for r in request.puts) or request.intents:
             return None
     else:
         if old_row is None:
@@ -122,7 +150,10 @@ def intake_guards(
                 expiry = min(expiry, token.expires_at)
             if any(
                 r.entity_type
-                not in {"intake_draft", "intake_callback", "scribe_state", "scribe_proposal"}
+                not in (
+                    {"intake_draft", "intake_callback", "scribe_state", "scribe_proposal"}
+                    | ({"media_work"} if request.command.payload.get("document_final") else set())
+                )
                 for r in request.puts
             ):
                 return None

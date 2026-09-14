@@ -35,6 +35,8 @@ from sanad.store.records import (
 if TYPE_CHECKING:
     from sanad.channels.telegram.router import RouteResult
     from sanad.concierge.turn import ConciergeTurn
+    from sanad.media.retrieve import MediaRetriever
+    from sanad.scribe.extract import LabRowCandidate
 
 
 def printed_date(value: str | None) -> date | None:
@@ -74,6 +76,15 @@ class EvidenceTurn:
         patient = from_record(patient_row, Patient)
         retriever.failure_template = "patient_evidence_unreadable"
         retriever.failure_text = templates.render("patient_evidence_unreadable", patient.language)
+        retriever.failure_renderer = lambda reason: (
+            templates.render(
+                "patient_" + reason,
+                patient.language,
+                **({"max_pages": "10"} if reason == "document_too_many_pages" else {}),
+            )
+            if "patient_" + reason in templates.TEXT
+            else retriever.failure_text
+        )
         media = retriever.fetch_telegram_file(
             receipt.provider_media_handle or "", receipt_id=receipt.id
         )
@@ -111,14 +122,64 @@ class EvidenceTurn:
                     or cached.second.provenance.source_observation_id != receipt.id
                 ):
                     return "read_checkpoint_source"
-        if cached:
+        if cached and media.mime != "application/pdf":
             result: DocumentRead | DocumentFailure = cached
-        elif duplicate:
+        elif duplicate and media.mime != "application/pdf":
             result = DocumentRead(
                 first=duplicate.readers[0],
                 second=duplicate.readers[1],
                 disagreements=duplicate.disagreements,
             )
+        elif media.mime == "application/pdf":
+            from sanad.media.documents import DocumentPipeline
+            from sanad.media.limits import MediaInvalid
+
+            source = Provenance(
+                source_observation_id=receipt.id,
+                actor_kind="patient",
+                actor_id=actor.subject,
+                source_kind="document_observation",
+                received_at=receipt.received_at,
+            )
+
+            def screen_page(read: DocumentRead, index: int) -> None:
+                from sanad.evidence.photos import corroborated_values
+
+                screen_values(
+                    self.runtime.urgent,
+                    scope,
+                    corroborated_values(read.model_copy(update={"blocked_pages": (index,)})),
+                    duplicate.observation_id if duplicate else receipt.id,
+                    duplicate.provenance.received_at if duplicate else receipt.received_at,
+                    self.runtime.safety_policy,
+                )
+                self.concierge.checkpoint("document_page_danger_persisted")
+
+            try:
+                result, manifests = DocumentPipeline(
+                    retriever,
+                    receipt,
+                    source,
+                    self.concierge.vision_factory,
+                    kind_hint=kind_hint(caption, associate.open_missions(missions)),
+                    on_page=screen_page,
+                ).run(work)
+            except MediaInvalid as error:
+                return str(error)
+            if isinstance(result, DocumentFailure):
+                from sanad.media.documents import failed_document_read
+
+                result = failed_document_read(result.reason, source, manifests)
+            reference = retriever.media_store.put(
+                scope, result.model_dump_json().encode(), "application/json"
+            )
+            if not retriever.extraction_result(
+                receipt.id, transcript_ref=reference, document_pages=manifests
+            ):
+                return "stale_work"
+            work_row = self.store.get(scope, "media_work", media.work_id)
+            assert work_row
+            work = from_record(work_row, MediaWork)
         else:
             claim = self.store.claim_work(
                 to_record(work, scope).scoped_key(scope),
@@ -187,24 +248,30 @@ class EvidenceTurn:
         ids, hits = screen_values(
             self.runtime.urgent,
             scope,
-            read_values(result),
+            self.pdf_values(result) if media.mime == "application/pdf" else read_values(result),
             duplicate.observation_id if duplicate else receipt.id,
             duplicate.provenance.received_at if duplicate else receipt.received_at,
             self.runtime.safety_policy,
         )
         self.concierge.checkpoint("evidence_danger_persisted")
         if duplicate and duplicate.observation_id != receipt.id:
+            final_fields = self.pdf_finalization(retriever, work)
+            if media.mime == "application/pdf":
+                final_fields["duplicate_evidence_id"] = duplicate.evidence_id
             outcome = self.command(
                 scope,
                 "evidence-duplicate:" + receipt.id,
                 "_EvidenceTurn",
                 action="duplicate",
                 source_receipt_id=receipt.id,
+                **final_fields,
             )
-            if outcome.status == "accepted":
+            if outcome.status == "accepted" and media.mime != "application/pdf":
                 retriever.extraction_result(
                     receipt.id, association_ref="duplicate:" + duplicate.evidence_id
                 )
+            if outcome.status != "accepted" and media.mime == "application/pdf":
+                self.pdf_conflict(retriever, work, final_fields)
             return outcome.status
         id = keys.digest("evidence:" + receipt.id)
         if not self.store.get(scope, "evidence_head", id):
@@ -226,6 +293,9 @@ class EvidenceTurn:
             flags.extend(h.reason for h in hits if h.status == "cannot_judge")
             category = classify(result, caption, associate.open_missions(missions))
             now = self.runtime.clock()
+            from sanad.media.documents import row_page_indices
+
+            row_pages = row_page_indices(self.store, work, result) if work.document_pages else ()
             candidate = Evidence(
                 id=id + ":1",
                 evidence_id=id,
@@ -248,12 +318,27 @@ class EvidenceTurn:
                 if category == "lab_result"
                 else tuple(r.item for r in result.first.items),
                 readers=(result.first, result.second),
+                document_pages=work.document_pages,
+                row_pages=row_pages,
+                blocked_pages=result.blocked_pages,
+                rejection_reason=result.first.failure_reason if work.document_pages else None,
                 disagreements=meaningful_disagreements(result.disagreements),
                 shift_guard_fired=shift_guard(result.first, result.second),
                 provenance=result.first.provenance,
                 flags=tuple(dict.fromkeys(flags)),
                 incident_ids=ids,
             )
+            if row_pages:
+                candidate = candidate.model_copy(
+                    update={
+                        "extracted_values": tuple(
+                            value.model_copy(update={"page_indices": row_pages[i]})
+                            if hasattr(value, "page_indices") and i < len(row_pages)
+                            else value
+                            for i, value in enumerate(candidate.extracted_values)
+                        )
+                    }
+                )
             target, match, plausible = associate.choose(missions, candidate, caption)
             candidate = Evidence.model_validate(
                 candidate.model_dump()
@@ -279,6 +364,7 @@ class EvidenceTurn:
         # A stored second version is a completed association decision, including a
         # pending patient/doctor choice. Its clock/review survives MediaWork completion.
         if head.current_version == 1:
+            final_fields = self.pdf_finalization(retriever, work)
             outcome = self.command(
                 scope,
                 f"evidence:{id}:2",
@@ -286,12 +372,51 @@ class EvidenceTurn:
                 action="evaluate",
                 evidence_id=id,
                 evidence_version=1,
+                **final_fields,
             )
             if outcome.status != "accepted":
+                if media.mime == "application/pdf":
+                    self.pdf_conflict(retriever, work, final_fields)
                 return outcome.status
             self.concierge.checkpoint("evidence_acceptance_persisted")
-        retriever.extraction_result(receipt.id, association_ref="evidence:" + id)
+        if media.mime != "application/pdf":
+            retriever.extraction_result(receipt.id, association_ref="evidence:" + id)
         return "accepted"
+
+    @staticmethod
+    def pdf_values(read: DocumentRead) -> tuple["LabRowCandidate", ...]:
+        from sanad.evidence.photos import corroborated_values
+
+        return corroborated_values(read.model_copy(update={"blocked_pages": (1,)}))
+
+    @staticmethod
+    def pdf_conflict(
+        retriever: "MediaRetriever", work: MediaWork, fields: dict[str, object]
+    ) -> None:
+        from sanad.store.records import Claim
+
+        claim = (
+            Claim.model_validate(fields["document_claim"]) if fields.get("document_claim") else None
+        )
+        retriever._conflict(work.id, "associate", claim.version if claim else work.version, claim)
+
+    def pdf_finalization(self, retriever: "MediaRetriever", work: MediaWork) -> dict[str, object]:
+        if work.mime != "application/pdf":
+            return {}
+        fresh = self.store.get(work.scope, "media_work", work.id)
+        assert fresh
+        claim = self.store.claim_work(
+            fresh.scoped_key(work.scope),
+            fresh.version,
+            "pdf-finalize",
+            self.runtime.clock(),
+            retriever.policy.operations.claim_ttl,
+            count_attempt=False,
+            start_extraction=True,
+        )
+        if claim is None:
+            return {"document_claim": None}
+        return {"document_claim": claim.model_dump(mode="json")}
 
     def patient_action(
         self, receipt: InboundReceipt, actor: Principal, token: PatientAction

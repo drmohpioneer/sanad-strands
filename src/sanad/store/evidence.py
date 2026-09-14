@@ -72,19 +72,56 @@ def guards(store: "StoreBase", request: CommitRequest, now: datetime) -> list["C
             return None
     else:
         return None
+    allowed = ALLOWED | ({"media_work"} if command.payload.get("document_claim") else set())
     if any(
-        r.entity_type not in ALLOWED
+        r.entity_type not in allowed
         or r.doctor_id != scope.doctor_id
         or r.patient_id != scope.patient_id
         for r in request.puts
     ):
         return None
     checks = [Check(doctor.key, doctor.version)]
+    for pdf_row in request.puts:
+        if pdf_row.entity_type == "media_work":
+            if (
+                pdf_row.body.get("mime") != "application/pdf"
+                or pdf_row.body.get("state") != "completed"
+                or not command.work_claim
+                or command.work_claim.record_key.key != pdf_row.key
+                or action not in {"evaluate", "duplicate"}
+            ):
+                return None
+    for pdf_row in request.puts:
+        if pdf_row.entity_type == "media_work":
+            from sanad.media.documents import final_page_checks
+            from sanad.store.records import MediaWork
+
+            if action == "duplicate":
+                original = store.get(
+                    scope, "evidence", str(command.payload.get("duplicate_evidence_id")) + ":1"
+                )
+                if not original or original.body.get("content_hash") != pdf_row.body.get(
+                    "byte_hash"
+                ):
+                    return None
+                checks.append(Check(original.key, original.version))
+            page_checks = final_page_checks(store, from_record(pdf_row, MediaWork))
+            if page_checks is None:
+                return None
+            checks.extend(page_checks)
     versions = [from_record(r, Evidence) for r in request.puts if r.entity_type == "evidence"]
     heads = [from_record(r, EvidenceHead) for r in request.puts if r.entity_type == "evidence_head"]
     if len(versions) > 1 or len(heads) != len(versions):
         return None
     for evidence in versions:
+        if evidence.document_pages:
+            from sanad.media.documents import check_item_size
+            from sanad.store.records import to_record
+
+            try:
+                check_item_size(to_record(evidence, scope))
+            except ValueError:
+                return None
         head = heads[0]
         if (
             head.evidence_id != evidence.evidence_id
@@ -181,7 +218,29 @@ def guards(store: "StoreBase", request: CommitRequest, now: datetime) -> list["C
                 "rejection_reason",
             }
             if old.model_dump(exclude=mutable) != evidence.model_dump(exclude=mutable):
-                return None
+                from sanad.evidence.commit import detailed_pdf_disposition
+
+                # Only the canonical PDF overflow reduction may replace inline reads.
+                # Its page records remain immutable and its parent finishes atomically.
+                if (
+                    not old.document_pages
+                    or action != "evaluate"
+                    or not command.payload.get("document_claim")
+                    or evidence != detailed_pdf_disposition(evidence)
+                    or detailed_pdf_disposition(old).model_dump(exclude=mutable)
+                    != evidence.model_dump(exclude=mutable)
+                    or any(
+                        r.entity_type not in {"evidence", "evidence_head", "media_work", "review"}
+                        for r in request.puts
+                    )
+                    or not any(
+                        r.entity_type == "media_work"
+                        and r.id == evidence.media_id
+                        and r.body.get("last_error") == "document_too_detailed"
+                        for r in request.puts
+                    )
+                ):
+                    return None
             checks.extend((Check(old_head.key, old_head.version), Check(prior.key, prior.version)))
         if evidence.patient_match_provenance == "doctor_choice" and actor.actor_kind != "doctor":
             return None

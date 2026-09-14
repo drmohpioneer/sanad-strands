@@ -3,6 +3,41 @@
 from sanad.presentation.catalog import Catalog, validate_catalog
 
 CATALOG: Catalog = {
+    "evidence.patient_document_too_many_pages": {
+        "ar": "ابعت لحد {max_pages} صفحات لو سمحت، الصفحات اللي فيها النتائج بس.",
+        "en": "Please send up to {max_pages} pages: just the pages with the results.",
+    },
+    "evidence.patient_document_too_large": {
+        "ar": "حجم الملف كبير. ابعت ملف أصغر أو صور لصفحات النتائج لو سمحت.",
+        "en": "This file is too large. Please send a smaller file or photos of the result pages.",
+    },
+    "evidence.patient_document_encrypted": {
+        "ar": "الملف محمي بكلمة سر. ابعته من غير كلمة سر أو على شكل صور لو سمحت.",
+        "en": "This file is password protected. Please send it without a password or as photos.",
+    },
+    "evidence.patient_document_invalid": {
+        "ar": "مش قادرين نفتح الملف. ابعته تاني أو على شكل صور لو سمحت.",
+        "en": "This file could not be opened. Please send it again or as photos.",
+    },
+    "evidence.patient_document_unreadable": {
+        "ar": "مش قادرين نقرا الملف. ابعت صور لصفحات النتائج لو سمحت.",
+        "en": "This file could not be read. Please send photos of the result pages.",
+    },
+    "evidence.patient_document_blank": {
+        "ar": "الملف باين فاضي. ابعت الصفحات اللي فيها النتائج لو سمحت.",
+        "en": "This file looks empty. Please send the pages with the results.",
+    },
+    "evidence.patient_document_too_detailed": {
+        "ar": "شكرًا. دكتورك هيراجع المستند ده.",
+        "en": "Thank you. Your doctor will review this document.",
+    },
+    "evidence.patient_document_word_unsupported": {
+        "ar": "لسه مش بنقرا ملفات Word. ابعته PDF أو صور لصفحات النتائج لو سمحت.",
+        "en": (
+            "Word files can't be read yet. Please send it as a PDF "
+            "or as photos of the result pages."
+        ),
+    },
     "evidence.doctor_evidence_refused": {
         "ar": "مقدرتش أسجل القرار. افتح /evidence وحاول تاني.",
         "en": "This evidence decision could not be recorded. Open /evidence and try again.",

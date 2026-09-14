@@ -339,7 +339,7 @@ def upload_router(ingress: "UploadIngress", settings: WebSettings) -> APIRouter:
     from starlette.concurrency import run_in_threadpool
     from starlette.requests import ClientDisconnect
 
-    from sanad.media.limits import MAX_IMAGE_BYTES, MediaInvalid
+    from sanad.media.limits import MAX_DOCUMENT_BYTES, MAX_IMAGE_BYTES, MediaInvalid
     from sanad.media.upload import new_upload_id
     from sanad.safety import screen_text
 
@@ -395,12 +395,15 @@ def upload_router(ingress: "UploadIngress", settings: WebSettings) -> APIRouter:
             if request.query_params:
                 raise MediaInvalid("unsupported_parameter")
             declared = request.headers.get("content-type", "").split(";", 1)[0].lower()
-            if not declared.startswith("image/"):
+            if declared != "application/pdf" and not declared.startswith("image/"):
                 raise MediaInvalid("unsupported_type")
             async with asyncio.timeout(30):
                 async for part in request.stream():
-                    if len(body) + len(part) > MAX_IMAGE_BYTES:
-                        raise MediaInvalid("too_large")
+                    cap = MAX_DOCUMENT_BYTES if declared == "application/pdf" else MAX_IMAGE_BYTES
+                    if len(body) + len(part) > cap:
+                        raise MediaInvalid(
+                            "document_too_large" if declared == "application/pdf" else "too_large"
+                        )
                     body.extend(part)
             # Receipt timing belongs to the complete image, not its first HTTP byte.
             received_at = ingress.runtime.clock()
@@ -427,7 +430,7 @@ def upload_router(ingress: "UploadIngress", settings: WebSettings) -> APIRouter:
                 403
                 if isinstance(error, PermissionError)
                 else 413
-                if str(error) == "too_large"
+                if str(error) in {"too_large", "document_too_large"}
                 else 400
             )
             from sanad.media.upload import rejection_category

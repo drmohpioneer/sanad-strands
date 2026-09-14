@@ -248,6 +248,38 @@ SCRIBE_TEMPLATES = {
         "Send instructions by text or voice and review the card before tapping ✅ Confirm.\n"
         "Contest mode is English; Arabic is a declared upgrade.",
     ),
+    "doctor_document_too_many_pages": (
+        "ابعت لحد ١٠ صفحات لو سمحت، الصفحات اللي فيها النتائج بس.",
+        "Please send up to 10 pages: just the pages with the results.",
+    ),
+    "doctor_document_too_large": (
+        "حجم الملف كبير. ابعت ملف أصغر أو صور لصفحات النتائج لو سمحت.",
+        "This file is too large. Please send a smaller file or photos of the result pages.",
+    ),
+    "doctor_document_encrypted": (
+        "الملف محمي بكلمة سر. ابعته من غير كلمة سر أو على شكل صور لو سمحت.",
+        "This file is password protected. Please send it without a password or as photos.",
+    ),
+    "doctor_document_invalid": (
+        "مش قادرين نفتح الملف. ابعته تاني أو على شكل صور لو سمحت.",
+        "This file could not be opened. Please send it again or as photos.",
+    ),
+    "doctor_document_unreadable": (
+        "مش قادرين نقرا الملف. ابعت صور لصفحات النتائج لو سمحت.",
+        "This file could not be read. Please send photos of the result pages.",
+    ),
+    "doctor_document_blank": (
+        "الملف باين فاضي. ابعت الصفحات اللي فيها النتائج لو سمحت.",
+        "This file looks empty. Please send the pages with the results.",
+    ),
+    "doctor_document_too_detailed": (
+        "المستند فيه نتائج كتير مش هنعرف نعرضها كلها. راجع الصفحات لو سمحت.",
+        "This document has too many results to list. Please review the pages.",
+    ),
+    "doctor_document_word_unsupported": (
+        "لسه مش بنقرا ملفات Word. ابعته PDF أو صور لصفحات النتائج لو سمحت.",
+        "Word files can't be read yet. Please send it as a PDF or as photos of the result pages.",
+    ),
 }
 ALL_TEMPLATES = TEMPLATES | ENROLLMENT_TEMPLATES | SCRIBE_TEMPLATES
 

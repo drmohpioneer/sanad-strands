@@ -24,6 +24,7 @@ from sanad.store.records import (
 )
 
 if TYPE_CHECKING:
+    from sanad.media.retrieve import MediaRetriever
     from sanad.scribe.turn import ScribeTurn
 
 
@@ -32,14 +33,20 @@ class IntakeService:
         self.turn, self.repo = turn, turn.repo
 
     def create(
-        self, actor: Principal, receipt_id: str, reads: DocumentRead, kind: str
+        self,
+        actor: Principal,
+        receipt_id: str,
+        reads: DocumentRead,
+        kind: str,
+        *,
+        pdf_retriever: "MediaRetriever | None" = None,
     ) -> IntakeDraft:
         doctor = self.turn.claims.doctor(actor)
         if doctor is None:
             raise ValueError("intake_authority")
         id, now = keys.digest(receipt_id), self.repo.clock()
         existing = self.repo.load(doctor.scope, "intake_draft", id, IntakeDraft)
-        if existing:
+        if existing and pdf_retriever is None:
             return existing
         draft = IntakeDraft.model_validate(
             {
@@ -60,7 +67,58 @@ class IntakeService:
                 ),
             }
         )
-        result = self.repo.commit(actor, "IntakeCreate", "intake:" + id, (draft,))
+        if pdf_retriever:
+            from sanad.media.documents import (
+                check_item_size,
+                commit_pdf_intake,
+                failed_document_read,
+            )
+            from sanad.store.records import MediaWork, to_record
+
+            parent = self.repo.load(pdf_retriever.scope, "media_work", id, MediaWork)
+            assert parent
+            draft = draft.model_copy(
+                update={"document_page_refs": tuple(p.work_id for p in parent.document_pages)}
+            )
+            try:
+                check_item_size(to_record(draft, draft.scope))
+                # The proposal also carries its candidate, printable source and row
+                # projection. Bound that combined core before finalizing the parent;
+                # the 50 KiB difference reserves its authority/lifecycle envelope.
+                import json
+
+                from sanad.media.documents import AGGREGATE_BYTES
+                from sanad.media.limits import MediaInvalid
+                from sanad.scribe.crosscheck import candidate_from, projected_items, source_text
+
+                projected = candidate_from(reads, kind, self.turn.runtime.safety_policy)
+                core = {
+                    "reads": reads.model_dump(mode="json"),
+                    "candidate": projected.model_dump(mode="json"),
+                    "source_text": source_text(reads),
+                    "rows": [r.model_dump(mode="json") for r in projected_items(reads)[0]]
+                    if kind == "prescription"
+                    else [],
+                }
+                if len(json.dumps(core, ensure_ascii=False).encode()) > AGGREGATE_BYTES:
+                    raise MediaInvalid("document_too_detailed")
+            except ValueError:
+                reads = failed_document_read(
+                    "document_too_detailed", reads.first.provenance, parent.document_pages
+                )
+                draft = draft.model_copy(update={"reads": reads, "kind": "other"})
+
+            if existing:
+                draft = revise(
+                    existing,
+                    now,
+                    reads=reads,
+                    kind=draft.kind,
+                    document_page_refs=draft.document_page_refs,
+                )
+            result = commit_pdf_intake(self.repo, actor, draft, pdf_retriever, existing is not None)
+        else:
+            result = self.repo.commit(actor, "IntakeCreate", "intake:" + id, (draft,))
         if result.status not in {"accepted", "duplicate"}:
             raise RuntimeError("intake_create_retry")
         saved = self.repo.load(doctor.scope, "intake_draft", id, IntakeDraft)

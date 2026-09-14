@@ -146,12 +146,38 @@ class S3MediaStore:
         )
         return f"s3://{self.bucket}/{key}"
 
+    def put_page(
+        self,
+        scope: MediaScope,
+        receipt_id: str,
+        page_index: int,
+        renderer_version: str,
+        data: bytes,
+    ) -> str:
+        if not 1 <= page_index <= 10:
+            raise ValueError("invalid_page_index")
+        variant = (
+            f"pages/{sha256(receipt_id.encode()).hexdigest()}/{page_index}/"
+            f"{sha256(renderer_version.encode()).hexdigest()}/"
+        )
+        key = prefix(scope) + variant + sha256(data).hexdigest()
+        self.client.put_object(
+            Bucket=self.bucket,
+            Key=key,
+            Body=data,
+            ContentType="image/png",
+            ServerSideEncryption="AES256",
+        )
+        return f"s3://{self.bucket}/{key}"
+
     def get(self, scope: MediaScope, reference: str, limit: int) -> bytes:
         root = f"s3://{self.bucket}/"
         if not reference.startswith(root + prefix(scope)):
             raise ValueError("media_scope_mismatch")
         key = reference[len(root) :]
         suffix = key[len(prefix(scope)) :]
+        if re.fullmatch(r"pages/[0-9a-f]{64}/(?:[1-9]|10)/[0-9a-f]{64}/[0-9a-f]{64}", suffix):
+            suffix = suffix.rsplit("/", 1)[1]
         if len(suffix) != 64 or any(c not in "0123456789abcdef" for c in suffix):
             raise ValueError("invalid_blob_reference")
         response = self.client.get_object(Bucket=self.bucket, Key=key)

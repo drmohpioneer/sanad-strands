@@ -703,6 +703,9 @@ class Evidence(_Metadata):
     ) = None
     extracted_values: tuple[LabRowCandidate | DocumentItem, ...] = Field(default=(), repr=False)
     readers: tuple[ReaderResult, ReaderResult] = Field(repr=False)
+    document_pages: tuple[DocumentPageManifest, ...] = ()
+    row_pages: tuple[tuple[int, ...], ...] = ()
+    blocked_pages: tuple[int, ...] = ()
     disagreements: tuple[Disagreement, ...] = ()
     shift_guard_fired: bool = False
     required_predicate_results: tuple[PredicateResult, ...] = ()
@@ -884,7 +887,7 @@ class UploadStage(_Metadata):
     auth_epoch: NonnegativeInt
     content_digest: Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
     content_type: NonblankStr
-    size: Annotated[int, Field(gt=0, le=8 * 1024 * 1024)]
+    size: Annotated[int, Field(gt=0, le=20_000_000)]
     object_ref: NonblankStr
     receipt: InboundReceipt = Field(repr=False)
     state: Literal["reserved", "attached", "discarded"] = "reserved"
@@ -893,6 +896,8 @@ class UploadStage(_Metadata):
 
     @model_validator(mode="after")
     def staging(self) -> Self:
+        if self.content_type != "application/pdf" and self.size > 8 * 1024 * 1024:
+            raise ValueError("image_too_large")
         if (
             self.receipt.scope != self.scope
             or self.receipt.source_subject != self.subject
@@ -938,6 +943,7 @@ class IntakeDraft(_Metadata):
     source_receipt_ids: tuple[NonblankStr, ...]
     media_work_ids: tuple[NonblankStr, ...]
     reads: DocumentRead = Field(repr=False)
+    document_page_refs: tuple[str, ...] = ()
     reader_policy_version: NonblankStr
     kind: Literal["prescription", "lab", "other"]
     proposal_id: str | None = None
@@ -1045,9 +1051,17 @@ class MediaWork(_Metadata):
     transcript_ref: NonblankStr | None = None
     association_ref: NonblankStr | None = None
     pending_mission_ids: tuple[str, ...] = ()
+    document_pages: tuple[DocumentPageManifest, ...] = ()
 
     @model_validator(mode="after")
     def recoverable(self) -> Self:
+        if self.document_pages and (
+            self.mime != "application/pdf"
+            or tuple(p.page_index for p in self.document_pages)
+            != tuple(range(1, len(self.document_pages) + 1))
+            or len({p.work_id for p in self.document_pages}) != len(self.document_pages)
+        ):
+            raise ValueError("invalid_document_manifest")
         if self.id != keys.digest(self.receipt_id):
             raise ValueError("media work identity must derive from its scoped receipt")
         if (self.state == "completed") != (self.work_clock is None):
@@ -1072,6 +1086,54 @@ class MediaWork(_Metadata):
             raise ValueError("normalization requires durable source bytes")
         if self.stage in {"extract", "associate"} and self.normalized_blob_ref is None:
             raise ValueError("extraction requires normalized source")
+        return self
+
+
+class DocumentPageManifest(_BoundaryValue):
+    page_index: Annotated[int, Field(ge=1, le=10)]
+    work_id: NonblankStr
+    renderer_name: Literal["pypdfium2"] = "pypdfium2"
+    renderer_version: NonblankStr
+    byte_hash: Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")] | None = None
+    blob_ref: str | None = None
+
+
+class DocumentPageWork(_Metadata):
+    """One independently fenced page; terminal pages never lose their provenance."""
+
+    entity_type: Literal["document_page_work"] = "document_page_work"
+    scope: PatientScope | IntakeScope
+    parent_id: NonblankStr
+    receipt_id: NonblankStr
+    source_hash: Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")]
+    manifest: DocumentPageManifest
+    refresh_of: str | None = None
+    stage: Literal["render", "read", "commit"] = "render"
+    state: Literal["pending", "processing", "committed", "blank", "unreadable", "duplicate"] = (
+        "pending"
+    )
+    processing_claim: ProcessingClaim | None = None
+    work_clock: OperationalClock | None
+    reads: DocumentRead | None = Field(default=None, repr=False)
+    reads_ref: str | None = None
+    duplicate_of: str | None = None
+    last_error: str | None = None
+
+    @model_validator(mode="after")
+    def lifecycle(self) -> Self:
+        if self.id != self.manifest.work_id or self.parent_id != keys.digest(self.receipt_id):
+            raise ValueError("document_page_identity")
+        terminal = self.state in {"committed", "blank", "unreadable", "duplicate"}
+        if terminal != (self.work_clock is None) or terminal != (self.stage == "commit"):
+            raise ValueError("document_page_clock")
+        if self.work_clock and self.work_clock.work_lane != "media":
+            raise ValueError("document_page_lane")
+        if self.state == "committed" and not (self.reads or self.reads_ref):
+            raise ValueError("document_page_read_missing")
+        if self.state == "duplicate" and not self.duplicate_of:
+            raise ValueError("document_page_duplicate_missing")
+        if self.stage == "read" and not (self.manifest.byte_hash and self.manifest.blob_ref):
+            raise ValueError("document_page_render_missing")
         return self
 
 
@@ -1369,6 +1431,7 @@ type InboundReceiptRecord = StoredRecord
 
 
 MODELS: dict[str, type[BaseModel]] = {
+    "document_page_work": DocumentPageWork,
     "sweep_position": SweepPosition,
     "correction": Correction,
     "correction_offer": CorrectionOffer,
@@ -1437,6 +1500,8 @@ MODELS: dict[str, type[BaseModel]] = {
 
 
 def model_scope(model: BaseModel) -> Scope:
+    if isinstance(model, DocumentPageWork):
+        return model.scope
     if isinstance(model, SweepPosition):
         return model.scope
     if isinstance(
@@ -1537,6 +1602,8 @@ def scope_owns(scope: Scope, other: Scope) -> bool:
 
 
 def model_key(model: BaseModel, scope: Scope) -> Key:
+    if isinstance(model, DocumentPageWork):
+        return Key(keys.partition(model.scope), f"DOCUMENT_PAGE#{keys.component(model.id)}")
     if isinstance(model, SweepPosition):
         return keys.sweep_position(model.scope, model.lane, model.shard)
     if isinstance(

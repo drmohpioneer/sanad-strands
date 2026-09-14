@@ -79,6 +79,7 @@ Versions below come from [pyproject.toml](pyproject.toml) and [uv.lock](uv.lock)
 | segno | 1.6.6 | Invitation QR images | BSD-3-Clause |
 | pillow | 12.3.0 | Image normalization | MIT-CMU |
 | pillow-heif | 1.7.0 | HEIF decoding | BSD-3-Clause source; GPLv2 binary wheels |
+| pypdfium2 | 5.13.0 | PDF page rendering | BSD-3-Clause, Apache-2.0 (bundled PDFium BSD-3-Clause and permissive third-party notices) |
 | arabic-reshaper | 3.0.1 | Text-layout checks | MIT |
 | hatchling | 1.32.0 | Package build | MIT |
 | mypy | 1.20.2 | Type checks | MIT |
@@ -87,6 +88,8 @@ Versions below come from [pyproject.toml](pyproject.toml) and [uv.lock](uv.lock)
 | pytest-socket | 0.8.1 | Offline test isolation | MIT |
 | python-bidi | 0.6.11 | Text-layout checks | LGPL-3.0-or-later |
 | ruff | 0.16.6 | Lint and formatting | MIT |
+
+pypdfium2 bundles PDFium and its third-party notices for PDF page rendering.
 
 The `pillow-heif` source is BSD-3-Clause. Its binary wheels are declared GPLv2 because of x265 and bundle LGPLv3 libheif and libde265, plus the GPL-3.0-with-GCC-exception MinGW runtime on Windows. Anyone redistributing those wheels must meet their GPLv2 and LGPLv3 source and notice terms. Sanad's MIT code places no extra restriction on that. `python-bidi` is LGPL-3.0-or-later and development-only. The indirect dependencies `certifi` (runtime) and `pathspec` (development and build, through mypy and hatchling) are MPL-2.0.
 

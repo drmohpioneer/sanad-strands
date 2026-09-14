@@ -70,6 +70,9 @@ from browser.depth18e import (
 from browser.depth18e import (
     test_depth_summary_filters_chips_and_primary as test_depth_summary_filters_chips_and_primary,
 )
+from browser.documents30 import (
+    test_pdf_document_pages_and_download as test_pdf_document_pages_and_download,
+)
 from browser.logo18h import test_aurora_entry_logo as test_aurora_entry_logo
 from browser.logo18h import test_logo_pages as test_logo_pages
 from browser.sample18h3 import (

@@ -306,6 +306,22 @@ def record_router(claims: ClaimService) -> APIRouter:
                     if (source := media_sources[m.id]) is not None
                     else m.created_at.isoformat(),
                     "mime": m.mime,
+                    **(
+                        {
+                            "pages": [
+                                p.page_index
+                                for p in from_record(media_work, MediaWork).document_pages
+                                if p.blob_ref
+                            ]
+                        }
+                        if m.mime == "application/pdf"
+                        and (
+                            media_work := claims.store.get(
+                                m.media_scope, "media_work", m.media_work_id
+                            )
+                        )
+                        else {}
+                    ),
                     "uploaded_by_you": bool(
                         source and source.body.get("source_subject") == session.subject
                     ),
@@ -320,6 +336,7 @@ def record_router(claims: ClaimService) -> APIRouter:
         patient_id: str,
         media_id: str,
         session: Annotated[WebSession, Depends(require_session("doctor"))],
+        page: int | None = None,
     ) -> Response:
         scope = PatientScope(doctor_id=session.doctor_id, patient_id=patient_id)
         row = (
@@ -339,9 +356,21 @@ def record_router(claims: ClaimService) -> APIRouter:
         storage = getattr(request.app.state, "media_store", None)
         if storage is None:
             raise RequestFailure("media_storage_unavailable")
+        from sanad.media.limits import MAX_DOCUMENT_BYTES
+
+        reference, mime = work.source_blob_ref, media.mime
+        if page is not None:
+            selected = next((m for m in work.document_pages if m.page_index == page), None)
+            if work.mime != "application/pdf" or selected is None or not selected.blob_ref:
+                raise HTTPException(404)
+            reference, mime = selected.blob_ref, "image/png"
         try:
             data = storage.get(
-                media.media_scope, work.source_blob_ref, DRAFT_SCRIBE_POLICY.max_photo_bytes
+                media.media_scope,
+                reference,
+                MAX_DOCUMENT_BYTES
+                if mime == "application/pdf"
+                else DRAFT_SCRIBE_POLICY.max_photo_bytes,
             )
         except Exception as error:
             raise RequestFailure(
@@ -354,8 +383,15 @@ def record_router(claims: ClaimService) -> APIRouter:
             raise HTTPException(401)
         return Response(
             data,
-            media_type=media.mime,
-            headers={"X-Content-Type-Options": "nosniff"},
+            media_type=mime,
+            headers={
+                "X-Content-Type-Options": "nosniff",
+                **(
+                    {"Content-Disposition": 'attachment; filename="document.pdf"'}
+                    if mime == "application/pdf"
+                    else {}
+                ),
+            },
         )
 
     @router.get("/api/intake")

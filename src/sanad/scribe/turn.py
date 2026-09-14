@@ -1875,7 +1875,15 @@ class ScribeTurn:
             self.committer.expire(from_record(row, Proposal))
         elif row.entity_type == "scribe_invitation_work":
             self.invitation_work(from_record(row, InvitationWork))
-        elif row.entity_type == "media_work" and self.media_factory:
+        elif row.entity_type in {"media_work", "document_page_work"} and self.media_factory:
+            if row.entity_type == "document_page_work":
+                from sanad.store.records import DocumentPageWork
+
+                page = from_record(row, DocumentPageWork)
+                parent = self.repo.store.get(page.scope, "media_work", page.parent_id)
+                if parent is None:
+                    return
+                row = parent
             work = from_record(row, MediaWork)
             source = self.repo.store.get(
                 TenantScope(doctor_id=work.scope.doctor_id), "inbound_receipt", work.receipt_id

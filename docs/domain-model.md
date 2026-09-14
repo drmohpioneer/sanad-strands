@@ -421,10 +421,19 @@ Index delays or a missed tick do not lose deadlines: due records stay due until 
 
 ## Inbound, media and delivery schema
 
+For PDFs, MediaWork carries an ordered page manifest. Evidence and doctor drafts
+reference those pages; merged reads retain both independent reader slots and
+blocked page indices. Repeated lab rows retain all source page indices; conflicting
+values on the same date require review. Each complete page, draft, proposal and
+evidence item is bounded to 350 KiB, and merged reads to 300 KiB. Oversized reports
+retain private page data and images for doctor review. Parent completion shares
+the fenced transaction that records the outcome; extraction alone is insufficient.
+
 | Entity | Required fields / lifecycle |
 |---|---|
 | InboundReceipt | transport_key (bot+update_id, or session+client_command_id), source_subject/chat, channel, kind, immutable payload or protected payload_ref, provider_media_handle optional, received_at, safety_screen_state/policy_version, state (pending/processing/completed/needs_attention), ProcessingClaim, WorkClock until completed, result_event_ids; scope established by ingress, never payload claims |
 | MediaWork | receipt_id, provider_handle_ref, source_blob_ref optional, normalized_blob_ref optional, byte_hash optional, mime/size/duration, stage (fetch/normalize/extract/associate), state (pending/processing/completed/needs_attention), ProcessingClaim, WorkClock, last_error/resend_intent_id optional |
+| DocumentPageWork | Doctor/patient or private intake scope; parent MediaWork, receipt and source hash; page index, image hash and renderer version; independently fenced render/read/commit stages and media clock; paired reads or private read reference; terminal committed, blank, unreadable or duplicate disposition. Policy refresh retains the prior page and creates separately checkpointed reads of its immutable image. |
 | PhotoReceipt | authenticated_scope (patient scope or owning-doctor IntakeDraft), content_hash, processing_version, media_work_id, evidence_id optional, state (pending/processing/completed/needs_attention), source_receipt_ids; deduping cannot cross scopes or hide unfinished work |
 | Evidence | observation_id, source_blob_ref, normalized_blob_ref, content_hash, category, printed_identity/date optional, association_state (unmatched/candidate/accepted_pending_identity/accepted/rejected), patient_match_provenance, extracted_values with units, required_predicate_results, accepted_by/at optional, supersedes_evidence_id/version optional, Provenance; immutable accepted versions, current head separately points to chosen version |
 | EvidenceHead | evidence_id, current_version, status (candidate/accepted_pending_identity/accepted/rejected/superseded), association refs; explicit correction is the only supersession authority |

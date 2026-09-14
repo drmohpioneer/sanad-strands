@@ -326,6 +326,14 @@ threshold provenance. Code renders missing slots, values and descriptive trends
 on the existing DONE/DEADLINE gateway. Draft schedule policy remains pending
 owner review; no model supplies schedule arithmetic or patient wording.
 
+PDF documents use the same independent visual readers and evidence predicates as
+photos. A PDF contains at most ten pages and remains one report. Sanad stores the
+original privately, renders pages in isolated bounded processes, and checkpoints
+each page separately. Corroborated danger is handled immediately after each page;
+a missing, unreadable or conflicting page blocks the report for review. The doctor
+can inspect numbered page images and download the original through the same
+session and patient authorization. No PDF text layer supplies clinical evidence.
+
 Decision 023 supports printed or typed Latin-script documents; handwriting and
 Arabic script in images remain unsupported. Contract 11d normalizes document
 uploads and channel photos through one image path before reading: bounded Pillow/HEIF decode, EXIF orientation, grayscale,
@@ -489,7 +497,7 @@ MediaSource; clinical processing is unchanged. Receipt/channel provenance and
 transport-derived IDs remain distinct. Equivalence compares mapped business
 semantics in independently initialized stores, not raw generated IDs.
 
-Uploads use an authenticated, same-origin, header-CSRF-protected bounded image
+Uploads use an authenticated, same-origin, header-CSRF-protected bounded image or PDF
 body, with a readable caption in a header. The server derives patient scope and
 private-chat delivery context from the live session/binding. A scoped staging
 ledger reserves an upload before private S3 persistence; attaching its handle and

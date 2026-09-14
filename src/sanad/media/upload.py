@@ -10,7 +10,7 @@ from sanad.auth.login import LoginService
 from sanad.channels.telegram.router import TelegramRuntime
 from sanad.domain import ObservationRef, PatientScope, Principal
 from sanad.media.images import normalize_document, source_image_mime
-from sanad.media.limits import MAX_IMAGE_BYTES, MediaInvalid
+from sanad.media.limits import MAX_DOCUMENT_BYTES, MAX_IMAGE_BYTES, MediaInvalid
 from sanad.media.source import FileBytes, MediaFailure, MediaSource
 from sanad.media.storage import UploadStorage
 from sanad.safety import to_incident_facts
@@ -57,7 +57,10 @@ class StagedUpload:
             return MediaFailure(reason="upload_scope_mismatch", request_resend=False)
         try:
             data = self.storage.get_upload(
-                self.scope, stage.id, stage.content_digest, MAX_IMAGE_BYTES
+                self.scope,
+                stage.id,
+                stage.content_digest,
+                MAX_DOCUMENT_BYTES if stage.content_type == "application/pdf" else MAX_IMAGE_BYTES,
             )
         except Exception as error:
             from sanad.api.failures import store_busy
@@ -187,12 +190,19 @@ class UploadIngress:
     def stage(
         self, session: WebSession, receipt: InboundReceipt, data: bytes, declared: str
     ) -> UploadStage:
-        actual = source_image_mime(data)
+        if declared == "application/pdf":
+            from sanad.media.documents import validate_document
+
+            validate_document(data)
+            actual = "application/pdf"
+        else:
+            actual = source_image_mime(data)
         if actual != declared:
             raise MediaInvalid("content_type_mismatch")
         # Decode bounded pixels now so corrupt/truncated bodies never reach S3.
         # The downstream normalization and exact reader input remain unchanged.
-        normalize_document(data)
+        if actual != "application/pdf":
+            normalize_document(data)
         assert isinstance(receipt.scope, PatientScope)
         assert session.binding_id and session.binding_epoch is not None and session.consent_version
         id = (receipt.provider_media_handle or "").removeprefix("upload:")
@@ -249,7 +259,12 @@ class UploadIngress:
         if stage.state == "reserved":
             try:
                 data = self.storage.get_upload(
-                    stage.scope, stage.id, stage.content_digest, MAX_IMAGE_BYTES
+                    stage.scope,
+                    stage.id,
+                    stage.content_digest,
+                    MAX_DOCUMENT_BYTES
+                    if stage.content_type == "application/pdf"
+                    else MAX_IMAGE_BYTES,
                 )
             except ValueError:
                 data = None
@@ -275,6 +290,17 @@ def new_upload_id() -> str:
 
 
 def rejection_category(reason: str | None) -> str:
+    if reason in {
+        "document_too_many_pages",
+        "document_too_large",
+        "document_encrypted",
+        "document_invalid",
+        "document_unreadable",
+        "document_blank",
+        "document_too_detailed",
+        "document_word_unsupported",
+    }:
+        return reason
     if reason in {"too_large", "dimensions_exceeded"}:
         return "too_large"
     if reason in {"not_a_document", "not_document"}:

@@ -51,6 +51,8 @@ def evaluate(
         and candidate.patient_match_provenance != "doctor_choice"
     ):
         return result(("identity",), "Printed name requires the doctor's association decision.")
+    if candidate.blocked_pages:
+        return result(("readable_document",), "The complete document requires review.")
     if any(r.unreadable for r in candidate.readers) or not candidate.extracted_values:
         return result(("readable_document",), "The document is not readable.")
     if "document_instructions" in candidate.flags:

@@ -36,7 +36,7 @@ def controls(locale: str) -> str:
 <path d="M12 17V5M7 10l5-5 5 5M5 19h14"/></svg></span>
 <p>{w("limits")}</p>
 <form id="patient-upload-form">
-<label>{w("file")}<input id="patient-file" type="file" accept="image/*" required>
+<label>{w("file")}<input id="patient-file" type="file" accept="image/*,application/pdf" required>
 </label>
 <label>{w("caption")}<textarea id="patient-caption" maxlength="4096">
 </textarea>

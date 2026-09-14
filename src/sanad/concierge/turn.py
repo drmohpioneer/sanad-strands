@@ -784,6 +784,14 @@ class ConciergeTurn:
     @invoked("tick")
     def sweep(self, row: StoredRecord) -> None:
         """Recover persisted media and screen evidence before association."""
+        if row.entity_type == "document_page_work":
+            from sanad.store.records import DocumentPageWork
+
+            page = from_record(row, DocumentPageWork)
+            parent = self.store.get(page.scope, "media_work", page.parent_id)
+            if parent is None:
+                return
+            row = parent
         if row.entity_type != "media_work" or not self.media_factory:
             return
         work = from_record(row, MediaWork)

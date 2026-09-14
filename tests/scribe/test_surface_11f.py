@@ -42,6 +42,26 @@ def test_every_doctor_template_has_real_english_and_literal_arabic(key: str) -> 
             "patient_not_linked": "لسه مش مرتبط بدكتور. افتح رابط الدعوة اللي بعته الدكتور.",
             "login_refused": "تعذر الدخول. تواصل مع الإدارة.",
             "monitor_schedule_changed": "مواعيد القياس اتغيرت. ابعت التعليمات من جديد.",
+            "doctor_document_too_many_pages": (
+                "ابعت لحد ١٠ صفحات لو سمحت، الصفحات اللي فيها النتائج بس."
+            ),
+            "doctor_document_too_large": (
+                "حجم الملف كبير. ابعت ملف أصغر أو صور لصفحات النتائج لو سمحت."
+            ),
+            "doctor_document_encrypted": (
+                "الملف محمي بكلمة سر. ابعته من غير كلمة سر أو على شكل صور لو سمحت."
+            ),
+            "doctor_document_invalid": ("مش قادرين نفتح الملف. ابعته تاني أو على شكل صور لو سمحت."),
+            "doctor_document_unreadable": (
+                "مش قادرين نقرا الملف. ابعت صور لصفحات النتائج لو سمحت."
+            ),
+            "doctor_document_blank": ("الملف باين فاضي. ابعت الصفحات اللي فيها النتائج لو سمحت."),
+            "doctor_document_too_detailed": (
+                "المستند فيه نتائج كتير مش هنعرف نعرضها كلها. راجع الصفحات لو سمحت."
+            ),
+            "doctor_document_word_unsupported": (
+                "لسه مش بنقرا ملفات Word. ابعته PDF أو صور لصفحات النتائج لو سمحت."
+            ),
         }
     )[key]
     # Addendum 6a supersedes bilingual account entries and long-dash prose.

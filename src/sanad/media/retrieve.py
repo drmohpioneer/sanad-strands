@@ -27,7 +27,7 @@ from sanad.domain.boundaries import _BoundaryValue
 from sanad.domain.operations import transition_operational_clock
 from sanad.media.audio import AudioConverter, ConversionFailure
 from sanad.media.images import normalize_document, source_image_mime
-from sanad.media.limits import MAX_AUDIO_BYTES, MediaInvalid, sniff
+from sanad.media.limits import MAX_AUDIO_BYTES, MAX_DOCUMENT_BYTES, MediaInvalid, sniff
 from sanad.media.source import MediaFailure, MediaSource
 from sanad.media.storage import MediaScope, MediaStore
 from sanad.steward.apply import make_intent
@@ -40,6 +40,7 @@ from sanad.store.records import (
     CommandEnvelope,
     CommitRequest,
     DoctorAuthority,
+    DocumentPageManifest,
     InboundReceipt,
     MediaWork,
     OperationalClock,
@@ -518,6 +519,7 @@ class MediaRetriever:
         failure: str | None = None,
         claim: Claim | None = None,
         resume_immediately: bool = False,
+        document_pages: tuple[DocumentPageManifest, ...] | None = None,
     ) -> bool | MediaFailure:
         """Checkpoint the extractor's private transcript and explicit operational association."""
         work = self._get(keys.digest(receipt_id))
@@ -557,6 +559,9 @@ class MediaRetriever:
                     "updated_at": now,
                     "processing_claim": None,
                     "transcript_ref": transcript_ref or work.transcript_ref,
+                    "document_pages": document_pages
+                    if document_pages is not None
+                    else work.document_pages,
                     "association_ref": association_ref,
                     "state": "completed" if association_ref else "pending",
                     "stage": "associate" if association_ref else "extract",
@@ -654,6 +659,12 @@ class MediaRetriever:
                             actual = "image"
                         if actual in {"png", "jpeg", "heif", "avif", "image"}:
                             mime = source_image_mime(download.data)
+                        elif actual in {"doc", "docx"}:
+                            raise MediaInvalid("document_word_unsupported")
+                        elif actual == "pdf":
+                            if len(download.data) > MAX_DOCUMENT_BYTES:
+                                raise MediaInvalid("document_too_large")
+                            mime = "application/pdf"
                         elif len(download.data) <= MAX_AUDIO_BYTES:
                             mime = {
                                 "ogg": "audio/ogg",
@@ -676,7 +687,23 @@ class MediaRetriever:
                         assert work.source_blob_ref is not None
                         data = self._get_blob(work.source_blob_ref)
                         self.checkpoint("normalization_loaded")
-                        if work.mime and work.mime.startswith("image/"):
+                        document_pages = work.document_pages
+                        if work.mime == "application/pdf":
+                            from sanad.media.documents import validate_document
+
+                            info = validate_document(data)
+                            normalized, duration = work.source_blob_ref, None
+                            document_pages = tuple(
+                                DocumentPageManifest(
+                                    page_index=index,
+                                    work_id=keys.digest(
+                                        f"{work.id}:page:{index}:{info.renderer_version}"
+                                    ),
+                                    renderer_version=info.renderer_version,
+                                )
+                                for index in range(1, info.pages + 1)
+                            )
+                        elif work.mime and work.mime.startswith("image/"):
                             normalized = self._put_blob(normalize_document(data), "image/jpeg")
                             duration = None
                         else:
@@ -691,6 +718,7 @@ class MediaRetriever:
                             "stage": "extract",
                             "normalized_blob_ref": normalized,
                             "duration": duration,
+                            "document_pages": document_pages,
                         }
                 except MediaInvalid as error:
                     return self._failure(work, claim, str(error))

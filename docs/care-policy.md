@@ -65,6 +65,13 @@ A question opens silently and retains its answer-review deadline. An ordinary do
 
 A treatment-changing answer is doctor-private record text. A subsequent confirmed order amendment durably flags it for a separate atomic release on the next tick. Release fulfils the question and resolves its review, sending only the fixed sentence directing the patient to the updated plan. The held words themselves are never sent or paraphrased, including after an amendment. Resolved held answers cannot replay on reopening. `visit_brief_offset=1 day`, `task_reopen_offset=3 days`, and `question_list_ttl=1 hour` are draft operational policy, **OWNER_REVIEW_PENDING**.
 
+A PDF of up to ten pages counts as one document wherever a photo is accepted.
+Readable pages do not compensate for an unreadable or conflicting page: the whole
+report requires review before it can supply mission or monitoring coverage.
+Corroborated danger on an earlier page is still escalated immediately. Repeated lab
+rows are counted once with both page references; monitoring keeps its existing
+reading and slot rules. Historical prescriptions do not activate orders.
+
 For medication lists and old documents, collection does not mean medication reconciliation or clinical interpretation. For a multi-part request, receiving one readable file is insufficient unless that file meets all confirmed requirements. TEST date requirements do not apply wholesale to SEND_RECORDS.
 
 ## Deadline inference and the three clocks

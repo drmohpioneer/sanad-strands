@@ -101,6 +101,8 @@ _UNKNOWN_REASON = (
 
 
 def unreadable(reason: str, language: str = "ar") -> str:
+    if "doctor_" + reason in wording.SCRIBE_TEMPLATES:
+        return wording.render("doctor_" + reason, language)
     if reason in {
         "unreadable",
         "invalid_document_json",
@@ -223,11 +225,62 @@ class PhotoTurn:
             ),
         )
         caption = str((receipt.payload or {}).get("text", ""))
-        if cached and all(
-            r.provenance.prompt_version == VISION_PROMPT_VERSION
-            for r in (cached.first, cached.second)
+        if (
+            media.mime != "application/pdf"
+            and cached
+            and all(
+                r.provenance.prompt_version == VISION_PROMPT_VERSION
+                for r in (cached.first, cached.second)
+            )
         ):
             result: DocumentRead | DocumentFailure = cached
+        elif media.mime == "application/pdf":
+            from sanad.media.documents import DocumentPipeline
+
+            selected_hint = caption_patient(caption)
+            selected_choices = (
+                lookup(self.repo.store, doctor.scope, selected_hint)
+                if selected_hint.name_as_spoken
+                else ()
+            )
+
+            def screen_page(read: DocumentRead, index: int) -> None:
+                assert work is not None
+                corroborated = read.model_copy(update={"blocked_pages": (index,)})
+                danger = self.danger_facts(corroborated)
+                if not danger:
+                    return
+                if len(selected_choices) == 1:
+                    self.raise_patient(corroborated, selected_choices[0].patient_id, actor)
+                else:
+                    from sanad.media.documents import AGGREGATE_BYTES, failed_document_read
+
+                    partial_reads = (
+                        failed_document_read("document_too_detailed", source, work.document_pages)
+                        if len(corroborated.model_dump_json().encode()) > AGGREGATE_BYTES
+                        else corroborated
+                    )
+                    partial = self.intake.create(
+                        actor, receipt.id, partial_reads, partial_reads.first.document_type
+                    )
+                    self.intake.concern(partial, actor, danger, source_key=f"page:{index}")
+
+            try:
+                result, manifests = DocumentPipeline(
+                    retriever,
+                    receipt,
+                    source,
+                    self.turn.vision_factory,
+                    kind_hint=kind_hint(caption),
+                    on_page=screen_page,
+                ).run(work)
+                work = work.model_copy(update={"document_pages": manifests})
+                if isinstance(result, DocumentFailure):
+                    from sanad.media.documents import failed_document_read
+
+                    result = failed_document_read(result.reason, source, manifests)
+            except MediaInvalid as error:
+                return RouteResult(route="busy", status=str(error))
         else:
             try:
                 data = retriever.media_store.get(
@@ -285,15 +338,28 @@ class PhotoTurn:
                 )
             return RouteResult(route="busy", status="stale_work")
         if cached is not result:
-            result = self.with_column(result, retriever, media.normalized_blob_ref)
+            if media.mime != "application/pdf":
+                result = self.with_column(result, retriever, media.normalized_blob_ref)
             reference = retriever.media_store.put(
                 retriever.scope, result.model_dump_json().encode(), "application/json"
             )
-            if not retriever.extraction_result(receipt.id, transcript_ref=reference):
+            if not retriever.extraction_result(
+                receipt.id,
+                transcript_ref=reference,
+                document_pages=work.document_pages if media.mime == "application/pdf" else None,
+            ):
                 return RouteResult(route="busy", status="stale_work")
         self.turn.checkpoint("photo_reads_persisted")
         kind = result.first.document_type
-        draft = self.intake.create(actor, receipt.id, result, kind)
+        draft = self.intake.create(
+            actor,
+            receipt.id,
+            result,
+            kind,
+            pdf_retriever=retriever if media.mime == "application/pdf" else None,
+        )
+        if media.mime == "application/pdf":
+            result = draft.reads
         patient = caption_patient(caption)
         previous = self.repo.pending(doctor.scope)
         pending_id = (
@@ -678,7 +744,49 @@ class PhotoTurn:
         else:
             candidate = candidate_from(draft.reads, draft.kind, self.turn.runtime.safety_policy)
         candidate = candidate.model_copy(update={"patient": patient})
+        from sanad.media.documents import row_page_indices
+        from sanad.store.keys import IntakeScope
+
+        pdf_work = (
+            self.repo.load(
+                IntakeScope(doctor_id=doctor.id, intake_id=draft.id),
+                "media_work",
+                draft.id,
+                MediaWork,
+            )
+            if draft.document_page_refs
+            else None
+        )
+        if pdf_work:
+            from sanad.store.records import DocumentPageWork
+
+            linked_pages = [
+                self.repo.load(pdf_work.scope, "document_page_work", id, DocumentPageWork)
+                for id in draft.document_page_refs
+            ]
+            if all(page is not None for page in linked_pages):
+                pdf_work = pdf_work.model_copy(
+                    update={"document_pages": tuple(page.manifest for page in linked_pages if page)}
+                )
+        page_rows = row_page_indices(self.repo.store, pdf_work, draft.reads) if pdf_work else ()
+        if page_rows:
+            candidate = candidate.model_copy(
+                update={
+                    "facts": tuple(
+                        fact.model_copy(
+                            update={
+                                "lab": fact.lab.model_copy(update={"page_indices": page_rows[i]})
+                            }
+                        )
+                        if fact.lab and i < len(page_rows)
+                        else fact
+                        for i, fact in enumerate(candidate.facts)
+                    )
+                }
+            )
         photo = PhotoReview(
+            document_page_refs=draft.document_page_refs,
+            row_pages=page_rows,
             reads=draft.reads,
             kind=draft.kind,
             row_targets=targets,
@@ -810,18 +918,51 @@ class PhotoTurn:
                 )
             source_receipt = from_record(source_row, InboundReceipt)
             retriever = self.turn.media_factory(source_receipt, actor)
-            data = retriever.media_store.get(
-                media_scope, work.normalized_blob_ref, DRAFT_SCRIBE_POLICY.max_photo_bytes
-            )
-            info = image_info(data)
-            fresh = asyncio.run(
-                read_document(
-                    data,
-                    info.format,
-                    kind_hint=draft.kind,
-                    adapter=self.turn.vision_factory(draft.reads.first.provenance),
+            if work.mime == "application/pdf":
+                from sanad.media.documents import DocumentPipeline
+
+                def screen_fresh(read: DocumentRead, index: int) -> None:
+                    if token.patient_id:
+                        self.raise_patient(
+                            read.model_copy(update={"blocked_pages": (index,)}),
+                            token.patient_id,
+                            actor,
+                        )
+
+                try:
+                    fresh, fresh_pages = DocumentPipeline(
+                        retriever,
+                        source_receipt,
+                        draft.reads.first.provenance,
+                        self.turn.vision_factory,
+                        kind_hint=draft.kind,
+                        on_page=screen_fresh,
+                    ).run(
+                        work,
+                        refresh_key=(
+                            self.turn.runtime.safety_policy.policy_version
+                            + ":"
+                            + VISION_PROMPT_VERSION
+                        ),
+                    )
+                except MediaInvalid as error:
+                    return RouteResult(route="busy", status=str(error))
+                draft = draft.model_copy(
+                    update={"document_page_refs": tuple(p.work_id for p in fresh_pages)}
                 )
-            )
+            else:
+                data = retriever.media_store.get(
+                    media_scope, work.normalized_blob_ref, DRAFT_SCRIBE_POLICY.max_photo_bytes
+                )
+                info = image_info(data)
+                fresh = asyncio.run(
+                    read_document(
+                        data,
+                        info.format,
+                        kind_hint=draft.kind,
+                        adapter=self.turn.vision_factory(draft.reads.first.provenance),
+                    )
+                )
             if isinstance(fresh, DocumentFailure):
                 return self.turn._reply(
                     receipt,
@@ -857,7 +998,9 @@ class PhotoTurn:
             else:
                 draft = draft.model_copy(
                     update={
-                        "reads": self.with_column(fresh, retriever, work.normalized_blob_ref),
+                        "reads": fresh
+                        if work.mime == "application/pdf"
+                        else self.with_column(fresh, retriever, work.normalized_blob_ref),
                         "reader_policy_version": self.turn.runtime.safety_policy.policy_version,
                     }
                 )

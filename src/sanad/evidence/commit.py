@@ -230,6 +230,57 @@ def patient_buttons(
     return keyboard
 
 
+def bounded_pdf(evidence: Evidence) -> Evidence:
+    """Bound the complete item; the original reads and images remain on its pages."""
+    if not evidence.document_pages:
+        return evidence
+    from sanad.media.documents import check_item_size
+    from sanad.media.limits import MediaInvalid
+
+    try:
+        check_item_size(to_record(evidence, evidence.scope))
+        return evidence
+    except MediaInvalid:
+        blocked = detailed_pdf_disposition(evidence)
+        check_item_size(to_record(blocked, blocked.scope))
+        return blocked
+
+
+def detailed_pdf_disposition(evidence: Evidence) -> Evidence:
+    """Canonical content reduction, also reconstructed by the transaction guard."""
+    from sanad.media.vision import PrintedIdentityHint
+
+    return Evidence.model_validate(
+        evidence.model_dump()
+        | {
+            "association_state": "candidate",
+            "accepted_by": None,
+            "accepted_at": None,
+            "printed_identity": None,
+            "printed_date": None,
+            "extracted_values": (),
+            "readers": tuple(
+                reader.model_copy(
+                    update={
+                        "printed_identity_hint": PrintedIdentityHint(text=None),
+                        "printed_date": None,
+                        "items": (),
+                        "notes": (),
+                        "dropped_fields": (),
+                    }
+                )
+                for reader in evidence.readers
+            ),
+            "row_pages": (),
+            "disagreements": (),
+            "required_predicate_results": (),
+            "candidate_mission_ids": (),
+            "blocked_pages": tuple(p.page_index for p in evidence.document_pages),
+            "rejection_reason": "document_too_detailed",
+        }
+    )
+
+
 def prepare(builder: CommitBuilder) -> None:
     """Only Steward.handle calls this after the shared authority/fence checks."""
     command, store, scope, now = builder.command, builder.store, builder.scope, builder.now
@@ -252,6 +303,7 @@ def prepare(builder: CommitBuilder) -> None:
             raise EffectsRejected("evidence_source")
         if store.get(scope, "evidence_hash", candidate.content_hash):
             raise EffectsRejected("duplicate_content")
+        candidate = bounded_pdf(candidate)
         builder.put(to_record(candidate, scope))
         builder.put(
             to_record(
@@ -305,6 +357,9 @@ def prepare(builder: CommitBuilder) -> None:
         )
         return
     if action == "duplicate":
+        from sanad.media.documents import finalize_pdf
+
+        finalize_pdf(builder, "duplicate:" + str(command.payload.get("duplicate_evidence_id")))
         emit(builder, "patient_evidence_duplicate")
         return
     patient_row = store.get(scope, "patient", scope.patient_id)
@@ -338,6 +393,10 @@ def prepare(builder: CommitBuilder) -> None:
         target = store.get(scope, "mission", previous.mission_id)
         if target and target.body.get("state") == "fulfilled":
             raise EffectsRejected("correction_requires_slice19")
+    # PDF evaluation effects remain provisional until the complete outcome fits.
+    destination = builder
+    if previous.document_pages:
+        builder = CommitBuilder(scope, command, now, builder.policy, store)
     raw_token = command.payload.get("token_hash")
     if raw_token:
         consume(builder, previous, str(raw_token))
@@ -425,6 +484,19 @@ def prepare(builder: CommitBuilder) -> None:
     ):
         key = "patient_evidence_name_check"
         keyboard = patient_buttons(builder, evidence, plausible, identity=True)
+        review(builder, evidence)
+    elif evidence.document_pages and (
+        evidence.blocked_pages
+        or "document_instructions" in evidence.flags
+        or evidence.shift_guard_fired
+        or any(r.unreadable or r.status != "ok" for r in evidence.readers)
+        or not evidence.extracted_values
+        or evidence.disagreements
+    ):
+        if evidence.rejection_reason and "patient_" + evidence.rejection_reason in templates.TEXT:
+            key = "patient_" + evidence.rejection_reason
+            if evidence.rejection_reason == "document_too_many_pages":
+                fields = {"max_pages": "10"}
         review(builder, evidence)
     elif evidence.category == "monitor_screen":
         from sanad.monitor.evidence import prepare as prepare_monitor
@@ -561,6 +633,14 @@ def prepare(builder: CommitBuilder) -> None:
             and not (action == "confirm_identity" and predicate.missing == ("verification",))
         ):
             resolve_reviews(builder, previous)
+    bounded = bounded_pdf(evidence)
+    if bounded is not evidence:
+        evidence = bounded
+        builder = CommitBuilder(scope, command, now, builder.policy, store)
+        if raw_token:
+            consume(builder, previous, str(raw_token))
+        review(builder, evidence)
+        key, fields, keyboard = "patient_document_too_detailed", {}, []
     builder.put(to_record(evidence, scope))
     next_head = EvidenceHead.model_validate(
         head.model_dump()
@@ -575,6 +655,9 @@ def prepare(builder: CommitBuilder) -> None:
         }
     )
     builder.put(to_record(next_head, scope))
+    from sanad.media.documents import finalize_pdf
+
+    finalize_pdf(builder, "evidence:" + evidence.evidence_id)
     builder.audit(
         "EVIDENCE_" + evidence.association_state.upper(),
         keys.digest(command.command_id + ":evidence"),
@@ -583,6 +666,13 @@ def prepare(builder: CommitBuilder) -> None:
     emit(builder, key, fields, keyboard)
     if evidence.association_state == "accepted_pending_identity":
         doctor_card(builder, next_head, evidence)
+    if builder is not destination:
+        destination.command = builder.command
+        for row in builder.puts.values():
+            destination.put(row)
+        destination.events.update(builder.events)
+        destination.intents.update(builder.intents)
+        destination.deadline_reviews.update(builder.deadline_reviews)
 
 
 def record_monitor(builder: CommitBuilder, evidence: Evidence) -> None:

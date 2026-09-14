@@ -167,6 +167,7 @@ class PatientCandidate(_CandidateValue):
 
 
 class LabRowCandidate(_CandidateValue):
+    page_indices: tuple[int, ...] = ()
     analyte: str
     value: str | None = None
     unit: str | None = None

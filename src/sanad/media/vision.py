@@ -137,6 +137,7 @@ class DocumentCrop(_BoundaryValue):
 
 
 class DocumentRead(_BoundaryValue):
+    blocked_pages: tuple[int, ...] = ()
     first: ReaderResult
     second: ReaderResult
     disagreements: tuple[Disagreement, ...]
